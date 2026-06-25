@@ -52,6 +52,56 @@ if(!function_exists('getUserMobile')){
 
 }
 
+// ==================== اعتبارسنجی لینک ====================
+
+if(!function_exists('isValidSubscriptionLink')){
+
+    function isValidSubscriptionLink($link){
+
+        $link = trim($link);
+
+        if($link === ''){
+            return false;
+        }
+
+        if(!filter_var($link, FILTER_VALIDATE_URL)){
+            return false;
+        }
+
+        $validDomains = [
+            'vip.boozhaan.ir',
+            'vip2.boozhaan.ir',
+            'vip3.boozhaan.ir',
+            'vip4.boozhaan.ir'
+        ];
+
+        foreach($validDomains as $d){
+
+            if(stripos($link, $d) !== false){
+                return true;
+            }
+
+        }
+
+        return false;
+
+    }
+
+}
+
+$paymentMessage = '';
+$paymentError = '';
+
+if(isset($_SESSION['payment_message'])){
+    $paymentMessage = $_SESSION['payment_message'];
+    unset($_SESSION['payment_message']);
+}
+
+if(isset($_SESSION['payment_error'])){
+    $paymentError = $_SESSION['payment_error'];
+    unset($_SESSION['payment_error']);
+}
+
 // ==================== عملیات POST ====================
 
 if(isset($_POST['approve_payment'])){
@@ -60,23 +110,79 @@ if(isset($_POST['approve_payment'])){
 
     $link = trim($_POST['approve_link']);
 
+    if(!isValidSubscriptionLink($link)){
+
+        $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
+
+        header('Location: index.php?page=payments');
+
+        exit;
+
+    }
+
     if(isset($payments[$index])){
 
         $payments[$index][6] = 'تایید شد';
 
         $payments[$index][7] = $link;
 
+        $fp = fopen($paymentsFile,'w');
+
+        foreach($payments as $p){
+
+            fputcsv($fp, $p);
+
+        }
+
+        fclose($fp);
+
+        $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
+
     }
 
-    $fp = fopen($paymentsFile,'w');
+    header('Location: index.php?page=payments');
 
-    foreach($payments as $p){
+    exit;
 
-        fputcsv($fp, $p);
+}
+
+if(isset($_POST['edit_link'])){
+
+    $index = intval($_POST['edit_index']);
+
+    $link = trim($_POST['edit_link_value']);
+
+    if(!isValidSubscriptionLink($link)){
+
+        $_SESSION['payment_error'] = 'لینک اشتراک معتبر وارد کنید';
+
+        header('Location: index.php?page=payments');
+
+        exit;
 
     }
 
-    fclose($fp);
+    if(
+        isset($payments[$index])
+        &&
+        trim($payments[$index][6] ?? '') === 'تایید شد'
+    ){
+
+        $payments[$index][7] = $link;
+
+        $fp = fopen($paymentsFile,'w');
+
+        foreach($payments as $p){
+
+            fputcsv($fp, $p);
+
+        }
+
+        fclose($fp);
+
+        $_SESSION['payment_message'] = 'لینک اشتراک ذخیره شد';
+
+    }
 
     header('Location: index.php?page=payments');
 
@@ -390,6 +496,25 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
     background:#22c55e;
 }
 
+.flashMessage{
+    padding:14px 18px;
+    border-radius:12px;
+    margin-bottom:18px;
+    font-size:14px;
+}
+
+.flashSuccess{
+    background:#14532d;
+    color:#bbf7d0;
+    border:1px solid #22c55e;
+}
+
+.flashError{
+    background:#450a0a;
+    color:#fecaca;
+    border:1px solid #ef4444;
+}
+
 @media(max-width:900px){
 
     .dropdown{
@@ -416,6 +541,26 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
         لیست خرید های جدید
 
     </h2>
+
+    <?php if($paymentMessage){ ?>
+
+    <div class="flashMessage flashSuccess">
+
+        <?php echo htmlspecialchars($paymentMessage); ?>
+
+    </div>
+
+    <?php } ?>
+
+    <?php if($paymentError){ ?>
+
+    <div class="flashMessage flashError">
+
+        <?php echo htmlspecialchars($paymentError); ?>
+
+    </div>
+
+    <?php } ?>
 
     <table class="payTable">
 
@@ -795,13 +940,56 @@ function showAction(
 
     if(status === 'تایید شد'){
 
+        const linkDisplay = savedLink
+            ? savedLink
+            : 'لینکی ثبت نشده است';
+
         content = `
 
             <div class="bigText">
 
-                ${savedLink}
+                ${linkDisplay}
 
             </div>
+
+            <form method="POST" onsubmit="return validateLinkForm(this, 'edit_link_value')">
+
+                <input
+                    type="hidden"
+                    name="edit_index"
+                    value="${id}">
+
+                <input
+                    type="text"
+                    name="edit_link_value"
+                    id="editLink"
+                    placeholder="لینک اشتراک"
+                    value="${savedLink}"
+                    required>
+
+                <div class="modalBtns">
+
+                    <button
+                        type="button"
+                        class="gray"
+                        onclick="pasteToInput('editLink')">
+
+                        Paste
+
+                    </button>
+
+                    <button
+                        type="submit"
+                        name="edit_link"
+                        class="green">
+
+                        ${savedLink ? 'ویرایش لینک' : 'افزودن لینک'}
+
+                    </button>
+
+                </div>
+
+            </form>
 
             <div class="modalBtns">
 
@@ -849,7 +1037,7 @@ function showAction(
 
         content = `
 
-            <form method="POST">
+            <form method="POST" onsubmit="return validateLinkForm(this, 'approve_link')">
 
                 <input
                     type="hidden"
@@ -860,14 +1048,15 @@ function showAction(
                     type="text"
                     name="approve_link"
                     id="approveLink"
-                    placeholder="لینک اشتراک">
+                    placeholder="لینک اشتراک"
+                    required>
 
                 <div class="modalBtns">
 
                     <button
                         type="button"
                         class="gray"
-                        onclick="pasteClipboard()">
+                        onclick="pasteToInput('approveLink')">
 
                         Paste
 
@@ -1032,7 +1221,53 @@ function copyText(id){
 
 }
 
-async function pasteClipboard(){
+function validateLinkForm(form, fieldName){
+
+    const input = form.querySelector(`[name="${fieldName}"]`);
+
+    if(!input){
+        return false;
+    }
+
+    const link = input.value.trim();
+
+    if(link === ''){
+        alert('برای تایید پرداخت، وارد کردن لینک اشتراک الزامی است');
+        input.focus();
+        return false;
+    }
+
+    try{
+        new URL(link);
+    }
+    catch(e){
+        alert('لینک اشتراک معتبر نیست');
+        input.focus();
+        return false;
+    }
+
+    const validDomains = [
+        'vip.boozhaan.ir',
+        'vip2.boozhaan.ir',
+        'vip3.boozhaan.ir',
+        'vip4.boozhaan.ir'
+    ];
+
+    const hasValidDomain = validDomains.some(
+        d => link.toLowerCase().includes(d)
+    );
+
+    if(!hasValidDomain){
+        alert('لینک اشتراک باید از دامنه‌های مجاز باشد');
+        input.focus();
+        return false;
+    }
+
+    return true;
+
+}
+
+async function pasteToInput(inputId){
 
     try{
 
@@ -1040,7 +1275,7 @@ async function pasteClipboard(){
         await navigator.clipboard.readText();
 
         document
-        .getElementById('approveLink')
+        .getElementById(inputId)
         .value = text;
 
     }
