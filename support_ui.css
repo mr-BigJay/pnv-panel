@@ -214,11 +214,12 @@ border-bottom-right-radius:4px;
 }
 
 .msgApp--user .msg.usermsg{
-background:var(--msg-user);
+background:var(--msg-admin);
 margin-left:auto;
 margin-right:0;
 border-bottom-left-radius:4px;
-color:white;
+color:#052e16;
+max-width:78%;
 }
 
 .msgApp--user .msg.admin,
@@ -228,6 +229,7 @@ color:var(--msg-text);
 margin-right:auto;
 margin-left:0;
 border-bottom-right-radius:4px;
+max-width:78%;
 }
 
 .supportPage .msg.admin,
