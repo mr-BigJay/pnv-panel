@@ -218,6 +218,113 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportTicketLastMessage($ticket){
+
+        if(empty($ticket['messages'])){
+            return null;
+        }
+
+        return end($ticket['messages']);
+
+    }
+
+    function supportTicketPreview($ticket){
+
+        $last = supportTicketLastMessage($ticket);
+
+        if(!$last){
+            return 'بدون پیام';
+        }
+
+        $text = trim($last['text'] ?? '');
+
+        if($text === '' && !empty($last['image'])){
+            return '📷 تصویر';
+        }
+
+        if($text === ''){
+            return 'پیام';
+        }
+
+        if(mb_strlen($text) > 48){
+            return mb_substr($text, 0, 48) . '…';
+        }
+
+        return $text;
+
+    }
+
+    function supportTicketLastTimestamp($ticket){
+
+        $last = supportTicketLastMessage($ticket);
+
+        return intval($last['timestamp'] ?? 0);
+
+    }
+
+    function supportRelativeTime($timestamp){
+
+        $timestamp = intval($timestamp);
+
+        if($timestamp <= 0){
+            return '';
+        }
+
+        $diff = time() - $timestamp;
+
+        if($diff < 60){
+            return 'همین الان';
+        }
+
+        if($diff < 3600){
+            return intval($diff / 60) . ' دقیقه پیش';
+        }
+
+        if($diff < 86400){
+            return intval($diff / 3600) . ' ساعت پیش';
+        }
+
+        $display = supportMessageDisplayTime(['timestamp' => $timestamp]);
+
+        return $display['date'];
+
+    }
+
+    function supportAdminUnreadCount($ticket){
+
+        if(empty($ticket['messages'])){
+            return 0;
+        }
+
+        $count = 0;
+
+        foreach($ticket['messages'] as $msg){
+
+            if(
+                ($msg['sender'] ?? '') === 'user'
+                && empty($msg['seen_by_admin'])
+            ){
+                $count++;
+            }
+
+        }
+
+        return $count;
+
+    }
+
+    function supportUserInitial($username){
+
+        $username = trim($username);
+
+        if($username === ''){
+            return '?';
+        }
+
+        return mb_substr($username, 0, 1);
+
+    }
+
     function supportSortTickets($data){
 
         usort($data, function($a, $b){
@@ -446,7 +553,7 @@ if(!function_exists('supportLoad')){
     function supportRenderMessageHtml($m, $options){
 
         $sender = $m['sender'] ?? 'user';
-        $class = ($sender === 'admin') ? 'admin' : 'usermsg';
+        $class = ($sender === 'admin') ? 'is-admin admin' : 'is-user usermsg';
         $currentUser = $options['currentUser'] ?? '';
         $embedded = !empty($options['embedded']);
         $csrfField = $options['csrfField'] ?? '';
@@ -487,7 +594,7 @@ if(!function_exists('supportLoad')){
         ob_start();
         ?>
 
-        <div class="msg <?php echo $class; ?>" data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-timestamp="<?php echo intval($m['timestamp'] ?? 0); ?>">
+        <div class="msgBubble msg <?php echo $class; ?>" data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-timestamp="<?php echo intval($m['timestamp'] ?? 0); ?>">
 
             <?php echo nl2br(htmlspecialchars($m['text'] ?? '', ENT_QUOTES, 'UTF-8')); ?>
 
@@ -504,7 +611,7 @@ if(!function_exists('supportLoad')){
 
             <?php } ?>
 
-            <div class="time">
+            <div class="msgMeta">
 
                 <?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
                 -

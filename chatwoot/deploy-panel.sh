@@ -15,12 +15,15 @@ for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-
   curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
 done
 
-for f in auth.php index.php support_chatwoot_embed.php support_setup.php chatwoot-settings.php support.php; do
+for f in auth.php index.php support.php support-api.php; do
   curl -fL -o "$HTML/admin/$f" "$BASE/admin/$f"
 done
 
+curl -fL -o "$HTML/support.php" "$BASE/support.php"
 curl -fL -o "$HTML/support_lib.php" "$BASE/support_lib.php"
-curl -fL -o "$HTML/chatwoot_lib.php" "$BASE/chatwoot_lib.php"
+curl -fL -o "$HTML/support_ui.css" "$BASE/support_ui.css"
+curl -fL -o "$HTML/support_ui.js" "$BASE/support_ui.js"
+curl -fL -o "$HTML/dashboard.php" "$BASE/dashboard.php"
 
 curl -fL -o "$NGINX_AVAIL" "$BASE/chatwoot/nginx-panel.ticketin.ir.ssl.conf"
 

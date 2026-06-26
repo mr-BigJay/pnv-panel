@@ -12,14 +12,10 @@ exit;
 
 $user = $_SESSION['user'];
 
-require_once __DIR__ . '/chatwoot_lib.php';
-
-$supportFile =
-"db/support.json";
-
+$supportFile = "db/support.json";
 $hasUnreadSupport = false;
 
-if(!chatwootEnabled() && file_exists($supportFile)){
+if(file_exists($supportFile)){
 
 $supportData =
 json_decode(
@@ -317,13 +313,13 @@ class="menu">
 <a href="support.php"
 class="menu supportMenu">
 
-<?php if($hasUnreadSupport && !chatwootEnabled()){ ?>
+<?php if($hasUnreadSupport){ ?>
 
 <span class="notifDot"></span>
 
 <?php } ?>
 
-<?php echo chatwootEnabled() ? 'پشتیبانی آنلاین' : 'پيام به پشتیبانی'; ?>
+پیام به پشتیبانی
 
 </a>
 
@@ -337,8 +333,6 @@ class="menu logout">
 </div>
 
 </div>
-
-<?php if(chatwootEnabled()){ chatwootRenderWidget($user); } ?>
 
 </body>
 

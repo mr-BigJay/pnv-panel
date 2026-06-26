@@ -2,7 +2,6 @@
 
 require_once __DIR__ . '/auth.php';
 require_once "functions.php";
-require_once __DIR__ . '/../chatwoot_lib.php';
 
 if(isset($_GET['logout'])){
 
@@ -238,7 +237,7 @@ $supportFile =
 
 $hasUnreadSupport = false;
 
-if(!chatwootEnabled() && file_exists($supportFile)){
+if(file_exists($supportFile)){
 
 $supportData =
 json_decode(
@@ -783,19 +782,13 @@ grid-template-columns:1fr;
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=support'), ENT_QUOTES, 'UTF-8'); ?>"
 class="supportMenu">
 
-<?php if($hasUnreadSupport && !chatwootEnabled()){ ?>
+<?php if($hasUnreadSupport){ ?>
 
 <span class="notifDot"></span>
 
 <?php } ?>
 
-پیام های کاربران
-
-</a>
-
-<a href="<?php echo htmlspecialchars(pnvAdminUrl('chatwoot-settings.php'), ENT_QUOTES, 'UTF-8'); ?>">
-
-تنظیمات Chatwoot<?php echo chatwootEnabled() ? ' ✓' : ''; ?>
+پیام‌های کاربران
 
 </a>
 
@@ -875,26 +868,12 @@ class="red">
 
 <?php } ?>
 
-<?php if($page=='support' && chatwootEnabled()){ ?>
-
-<?php include __DIR__ . '/support_chatwoot_embed.php'; ?>
-
-<?php } ?>
-
-<?php if($page=='support' && !chatwootEnabled() && !isset($_GET['legacy'])){ ?>
-
-<?php include __DIR__ . '/support_setup.php'; ?>
-
-<?php } ?>
-
-<?php if($page=='support' && !chatwootEnabled() && isset($_GET['legacy'])){ ?>
+<?php if($page=='support'){ ?>
 
 <?php
 $supportEmbedded = true;
 include "support.php";
 ?>
-
-<?php } ?>
 
 <?php if($page=='payments'){ ?>
 
