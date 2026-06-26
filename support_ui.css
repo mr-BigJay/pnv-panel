@@ -946,8 +946,16 @@ min-height:0;
 margin-right:280px;
 padding:0 !important;
 height:100vh;
+height:100dvh;
 overflow:hidden;
 background:var(--msg-bg);
+}
+
+.content-support .supportPage,
+.content-support .supportPage.supportEmbedded{
+height:100%;
+max-height:100dvh;
+min-height:0;
 }
 
 .supportChatbox .msgHeader .msgHeaderInfo{
@@ -975,28 +983,22 @@ position:fixed;
 inset:0;
 z-index:200;
 width:100%;
-height:100vh;
-height:100dvh;
+height:100%;
+max-height:100dvh;
 overflow:hidden;
+padding-bottom:env(safe-area-inset-bottom);
+box-sizing:border-box;
 }
 
-.content-support .supportPage input,
-.content-support .supportPage button,
-.content-support .supportPage textarea{
-width:auto !important;
-}
-
-.msgApp--user{
-max-width:100%;
-box-shadow:none;
-}
-
-.supportPage{
+.supportPage,
+.supportPage.supportEmbedded{
 display:flex;
 flex-direction:row;
 height:100%;
+max-height:100%;
 min-height:0;
 width:100%;
+overflow:hidden;
 }
 
 .msgSidebar{
@@ -1052,7 +1054,9 @@ flex-direction:column;
 min-width:0;
 min-height:0;
 height:100%;
+max-height:100%;
 width:100%;
+overflow:hidden;
 }
 
 .supportPage.chat-active .msgSidebar{
@@ -1078,6 +1082,7 @@ flex-shrink:0;
 .supportChatbox .msgHeader{
 padding:12px 14px;
 gap:10px;
+flex-shrink:0;
 }
 
 .supportChatbox .msgHeader .msgHeaderInfo h2{
@@ -1090,14 +1095,54 @@ font-size:11px;
 }
 
 .supportMessages{
-flex:1;
+flex:1 1 auto;
 min-height:0;
+overflow-y:auto;
 -webkit-overflow-scrolling:touch;
+overscroll-behavior:contain;
 }
 
 .supportSendbox{
+flex:0 0 auto;
 flex-shrink:0;
+position:relative;
+z-index:5;
+background:var(--msg-panel);
+border-top:1px solid var(--msg-border);
+padding:10px 12px;
 padding-bottom:max(12px, env(safe-area-inset-bottom));
+}
+
+.supportSendbox form.msgComposerInner{
+align-items:flex-end;
+}
+
+.content-support .supportPage input,
+.content-support .supportPage button,
+.content-support .supportPage textarea{
+width:auto !important;
+}
+
+.msgApp--user{
+max-width:100%;
+box-shadow:none;
+height:100%;
+max-height:100dvh;
+}
+
+.msgApp--user .msgComposer{
+flex-shrink:0;
+padding:10px 12px;
+padding-bottom:max(12px, env(safe-area-inset-bottom));
+background:var(--msg-panel);
+border-top:1px solid var(--msg-border);
+}
+
+.msgApp--user .msgBody{
+flex:1 1 auto;
+min-height:0;
+overflow-y:auto;
+-webkit-overflow-scrolling:touch;
 }
 
 .msgConv{

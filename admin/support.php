@@ -44,7 +44,7 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=5';
+$cssHref = '../support_ui.css?v=6';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
 $jsHref = '../support_ui.js';

@@ -716,8 +716,9 @@ margin-right:0;
 
 .content-support{
 margin-right:0;
-height:100vh;
-min-height:100vh;
+height:100%;
+max-height:100dvh;
+min-height:0;
 }
 
 .content-support input,
