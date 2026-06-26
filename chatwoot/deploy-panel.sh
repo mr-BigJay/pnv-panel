@@ -8,7 +8,7 @@ HTML="/var/www/html"
 NGINX_AVAIL="/etc/nginx/sites-available/panel.ticketin.ir"
 NGINX_ENABLED="/etc/nginx/sites-enabled/panel.ticketin.ir"
 
-echo "==> Deploy from branch: $BR"
+echo "==> Deploy commit: $COMMIT (branch: $BR)"
 
 mkdir -p "$HTML/bigjay_controller"
 
@@ -26,7 +26,12 @@ curl -fL -o "$HTML/support_ui.css" "$BASE/support_ui.css"
 curl -fL -o "$HTML/support_ui.js" "$BASE/support_ui.js"
 curl -fL -o "$HTML/dashboard.php" "$BASE/dashboard.php"
 
-echo "==> admin/index.php size: $(wc -c < "$HTML/admin/index.php") bytes (expect ~11198)"
+echo "==> admin/index.php size: $(wc -c < "$HTML/admin/index.php") bytes"
+
+if ! grep -A4 'include "support.php"' "$HTML/admin/index.php" | grep -q '<?php } ?>'; then
+  echo "WARN: index.php stale (missing brace) — fetching fb5aadd"
+  curl -fL -o "$HTML/admin/index.php" "https://raw.githubusercontent.com/mr-BigJay/pnv-panel/fb5aadd/admin/index.php"
+fi
 
 if grep -q 'support_setup.php' "$HTML/admin/index.php"; then
   echo "ERROR: old index.php still references support_setup.php"
@@ -34,7 +39,10 @@ if grep -q 'support_setup.php' "$HTML/admin/index.php"; then
 fi
 
 if command -v php >/dev/null 2>&1; then
-  php -l "$HTML/admin/index.php"
+  php -l "$HTML/admin/index.php" || {
+    echo "ERROR: index.php syntax invalid after download"
+    exit 1
+  }
   php -l "$HTML/admin/support.php"
 fi
 
