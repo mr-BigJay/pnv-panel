@@ -1,40 +1,33 @@
 <?php
 
-session_start();
-
+require_once __DIR__ . '/auth.php';
 require_once "functions.php";
 require_once __DIR__ . '/../chatwoot_lib.php';
 
-$adminUser = "BigJay";
-$adminPass = "603240@BigJayX";
-
 if(isset($_GET['logout'])){
 
-session_destroy();
+pnvAdminLogout();
 
-header("Location: index.php");
+header("Location: " . pnvAdminEntryUrl());
 
 exit;
 
 }
 
-if(!isset($_SESSION['admin'])){
+if(!pnvAdminIsLoggedIn()){
 
 if($_SERVER['REQUEST_METHOD']=="POST"){
 
-if(
+$admin = pnvAdminValidateLogin(
+trim($_POST['username'] ?? ''),
+$_POST['password'] ?? ''
+);
 
-$_POST['username']==$adminUser
+if($admin){
 
-&&
+pnvAdminLogin($admin);
 
-$_POST['password']==$adminPass
-
-){
-
-$_SESSION['admin']=true;
-
-header("Location: index.php");
+header("Location: " . pnvAdminEntryUrl());
 
 exit;
 
@@ -168,14 +161,6 @@ exit;
 }
 
 $page = $_GET['page'] ?? 'dashboard';
-
-if($page === 'support' && chatwootEnabled()){
-
-header('Location: ' . chatwootAdminUrl());
-
-exit;
-
-}
 
 $supportActionResult = null;
 
@@ -797,12 +782,10 @@ grid-template-columns:1fr;
 
 <?php if(chatwootEnabled()){ ?>
 
-<a
-href="<?php echo htmlspecialchars(chatwootAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
-target="_blank"
-rel="noopener">
+<a href="index.php?page=support"
+class="supportMenu">
 
-پشتیبانی Chatwoot
+پیام های کاربران (Chatwoot)
 
 </a>
 
@@ -902,6 +885,12 @@ class="red">
 <?php if($page=='dashboard'){ ?>
 
 <?php include "dashboard.php"; ?>
+
+<?php } ?>
+
+<?php if($page=='support' && chatwootEnabled()){ ?>
+
+<?php include __DIR__ . '/support_chatwoot_embed.php'; ?>
 
 <?php } ?>
 

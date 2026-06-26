@@ -1,11 +1,8 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/auth.php';
 
-if(!isset($_SESSION['admin'])){
-header("Location:index.php");
-exit;
-}
+pnvAdminRequireAuth();
 
 $dir = __DIR__ . "/../down";
 

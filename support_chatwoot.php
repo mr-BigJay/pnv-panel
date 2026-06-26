@@ -22,88 +22,70 @@ if(!chatwootEnabled()){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>پشتیبانی</title>
+<title>پشتیبانی آنلاین</title>
 <style>
 *{
 box-sizing:border-box;
 }
 body{
 margin:0;
-padding:16px;
+min-height:100vh;
+padding:12px;
 background:#0f172a;
 font-family:tahoma;
 direction:rtl;
 color:white;
 }
-.container{
-max-width:720px;
-margin:auto;
+.topbar{
+max-width:900px;
+margin:0 auto 12px;
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:12px;
 }
-.card{
-background:#1e293b;
-border-radius:18px;
-padding:24px;
-line-height:32px;
-}
-h2{
-margin:0 0 16px;
-font-size:22px;
-}
-.note{
-color:#94a3b8;
-font-size:14px;
-margin-top:16px;
-}
-.openBtn{
-display:inline-block;
-margin-top:18px;
-background:#22c55e;
-color:white;
-border:none;
-padding:14px 22px;
-border-radius:12px;
-font-size:15px;
-cursor:pointer;
-font-family:tahoma;
+.topbar h2{
+margin:0;
+font-size:20px;
 }
 .back{
-display:block;
-margin-top:18px;
 background:#334155;
-padding:14px;
-border-radius:14px;
-text-align:center;
 color:white;
 text-decoration:none;
+padding:10px 16px;
+border-radius:12px;
+font-size:14px;
+white-space:nowrap;
+}
+.hint{
+max-width:900px;
+margin:0 auto 12px;
+padding:12px 14px;
+background:#1e293b;
+border-radius:12px;
+color:#94a3b8;
+font-size:13px;
+line-height:26px;
+}
+.chatHost{
+max-width:900px;
+margin:0 auto;
+min-height:70vh;
 }
 </style>
 </head>
 <body>
 
-<div class="container">
-
-<div class="card">
-
+<div class="topbar">
 <h2>پشتیبانی آنلاین</h2>
-
-سلام <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?>،
-برای ارتباط با پشتیبانی روی دکمه زیر بزنید یا از آیکون چت پایین صفحه استفاده کنید.
-
-<br>
-
-<button type="button" class="openBtn" onclick="openChatwoot()">
-باز کردن چت پشتیبانی
-</button>
-
-<div class="note">
-پیام‌های شما به‌صورت لحظه‌ای به تیم پشتیبانی ارسال می‌شود.
+<a href="dashboard.php" class="back">بازگشت</a>
 </div>
 
+<div class="hint">
+سلام <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?> — چت با نام کاربری پنل شما باز می‌شود؛ نیازی به ورود جداگانه نیست.
 </div>
 
-<a href="dashboard.php" class="back">بازگشت به داشبورد</a>
-
-</div>
+<div class="chatHost" id="chatHost"></div>
 
 <script>
 function openChatwoot(){
@@ -112,9 +94,7 @@ function openChatwoot(){
     }
 }
 window.addEventListener('chatwoot:ready', function(){
-    if(window.$chatwoot){
-        window.$chatwoot.toggle('open');
-    }
+    openChatwoot();
 });
 </script>
 

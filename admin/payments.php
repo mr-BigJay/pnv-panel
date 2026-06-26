@@ -1,6 +1,8 @@
 <?php
 
-if(!isset($_SESSION['admin'])){
+require_once __DIR__ . '/auth.php';
+
+if(!pnvAdminIsLoggedIn()){
     exit;
 }
 

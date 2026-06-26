@@ -3,5 +3,6 @@
     "base_url": "https://panel.ticketin.ir",
     "website_token": "PASTE_WEBSITE_TOKEN_HERE",
     "identity_validation_key": "PASTE_IDENTITY_VALIDATION_KEY_HERE",
-    "admin_url": "https://panel.ticketin.ir/app"
+    "admin_url": "https://panel.ticketin.ir/app",
+    "inbox_url": ""
 }

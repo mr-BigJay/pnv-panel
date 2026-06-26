@@ -1,5 +1,5 @@
 <?php
 
-header("Location: /admin/");
+header("Location: /bigjay_controller/");
 
 exit;

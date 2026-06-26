@@ -1,11 +1,7 @@
 <?php
 
-session_start();
-
-if(!isset($_SESSION['admin'])){
-    header('Location: index.php');
-    exit;
-}
+require_once __DIR__ . '/auth.php';
+pnvAdminRequireAuth();
 
 require_once __DIR__ . '/../chatwoot_lib.php';
 
@@ -20,7 +16,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         'base_url' => rtrim(trim($_POST['base_url'] ?? ''), '/'),
         'website_token' => trim($_POST['website_token'] ?? ''),
         'identity_validation_key' => trim($_POST['identity_validation_key'] ?? ''),
-        'admin_url' => rtrim(trim($_POST['admin_url'] ?? ''), '/')
+        'admin_url' => rtrim(trim($_POST['admin_url'] ?? ''), '/'),
+        'inbox_url' => rtrim(trim($_POST['inbox_url'] ?? ''), '/')
     ];
 
     if(
@@ -166,6 +163,9 @@ margin-top:18px;
 
 <label>آدرس پنل ادمین Chatwoot</label>
 <input type="url" name="admin_url" value="<?php echo htmlspecialchars($config['admin_url'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://panel.ticketin.ir/app">
+
+<label>آدرس مستقیم Inbox (اختیاری)</label>
+<input type="url" name="inbox_url" value="<?php echo htmlspecialchars($config['inbox_url'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://panel.ticketin.ir/app/accounts/1/inbox/1">
 
 <button type="submit">ذخیره تنظیمات</button>
 

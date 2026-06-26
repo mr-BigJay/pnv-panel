@@ -1,13 +1,9 @@
 <?php
 
-session_start();
-
+require_once __DIR__ . '/auth.php';
 require_once "functions.php";
 
-if(!isset($_SESSION['admin'])){
-header("Location: index.php");
-exit;
-}
+pnvAdminRequireAuth();
 
 $usersFile = '../db/users.json';
 

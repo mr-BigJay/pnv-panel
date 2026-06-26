@@ -1,10 +1,10 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/auth.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-if(!isset($_SESSION['admin'])){
+if(!pnvAdminIsLoggedIn()){
     http_response_code(403);
     echo json_encode(['error' => 'forbidden']);
     exit;

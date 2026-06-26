@@ -21,7 +21,8 @@ if(!function_exists('chatwootConfig')){
             'base_url' => '',
             'website_token' => '',
             'identity_validation_key' => '',
-            'admin_url' => ''
+            'admin_url' => '',
+            'inbox_url' => ''
         ];
 
         $path = chatwootConfigPath();
@@ -64,6 +65,19 @@ if(!function_exists('chatwootConfig')){
         }
 
         return rtrim(trim($config['base_url'] ?? ''), '/') . '/app';
+
+    }
+
+    function chatwootAdminEmbedUrl(){
+
+        $config = chatwootConfig();
+        $inboxUrl = trim($config['inbox_url'] ?? '');
+
+        if($inboxUrl !== ''){
+            return $inboxUrl;
+        }
+
+        return chatwootAdminUrl();
 
     }
 

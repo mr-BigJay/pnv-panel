@@ -12,10 +12,10 @@ if(!$supportEmbedded && supportIsEmbeddedRequest()){
 
 if(!$supportEmbedded){
 
-    session_start();
+    require_once __DIR__ . '/auth.php';
 
-    if(!isset($_SESSION['admin'])){
-        header('Location: index.php');
+    if(!pnvAdminIsLoggedIn()){
+        header('Location: ' . pnvAdminEntryUrl());
         exit;
     }
 

@@ -317,13 +317,13 @@ class="menu">
 <a href="support.php"
 class="menu supportMenu">
 
-<?php if($hasUnreadSupport){ ?>
+<?php if($hasUnreadSupport && !chatwootEnabled()){ ?>
 
 <span class="notifDot"></span>
 
 <?php } ?>
 
-پيام به پشتیبانی
+<?php echo chatwootEnabled() ? 'پشتیبانی آنلاین' : 'پيام به پشتیبانی'; ?>
 
 </a>
 
