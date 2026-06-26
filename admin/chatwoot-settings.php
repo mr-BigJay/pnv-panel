@@ -156,7 +156,7 @@ margin-top:18px;
 </div>
 
 <label>آدرس Chatwoot (Base URL)</label>
-<input type="url" name="base_url" value="<?php echo htmlspecialchars($config['base_url'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://chat.panel.ticketin.ir">
+<input type="url" name="base_url" value="<?php echo htmlspecialchars($config['base_url'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://panel.ticketin.ir">
 
 <label>Website Token</label>
 <input type="text" name="website_token" value="<?php echo htmlspecialchars($config['website_token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
@@ -165,7 +165,7 @@ margin-top:18px;
 <input type="text" name="identity_validation_key" value="<?php echo htmlspecialchars($config['identity_validation_key'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
 
 <label>آدرس پنل ادمین Chatwoot</label>
-<input type="url" name="admin_url" value="<?php echo htmlspecialchars($config['admin_url'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://chat.panel.ticketin.ir/app">
+<input type="url" name="admin_url" value="<?php echo htmlspecialchars($config['admin_url'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://panel.ticketin.ir/app">
 
 <button type="submit">ذخیره تنظیمات</button>
 
