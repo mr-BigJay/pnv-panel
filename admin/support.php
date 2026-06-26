@@ -400,6 +400,21 @@ border-radius:18px;
 margin-bottom:14px;
 font-size:18px;
 font-weight:bold;
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:12px;
+flex-wrap:wrap;
+}
+
+.viewSubsBtn{
+background:#2563eb;
+color:white;
+text-decoration:none;
+font-size:13px;
+padding:8px 14px;
+border-radius:10px;
+white-space:nowrap;
 }
 
 .messages{
@@ -687,9 +702,18 @@ class="back">
 
 <div class="chatHeader">
 
+<span>
 چت با :
-
 <?php echo htmlspecialchars($currentUser); ?>
+</span>
+
+<a
+    href="users.php?openProfile=<?php echo urlencode($currentUser); ?>"
+    class="viewSubsBtn">
+
+📦 اشتراک‌ها
+
+</a>
 
 </div>
 
