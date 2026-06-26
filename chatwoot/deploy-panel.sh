@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BR="${1:-cursor/chatwoot-integration-af0f}"
-COMMIT="${DEPLOY_COMMIT:-7b9e009}"
+COMMIT="${DEPLOY_COMMIT:-cursor/chatwoot-integration-af0f}"
 BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/$COMMIT"
 HTML="/var/www/html"
 NGINX_AVAIL="/etc/nginx/sites-available/panel.ticketin.ir"
@@ -44,6 +44,20 @@ if command -v php >/dev/null 2>&1; then
     exit 1
   }
   php -l "$HTML/admin/support.php"
+  php -l "$HTML/admin/payments.php" || {
+    echo "ERROR: payments.php syntax invalid after download"
+    exit 1
+  }
+fi
+
+if ! grep -q 'data-payments-ui="v3"' "$HTML/admin/payments.php"; then
+  echo "ERROR: payments.php missing v3 UI marker — stale deploy?"
+  exit 1
+fi
+
+if ! grep -q 'table:not(.payTable)' "$HTML/admin/index.php"; then
+  echo "ERROR: index.php missing payTable CSS scoping — stale deploy?"
+  exit 1
 fi
 
 curl -fL -o "$NGINX_AVAIL" "$BASE/chatwoot/nginx-panel.ticketin.ir.ssl.conf"

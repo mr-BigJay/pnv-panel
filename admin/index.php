@@ -598,19 +598,19 @@ text-decoration:none;
 display:inline-block;
 }
 
-table{
+table:not(.payTable){
 width:100%;
 border-collapse:collapse;
 }
 
-th,
-td{
+table:not(.payTable) th,
+table:not(.payTable) td{
 padding:12px;
 border-bottom:1px solid #334155;
 text-align:center;
 }
 
-th{
+table:not(.payTable) th{
 background:#334155;
 }
 

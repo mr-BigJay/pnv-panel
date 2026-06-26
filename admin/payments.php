@@ -254,58 +254,81 @@ max-width:100%;
 overflow:hidden;
 }
 
-.payTable{
-width:100%;
-max-width:100%;
-table-layout:fixed;
-border-collapse:collapse;
+.paymentsPage .payTable{
+width:100% !important;
+max-width:100% !important;
+table-layout:fixed !important;
+border-collapse:collapse !important;
 background:#1e293b;
 border-radius:16px;
 }
 
-.payTable th{
-background:#334155;
-padding:10px 6px;
-font-size:13px;
-color:white;
+.paymentsPage .payTable th,
+.paymentsPage .payTable td{
+padding:10px 6px !important;
+border-bottom:1px solid #334155 !important;
+text-align:center !important;
+vertical-align:middle !important;
+color:white !important;
+}
+
+.paymentsPage .payTable th{
+background:#334155 !important;
+font-size:13px !important;
 font-weight:600;
 }
 
-.payTable td{
-padding:10px 6px;
-border-bottom:1px solid #334155;
-font-size:12px;
-text-align:center;
-color:white;
-vertical-align:middle;
+.paymentsPage .payTable td{
+font-size:12px !important;
 }
 
-.payTable .col-num{
+.paymentsPage .payTable .col-plan{
+text-align:center !important;
+vertical-align:middle !important;
+}
+
+.paymentsPage .planCell{
+display:flex !important;
+flex-direction:column !important;
+align-items:center !important;
+justify-content:center !important;
+gap:3px !important;
+line-height:1.15 !important;
+}
+
+.paymentsPage .planSize{
+display:block !important;
+font-size:12px !important;
+font-weight:600 !important;
+}
+
+.paymentsPage .planPrice{
+display:block !important;
+font-size:15px !important;
+font-weight:700 !important;
+color:#f8fafc !important;
+}
+
+.paymentsPage .payTable .col-num{
 width:11%;
 }
 
-.payTable .col-user{
+.paymentsPage .payTable .col-user{
 width:20%;
 word-break:break-word;
 line-height:1.35;
 }
 
-.payTable .col-plan{
+.paymentsPage .payTable .col-plan{
 width:36%;
-text-align:right;
-word-break:break-word;
-line-height:1.45;
-font-size:11px;
-padding-left:4px;
-padding-right:6px;
 }
 
-.payTable .col-status{
+.paymentsPage .payTable .col-status{
 width:10%;
 }
 
-.payTable .col-actions{
-width:10%;
+.paymentsPage .payTable .col-actions{
+width:23%;
 }
 
 .statusDot{
@@ -559,34 +582,40 @@ padding:12px;
 overflow:hidden;
 }
 
-.payTable th,
-.payTable td{
-padding:7px 3px;
-font-size:10px;
+.paymentsPage .payTable th,
+.paymentsPage .payTable td{
+padding:7px 3px !important;
+font-size:10px !important;
 }
 
-.payTable .col-num{
-width:9%;
-font-size:9px;
+.paymentsPage .payTable .col-num{
+width:9% !important;
+font-size:9px !important;
 }
 
-.payTable .col-user{
-width:18%;
-font-size:10px;
+.paymentsPage .payTable .col-user{
+width:18% !important;
+font-size:10px !important;
 }
 
-.payTable .col-plan{
-width:40%;
-font-size:10px;
-line-height:1.35;
+.paymentsPage .payTable .col-plan{
+width:40% !important;
 }
 
-.payTable .col-status{
-width:9%;
+.paymentsPage .payTable .col-plan .planSize{
+font-size:11px !important;
 }
 
-.payTable .col-actions{
-width:8%;
+.paymentsPage .payTable .col-plan .planPrice{
+font-size:13px !important;
+}
+
+.paymentsPage .payTable .col-status{
+width:9% !important;
+}
+
+.paymentsPage .payTable .col-actions{
+width:8% !important;
 }
 
 .menuWrap{
@@ -617,6 +646,8 @@ width:180px;
 }
 
 </style>
+
+<div class="paymentsPage" data-payments-ui="v3">
 
 <div class="box">
 
@@ -677,6 +708,8 @@ width:180px;
                 $users
             );
 
+            [$planSize, $planPrice] = paymentsFormatPlanLines($p[2] ?? '');
+
         ?>
 
             <tr>
@@ -695,7 +728,12 @@ width:180px;
 
                 <td class="col-plan">
 
-                    <?php echo htmlspecialchars($p[2] ?? '-'); ?>
+                    <div class="planCell">
+                        <span class="planSize"><?php echo htmlspecialchars($planSize, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php if($planPrice !== ''){ ?>
+                        <span class="planPrice"><?php echo htmlspecialchars($planPrice, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php } ?>
+                    </div>
 
                 </td>
 
@@ -870,6 +908,8 @@ width:180px;
 <div class="modalOverlay" id="modal">
 
     <div class="modal" id="modalContent"></div>
+
+</div>
 
 </div>
 

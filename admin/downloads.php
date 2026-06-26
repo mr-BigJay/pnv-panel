@@ -385,7 +385,7 @@ onclick="return confirm('فایل حذف شود؟')">
 <?php } ?>
 
 <a
-href="index.php"
+href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
 class="back">
 
 بازگشت
