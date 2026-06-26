@@ -168,6 +168,32 @@ exit;
 
 $page = $_GET['page'] ?? 'dashboard';
 
+$supportActionResult = null;
+
+if($page === 'support'){
+
+require_once __DIR__ . '/../support_lib.php';
+
+if($_SERVER['REQUEST_METHOD'] === 'POST'){
+
+$supportActionResult =
+supportProcessAdminActions(
+'../db/support.json',
+true
+);
+
+if($supportActionResult['redirect']){
+
+header('Location: ' . $supportActionResult['redirect']);
+
+exit;
+
+}
+
+}
+
+}
+
 $plansFile = '../db/plans.json';
 $cardsFile = '../db/cards.json';
 $usersFile = '../db/users.json';
@@ -702,6 +728,13 @@ font-weight:bold;
 color:#22c55e;
 }
 
+.content-support{
+margin-right:280px;
+padding:0;
+height:100vh;
+overflow:hidden;
+}
+
 @media(max-width:768px){
 
 .sidebar{
@@ -712,6 +745,12 @@ height:auto;
 
 .content{
 margin-right:0;
+}
+
+.content-support{
+margin-right:0;
+height:auto;
+min-height:100vh;
 }
 
 input,
@@ -747,7 +786,7 @@ grid-template-columns:1fr;
 
 </a>
 
-<a href="support.php"
+<a href="index.php?page=support"
 class="supportMenu">
 
 <?php if($hasUnreadSupport){ ?>
@@ -828,11 +867,20 @@ class="red">
 
 </div>
 
-<div class="content">
+<div class="content <?php echo $page=='support' ? 'content-support' : ''; ?>">
 
 <?php if($page=='dashboard'){ ?>
 
 <?php include "dashboard.php"; ?>
+
+<?php } ?>
+
+<?php if($page=='support'){ ?>
+
+<?php
+$supportEmbedded = true;
+include "support.php";
+?>
 
 <?php } ?>
 

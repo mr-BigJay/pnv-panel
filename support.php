@@ -3,292 +3,50 @@
 session_start();
 
 if(!isset($_SESSION['user'])){
-header("Location: index.php");
-exit;
+    header('Location: index.php');
+    exit;
 }
+
+require_once __DIR__ . '/support_lib.php';
 
 $user = $_SESSION['user'];
+$file = __DIR__ . '/db/support.json';
+$csrfField = supportCsrfField();
+$actionResult = supportProcessUserActions($file, $user);
 
-$file = "db/support.json";
-
-if(!file_exists($file)){
-file_put_contents($file,"[]");
+if($actionResult['error']){
+    $supportError = $actionResult['error'];
+}
+else{
+    $supportError = '';
 }
 
-$data = json_decode(
-file_get_contents($file),
-true
-);
-
-if(!is_array($data)){
-$data = [];
-}
-
-if(isset($_GET['delete'])){
-
-$msgid = $_GET['delete'];
-
-for($i=0;$i<count($data);$i++){
-
-if($data[$i]['user']==$user){
-
-for($j=0;$j<count($data[$i]['messages']);$j++){
-
-$m = $data[$i]['messages'][$j];
-
-if(
-isset($m['id'])
-&&
-$m['id']==$msgid
-&&
-$m['sender']=='user'
-){
-
-if(
-time()-$m['timestamp'] <= 60
-){
-
-unset($data[$i]['messages'][$j]);
-
-$data[$i]['messages'] =
-array_values(
-$data[$i]['messages']
-);
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-}
-
-}
-
-}
-
-}
-
-}
-
-header("Location: support.php");
-exit;
-
-}
-
-if(isset($_POST['edit_id'])){
-
-$editid = $_POST['edit_id'];
-
-$newtext =
-trim($_POST['edit_text']);
-
-for($i=0;$i<count($data);$i++){
-
-if($data[$i]['user']==$user){
-
-for($j=0;$j<count($data[$i]['messages']);$j++){
-
-$m = &$data[$i]['messages'][$j];
-
-if(
-isset($m['id'])
-&&
-$m['id']==$editid
-&&
-$m['sender']=='user'
-){
-
-if(
-time()-$m['timestamp'] <= 3600
-){
-
-$m['text'] = $newtext;
-
-$m['edited'] = true;
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-}
-
-}
-
-}
-
-}
-
-}
-
-header("Location: support.php");
-exit;
-
-}
-
-if(isset($_POST['message'])){
-
-$text =
-trim($_POST['message']);
-
-$image = "";
-
-if(
-isset($_FILES['image'])
-&&
-$_FILES['image']['size'] > 0
-){
-
-$ext =
-strtolower(
-pathinfo(
-$_FILES['image']['name'],
-PATHINFO_EXTENSION
-)
-);
-
-$allowed = [
-'jpg',
-'jpeg',
-'png',
-'webp'
-];
-
-if(in_array($ext,$allowed)){
-
-if(!file_exists("uploads/support")){
-mkdir("uploads/support",0777,true);
-}
-
-$image =
-"uploads/support/".
-time().
-rand(1000,9999).
-".".
-$ext;
-
-move_uploaded_file(
-$_FILES['image']['tmp_name'],
-$image
-);
-
-}
-
-}
-
-$ticketFound = false;
-
-$newmsg = [
-
-'id'=>uniqid(),
-
-'sender'=>'user',
-
-'text'=>$text,
-
-'image'=>$image,
-
-'date'=>date('Y/m/d'),
-
-'time'=>date('H:i'),
-
-'timestamp'=>time()
-
-];
-
-for($i=0;$i<count($data);$i++){
-
-if($data[$i]['user']==$user){
-
-$data[$i]['messages'][] = $newmsg;
-
-$data[$i]['status']='open';
-
-$ticketFound = true;
-
-break;
-
-}
-
-}
-
-if(!$ticketFound){
-
-$data[] = [
-
-'id'=>'SUP-'.rand(1000,9999),
-
-'user'=>$user,
-
-'status'=>'open',
-
-'messages'=>[
-$newmsg
-]
-
-];
-
-}
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-header("Location: support.php");
-exit;
-
-}
-
+$data = $actionResult['data'];
 $messages = [];
+$editId = $_GET['edit'] ?? '';
 
 foreach($data as $ticket){
 
-if($ticket['user']==$user){
+    if(($ticket['user'] ?? '') === $user){
 
-if(isset($ticket['messages'])){
+        if(isset($ticket['messages'])){
+            $messages = $ticket['messages'];
+        }
 
-$messages = $ticket['messages'];
+        break;
 
-}
-
-break;
-
-}
+    }
 
 }
 
 ?>
 
 <!DOCTYPE html>
-
 <html lang="fa">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
-
-<title>
-
-پشتیبانی
-
-</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>پشتیبانی</title>
 <style>
 
 *{
@@ -317,7 +75,7 @@ height:68vh;
 overflow-y:auto;
 margin-bottom:15px;
 display:flex;
-flex-direction:column-reverse;
+flex-direction:column;
 }
 
 .msg{
@@ -330,12 +88,12 @@ word-break:break-word;
 position:relative;
 }
 
-.user{
+.msg.user{
 background:#2563eb;
 margin-left:auto;
 }
 
-.admin{
+.msg.admin{
 background:#334155;
 margin-right:auto;
 }
@@ -437,7 +195,8 @@ padding:0;
 margin-bottom:2px;
 }
 
-.action{
+.action,
+.deleteBtn{
 color:white;
 text-decoration:none;
 font-size:14px;
@@ -448,6 +207,14 @@ align-items:center;
 justify-content:center;
 background:rgba(255,255,255,0.12);
 border-radius:8px;
+border:none;
+cursor:pointer;
+padding:0;
+}
+
+.deleteForm{
+display:inline;
+margin:0;
 }
 
 .editbox{
@@ -457,6 +224,7 @@ margin-top:10px;
 .editbox textarea{
 background:#1e293b;
 min-height:80px;
+width:100%;
 }
 
 .editbtn{
@@ -483,6 +251,15 @@ color:white;
 text-decoration:none;
 }
 
+.flashError{
+background:#450a0a;
+color:#fecaca;
+padding:12px 14px;
+border-radius:12px;
+margin-bottom:12px;
+font-size:13px;
+}
+
 @media(max-width:768px){
 
 .chat{
@@ -502,115 +279,75 @@ font-size:16px;
 }
 
 </style>
-
 </head>
-
 <body>
 
 <div class="container">
 
-<div class="chat">
-
-<?php if(count($messages)==0){ ?>
-
-<div class="empty">
-
-هنوز پیامی ارسال نشده است
-
-</div>
-
+<?php if($supportError){ ?>
+<div class="flashError"><?php echo htmlspecialchars($supportError, ENT_QUOTES, 'UTF-8'); ?></div>
 <?php } ?>
 
-<?php foreach(array_reverse($messages) as $m){ ?>
+<div class="chat" id="userChat">
 
-<div class="msg <?php echo $m['sender']; ?>">
+<?php if(count($messages) === 0){ ?>
+<div class="empty">هنوز پیامی ارسال نشده است</div>
+<?php } ?>
 
-<?php echo nl2br(htmlspecialchars($m['text'])); ?>
+<?php foreach($messages as $m){
 
-<?php if(isset($m['edited'])){ ?>
+    $sender = $m['sender'] ?? 'user';
+    $timestamp = $m['timestamp'] ?? 0;
+    $canEdit = $sender === 'user' && time() - $timestamp <= 3600;
+    $canDelete = $sender === 'user' && time() - $timestamp <= 60;
+    $image = $m['image'] ?? '';
 
+    if($image !== ''){
+        $image = '/' . ltrim($image, '/');
+    }
+
+?>
+
+<div class="msg <?php echo htmlspecialchars($sender, ENT_QUOTES, 'UTF-8'); ?>" data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-timestamp="<?php echo intval($timestamp); ?>">
+
+<?php echo nl2br(htmlspecialchars($m['text'] ?? '', ENT_QUOTES, 'UTF-8')); ?>
+
+<?php if(!empty($m['edited'])){ ?>
 <br><small>(ویرایش شد)</small>
-
 <?php } ?>
 
-<?php if($m['image']!=""){ ?>
-
-<br>
-
-<img src="<?php echo $m['image']; ?>">
-
+<?php if($image !== ''){ ?>
+<br><img src="<?php echo htmlspecialchars($image, ENT_QUOTES, 'UTF-8'); ?>" alt="">
 <?php } ?>
 
 <div class="time">
 
-<?php echo $m['date']; ?>
-
+<?php echo htmlspecialchars($m['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
 -
+<?php echo htmlspecialchars($m['time'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
 
-<?php echo $m['time']; ?>
-
-<?php if(
-$m['sender']=='user'
-&&
-time()-$m['timestamp'] <= 3600
-){ ?>
-
-<a
-href="?edit=<?php echo $m['id']; ?>"
-class="action">
-
-✏️
-
-</a>
-
+<?php if($canEdit){ ?>
+<a href="?edit=<?php echo urlencode($m['id'] ?? ''); ?>" class="action">✏️</a>
 <?php } ?>
 
-<?php if(
-$m['sender']=='user'
-&&
-time()-$m['timestamp'] <= 60
-){ ?>
-
-<a
-href="?delete=<?php echo $m['id']; ?>"
-class="action">
-
-🗑
-
-</a>
-
+<?php if($canDelete){ ?>
+<form method="POST" class="deleteForm" onsubmit="return confirm('پیام حذف شود؟');">
+<?php echo $csrfField; ?>
+<input type="hidden" name="delete_message" value="1">
+<input type="hidden" name="delete_id" value="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+<button type="submit" class="deleteBtn">🗑</button>
+</form>
 <?php } ?>
 
 </div>
 
-<?php if(
-isset($_GET['edit'])
-&&
-$_GET['edit']==$m['id']
-&&
-$m['sender']=='user'
-){ ?>
+<?php if($editId !== '' && $editId === ($m['id'] ?? '') && $canEdit){ ?>
 
-<form method="POST"
-class="editbox">
-
-<textarea
-name="edit_text"
-required><?php echo htmlspecialchars($m['text']); ?></textarea>
-
-<input
-type="hidden"
-name="edit_id"
-value="<?php echo $m['id']; ?>">
-
-<button
-type="submit"
-class="editbtn">
-
-✓
-
-</button>
-
+<form method="POST" class="editbox">
+<?php echo $csrfField; ?>
+<textarea name="edit_text" required><?php echo htmlspecialchars($m['text'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+<input type="hidden" name="edit_id" value="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+<button type="submit" class="editbtn">✓</button>
 </form>
 
 <?php } ?>
@@ -623,39 +360,27 @@ class="editbtn">
 
 <div class="formbox">
 
-<form method="POST"
-enctype="multipart/form-data">
+<form method="POST" enctype="multipart/form-data" id="userSupportForm">
+
+<?php echo $csrfField; ?>
 
 <div class="sendbox">
 
 <div class="sidebuttons">
 
 <label class="attach">
-
 📎
-
-<input
-type="file"
-name="image"
-accept="image/*">
-
+<input type="file" name="image" id="userImage" accept="image/*">
 </label>
 
-<button
-type="submit"
-class="sendbtn">
-
-➤
-
-</button>
+<button type="submit" class="sendbtn">➤</button>
 
 </div>
 
 <textarea
-name="message"
-id="message"
-placeholder="پیام خود را بنویسید..."
-required></textarea>
+    name="message"
+    id="message"
+    placeholder="پیام خود را بنویسید..."></textarea>
 
 </div>
 
@@ -663,31 +388,170 @@ required></textarea>
 
 </div>
 
-<a href="dashboard.php"
-class="back">
-
-بازگشت
-
-</a>
+<a href="dashboard.php" class="back">بازگشت</a>
 
 </div>
 
 <script>
 
-const textarea =
-document.getElementById('message');
+(function(){
 
-textarea.addEventListener('input',function(){
+const userChat = document.getElementById('userChat');
+const messageInput = document.getElementById('message');
+const userSupportForm = document.getElementById('userSupportForm');
 
-this.style.height='52px';
+function scrollChatToBottom(force){
 
-this.style.height=
-(this.scrollHeight)+'px';
+    if(!userChat){
+        return;
+    }
 
-});
+    const distance =
+    userChat.scrollHeight -
+    userChat.scrollTop -
+    userChat.clientHeight;
+
+    if(force || distance < 120){
+        userChat.scrollTop = userChat.scrollHeight;
+    }
+
+}
+
+function escapeHtml(text){
+
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+}
+
+function buildMessageNode(msg){
+
+    const wrap = document.createElement('div');
+    const senderClass = msg.sender === 'admin' ? 'admin' : 'user';
+
+    wrap.className = 'msg ' + senderClass;
+    wrap.dataset.msgId = msg.id || '';
+    wrap.dataset.timestamp = msg.timestamp || 0;
+
+    let html = escapeHtml(msg.text || '').replace(/\n/g, '<br>');
+
+    if(msg.edited){
+        html += '<br><small>(ویرایش شد)</small>';
+    }
+
+    if(msg.image){
+        html += '<br><img src="' + escapeHtml(msg.image) + '" alt="">';
+    }
+
+    html += '<div class="time">' +
+        escapeHtml(msg.date || '') + ' - ' + escapeHtml(msg.time || '') +
+        '</div>';
+
+    wrap.innerHTML = html;
+    return wrap;
+
+}
+
+let lastPollTimestamp = 0;
+
+if(userChat){
+
+    userChat.querySelectorAll('.msg[data-timestamp]').forEach(function(node){
+
+        const ts = parseInt(node.dataset.timestamp || '0', 10);
+
+        if(ts > lastPollTimestamp){
+            lastPollTimestamp = ts;
+        }
+
+    });
+
+}
+
+async function pollMessages(){
+
+    if(!userChat){
+        return;
+    }
+
+    const url = 'support-api.php?since=' + (lastPollTimestamp || 0);
+
+    try{
+
+        const response = await fetch(url, {credentials: 'same-origin'});
+
+        if(!response.ok){
+            return;
+        }
+
+        const payload = await response.json();
+        let added = false;
+
+        (payload.messages || []).forEach(function(msg){
+
+            if(userChat.querySelector('[data-msg-id="' + msg.id + '"]')){
+                return;
+            }
+
+            const empty = userChat.querySelector('.empty');
+
+            if(empty){
+                empty.remove();
+            }
+
+            const node = buildMessageNode(msg);
+            userChat.appendChild(node);
+            lastPollTimestamp = Math.max(lastPollTimestamp, msg.timestamp || 0);
+            added = true;
+
+        });
+
+        if(added){
+            scrollChatToBottom(false);
+        }
+
+    }
+    catch(e){}
+
+}
+
+if(messageInput){
+
+    messageInput.addEventListener('input', function(){
+
+        this.style.height = '52px';
+        this.style.height = (this.scrollHeight) + 'px';
+
+    });
+
+}
+
+if(userSupportForm){
+
+    userSupportForm.addEventListener('submit', function(e){
+
+        const text = (messageInput?.value || '').trim();
+        const image = document.getElementById('userImage');
+
+        if(text === '' && (!image || image.files.length === 0)){
+            e.preventDefault();
+            alert('متن یا تصویر وارد کنید');
+        }
+
+    });
+
+}
+
+scrollChatToBottom(true);
+setInterval(pollMessages, 8000);
+
+})();
 
 </script>
 
 </body>
-
 </html>
