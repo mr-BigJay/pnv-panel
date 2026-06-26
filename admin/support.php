@@ -211,7 +211,7 @@ if(!$hasMessages){
 <input type="file" name="image" id="supportImage" accept="image/*">
 </label>
 
-<textarea name="message" id="supportMessage" placeholder="ارسال پیام" rows="1"></textarea>
+<textarea name="message" id="supportMessage" placeholder="ارسال پیام . . . ." rows="1"></textarea>
 
 <button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال">➤</button>
 
