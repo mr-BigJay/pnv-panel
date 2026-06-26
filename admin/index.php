@@ -239,46 +239,11 @@ $hasUnreadSupport = false;
 
 if(file_exists($supportFile)){
 
-$supportData =
-json_decode(
-file_get_contents($supportFile),
-true
-);
+require_once __DIR__ . '/../support_lib.php';
 
-if(is_array($supportData)){
+$supportData = supportLoad($supportFile);
 
-foreach($supportData as $ticket){
-
-if(isset($ticket['messages'])){
-
-foreach($ticket['messages'] as $msg){
-
-if(
-
-isset($msg['sender'])
-&&
-
-$msg['sender']=='user'
-
-&&
-
-empty($msg['seen_by_admin'])
-
-){
-
-$hasUnreadSupport = true;
-
-break 2;
-
-}
-
-}
-
-}
-
-}
-
-}
+$hasUnreadSupport = supportAdminHasUnread($supportData);
 
 }
 
@@ -790,7 +755,8 @@ grid-template-columns:1fr;
 </a>
 
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=support'), ENT_QUOTES, 'UTF-8'); ?>"
-class="supportMenu">
+class="supportMenu"
+id="adminSupportMenu">
 
 <?php if($hasUnreadSupport){ ?>
 
@@ -1041,6 +1007,46 @@ name="uploadcsv">
 <?php } ?>
 
 </div>
+
+<script>
+(function(){
+    const menuLink = document.getElementById('adminSupportMenu');
+    if(!menuLink){
+        return;
+    }
+
+    const pollUrl = <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>;
+
+    function setUnreadDot(hasUnread){
+        let dot = menuLink.querySelector('.notifDot');
+
+        if(hasUnread){
+            if(!dot){
+                dot = document.createElement('span');
+                dot.className = 'notifDot';
+                menuLink.insertBefore(dot, menuLink.firstChild);
+            }
+            return;
+        }
+
+        if(dot){
+            dot.remove();
+        }
+    }
+
+    function checkUnread(){
+        fetch(pollUrl, {credentials:'same-origin'})
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                setUnreadDot(!!data.has_unread);
+            })
+            .catch(function(){});
+    }
+
+    checkUnread();
+    setInterval(checkUnread, 10000);
+})();
+</script>
 
 </body>
 

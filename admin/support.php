@@ -46,6 +46,7 @@ $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $cssHref = '../support_ui.css?v=4';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
+$usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
 $jsHref = '../support_ui.js';
 
 if(!$supportEmbedded){
@@ -70,7 +71,10 @@ if(!$supportEmbedded){
 <a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
 <h2>پیام‌های کاربران</h2>
 </div>
-<input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو...">
+<div class="msgSearchWrap">
+<input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
+<div class="msgUserSearchResults" id="supportUserResults"></div>
+</div>
 </div>
 
 <div class="msgList">
@@ -227,6 +231,7 @@ if(!$hasMessages){
     const supportMessages = document.getElementById('supportMessages');
     const supportMessage = document.getElementById('supportMessage');
     const supportSearch = document.getElementById('supportSearch');
+    const supportUserResults = document.getElementById('supportUserResults');
     const supportBackBtn = document.getElementById('supportBackBtn');
     const supportReplyForm = document.getElementById('supportReplyForm');
     const currentUser = <?php echo json_encode($currentUser, JSON_UNESCAPED_UNICODE); ?>;
@@ -236,8 +241,11 @@ if(!$hasMessages){
             : 'support-api.php',
         JSON_UNESCAPED_UNICODE
     ); ?>;
+    const usersApiUrl = <?php echo json_encode($usersApiUrl, JSON_UNESCAPED_UNICODE); ?>;
     const listUrl = <?php echo json_encode(supportAdminUrl('', $supportEmbedded), JSON_UNESCAPED_UNICODE); ?>;
     const profileApiUrl = <?php echo json_encode($profileApiUrl, JSON_UNESCAPED_UNICODE); ?>;
+    let userSearchTimer = null;
+    let userSearchRequest = 0;
 
     window.openUserSubscriptions = function(){
         if(!currentUser){
@@ -287,15 +295,124 @@ if(!$hasMessages){
     SupportUI.bindEnterToSend(supportMessage, supportReplyForm, true);
     SupportUI.bindFormGuard(supportReplyForm, supportMessage, 'supportImage');
 
-    if(supportSearch){
-        supportSearch.addEventListener('input', function(){
-            const q = this.value.trim().toLowerCase();
-            document.querySelectorAll('.msgConv[data-username]').forEach(function(item){
-                const name = (item.dataset.username || '').toLowerCase();
-                item.style.display = name.includes(q) ? 'flex' : 'none';
+    function hideUserSearchResults(){
+        if(!supportUserResults){
+            return;
+        }
+        supportUserResults.classList.remove('is-open');
+        supportUserResults.innerHTML = '';
+    }
+
+    function openUserChat(username){
+        if(!username){
+            return;
+        }
+        const sep = listUrl.indexOf('?') >= 0 ? '&' : '?';
+        window.location.href = listUrl + sep + 'user=' + encodeURIComponent(username);
+    }
+
+    function renderUserSearchResults(users){
+        if(!supportUserResults){
+            return;
+        }
+
+        supportUserResults.innerHTML = '';
+
+        if(!users || users.length === 0){
+            supportUserResults.innerHTML = '<div class="msgUserSearchEmpty">کاربری یافت نشد</div>';
+            supportUserResults.classList.add('is-open');
+            return;
+        }
+
+        users.forEach(function(user){
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'msgUserSearchItem';
+            btn.innerHTML =
+                '<span class="msgUserSearchName">' + escapeHtml(user.username || '') + '</span>' +
+                '<span class="msgUserSearchMobile">' + escapeHtml(user.mobile || 'بدون موبایل') + '</span>';
+            btn.addEventListener('click', function(){
+                openUserChat(user.username || '');
             });
+            supportUserResults.appendChild(btn);
+        });
+
+        supportUserResults.classList.add('is-open');
+    }
+
+    function escapeHtml(value){
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function searchUsersByQuery(query){
+        if(!supportUserResults){
+            return;
+        }
+
+        const requestId = ++userSearchRequest;
+
+        fetch(
+            usersApiUrl + '?q=' + encodeURIComponent(query),
+            {credentials:'same-origin'}
+        )
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(requestId !== userSearchRequest){
+                return;
+            }
+            renderUserSearchResults(data.users || []);
+        })
+        .catch(function(){
+            if(requestId !== userSearchRequest){
+                return;
+            }
+            hideUserSearchResults();
         });
     }
+
+    if(supportSearch){
+        supportSearch.addEventListener('input', function(){
+            const q = this.value.trim();
+            const qLower = q.toLowerCase();
+
+            document.querySelectorAll('.msgConv[data-username]').forEach(function(item){
+                const name = (item.dataset.username || '').toLowerCase();
+                item.style.display = name.includes(qLower) ? 'flex' : 'none';
+            });
+
+            clearTimeout(userSearchTimer);
+
+            if(q.length < 2){
+                hideUserSearchResults();
+                return;
+            }
+
+            userSearchTimer = setTimeout(function(){
+                searchUsersByQuery(q);
+            }, 250);
+        });
+
+        supportSearch.addEventListener('keydown', function(e){
+            if(e.key === 'Escape'){
+                hideUserSearchResults();
+            }
+        });
+    }
+
+    document.addEventListener('click', function(e){
+        if(
+            supportUserResults
+            && supportSearch
+            && !supportUserResults.contains(e.target)
+            && e.target !== supportSearch
+        ){
+            hideUserSearchResults();
+        }
+    });
 
     if(supportBackBtn){
         supportBackBtn.addEventListener('click', function(){

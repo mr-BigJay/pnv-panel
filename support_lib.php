@@ -517,6 +517,143 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportEnsureTicket(&$data, $username){
+
+        $username = trim($username);
+
+        if($username === ''){
+            return -1;
+        }
+
+        $ticketIndex = supportFindTicketIndex($data, $username);
+
+        if($ticketIndex >= 0){
+            return $ticketIndex;
+        }
+
+        $data[] = [
+            'id' => 'SUP-' . rand(1000, 9999),
+            'user' => $username,
+            'status' => 'open',
+            'messages' => []
+        ];
+
+        return count($data) - 1;
+
+    }
+
+    function supportAdminHasUnread($data){
+
+        if(!is_array($data)){
+            return false;
+        }
+
+        foreach($data as $ticket){
+
+            if(supportTicketHasUnreadForAdmin($ticket)){
+                return true;
+            }
+
+        }
+
+        return false;
+
+    }
+
+    function supportAdminUnreadTotal($data){
+
+        if(!is_array($data)){
+            return 0;
+        }
+
+        $total = 0;
+
+        foreach($data as $ticket){
+            $total += supportAdminUnreadCount($ticket);
+        }
+
+        return $total;
+
+    }
+
+    function supportSearchUsers($query, $limit = 10){
+
+        $query = trim($query);
+
+        if($query === ''){
+            return [];
+        }
+
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!file_exists($usersFile)){
+            return [];
+        }
+
+        $users = json_decode(file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return [];
+        }
+
+        $queryLower = mb_strtolower($query);
+        $queryDigits = preg_replace('/\D+/', '', $query);
+        $results = [];
+
+        foreach($users as $user){
+
+            if(!is_array($user)){
+                continue;
+            }
+
+            $username = trim($user['username'] ?? '');
+            $mobile = trim($user['mobile'] ?? '');
+
+            if($username === ''){
+                continue;
+            }
+
+            $match = false;
+
+            if(mb_strpos(mb_strtolower($username), $queryLower) !== false){
+                $match = true;
+            }
+
+            if(
+                !$match
+                && $queryDigits !== ''
+                && $mobile !== ''
+            ){
+                $mobileDigits = preg_replace('/\D+/', '', $mobile);
+
+                if(
+                    $mobileDigits !== ''
+                    && strpos($mobileDigits, $queryDigits) !== false
+                ){
+                    $match = true;
+                }
+
+            }
+
+            if(!$match){
+                continue;
+            }
+
+            $results[] = [
+                'username' => $username,
+                'mobile' => $mobile
+            ];
+
+            if(count($results) >= $limit){
+                break;
+            }
+
+        }
+
+        return $results;
+
+    }
+
     function supportAdminUrl($user = '', $embedded = false){
 
         if(!$embedded && supportIsEmbeddedRequest()){
@@ -753,7 +890,7 @@ if(!function_exists('supportLoad')){
                     $error = 'متن یا تصویر وارد کنید';
                 }
                 else{
-                    $ticketIndex = supportFindTicketIndex($data, $user);
+                    $ticketIndex = supportEnsureTicket($data, $user);
 
                     if($ticketIndex >= 0){
 
@@ -776,9 +913,9 @@ if(!function_exists('supportLoad')){
 
                         $data[$ticketIndex]['status'] = 'answered';
 
-                    }
+                        supportSave($file, $data);
 
-                    supportSave($file, $data);
+                    }
                     $redirect = supportAdminUrl($user, $embedded);
                 }
 

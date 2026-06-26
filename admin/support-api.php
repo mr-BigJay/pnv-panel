@@ -54,5 +54,7 @@ foreach($data as $ticket){
 echo json_encode([
     'messages' => $messages,
     'status' => $status,
-    'unreadUsers' => $unreadUsers
+    'unreadUsers' => $unreadUsers,
+    'has_unread' => count($unreadUsers) > 0,
+    'unread_count' => supportAdminUnreadTotal($data)
 ], JSON_UNESCAPED_UNICODE);

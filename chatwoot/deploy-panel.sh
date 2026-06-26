@@ -12,11 +12,11 @@ echo "==> Deploy commit: $COMMIT (branch: $BR)"
 
 mkdir -p "$HTML/bigjay_controller"
 
-for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php; do
+for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php; do
   curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
 done
 
-for f in auth.php index.php support.php support-api.php; do
+for f in auth.php index.php support.php support-api.php support-users-api.php; do
   curl -fL -o "$HTML/admin/$f" "$BASE/admin/$f"
 done
 

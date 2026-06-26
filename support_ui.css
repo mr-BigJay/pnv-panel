@@ -440,6 +440,73 @@ outline:none;
 border-color:#3b82f6;
 }
 
+.msgSearchWrap{
+position:relative;
+}
+
+.msgUserSearchResults{
+position:absolute;
+top:calc(100% + 6px);
+right:0;
+left:0;
+z-index:30;
+max-height:280px;
+overflow-y:auto;
+background:var(--msg-panel);
+border:1px solid var(--msg-border);
+border-radius:12px;
+box-shadow:0 12px 32px rgba(0,0,0,.35);
+display:none;
+}
+
+.msgUserSearchResults.is-open{
+display:block;
+}
+
+.msgUserSearchItem{
+display:flex;
+flex-direction:column;
+gap:4px;
+width:100%;
+padding:12px 14px;
+border:none;
+border-bottom:1px solid var(--msg-border);
+background:transparent;
+color:var(--msg-text);
+text-align:right;
+font-family:inherit;
+cursor:pointer;
+}
+
+.msgUserSearchItem:last-child{
+border-bottom:none;
+}
+
+.msgUserSearchItem:hover,
+.msgUserSearchItem:focus{
+background:var(--msg-card);
+outline:none;
+}
+
+.msgUserSearchName{
+font-size:14px;
+font-weight:700;
+}
+
+.msgUserSearchMobile{
+font-size:12px;
+color:var(--msg-muted);
+direction:ltr;
+text-align:right;
+}
+
+.msgUserSearchEmpty{
+padding:14px;
+font-size:13px;
+color:var(--msg-muted);
+text-align:center;
+}
+
 .msgList{
 flex:1;
 overflow-y:auto;
