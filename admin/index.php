@@ -773,7 +773,7 @@ grid-template-columns:1fr;
 
 </head>
 
-<body>
+<body class="<?php echo $page === 'support' ? 'adminPageSupport' : ''; ?>">
 
 <div class="sidebar">
 
