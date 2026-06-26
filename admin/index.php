@@ -726,6 +726,7 @@ margin-right:280px;
 padding:0;
 height:100vh;
 overflow:hidden;
+background:#0b1220;
 }
 
 @media(max-width:768px){
@@ -874,6 +875,8 @@ class="red">
 $supportEmbedded = true;
 include "support.php";
 ?>
+
+<?php } ?>
 
 <?php if($page=='payments'){ ?>
 
