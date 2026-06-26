@@ -201,18 +201,19 @@ if(!$hasMessages){
 </div>
 
 <footer class="supportSendbox">
-<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner">
+<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner" action="<?php echo htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8'); ?>">
 
 <?php echo $csrfField; ?>
+<input type="hidden" name="reply" value="1">
 <input type="hidden" name="user" value="<?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?>">
 
 <label class="msgIconBtn msgIconBtn--attach" title="تصویر">📎
 <input type="file" name="image" id="supportImage" accept="image/*">
 </label>
 
-<textarea name="message" id="supportMessage" placeholder="پاسخ... (Enter ارسال)" rows="1"></textarea>
+<textarea name="message" id="supportMessage" placeholder="پاسخ... (Enter ارسال، Shift+Enter خط جدید)" rows="1"></textarea>
 
-<button type="submit" name="reply" class="msgIconBtn msgIconBtn--send" title="ارسال">➤</button>
+<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال">➤</button>
 
 </form>
 </footer>
@@ -225,7 +226,7 @@ if(!$hasMessages){
 
 <div id="profileHost"></div>
 
-<script src="../support_ui.js?v=3"></script>
+<script src="../support_ui.js?v=4"></script>
 <script>
 (function(){
     const supportMessages = document.getElementById('supportMessages');

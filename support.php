@@ -80,9 +80,10 @@ foreach($data as $ticket){
 </div>
 
 <footer class="msgComposer">
-<form method="POST" enctype="multipart/form-data" id="userSupportForm" class="msgComposerInner">
+<form method="POST" enctype="multipart/form-data" id="userSupportForm" class="msgComposerInner" action="support.php">
 
 <?php echo $csrfField; ?>
+<input type="hidden" name="send" value="1">
 
 <label class="msgIconBtn msgIconBtn--attach" title="پیوست تصویر">
 📎
@@ -102,7 +103,7 @@ foreach($data as $ticket){
 
 </div>
 
-<script src="support_ui.js?v=3"></script>
+<script src="support_ui.js?v=4"></script>
 <script>
 (function(){
     const userChat = document.getElementById('userChat');

@@ -872,7 +872,17 @@ if(!function_exists('supportLoad')){
 
         }
 
-        if(isset($_POST['reply']) && $redirect === null){
+        if(
+            (
+                isset($_POST['reply'])
+                || (
+                    isset($_POST['message'], $_POST['user'])
+                    && !isset($_POST['edit_id'])
+                    && !isset($_POST['delete_message'])
+                )
+            )
+            && $redirect === null
+        ){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';
@@ -1028,7 +1038,13 @@ if(!function_exists('supportLoad')){
 
         }
 
-        if(isset($_POST['message']) && $error === null){
+        if(
+            (
+                isset($_POST['send'])
+                || isset($_POST['message'])
+            )
+            && $error === null
+        ){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';

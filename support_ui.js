@@ -55,6 +55,43 @@
 
     }
 
+    function submitComposerForm(form){
+
+        if(!form){
+            return;
+        }
+
+        const submitBtn = form.querySelector(
+            'button[type="submit"], input[type="submit"]'
+        );
+
+        try{
+
+            if(typeof form.requestSubmit === 'function'){
+
+                if(submitBtn){
+                    form.requestSubmit(submitBtn);
+                }
+                else{
+                    form.requestSubmit();
+                }
+
+                return;
+
+            }
+
+        }
+        catch(err){}
+
+        if(submitBtn){
+            submitBtn.click();
+            return;
+        }
+
+        form.submit();
+
+    }
+
     function bindEnterToSend(textarea, form, allowEmptyImage){
 
         if(!textarea || !form){
@@ -91,7 +128,7 @@
                 return;
             }
 
-            form.requestSubmit();
+            submitComposerForm(form);
 
         });
 
@@ -226,7 +263,8 @@
         bindTextareaGrow: bindTextareaGrow,
         bindEnterToSend: bindEnterToSend,
         bindFormGuard: bindFormGuard,
-        initPolling: initPolling
+        initPolling: initPolling,
+        submitComposerForm: submitComposerForm
     };
 
 })(window);
