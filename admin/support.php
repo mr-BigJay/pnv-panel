@@ -4,6 +4,12 @@ if(!isset($supportEmbedded)){
     $supportEmbedded = false;
 }
 
+require_once __DIR__ . '/../support_lib.php';
+
+if(!$supportEmbedded && supportIsEmbeddedRequest()){
+    $supportEmbedded = true;
+}
+
 if(!$supportEmbedded){
 
     session_start();
@@ -14,8 +20,6 @@ if(!$supportEmbedded){
     }
 
 }
-
-require_once __DIR__ . '/../support_lib.php';
 
 $file = __DIR__ . '/../db/support.json';
 $csrfField = supportCsrfField();
@@ -141,6 +145,24 @@ display:flex;
 align-items:center;
 justify-content:space-between;
 gap:10px;
+flex-wrap:wrap;
+}
+
+.supportChatHeaderActions{
+display:flex;
+align-items:center;
+gap:8px;
+flex-wrap:wrap;
+}
+
+.viewSubsBtn{
+background:#2563eb;
+color:white;
+text-decoration:none;
+font-size:13px;
+padding:8px 14px;
+border-radius:10px;
+white-space:nowrap;
 }
 
 .supportBackBtn{
@@ -457,6 +479,13 @@ flex:1;
 <div class="supportChatHeader">
     <button type="button" class="supportBackBtn" id="supportBackBtn">← لیست</button>
     <span>چت با: <?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?></span>
+    <div class="supportChatHeaderActions">
+        <a
+            href="users.php?openProfile=<?php echo urlencode($currentUser); ?>"
+            class="viewSubsBtn">
+            📦 اشتراک‌ها
+        </a>
+    </div>
 </div>
 
 <div class="supportMessages" id="supportMessages">

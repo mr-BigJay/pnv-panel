@@ -2,6 +2,13 @@
 
 if(!function_exists('supportLoad')){
 
+    function supportIsEmbeddedRequest(){
+
+        return basename($_SERVER['SCRIPT_NAME'] ?? '') === 'index.php'
+            && (($_GET['page'] ?? '') === 'support');
+
+    }
+
     function supportLoad($file){
 
         if(!file_exists($file)){
@@ -404,6 +411,10 @@ if(!function_exists('supportLoad')){
     }
 
     function supportAdminUrl($user = '', $embedded = false){
+
+        if(!$embedded && supportIsEmbeddedRequest()){
+            $embedded = true;
+        }
 
         if($embedded){
             $url = 'index.php?page=support';
