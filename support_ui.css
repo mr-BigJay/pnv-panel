@@ -221,16 +221,17 @@ border-bottom-left-radius:4px;
 color:white;
 }
 
-.msgApp--user .msg.admin{
+.msgApp--user .msg.admin,
+.msgApp--user .msgBubble.is-admin{
 background:var(--msg-in);
+color:var(--msg-text);
 margin-right:auto;
 margin-left:0;
 border-bottom-right-radius:4px;
 }
 
 .supportPage .msg.admin,
-.msgBubble.is-admin,
-.msg.admin{
+.supportPage .msgBubble.is-admin{
 background:var(--msg-admin);
 color:#052e16;
 margin-left:auto;
