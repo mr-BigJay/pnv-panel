@@ -39,7 +39,7 @@ foreach($data as $ticket){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>پیام به پشتیبانی</title>
-<link rel="stylesheet" href="support_ui.css">
+<link rel="stylesheet" href="support_ui.css?v=2">
 </head>
 <body>
 
@@ -102,7 +102,7 @@ foreach($data as $ticket){
 
 </div>
 
-<script src="support_ui.js"></script>
+<script src="support_ui.js?v=2"></script>
 <script>
 (function(){
     const userChat = document.getElementById('userChat');

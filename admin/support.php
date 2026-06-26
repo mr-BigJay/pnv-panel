@@ -44,7 +44,7 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = $supportEmbedded ? '../support_ui.css' : '../support_ui.css';
+$cssHref = '../support_ui.css?v=2';
 $jsHref = '../support_ui.js';
 
 if(!$supportEmbedded){

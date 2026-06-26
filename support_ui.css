@@ -243,22 +243,34 @@ border-top:1px solid var(--msg-border);
 flex-shrink:0;
 }
 
-.msgComposerInner{
+.msgComposerInner,
+form.msgComposerInner{
 display:flex;
+flex-direction:row;
 align-items:flex-end;
-gap:8px;
+gap:10px;
+width:100%;
+box-sizing:border-box;
 background:var(--msg-card);
 border:1px solid var(--msg-border);
 border-radius:var(--msg-radius);
-padding:8px;
+padding:10px;
 }
 
+.msgComposerInner input[type="hidden"]{
+display:none !important;
+}
+
+.msgComposerInner textarea,
 .msgComposer textarea{
-flex:1;
+flex:1 1 0;
+min-width:0;
+width:auto !important;
+max-width:none !important;
 min-height:44px;
 max-height:160px;
 padding:10px 12px;
-border:none;
+border:none !important;
 background:transparent;
 color:var(--msg-text);
 font-family:inherit;
@@ -266,15 +278,38 @@ font-size:15px;
 resize:none;
 outline:none;
 line-height:1.6;
+margin:0 !important;
+box-sizing:border-box;
 }
 
+.msgComposerInner textarea::placeholder,
 .msgComposer textarea::placeholder{
 color:var(--msg-muted);
 }
 
+.msgComposerInner .msgIconBtn,
+.msgComposerInner button[type="submit"],
+.msgComposerInner button[name="reply"]{
+width:44px !important;
+height:44px !important;
+min-width:44px !important;
+max-width:44px !important;
+margin:0 !important;
+padding:0 !important;
+flex:0 0 44px;
+border:none;
+border-radius:12px;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+cursor:pointer;
+font-size:18px;
+box-sizing:border-box;
+}
+
 .msgIconBtn{
-width:42px;
-height:42px;
+width:44px;
+height:44px;
 border:none;
 border-radius:12px;
 display:flex;
@@ -360,8 +395,9 @@ overflow:hidden;
 }
 
 .supportPage.supportEmbedded{
-height:calc(100vh - 0px);
-margin:-20px;
+height:100vh;
+margin:0;
+min-height:0;
 }
 
 .msgSidebar{
@@ -487,12 +523,15 @@ flex:1;
 display:flex;
 flex-direction:column;
 min-width:0;
+min-height:0;
 background:var(--msg-bg);
 }
 
 .supportChatbox .msgHeader{
-justify-content:space-between;
-flex-wrap:wrap;
+justify-content:flex-start;
+flex-wrap:nowrap;
+gap:12px;
+flex-shrink:0;
 }
 
 .supportChatHeaderActions{
@@ -519,6 +558,7 @@ padding:8px 12px;
 border-radius:10px;
 cursor:pointer;
 font-family:inherit;
+flex-shrink:0;
 }
 
 .supportMessages{
@@ -527,16 +567,101 @@ overflow-y:auto;
 padding:16px;
 display:flex;
 flex-direction:column;
-gap:4px;
+gap:8px;
+min-height:0;
+}
+
+.supportPage .msg.usermsg{
+background:var(--msg-in);
+color:var(--msg-text);
+margin-right:auto;
+margin-left:0;
+border-bottom-right-radius:4px;
+max-width:78%;
+}
+
+.supportPage .msg.admin{
+background:var(--msg-admin);
+color:#052e16;
+margin-left:auto;
+margin-right:0;
+border-bottom-left-radius:4px;
+max-width:78%;
 }
 
 .supportSendbox{
 padding:12px 14px 16px;
 background:var(--msg-panel);
 border-top:1px solid var(--msg-border);
+flex-shrink:0;
+}
+
+.supportSendbox form.msgComposerInner{
+margin:0;
+}
+
+/* جلوگیری از تداخل استایل پنل ادمین */
+.content-support .supportPage input:not([type="hidden"]),
+.content-support .supportPage select,
+.content-support .supportPage button,
+.content-support .supportPage textarea,
+.supportPage .msgComposerInner input,
+.supportPage .msgComposerInner button,
+.supportPage .msgComposerInner textarea,
+.msgApp .msgComposerInner input,
+.msgApp .msgComposerInner button,
+.msgApp .msgComposerInner textarea{
+width:auto;
+max-width:none;
+margin:0;
+}
+
+.content-support .supportPage .msgIconBtn,
+.content-support .supportPage .msgComposerInner button{
+width:44px !important;
+min-width:44px !important;
+max-width:44px !important;
+}
+
+.content-support .supportPage .msgComposerInner textarea{
+flex:1 1 0 !important;
+min-width:0 !important;
+width:auto !important;
+}
+
+.supportPage.supportEmbedded{
+height:100vh;
+margin:0;
+min-height:0;
+}
+
+.content-support{
+margin-right:280px;
+padding:0 !important;
+height:100vh;
+overflow:hidden;
+background:var(--msg-bg);
+}
+
+.supportChatbox .msgHeader .msgHeaderInfo{
+flex:1;
+min-width:0;
+}
+
+.supportChatbox .msgHeader .msgHeaderInfo h2{
+font-size:16px;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
 }
 
 @media(max-width:768px){
+
+.content-support .supportPage input,
+.content-support .supportPage button,
+.content-support .supportPage textarea{
+width:auto !important;
+}
 
 .msgApp--user{
 max-width:100%;

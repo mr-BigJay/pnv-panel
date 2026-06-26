@@ -743,8 +743,17 @@ margin-right:0;
 
 .content-support{
 margin-right:0;
-height:auto;
+height:100vh;
 min-height:100vh;
+}
+
+.content-support input,
+.content-support select,
+.content-support button,
+.content-support textarea{
+width:auto !important;
+max-width:none !important;
+margin:0 !important;
 }
 
 input,
