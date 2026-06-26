@@ -46,7 +46,7 @@ foreach($data as $ticket){
 <div class="msgApp msgApp--user">
 
 <header class="msgHeader">
-<a href="dashboard.php" class="msgBack" title="بازگشت">←</a>
+<a href="dashboard.php" class="userBackBtn" title="بازگشت">← بازگشت</a>
 <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($user), ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="msgHeaderInfo">
 <h1>پشتیبانی</h1>
