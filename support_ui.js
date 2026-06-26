@@ -25,15 +25,32 @@
 
     }
 
+    function isMobileComposer(){
+
+        return window.matchMedia('(max-width: 768px)').matches;
+
+    }
+
     function bindTextareaGrow(textarea){
 
         if(!textarea){
             return;
         }
 
+        const maxHeight = 160;
+
+        textarea.style.overflowY = 'hidden';
+
         textarea.addEventListener('input', function(){
+
             this.style.height = '44px';
-            this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+
+            const scrollHeight = this.scrollHeight;
+            const nextHeight = Math.min(scrollHeight, maxHeight);
+
+            this.style.height = nextHeight + 'px';
+            this.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+
         });
 
     }
@@ -44,9 +61,21 @@
             return;
         }
 
+        if(isMobileComposer()){
+            textarea.setAttribute('enterkeyhint', 'enter');
+        }
+
         textarea.addEventListener('keydown', function(e){
 
-            if(e.key !== 'Enter' || e.shiftKey){
+            if(e.key !== 'Enter'){
+                return;
+            }
+
+            if(isMobileComposer()){
+                return;
+            }
+
+            if(e.shiftKey){
                 return;
             }
 

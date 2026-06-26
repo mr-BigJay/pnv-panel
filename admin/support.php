@@ -44,7 +44,7 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=4';
+$cssHref = '../support_ui.css?v=5';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
 $jsHref = '../support_ui.js';
@@ -225,7 +225,7 @@ if(!$hasMessages){
 
 <div id="profileHost"></div>
 
-<script src="../support_ui.js?v=2"></script>
+<script src="../support_ui.js?v=3"></script>
 <script>
 (function(){
     const supportMessages = document.getElementById('supportMessages');

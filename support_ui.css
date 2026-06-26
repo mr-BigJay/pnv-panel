@@ -105,17 +105,67 @@ radial-gradient(circle at top right,rgba(59,130,246,.08),transparent 40%),
 var(--msg-bg);
 }
 
+/* اسکرول‌بار مدرن — لیست پیام‌ها و سایدبار */
+.msgBody,
+.supportMessages,
+.msgList,
+.msgSidebar,
+.msgUserSearchResults,
+.profileModal{
+scrollbar-width:thin;
+scrollbar-color:rgba(100,116,139,.55) transparent;
+}
+
 .msgBody::-webkit-scrollbar,
+.supportMessages::-webkit-scrollbar,
+.msgList::-webkit-scrollbar,
 .msgSidebar::-webkit-scrollbar,
-.msgList::-webkit-scrollbar{
-width:6px;
+.msgUserSearchResults::-webkit-scrollbar,
+.profileModal::-webkit-scrollbar{
+width:8px;
+height:8px;
+}
+
+.msgBody::-webkit-scrollbar-track,
+.supportMessages::-webkit-scrollbar-track,
+.msgList::-webkit-scrollbar-track,
+.msgSidebar::-webkit-scrollbar-track,
+.msgUserSearchResults::-webkit-scrollbar-track,
+.profileModal::-webkit-scrollbar-track{
+background:transparent;
 }
 
 .msgBody::-webkit-scrollbar-thumb,
+.supportMessages::-webkit-scrollbar-thumb,
+.msgList::-webkit-scrollbar-thumb,
 .msgSidebar::-webkit-scrollbar-thumb,
-.msgList::-webkit-scrollbar-thumb{
-background:#334155;
-border-radius:8px;
+.msgUserSearchResults::-webkit-scrollbar-thumb,
+.profileModal::-webkit-scrollbar-thumb{
+background:rgba(100,116,139,.45);
+border-radius:999px;
+border:2px solid transparent;
+background-clip:padding-box;
+}
+
+.msgBody::-webkit-scrollbar-thumb:hover,
+.supportMessages::-webkit-scrollbar-thumb:hover,
+.msgList::-webkit-scrollbar-thumb:hover,
+.msgSidebar::-webkit-scrollbar-thumb:hover,
+.msgUserSearchResults::-webkit-scrollbar-thumb:hover,
+.profileModal::-webkit-scrollbar-thumb:hover{
+background:rgba(148,163,184,.65);
+background-clip:padding-box;
+}
+
+.msgBody::-webkit-scrollbar-button,
+.supportMessages::-webkit-scrollbar-button,
+.msgList::-webkit-scrollbar-button,
+.msgSidebar::-webkit-scrollbar-button,
+.msgUserSearchResults::-webkit-scrollbar-button,
+.profileModal::-webkit-scrollbar-button{
+display:none;
+width:0;
+height:0;
 }
 
 .msgDaySep{
@@ -280,6 +330,16 @@ outline:none;
 line-height:1.6;
 margin:0 !important;
 box-sizing:border-box;
+overflow-y:hidden;
+scrollbar-width:none;
+-ms-overflow-style:none;
+}
+
+.msgComposerInner textarea::-webkit-scrollbar,
+.msgComposer textarea::-webkit-scrollbar{
+display:none;
+width:0;
+height:0;
 }
 
 .msgComposerInner textarea::placeholder,
