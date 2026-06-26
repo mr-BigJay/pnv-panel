@@ -17,7 +17,7 @@ services:
       - redis_data:/data
 
   chatwoot:
-    image: chatwoot/chatwoot:latest
+    image: chatwoot/chatwoot:v3.14.0
     restart: always
     depends_on:
       - postgres
