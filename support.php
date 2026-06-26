@@ -39,7 +39,7 @@ foreach($data as $ticket){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>پیام به پشتیبانی</title>
-<link rel="stylesheet" href="support_ui.css?v=8">
+<link rel="stylesheet" href="support_ui.css?v=9">
 </head>
 <body>
 
