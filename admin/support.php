@@ -44,7 +44,7 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=3';
+$cssHref = '../support_ui.css?v=4';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $jsHref = '../support_ui.js';
 
@@ -66,7 +66,10 @@ if(!$supportEmbedded){
 <aside class="msgSidebar" id="supportSidebar">
 
 <div class="msgSidebarHead">
+<div class="msgSidebarHeadRow">
+<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
 <h2>پیام‌های کاربران</h2>
+</div>
 <input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو...">
 </div>
 
