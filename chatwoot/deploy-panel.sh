@@ -25,6 +25,18 @@ curl -fL -o "$HTML/support_ui.css" "$BASE/support_ui.css"
 curl -fL -o "$HTML/support_ui.js" "$BASE/support_ui.js"
 curl -fL -o "$HTML/dashboard.php" "$BASE/dashboard.php"
 
+echo "==> admin/index.php size: $(wc -c < "$HTML/admin/index.php") bytes (expect ~11198)"
+
+if grep -q 'support_setup.php' "$HTML/admin/index.php"; then
+  echo "ERROR: old index.php still references support_setup.php"
+  exit 1
+fi
+
+if command -v php >/dev/null 2>&1; then
+  php -l "$HTML/admin/index.php"
+  php -l "$HTML/admin/support.php"
+fi
+
 curl -fL -o "$NGINX_AVAIL" "$BASE/chatwoot/nginx-panel.ticketin.ir.ssl.conf"
 
 if [ ! -e "$NGINX_ENABLED" ]; then
