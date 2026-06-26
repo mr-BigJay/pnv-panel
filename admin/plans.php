@@ -85,7 +85,7 @@ JSON_PRETTY_PRINT
 )
 );
 
-header("Location: plans.php");
+header("Location: " . pnvAdminUrl('plans.php'));
 exit;
 
 }
@@ -109,7 +109,7 @@ JSON_PRETTY_PRINT
 )
 );
 
-header("Location: plans.php");
+header("Location: " . pnvAdminUrl('plans.php'));
 exit;
 
 }
@@ -493,7 +493,7 @@ onclick="return confirm('پلن حذف شود؟')">
 
 </div>
 
-<a href="index.php"
+<a href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
 class="back">
 
 بازگشت به مدیریت

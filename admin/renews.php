@@ -1,8 +1,10 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/functions.php';
 
 if(!pnvAdminIsLoggedIn()){
+header('Location: ' . pnvAdminEntryUrl());
 exit;
 }
 
@@ -52,7 +54,7 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-header('Location:index.php?page=renews');
+header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -77,7 +79,7 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-header('Location:index.php?page=renews');
+header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -102,7 +104,7 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-header('Location:index.php?page=renews');
+header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }

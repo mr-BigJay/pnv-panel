@@ -385,7 +385,15 @@ JSON_PRETTY_PRINT
 )
 );
 
-header('Location: index.php?page=plans');
+header('Location: ' . pnvAdminUrl('plans.php'));
+
+exit;
+
+}
+
+if($page === 'plans'){
+
+header('Location: ' . pnvAdminUrl('plans.php'));
 
 exit;
 
@@ -412,7 +420,7 @@ JSON_PRETTY_PRINT
 
 }
 
-header('Location: index.php?page=plans');
+header('Location: ' . pnvAdminUrl('plans.php'));
 
 exit;
 
@@ -434,7 +442,7 @@ JSON_PRETTY_PRINT
 )
 );
 
-header('Location: index.php?page=cards');
+header('Location: ' . pnvAdminUrl('index.php?page=cards'));
 
 exit;
 
@@ -461,7 +469,7 @@ JSON_PRETTY_PRINT
 
 }
 
-header('Location: index.php?page=cards');
+header('Location: ' . pnvAdminUrl('index.php?page=cards'));
 
 exit;
 
@@ -476,7 +484,7 @@ $_FILES['csv']['tmp_name'],
 '../db/'.$server.'.csv'
 );
 
-header('Location: index.php?page=upload');
+header('Location: ' . pnvAdminUrl('index.php?page=upload'));
 
 exit;
 
@@ -748,7 +756,7 @@ grid-template-columns:1fr;
 
 </h2>
 
-<a href="index.php">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>">
 
 داشبورد
 
@@ -768,14 +776,14 @@ id="adminSupportMenu">
 
 </a>
 
-<a href="users.php">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('users.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 لیست کاربران
 
 </a>
 
 <a
-href="index.php?page=payments"
+href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=payments'), ENT_QUOTES, 'UTF-8'); ?>"
 class="supportMenu">
 
 <?php if($hasNewPayments){ ?>
@@ -789,7 +797,7 @@ class="supportMenu">
 </a>
 
 <a
-href="index.php?page=renews"
+href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=renews'), ENT_QUOTES, 'UTF-8'); ?>"
 class="supportMenu">
 
 <?php if($hasNewRenews){ ?>
@@ -802,32 +810,32 @@ class="supportMenu">
 
 </a>
 
-<a href="plans.php">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('plans.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت پلن ها
 
 </a>
 
-<a href="index.php?page=cards">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=cards'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت کارت ها
 
 </a>
 
-<a href="downloads.php">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('downloads.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت دانلودها
 
 </a>
 
-<a href="index.php?page=upload">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=upload'), ENT_QUOTES, 'UTF-8'); ?>">
 
 آپلود فایل کاربران سرورها
 
 </a>
 
 <a
-href="index.php?logout=1"
+href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?logout=1'), ENT_QUOTES, 'UTF-8'); ?>"
 class="red">
 
 خروج
@@ -932,7 +940,7 @@ name="add_card">
 <td>
 
 <a
-href="index.php?page=cards&deletecard=<?php echo $i; ?>"
+href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=cards&deletecard=' . $i), ENT_QUOTES, 'UTF-8'); ?>"
 class="red">
 
 حذف

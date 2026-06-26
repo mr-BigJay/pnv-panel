@@ -1,8 +1,10 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/functions.php';
 
 if(!pnvAdminIsLoggedIn()){
+    header('Location: ' . pnvAdminEntryUrl());
     exit;
 }
 
@@ -80,7 +82,7 @@ if(isset($_POST['approve_payment'])){
 
     fclose($fp);
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
     exit;
 
@@ -110,7 +112,7 @@ if(isset($_POST['reject_payment'])){
 
     fclose($fp);
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
     exit;
 
@@ -138,7 +140,7 @@ if(isset($_GET['deletepayment'])){
 
     fclose($fp);
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
     exit;
 

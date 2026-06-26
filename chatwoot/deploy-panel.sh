@@ -16,7 +16,7 @@ for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-
   curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
 done
 
-for f in auth.php index.php support.php support-api.php support-users-api.php; do
+for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php; do
   curl -fL -o "$HTML/admin/$f" "$BASE/admin/$f"
 done
 

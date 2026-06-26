@@ -79,7 +79,7 @@ LOCK_EX
 
 }
 
-header("Location: users.php");
+header("Location: " . pnvAdminUrl('users.php'));
 exit;
 
 }
@@ -120,7 +120,7 @@ LOCK_EX
 
 }
 
-header("Location: users.php");
+header("Location: " . pnvAdminUrl('users.php'));
 exit;
 }
 
@@ -149,7 +149,7 @@ LOCK_EX
 
 }
 
-header("Location: users.php");
+header("Location: " . pnvAdminUrl('users.php'));
 exit;
 }
 
@@ -177,7 +177,7 @@ LOCK_EX
 
 }
 
-header("Location: users.php");
+header("Location: " . pnvAdminUrl('users.php'));
 exit;
 }
 
@@ -716,7 +716,7 @@ background:#22c55e;
 </h2>
 
 <a
-href="index.php"
+href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
 class="backTop">
 
 بازگشت
@@ -726,7 +726,7 @@ class="backTop">
 <div class="topbar">
 
 <a
-href="users.php?backup=1"
+href="<?php echo htmlspecialchars(pnvAdminUrl('users.php?backup=1'), ENT_QUOTES, 'UTF-8'); ?>"
 class="backupBtn">
 
 دانلود بکاپ کاربران
@@ -876,7 +876,7 @@ onclick="openDeleteModal(
 <?php for($x=1;$x<=$totalPages;$x++){ ?>
 
 <a
-href="users.php?p=<?php echo $x; ?>"
+href="<?php echo htmlspecialchars(pnvAdminUrl('users.php?p=' . $x), ENT_QUOTES, 'UTF-8'); ?>"
 class="<?php echo ($page==$x)?'activePage':''; ?>">
 
 <?php echo $x; ?>
@@ -903,6 +903,9 @@ id="modalContent"></div>
 <div id="profileHost"></div>
 
 <script>
+
+const usersPageUrl = <?php echo json_encode(pnvAdminUrl('users.php'), JSON_UNESCAPED_UNICODE); ?>;
+const profileApiUrl = <?php echo json_encode(pnvAdminUrl('user-profile.php'), JSON_UNESCAPED_UNICODE); ?>;
 
 function toggleMenu(id){
 
@@ -1151,7 +1154,7 @@ openModal(`
 </div>
 
 <a
-href="users.php?delete=${id}"
+href="${usersPageUrl}?delete=${id}"
 class="deleteButton">
 
 حذف کاربر
@@ -1191,7 +1194,7 @@ p.type='password';
 function loadProfile(user, page = 1){
 
 fetch(
-'user-profile.php?user='
+profileApiUrl + '?user='
 + encodeURIComponent(user)
 + '&p='
 + page,

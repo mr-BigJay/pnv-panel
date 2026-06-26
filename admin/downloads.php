@@ -65,7 +65,7 @@ if(file_exists($path)){
 unlink($path);
 }
 
-header("Location:downloads.php");
+header("Location: " . pnvAdminUrl('downloads.php'));
 exit;
 
 }
