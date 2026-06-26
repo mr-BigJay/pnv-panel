@@ -110,6 +110,7 @@ usort($purchases, function($a, $b){
 });
 
 $page = intval($_GET['p'] ?? 1);
+$showAll = isset($_GET['all']) && $_GET['all'] === '1';
 
 if($page < 1){
     $page = 1;
@@ -118,8 +119,16 @@ if($page < 1){
 $perPage = 5;
 $totalCount = count($purchases);
 $totalPages = max(1, (int)ceil($totalCount / $perPage));
-$start = ($page - 1) * $perPage;
-$purchasesPage = array_slice($purchases, $start, $perPage);
+
+if($showAll){
+    $purchasesPage = $purchases;
+    $totalPages = 1;
+    $page = 1;
+}
+else{
+    $start = ($page - 1) * $perPage;
+    $purchasesPage = array_slice($purchases, $start, $perPage);
+}
 
 function profileStatusClass($status){
 
@@ -223,7 +232,7 @@ function profileStatusClass($status){
 
     <?php } ?>
 
-    <?php if($totalPages > 1){ ?>
+    <?php if(!$showAll && $totalPages > 1){ ?>
 
     <div class="profilePagination">
 

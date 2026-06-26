@@ -44,7 +44,8 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=2';
+$cssHref = '../support_ui.css?v=3';
+$profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $jsHref = '../support_ui.js';
 
 if(!$supportEmbedded){
@@ -141,7 +142,7 @@ if(!$supportEmbedded){
 <p>پاسخ به کاربر</p>
 </div>
 <div class="supportChatHeaderActions">
-<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('users.php?openProfile=' . urlencode($currentUser)) : 'users.php?openProfile=' . urlencode($currentUser), ENT_QUOTES, 'UTF-8'); ?>" class="viewSubsBtn">اشتراک‌ها</a>
+<button type="button" class="viewSubsBtn" onclick="openUserSubscriptions()">اشتراک‌ها</button>
 </div>
 </header>
 
@@ -215,7 +216,9 @@ if(!$hasMessages){
 
 </div>
 
-<script src="<?php echo htmlspecialchars($jsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<div id="profileHost"></div>
+
+<script src="../support_ui.js?v=2"></script>
 <script>
 (function(){
     const supportMessages = document.getElementById('supportMessages');
@@ -231,6 +234,51 @@ if(!$hasMessages){
         JSON_UNESCAPED_UNICODE
     ); ?>;
     const listUrl = <?php echo json_encode(supportAdminUrl('', $supportEmbedded), JSON_UNESCAPED_UNICODE); ?>;
+    const profileApiUrl = <?php echo json_encode($profileApiUrl, JSON_UNESCAPED_UNICODE); ?>;
+
+    window.openUserSubscriptions = function(){
+        if(!currentUser){
+            return;
+        }
+        loadProfile(currentUser);
+    };
+
+    window.loadProfile = function(user){
+        fetch(
+            profileApiUrl + '?user=' + encodeURIComponent(user) + '&all=1',
+            {credentials:'same-origin'}
+        )
+        .then(function(r){ return r.text(); })
+        .then(function(html){
+            document.getElementById('profileHost').innerHTML = html;
+            document.getElementById('profileHost').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        })
+        .catch(function(){
+            alert('خطا در بارگذاری اشتراک‌ها');
+        });
+    };
+
+    window.closeProfileModal = function(){
+        document.getElementById('profileHost').innerHTML = '';
+        document.getElementById('profileHost').style.display = 'none';
+        document.body.style.overflow = '';
+    };
+
+    window.copySub = function(button){
+        const input = button.previousElementSibling;
+        if(!input){ return; }
+        input.select();
+        input.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(input.value);
+        alert('کپی شد');
+    };
+
+    document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape'){
+            closeProfileModal();
+        }
+    });
 
     SupportUI.bindTextareaGrow(supportMessage);
     SupportUI.bindEnterToSend(supportMessage, supportReplyForm, true);
