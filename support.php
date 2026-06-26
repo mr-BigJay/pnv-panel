@@ -103,7 +103,7 @@ foreach($data as $ticket){
 
 </div>
 
-<script src="support_ui.js?v=4"></script>
+<script src="support_ui.js?v=5"></script>
 <script>
 (function(){
     const userChat = document.getElementById('userChat');

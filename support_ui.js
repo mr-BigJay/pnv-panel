@@ -27,7 +27,48 @@
 
     function isMobileComposer(){
 
-        return window.matchMedia('(max-width: 768px)').matches;
+        const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+        const narrowScreen = window.matchMedia('(max-width: 768px)').matches;
+        const touchMac = navigator.maxTouchPoints > 1;
+
+        return narrowScreen && (coarsePointer || touchMac);
+
+    }
+
+    function isEnterKey(e){
+
+        return e.key === 'Enter'
+            || e.code === 'Enter'
+            || e.keyCode === 13;
+
+    }
+
+    function submitComposerForm(form){
+
+        if(!form){
+            return;
+        }
+
+        const submitBtn = form.querySelector(
+            'button[type="submit"], input[type="submit"]'
+        );
+
+        if(submitBtn){
+            submitBtn.click();
+            return;
+        }
+
+        try{
+
+            if(typeof form.requestSubmit === 'function'){
+                form.requestSubmit();
+                return;
+            }
+
+        }
+        catch(err){}
+
+        form.submit();
 
     }
 
@@ -55,43 +96,6 @@
 
     }
 
-    function submitComposerForm(form){
-
-        if(!form){
-            return;
-        }
-
-        const submitBtn = form.querySelector(
-            'button[type="submit"], input[type="submit"]'
-        );
-
-        try{
-
-            if(typeof form.requestSubmit === 'function'){
-
-                if(submitBtn){
-                    form.requestSubmit(submitBtn);
-                }
-                else{
-                    form.requestSubmit();
-                }
-
-                return;
-
-            }
-
-        }
-        catch(err){}
-
-        if(submitBtn){
-            submitBtn.click();
-            return;
-        }
-
-        form.submit();
-
-    }
-
     function bindEnterToSend(textarea, form, allowEmptyImage){
 
         if(!textarea || !form){
@@ -104,7 +108,7 @@
 
         textarea.addEventListener('keydown', function(e){
 
-            if(e.key !== 'Enter'){
+            if(!isEnterKey(e)){
                 return;
             }
 
@@ -128,7 +132,9 @@
                 return;
             }
 
-            submitComposerForm(form);
+            setTimeout(function(){
+                submitComposerForm(form);
+            }, 0);
 
         });
 

@@ -226,7 +226,7 @@ if(!$hasMessages){
 
 <div id="profileHost"></div>
 
-<script src="../support_ui.js?v=4"></script>
+<script src="../support_ui.js?v=5"></script>
 <script>
 (function(){
     const supportMessages = document.getElementById('supportMessages');
