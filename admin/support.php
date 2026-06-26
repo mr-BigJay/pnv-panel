@@ -572,7 +572,12 @@ const supportSearch = document.getElementById('supportSearch');
 const supportBackBtn = document.getElementById('supportBackBtn');
 const supportReplyForm = document.getElementById('supportReplyForm');
 const currentUser = <?php echo json_encode($currentUser, JSON_UNESCAPED_UNICODE); ?>;
-const pollUrl = 'support-api.php';
+const pollUrl = <?php echo json_encode(
+    $supportEmbedded && function_exists('pnvAdminUrl')
+        ? pnvAdminUrl('support-api.php')
+        : 'support-api.php',
+    JSON_UNESCAPED_UNICODE
+); ?>;
 const listUrl = <?php echo json_encode(supportAdminUrl('', $supportEmbedded), JSON_UNESCAPED_UNICODE); ?>;
 
 function scrollMessagesToBottom(force){

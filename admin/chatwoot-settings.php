@@ -47,6 +47,19 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
 $config = chatwootConfig();
 
+if(!file_exists($configFile)){
+
+    $config = array_merge($config, [
+        'enabled' => false,
+        'base_url' => 'https://panel.ticketin.ir',
+        'admin_url' => 'https://panel.ticketin.ir/app',
+        'website_token' => '',
+        'identity_validation_key' => '',
+        'inbox_url' => ''
+    ]);
+
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="fa">
@@ -172,11 +185,15 @@ margin-top:18px;
 </form>
 
 <div class="help">
-راه‌اندازی سرور: پوشه <code>chatwoot/</code> را روی سرور اجرا کنید.<br>
-بعد از نصب، در Chatwoot یک Inbox از نوع Website بسازید و Tokenها را اینجا وارد کنید.
+<strong>مراحل:</strong><br>
+1) در <a href="https://panel.ticketin.ir/app" target="_blank" rel="noopener">Chatwoot</a> یک Inbox از نوع Website بسازید<br>
+2) Website Token و Identity Validation Key را از Configuration کپی کنید<br>
+3) Identity Validation را در Chatwoot فعال کنید تا کاربران با نام کاربری پنل شناسایی شوند<br>
+4) تیک فعال‌سازی را بزنید و ذخیره کنید<br>
+5) از منوی «پیام های کاربران» وارد شوید
 </div>
 
-<a href="index.php" class="btn gray">بازگشت</a>
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php'), ENT_QUOTES, 'UTF-8'); ?>" class="btn gray">بازگشت</a>
 
 <?php if(chatwootEnabled()){ ?>
 <a href="<?php echo htmlspecialchars(chatwootAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>" class="btn" target="_blank" rel="noopener">ورود به پنل Chatwoot</a>

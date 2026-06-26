@@ -417,13 +417,20 @@ if(!function_exists('supportLoad')){
         }
 
         if($embedded){
-            $url = 'index.php?page=support';
+
+            if(function_exists('pnvAdminUrl')){
+                $url = pnvAdminUrl('index.php?page=support');
+            }
+            else{
+                $url = 'index.php?page=support';
+            }
 
             if($user !== ''){
-                $url .= '&user=' . urlencode($user);
+                $url .= (strpos($url, '?') !== false ? '&' : '?') . 'user=' . urlencode($user);
             }
 
             return $url;
+
         }
 
         $url = 'support.php';

@@ -780,27 +780,10 @@ grid-template-columns:1fr;
 
 </a>
 
-<?php if(chatwootEnabled()){ ?>
-
-<a href="index.php?page=support"
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=support'), ENT_QUOTES, 'UTF-8'); ?>"
 class="supportMenu">
 
-پیام های کاربران (Chatwoot)
-
-</a>
-
-<a href="chatwoot-settings.php">
-
-تنظیمات Chatwoot
-
-</a>
-
-<?php } else { ?>
-
-<a href="index.php?page=support"
-class="supportMenu">
-
-<?php if($hasUnreadSupport){ ?>
+<?php if($hasUnreadSupport && !chatwootEnabled()){ ?>
 
 <span class="notifDot"></span>
 
@@ -810,7 +793,11 @@ class="supportMenu">
 
 </a>
 
-<?php } ?>
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('chatwoot-settings.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+تنظیمات Chatwoot<?php echo chatwootEnabled() ? ' ✓' : ''; ?>
+
+</a>
 
 <a href="users.php">
 
@@ -894,7 +881,13 @@ class="red">
 
 <?php } ?>
 
-<?php if($page=='support' && !chatwootEnabled()){ ?>
+<?php if($page=='support' && !chatwootEnabled() && !isset($_GET['legacy'])){ ?>
+
+<?php include __DIR__ . '/support_setup.php'; ?>
+
+<?php } ?>
+
+<?php if($page=='support' && !chatwootEnabled() && isset($_GET['legacy'])){ ?>
 
 <?php
 $supportEmbedded = true;
