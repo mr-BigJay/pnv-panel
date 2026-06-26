@@ -85,6 +85,132 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportEnsureTehranTimezone(){
+
+        static $set = false;
+
+        if(!$set){
+            date_default_timezone_set('Asia/Tehran');
+            $set = true;
+        }
+
+    }
+
+    function supportGregorianToJalali($gy, $gm, $gd){
+
+        $g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+        $gy2 = ($gm > 2) ? ($gy + 1) : $gy;
+        $days = 355666
+            + (365 * $gy)
+            + (int)(($gy2 + 3) / 4)
+            - (int)(($gy2 + 99) / 100)
+            + (int)(($gy2 + 399) / 400)
+            + $gd
+            + $g_d_m[$gm - 1];
+        $jy = -1595 + (33 * (int)($days / 12053));
+        $days %= 12053;
+        $jy += 4 * (int)($days / 1461);
+        $days %= 1461;
+
+        if($days > 365){
+            $jy += (int)(($days - 1) / 365);
+            $days = ($days - 1) % 365;
+        }
+
+        if($days < 186){
+            $jm = 1 + (int)($days / 31);
+            $jd = 1 + ($days % 31);
+        }
+        else{
+            $jm = 7 + (int)(($days - 186) / 30);
+            $jd = 1 + (($days - 186) % 30);
+        }
+
+        return [$jy, $jm, $jd];
+
+    }
+
+    function supportFormatFromTimestamp($timestamp){
+
+        supportEnsureTehranTimezone();
+
+        $timestamp = intval($timestamp);
+
+        if($timestamp <= 0){
+            return [
+                'date' => '-',
+                'time' => '-'
+            ];
+        }
+
+        $gy = (int)date('Y', $timestamp);
+        $gm = (int)date('n', $timestamp);
+        $gd = (int)date('j', $timestamp);
+
+        [$jy, $jm, $jd] = supportGregorianToJalali($gy, $gm, $gd);
+
+        return [
+            'date' => sprintf('%04d/%02d/%02d', $jy, $jm, $jd),
+            'time' => date('H:i', $timestamp)
+        ];
+
+    }
+
+    function supportMessageMeta($timestamp = null){
+
+        supportEnsureTehranTimezone();
+
+        if($timestamp === null){
+            $timestamp = time();
+        }
+
+        $formatted = supportFormatFromTimestamp($timestamp);
+
+        return [
+            'date' => $formatted['date'],
+            'time' => $formatted['time'],
+            'timestamp' => intval($timestamp)
+        ];
+
+    }
+
+    function supportMessageDisplayTime($message){
+
+        $timestamp = intval($message['timestamp'] ?? 0);
+
+        if($timestamp > 0){
+            return supportFormatFromTimestamp($timestamp);
+        }
+
+        return [
+            'date' => $message['date'] ?? '-',
+            'time' => $message['time'] ?? '-'
+        ];
+
+    }
+
+    function supportMessageForApi($message){
+
+        $display = supportMessageDisplayTime($message);
+        $image = $message['image'] ?? '';
+
+        if($image !== ''){
+            $image = '/' . ltrim($image, '/');
+        }
+
+        return [
+            'id' => $message['id'] ?? '',
+            'sender' => $message['sender'] ?? '',
+            'text' => $message['text'] ?? '',
+            'image' => $image,
+            'date' => $display['date'],
+            'time' => $display['time'],
+            'timestamp' => intval($message['timestamp'] ?? 0),
+            'edited' => !empty($message['edited'])
+        ];
+
+    }
+
     function supportSortTickets($data){
 
         usort($data, function($a, $b){
@@ -338,6 +464,8 @@ if(!function_exists('supportLoad')){
             $image = '/' . ltrim($image, '/');
         }
 
+        $display = supportMessageDisplayTime($m);
+
         ob_start();
         ?>
 
@@ -360,9 +488,9 @@ if(!function_exists('supportLoad')){
 
             <div class="time">
 
-                <?php echo htmlspecialchars($m['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                <?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
                 -
-                <?php echo htmlspecialchars($m['time'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                <?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?>
 
                 <?php if($canEdit){ ?>
 
@@ -508,14 +636,16 @@ if(!function_exists('supportLoad')){
                             $data[$ticketIndex]['messages'] = [];
                         }
 
+                        $meta = supportMessageMeta();
+
                         $data[$ticketIndex]['messages'][] = [
                             'id' => uniqid(),
                             'sender' => 'admin',
                             'text' => $text,
                             'image' => $image,
-                            'date' => date('Y/m/d'),
-                            'time' => date('H:i'),
-                            'timestamp' => time(),
+                            'date' => $meta['date'],
+                            'time' => $meta['time'],
+                            'timestamp' => $meta['timestamp'],
                             'seen_by_user' => false
                         ];
 
@@ -653,14 +783,16 @@ if(!function_exists('supportLoad')){
                     $error = 'متن یا تصویر وارد کنید';
                 }
                 else{
+                    $meta = supportMessageMeta();
+
                     $newmsg = [
                         'id' => uniqid(),
                         'sender' => 'user',
                         'text' => $text,
                         'image' => $image,
-                        'date' => date('Y/m/d'),
-                        'time' => date('H:i'),
-                        'timestamp' => time(),
+                        'date' => $meta['date'],
+                        'time' => $meta['time'],
+                        'timestamp' => $meta['timestamp'],
                         'seen_by_admin' => false
                     ];
 

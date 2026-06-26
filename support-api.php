@@ -40,22 +40,7 @@ foreach($data as $ticket){
             continue;
         }
 
-        $image = $msg['image'] ?? '';
-
-        if($image !== ''){
-            $image = '/' . ltrim($image, '/');
-        }
-
-        $messages[] = [
-            'id' => $msg['id'] ?? '',
-            'sender' => $msg['sender'] ?? '',
-            'text' => $msg['text'] ?? '',
-            'image' => $image,
-            'date' => $msg['date'] ?? '',
-            'time' => $msg['time'] ?? '',
-            'timestamp' => $timestamp,
-            'edited' => !empty($msg['edited'])
-        ];
+        $messages[] = supportMessageForApi($msg);
 
     }
 

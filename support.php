@@ -300,6 +300,7 @@ font-size:16px;
     $timestamp = $m['timestamp'] ?? 0;
     $canEdit = $sender === 'user' && time() - $timestamp <= 3600;
     $canDelete = $sender === 'user' && time() - $timestamp <= 60;
+    $display = supportMessageDisplayTime($m);
     $image = $m['image'] ?? '';
 
     if($image !== ''){
@@ -322,9 +323,9 @@ font-size:16px;
 
 <div class="time">
 
-<?php echo htmlspecialchars($m['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+<?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
 -
-<?php echo htmlspecialchars($m['time'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+<?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?>
 
 <?php if($canEdit){ ?>
 <a href="?edit=<?php echo urlencode($m['id'] ?? ''); ?>" class="action">✏️</a>
