@@ -2,7 +2,8 @@
 set -euo pipefail
 
 BR="${1:-cursor/chatwoot-integration-af0f}"
-BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/$BR"
+COMMIT="${DEPLOY_COMMIT:-7b9e009}"
+BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/$COMMIT"
 HTML="/var/www/html"
 NGINX_AVAIL="/etc/nginx/sites-available/panel.ticketin.ir"
 NGINX_ENABLED="/etc/nginx/sites-enabled/panel.ticketin.ir"
