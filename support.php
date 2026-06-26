@@ -93,7 +93,7 @@ foreach($data as $ticket){
 <textarea
     name="message"
     id="message"
-    placeholder="پیام... (Enter ارسال، Shift+Enter خط جدید)"
+    placeholder="ارسال پیام"
     rows="1"></textarea>
 
 <button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال">➤</button>
