@@ -1,0 +1,7 @@
+{
+    "enabled": false,
+    "base_url": "https://chat.panel.ticketin.ir",
+    "website_token": "PASTE_WEBSITE_TOKEN_HERE",
+    "identity_validation_key": "PASTE_IDENTITY_VALIDATION_KEY_HERE",
+    "admin_url": "https://chat.panel.ticketin.ir/app"
+}

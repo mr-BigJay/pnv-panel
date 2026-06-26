@@ -3,6 +3,7 @@
 session_start();
 
 require_once "functions.php";
+require_once __DIR__ . '/../chatwoot_lib.php';
 
 $adminUser = "BigJay";
 $adminPass = "603240@BigJayX";
@@ -168,6 +169,14 @@ exit;
 
 $page = $_GET['page'] ?? 'dashboard';
 
+if($page === 'support' && chatwootEnabled()){
+
+header('Location: ' . chatwootAdminUrl());
+
+exit;
+
+}
+
 $supportActionResult = null;
 
 if($page === 'support'){
@@ -244,7 +253,7 @@ $supportFile =
 
 $hasUnreadSupport = false;
 
-if(file_exists($supportFile)){
+if(!chatwootEnabled() && file_exists($supportFile)){
 
 $supportData =
 json_decode(
@@ -786,6 +795,25 @@ grid-template-columns:1fr;
 
 </a>
 
+<?php if(chatwootEnabled()){ ?>
+
+<a
+href="<?php echo htmlspecialchars(chatwootAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
+target="_blank"
+rel="noopener">
+
+پشتیبانی Chatwoot
+
+</a>
+
+<a href="chatwoot-settings.php">
+
+تنظیمات Chatwoot
+
+</a>
+
+<?php } else { ?>
+
 <a href="index.php?page=support"
 class="supportMenu">
 
@@ -798,6 +826,8 @@ class="supportMenu">
 پیام های کاربران
 
 </a>
+
+<?php } ?>
 
 <a href="users.php">
 
@@ -875,7 +905,7 @@ class="red">
 
 <?php } ?>
 
-<?php if($page=='support'){ ?>
+<?php if($page=='support' && !chatwootEnabled()){ ?>
 
 <?php
 $supportEmbedded = true;

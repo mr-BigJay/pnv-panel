@@ -12,12 +12,14 @@ exit;
 
 $user = $_SESSION['user'];
 
+require_once __DIR__ . '/chatwoot_lib.php';
+
 $supportFile =
 "db/support.json";
 
 $hasUnreadSupport = false;
 
-if(file_exists($supportFile)){
+if(!chatwootEnabled() && file_exists($supportFile)){
 
 $supportData =
 json_decode(
@@ -335,6 +337,8 @@ class="menu logout">
 </div>
 
 </div>
+
+<?php if(chatwootEnabled()){ chatwootRenderWidget($user); } ?>
 
 </body>
 

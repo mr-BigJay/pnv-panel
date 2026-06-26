@@ -7,6 +7,13 @@ if(!isset($_SESSION['user'])){
     exit;
 }
 
+require_once __DIR__ . '/chatwoot_lib.php';
+
+if(chatwootEnabled() && !isset($_GET['legacy'])){
+    include __DIR__ . '/support_chatwoot.php';
+    exit;
+}
+
 require_once __DIR__ . '/support_lib.php';
 
 $user = $_SESSION['user'];
