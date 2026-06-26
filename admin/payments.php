@@ -217,6 +217,33 @@ function paymentsListUrl($page, $per){
 
 }
 
+function paymentsFormatPlanLines($plan){
+
+    $plan = trim((string)$plan);
+
+    if($plan === '' || $plan === '-'){
+        return ['-', ''];
+    }
+
+    if(strpos($plan, ' - ') !== false){
+
+        [$size, $price] = explode(' - ', $plan, 2);
+
+        $size = trim($size);
+        $price = trim($price);
+
+        if(preg_match('/(\d+)/u', $price, $match)){
+            $price = $match[1];
+        }
+
+        return [$size, $price];
+
+    }
+
+    return [$plan, ''];
+
+}
+
 ?>
 
 <style>
