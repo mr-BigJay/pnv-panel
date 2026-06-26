@@ -26,6 +26,13 @@ services:
       - "127.0.0.1:3000:3000"
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: chatwoot
+      POSTGRES_USERNAME: chatwoot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_URL: redis://redis:6379
     volumes:
       - chatwoot_storage:/app/storage
     entrypoint: docker/entrypoints/rails.sh
@@ -39,6 +46,13 @@ services:
       - redis
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: chatwoot
+      POSTGRES_USERNAME: chatwoot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_URL: redis://redis:6379
     volumes:
       - chatwoot_storage:/app/storage
     command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
