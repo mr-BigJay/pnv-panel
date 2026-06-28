@@ -50,7 +50,6 @@ foreach($data as $ticket){
 <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($user), ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="msgHeaderInfo">
 <h1>پشتیبانی</h1>
-<p>سلام <?php echo htmlspecialchars($user, ENT_QUOTES, 'UTF-8'); ?> — پیام خود را بنویسید</p>
 </div>
 </header>
 
