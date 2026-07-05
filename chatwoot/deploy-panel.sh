@@ -12,11 +12,20 @@ echo "==> Deploy commit: $COMMIT (branch: $BR)"
 
 mkdir -p "$HTML/bigjay_controller"
 
-for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php; do
+for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php push-vapid.php push-subscribe.php; do
   curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
 done
 
-for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php; do
+for f in manifest.webmanifest sw.js pwa.js; do
+  curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
+done
+
+mkdir -p "$HTML/bigjay_controller/icons"
+for f in icon-192.png icon-512.png; do
+  curl -fL -o "$HTML/bigjay_controller/icons/$f" "$BASE/bigjay_controller/icons/$f"
+done
+
+for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php push_lib.php push-vapid.php push-subscribe.php; do
   curl -fL -o "$HTML/admin/$f" "$BASE/admin/$f"
 done
 
@@ -57,6 +66,16 @@ fi
 
 if ! grep -q 'table:not(.payTable)' "$HTML/admin/index.php"; then
   echo "ERROR: index.php missing payTable CSS scoping — stale deploy?"
+  exit 1
+fi
+
+if ! grep -q 'PNV_ADMIN_PWA' "$HTML/admin/index.php"; then
+  echo "ERROR: index.php missing admin PWA setup — stale deploy?"
+  exit 1
+fi
+
+if [ ! -f "$HTML/bigjay_controller/manifest.webmanifest" ]; then
+  echo "ERROR: PWA manifest missing after deploy"
   exit 1
 fi
 

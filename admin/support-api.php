@@ -56,5 +56,6 @@ echo json_encode([
     'status' => $status,
     'unreadUsers' => $unreadUsers,
     'has_unread' => count($unreadUsers) > 0,
-    'unread_count' => supportAdminUnreadTotal($data)
+    'unread_count' => supportAdminUnreadTotal($data),
+    'latest_unread' => supportAdminLatestUnread($data)
 ], JSON_UNESCAPED_UNICODE);

@@ -509,6 +509,13 @@ content="width=device-width, initial-scale=1.0">
 
 </title>
 
+<link rel="manifest" href="<?php echo htmlspecialchars(pnvAdminUrl('manifest.webmanifest'), ENT_QUOTES, 'UTF-8'); ?>">
+<meta name="theme-color" content="#111827">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ادمین">
+<link rel="apple-touch-icon" href="<?php echo htmlspecialchars(pnvAdminUrl('icons/icon-192.png'), ENT_QUOTES, 'UTF-8'); ?>">
+
 <style>
 
 body{
@@ -1018,44 +1025,16 @@ name="uploadcsv">
 </div>
 
 <script>
-(function(){
-    const menuLink = document.getElementById('adminSupportMenu');
-    if(!menuLink){
-        return;
-    }
-
-    const pollUrl = <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>;
-
-    function setUnreadDot(hasUnread){
-        let dot = menuLink.querySelector('.notifDot');
-
-        if(hasUnread){
-            if(!dot){
-                dot = document.createElement('span');
-                dot.className = 'notifDot';
-                menuLink.insertBefore(dot, menuLink.firstChild);
-            }
-            return;
-        }
-
-        if(dot){
-            dot.remove();
-        }
-    }
-
-    function checkUnread(){
-        fetch(pollUrl, {credentials:'same-origin'})
-            .then(function(r){ return r.json(); })
-            .then(function(data){
-                setUnreadDot(!!data.has_unread);
-            })
-            .catch(function(){});
-    }
-
-    checkUnread();
-    setInterval(checkUnread, 10000);
-})();
+window.PNV_ADMIN_PWA = {
+    pollUrl: <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>,
+    supportUrl: <?php echo json_encode(pnvAdminUrl('index.php?page=support'), JSON_UNESCAPED_UNICODE); ?>,
+    swUrl: <?php echo json_encode(pnvAdminUrl('sw.js'), JSON_UNESCAPED_UNICODE); ?>,
+    swScope: <?php echo json_encode(rtrim(PNV_ADMIN_BASE, '/') . '/', JSON_UNESCAPED_UNICODE); ?>,
+    vapidUrl: <?php echo json_encode(pnvAdminUrl('push-vapid.php'), JSON_UNESCAPED_UNICODE); ?>,
+    subscribeUrl: <?php echo json_encode(pnvAdminUrl('push-subscribe.php'), JSON_UNESCAPED_UNICODE); ?>
+};
 </script>
+<script src="<?php echo htmlspecialchars(pnvAdminUrl('pwa.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 
 </body>
 

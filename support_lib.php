@@ -576,6 +576,89 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportMessagePreviewText($message){
+
+        $text = trim($message['text'] ?? '');
+
+        if($text === '' && !empty($message['image'])){
+            return '📷 تصویر';
+        }
+
+        if($text === ''){
+            return 'پیام جدید';
+        }
+
+        if(mb_strlen($text) > 80){
+            return mb_substr($text, 0, 80) . '…';
+        }
+
+        return $text;
+
+    }
+
+    function supportAdminLatestUnread($data){
+
+        $latest = null;
+
+        if(!is_array($data)){
+            return null;
+        }
+
+        foreach($data as $ticket){
+
+            if(empty($ticket['messages'])){
+                continue;
+            }
+
+            foreach($ticket['messages'] as $msg){
+
+                if(
+                    ($msg['sender'] ?? '') !== 'user'
+                    || !empty($msg['seen_by_admin'])
+                ){
+                    continue;
+                }
+
+                $timestamp = intval($msg['timestamp'] ?? 0);
+
+                if(!$latest || $timestamp > intval($latest['timestamp'] ?? 0)){
+                    $latest = [
+                        'user' => $ticket['user'] ?? '',
+                        'text' => supportMessagePreviewText($msg),
+                        'timestamp' => $timestamp
+                    ];
+                }
+
+            }
+
+        }
+
+        return $latest;
+
+    }
+
+    function supportPushNotifyAdminsOnUserMessage($username, $text){
+
+        if(!function_exists('pushNotifyAdmins')){
+            $pushLib = __DIR__ . '/admin/push_lib.php';
+
+            if(file_exists($pushLib)){
+                require_once $pushLib;
+            }
+        }
+
+        if(!function_exists('pushNotifyAdmins')){
+            return;
+        }
+
+        $title = 'پیام جدید از ' . $username;
+        $body = supportMessagePreviewText(['text' => $text]);
+        $url = '/bigjay_controller/?page=support&user=' . rawurlencode($username);
+
+        pushNotifyAdmins($title, $body, $url);
+
+    }
+
     function supportSearchUsers($query, $limit = 10){
 
         $query = trim($query);
@@ -1090,6 +1173,7 @@ if(!function_exists('supportLoad')){
                     }
 
                     supportSave($file, $data);
+                    supportPushNotifyAdminsOnUserMessage($username, $text);
                     header('Location: support.php');
                     exit;
                 }
