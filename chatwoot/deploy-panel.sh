@@ -69,8 +69,23 @@ if ! grep -q 'table:not(.payTable)' "$HTML/admin/index.php"; then
   exit 1
 fi
 
-if ! grep -q 'PNV_ADMIN_PWA' "$HTML/admin/index.php"; then
+if ! grep -q 'pwa-foot.php' "$HTML/admin/index.php"; then
   echo "ERROR: index.php missing admin PWA setup — stale deploy?"
+  exit 1
+fi
+
+if [ ! -f "$HTML/admin/pwa-foot.php" ]; then
+  echo "ERROR: admin/pwa-foot.php missing after deploy"
+  exit 1
+fi
+
+if [ ! -f "$HTML/bigjay_controller/sw.js" ]; then
+  echo "ERROR: PWA sw.js missing after deploy"
+  exit 1
+fi
+
+if [ ! -f "$HTML/bigjay_controller/pwa.js" ]; then
+  echo "ERROR: PWA pwa.js missing after deploy"
   exit 1
 fi
 
