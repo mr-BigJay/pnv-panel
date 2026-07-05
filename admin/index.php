@@ -55,6 +55,8 @@ content="width=device-width, initial-scale=1.0">
 
 </title>
 
+<?php include __DIR__ . '/pwa-head.php'; ?>
+
 <style>
 
 body{
@@ -99,6 +101,24 @@ background:#dc2626;
 padding:10px;
 border-radius:8px;
 margin-bottom:15px;
+}
+
+.pwaInstallBtn{
+width:100%;
+padding:12px;
+margin-top:4px;
+margin-bottom:12px;
+border:1px solid #334155;
+border-radius:10px;
+background:#111827;
+color:white;
+cursor:pointer;
+font-family:inherit;
+font-size:14px;
+}
+
+.pwaInstallBtn:hover{
+background:#1e293b;
 }
 
 </style>
@@ -147,7 +167,13 @@ required>
 
 </form>
 
+<button type="button" class="pwaInstallBtn" data-pwa-install>
+📲 نصب اپ ادمین
+</button>
+
 </div>
+
+<?php $pnvPwaLoggedIn = false; include __DIR__ . '/pwa-foot.php'; ?>
 
 </body>
 
@@ -509,12 +535,7 @@ content="width=device-width, initial-scale=1.0">
 
 </title>
 
-<link rel="manifest" href="<?php echo htmlspecialchars(pnvAdminUrl('manifest.webmanifest'), ENT_QUOTES, 'UTF-8'); ?>">
-<meta name="theme-color" content="#111827">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="ادمین">
-<link rel="apple-touch-icon" href="<?php echo htmlspecialchars(pnvAdminUrl('icons/icon-192.png'), ENT_QUOTES, 'UTF-8'); ?>">
+<?php include __DIR__ . '/pwa-head.php'; ?>
 
 <style>
 
@@ -644,6 +665,25 @@ background:#22c55e;
 position:relative;
 }
 
+.pwaInstallBtn{
+display:block;
+width:100%;
+padding:14px;
+border:1px solid #334155;
+border-radius:10px;
+background:#0f172a;
+color:white;
+cursor:pointer;
+font-family:inherit;
+font-size:14px;
+margin-bottom:10px;
+text-align:center;
+}
+
+.pwaInstallBtn:hover{
+background:#1e293b;
+}
+
 .notifDot{
 position:absolute;
 top:10px;
@@ -763,6 +803,10 @@ grid-template-columns:1fr;
 مدیریت
 
 </h2>
+
+<button type="button" class="pwaInstallBtn" data-pwa-install hidden>
+📲 نصب اپ
+</button>
 
 <a href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>">
 
@@ -1024,17 +1068,7 @@ name="uploadcsv">
 
 </div>
 
-<script>
-window.PNV_ADMIN_PWA = {
-    pollUrl: <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>,
-    supportUrl: <?php echo json_encode(pnvAdminUrl('index.php?page=support'), JSON_UNESCAPED_UNICODE); ?>,
-    swUrl: <?php echo json_encode(pnvAdminUrl('sw.js'), JSON_UNESCAPED_UNICODE); ?>,
-    swScope: <?php echo json_encode(rtrim(PNV_ADMIN_BASE, '/') . '/', JSON_UNESCAPED_UNICODE); ?>,
-    vapidUrl: <?php echo json_encode(pnvAdminUrl('push-vapid.php'), JSON_UNESCAPED_UNICODE); ?>,
-    subscribeUrl: <?php echo json_encode(pnvAdminUrl('push-subscribe.php'), JSON_UNESCAPED_UNICODE); ?>
-};
-</script>
-<script src="<?php echo htmlspecialchars(pnvAdminUrl('pwa.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php $pnvPwaLoggedIn = true; include __DIR__ . '/pwa-foot.php'; ?>
 
 </body>
 

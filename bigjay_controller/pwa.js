@@ -11,6 +11,7 @@
 
   let lastNotifyTs = parseInt(localStorage.getItem(storageKey) || '0', 10);
   let swRegistration = null;
+  let deferredInstallPrompt = null;
 
   function urlBase64ToUint8Array(base64String){
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -23,6 +24,21 @@
     }
 
     return output;
+  }
+
+  function isStandalone(){
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+  }
+
+  function getInstallButtons(){
+    return Array.prototype.slice.call(document.querySelectorAll('[data-pwa-install]'));
+  }
+
+  function setInstallButtonsVisible(visible){
+    getInstallButtons().forEach(function(btn){
+      btn.hidden = !visible;
+    });
   }
 
   function setUnreadDot(hasUnread){
@@ -98,15 +114,23 @@
   }
 
   function checkUnread(){
-    if(!pollUrl){
+    if(!cfg.loggedIn || !pollUrl){
       return;
     }
 
     fetch(pollUrl, {credentials: 'same-origin'})
       .then(function(response){
+        if(!response.ok){
+          return null;
+        }
+
         return response.json();
       })
       .then(function(data){
+        if(!data){
+          return;
+        }
+
         setUnreadDot(!!data.has_unread);
 
         if(data.has_unread && data.latest_unread){
@@ -126,7 +150,7 @@
   }
 
   async function subscribePush(){
-    if(!subscribeUrl || !vapidUrl || !swRegistration || !('PushManager' in window)){
+    if(!cfg.loggedIn || !subscribeUrl || !vapidUrl || !swRegistration || !('PushManager' in window)){
       return;
     }
 
@@ -136,6 +160,11 @@
 
     try{
       const keyResponse = await fetch(vapidUrl, {credentials: 'same-origin'});
+
+      if(!keyResponse.ok){
+        return;
+      }
+
       const keyData = await keyResponse.json();
 
       if(!keyData.publicKey){
@@ -162,7 +191,7 @@
   }
 
   async function requestNotifications(){
-    if(!('Notification' in window)){
+    if(!cfg.loggedIn || !('Notification' in window)){
       return;
     }
 
@@ -182,25 +211,75 @@
     }
   }
 
+  async function installApp(){
+    if(deferredInstallPrompt){
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      setInstallButtonsVisible(false);
+      return;
+    }
+
+    if(/iPhone|iPad|iPod/.test(navigator.userAgent)){
+      alert('در Safari از منوی Share گزینه Add to Home Screen را بزنید.');
+      return;
+    }
+
+    alert('در منوی مرورگر (⋮) گزینه Install app یا نصب برنامه را انتخاب کنید.');
+  }
+
+  function bindInstallButtons(){
+    getInstallButtons().forEach(function(btn){
+      btn.addEventListener('click', function(){
+        installApp();
+      });
+    });
+  }
+
   async function init(){
+    bindInstallButtons();
+
+    if(isStandalone()){
+      setInstallButtonsVisible(false);
+    }
+    else{
+      setInstallButtonsVisible(true);
+    }
+
+    window.addEventListener('beforeinstallprompt', function(event){
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      setInstallButtonsVisible(true);
+    });
+
+    window.addEventListener('appinstalled', function(){
+      deferredInstallPrompt = null;
+      setInstallButtonsVisible(false);
+    });
+
     if('serviceWorker' in navigator){
       try{
         swRegistration = await navigator.serviceWorker.register(swUrl, {scope: swScope});
       }
-      catch(e){}
+      catch(e){
+        console.warn('PWA service worker registration failed', e);
+      }
     }
 
-    checkUnread();
-    setInterval(checkUnread, 10000);
+    if(cfg.loggedIn){
+      checkUnread();
+      setInterval(checkUnread, 10000);
 
-    if(cfg.promptNotifications !== false){
-      setTimeout(requestNotifications, 1200);
+      if(cfg.promptNotifications !== false){
+        setTimeout(requestNotifications, 1200);
+      }
     }
   }
 
   window.PNV_ADMIN_PWA = window.PNV_ADMIN_PWA || {};
   window.PNV_ADMIN_PWA.requestNotifications = requestNotifications;
   window.PNV_ADMIN_PWA.checkUnread = checkUnread;
+  window.PNV_ADMIN_PWA.installApp = installApp;
 
   init();
 })();

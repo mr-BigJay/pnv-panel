@@ -12,7 +12,7 @@ echo "==> Deploy commit: $COMMIT (branch: $BR)"
 
 mkdir -p "$HTML/bigjay_controller"
 
-for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php push-vapid.php push-subscribe.php; do
+for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php push-vapid.php push-subscribe.php manifest.php; do
   curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
 done
 
@@ -25,7 +25,7 @@ for f in icon-192.png icon-512.png; do
   curl -fL -o "$HTML/bigjay_controller/icons/$f" "$BASE/bigjay_controller/icons/$f"
 done
 
-for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php push_lib.php push-vapid.php push-subscribe.php; do
+for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php push_lib.php push-vapid.php push-subscribe.php manifest.php pwa-head.php pwa-foot.php; do
   curl -fL -o "$HTML/admin/$f" "$BASE/admin/$f"
 done
 
@@ -74,8 +74,13 @@ if ! grep -q 'PNV_ADMIN_PWA' "$HTML/admin/index.php"; then
   exit 1
 fi
 
-if [ ! -f "$HTML/bigjay_controller/manifest.webmanifest" ]; then
-  echo "ERROR: PWA manifest missing after deploy"
+if [ ! -f "$HTML/bigjay_controller/manifest.php" ]; then
+  echo "ERROR: PWA manifest.php missing after deploy"
+  exit 1
+fi
+
+if ! grep -q 'data-pwa-install' "$HTML/admin/index.php"; then
+  echo "ERROR: index.php missing PWA install button — stale deploy?"
   exit 1
 fi
 
