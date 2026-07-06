@@ -47,13 +47,15 @@ $error="اطلاعات ورود اشتباه است";
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 
 <title>
 
 ورود مدیریت
 
 </title>
+
+<script src="<?php echo htmlspecialchars(pnvAdminUrl('sw-cleanup.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 
 <style>
 
@@ -501,13 +503,15 @@ exit;
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 
 <title>
 
 پنل مدیریت
 
 </title>
+
+<script src="<?php echo htmlspecialchars(pnvAdminUrl('sw-cleanup.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 
 <style>
 
@@ -703,6 +707,11 @@ background:#0b1220;
 }
 
 @media(max-width:768px){
+
+body.adminPageSupport{
+overflow:hidden;
+height:100dvh;
+}
 
 .sidebar{
 position:relative;

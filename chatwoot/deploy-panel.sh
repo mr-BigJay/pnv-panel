@@ -14,7 +14,6 @@ echo "==> Deploy commit: $COMMIT (branch: $BR)"
 rm -f \
   "$HTML/bigjay_controller/manifest.php" \
   "$HTML/bigjay_controller/manifest.webmanifest" \
-  "$HTML/bigjay_controller/sw.js" \
   "$HTML/bigjay_controller/pwa.js" \
   "$HTML/bigjay_controller/push-vapid.php" \
   "$HTML/bigjay_controller/push-subscribe.php"
@@ -29,11 +28,13 @@ rm -rf "$HTML/bigjay_controller/icons"
 
 mkdir -p "$HTML/bigjay_controller"
 
-for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php; do
+for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php sw-cleanup.js; do
   curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
 done
 
-for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php; do
+curl -fL -o "$HTML/bigjay_controller/sw.js" "$BASE/bigjay_controller/sw.js"
+
+for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php sw-cleanup.js; do
   curl -fL -o "$HTML/admin/$f" "$BASE/admin/$f"
 done
 
@@ -41,6 +42,7 @@ curl -fL -o "$HTML/support.php" "$BASE/support.php"
 curl -fL -o "$HTML/support_lib.php" "$BASE/support_lib.php"
 curl -fL -o "$HTML/support_ui.css" "$BASE/support_ui.css"
 curl -fL -o "$HTML/support_ui.js" "$BASE/support_ui.js"
+curl -fL -o "$HTML/sw-cleanup.js" "$BASE/sw-cleanup.js"
 curl -fL -o "$HTML/dashboard.php" "$BASE/dashboard.php"
 
 echo "==> admin/index.php size: $(wc -c < "$HTML/admin/index.php") bytes"

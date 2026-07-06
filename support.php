@@ -37,11 +37,13 @@ foreach($data as $ticket){
 <html lang="fa">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام به پشتیبانی</title>
-<link rel="stylesheet" href="support_ui.css?v=11">
+<link rel="stylesheet" href="support_ui.css?v=12">
 </head>
 <body class="supportUserPage">
+
+<script src="sw-cleanup.js?v=1"></script>
 
 <div class="msgApp msgApp--user">
 
