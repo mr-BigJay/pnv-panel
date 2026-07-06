@@ -43,7 +43,10 @@ curl -fL -o "$HTML/support_lib.php" "$BASE/support_lib.php"
 curl -fL -o "$HTML/support_ui.css" "$BASE/support_ui.css"
 curl -fL -o "$HTML/support_ui.js" "$BASE/support_ui.js"
 curl -fL -o "$HTML/sw-cleanup.js" "$BASE/sw-cleanup.js"
+curl -fL -o "$HTML/user_panel.css" "$BASE/user_panel.css"
 curl -fL -o "$HTML/dashboard.php" "$BASE/dashboard.php"
+curl -fL -o "$HTML/index.php" "$BASE/index.php"
+curl -fL -o "$HTML/register.php" "$BASE/register.php"
 
 echo "==> admin/index.php size: $(wc -c < "$HTML/admin/index.php") bytes"
 
