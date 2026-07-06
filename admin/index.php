@@ -55,8 +55,6 @@ content="width=device-width, initial-scale=1.0">
 
 </title>
 
-<?php include __DIR__ . '/pwa-head.php'; ?>
-
 <style>
 
 body{
@@ -101,24 +99,6 @@ background:#dc2626;
 padding:10px;
 border-radius:8px;
 margin-bottom:15px;
-}
-
-.pwaInstallBtn{
-width:100%;
-padding:12px;
-margin-top:4px;
-margin-bottom:12px;
-border:1px solid #334155;
-border-radius:10px;
-background:#111827;
-color:white;
-cursor:pointer;
-font-family:inherit;
-font-size:14px;
-}
-
-.pwaInstallBtn:hover{
-background:#1e293b;
 }
 
 </style>
@@ -167,13 +147,7 @@ required>
 
 </form>
 
-<button type="button" class="pwaInstallBtn" data-pwa-install>
-📲 نصب اپ ادمین
-</button>
-
 </div>
-
-<?php $pnvPwaLoggedIn = false; include __DIR__ . '/pwa-foot.php'; ?>
 
 </body>
 
@@ -535,8 +509,6 @@ content="width=device-width, initial-scale=1.0">
 
 </title>
 
-<?php include __DIR__ . '/pwa-head.php'; ?>
-
 <style>
 
 body{
@@ -665,25 +637,6 @@ background:#22c55e;
 position:relative;
 }
 
-.pwaInstallBtn{
-display:block;
-width:100%;
-padding:14px;
-border:1px solid #334155;
-border-radius:10px;
-background:#0f172a;
-color:white;
-cursor:pointer;
-font-family:inherit;
-font-size:14px;
-margin-bottom:10px;
-text-align:center;
-}
-
-.pwaInstallBtn:hover{
-background:#1e293b;
-}
-
 .notifDot{
 position:absolute;
 top:10px;
@@ -803,10 +756,6 @@ grid-template-columns:1fr;
 مدیریت
 
 </h2>
-
-<button type="button" class="pwaInstallBtn" data-pwa-install hidden>
-📲 نصب اپ
-</button>
 
 <a href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>">
 
@@ -1068,7 +1017,45 @@ name="uploadcsv">
 
 </div>
 
-<?php $pnvPwaLoggedIn = true; include __DIR__ . '/pwa-foot.php'; ?>
+<script>
+(function(){
+    const menuLink = document.getElementById('adminSupportMenu');
+    if(!menuLink){
+        return;
+    }
+
+    const pollUrl = <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>;
+
+    function setUnreadDot(hasUnread){
+        let dot = menuLink.querySelector('.notifDot');
+
+        if(hasUnread){
+            if(!dot){
+                dot = document.createElement('span');
+                dot.className = 'notifDot';
+                menuLink.insertBefore(dot, menuLink.firstChild);
+            }
+            return;
+        }
+
+        if(dot){
+            dot.remove();
+        }
+    }
+
+    function checkUnread(){
+        fetch(pollUrl, {credentials:'same-origin'})
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                setUnreadDot(!!data.has_unread);
+            })
+            .catch(function(){});
+    }
+
+    checkUnread();
+    setInterval(checkUnread, 10000);
+})();
+</script>
 
 </body>
 

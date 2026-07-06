@@ -10,22 +10,30 @@ NGINX_ENABLED="/etc/nginx/sites-enabled/panel.ticketin.ir"
 
 echo "==> Deploy commit: $COMMIT (branch: $BR)"
 
+# حذف فایل‌های PWA قدیمی در صورت وجود
+rm -f \
+  "$HTML/bigjay_controller/manifest.php" \
+  "$HTML/bigjay_controller/manifest.webmanifest" \
+  "$HTML/bigjay_controller/sw.js" \
+  "$HTML/bigjay_controller/pwa.js" \
+  "$HTML/bigjay_controller/push-vapid.php" \
+  "$HTML/bigjay_controller/push-subscribe.php"
+rm -f \
+  "$HTML/admin/manifest.php" \
+  "$HTML/admin/pwa-head.php" \
+  "$HTML/admin/pwa-foot.php" \
+  "$HTML/admin/push_lib.php" \
+  "$HTML/admin/push-vapid.php" \
+  "$HTML/admin/push-subscribe.php"
+rm -rf "$HTML/bigjay_controller/icons"
+
 mkdir -p "$HTML/bigjay_controller"
 
-for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php push-vapid.php push-subscribe.php manifest.php; do
+for f in index.php users.php chatwoot-settings.php plans.php downloads.php user-profile.php support-api.php support-users-api.php; do
   curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
 done
 
-for f in manifest.webmanifest sw.js pwa.js; do
-  curl -fL -o "$HTML/bigjay_controller/$f" "$BASE/bigjay_controller/$f"
-done
-
-mkdir -p "$HTML/bigjay_controller/icons"
-for f in icon-192.png icon-512.png; do
-  curl -fL -o "$HTML/bigjay_controller/icons/$f" "$BASE/bigjay_controller/icons/$f"
-done
-
-for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php push_lib.php push-vapid.php push-subscribe.php manifest.php pwa-head.php pwa-foot.php; do
+for f in auth.php index.php support.php support-api.php support-users-api.php users.php plans.php payments.php renews.php downloads.php; do
   curl -fL -o "$HTML/admin/$f" "$BASE/admin/$f"
 done
 
@@ -66,36 +74,6 @@ fi
 
 if ! grep -q 'table:not(.payTable)' "$HTML/admin/index.php"; then
   echo "ERROR: index.php missing payTable CSS scoping — stale deploy?"
-  exit 1
-fi
-
-if ! grep -q 'pwa-foot.php' "$HTML/admin/index.php"; then
-  echo "ERROR: index.php missing admin PWA setup — stale deploy?"
-  exit 1
-fi
-
-if [ ! -f "$HTML/admin/pwa-foot.php" ]; then
-  echo "ERROR: admin/pwa-foot.php missing after deploy"
-  exit 1
-fi
-
-if [ ! -f "$HTML/bigjay_controller/sw.js" ]; then
-  echo "ERROR: PWA sw.js missing after deploy"
-  exit 1
-fi
-
-if [ ! -f "$HTML/bigjay_controller/pwa.js" ]; then
-  echo "ERROR: PWA pwa.js missing after deploy"
-  exit 1
-fi
-
-if [ ! -f "$HTML/bigjay_controller/manifest.php" ]; then
-  echo "ERROR: PWA manifest.php missing after deploy"
-  exit 1
-fi
-
-if ! grep -q 'data-pwa-install' "$HTML/admin/index.php"; then
-  echo "ERROR: index.php missing PWA install button — stale deploy?"
   exit 1
 fi
 
