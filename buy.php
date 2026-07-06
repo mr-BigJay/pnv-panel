@@ -39,7 +39,7 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
     $tracking = trim($_POST['tracking']);
     $time = trim($_POST['time']);
     $date = trim($_POST['date']);
-    $hasCoupon = ($_POST['has_coupon'] ?? 'no') === 'yes';
+    $hasCoupon = isset($_POST['has_coupon']);
     $couponCode = trim($_POST['coupon_code'] ?? '');
     $discountPercent = 0;
 
@@ -298,18 +298,20 @@ border-radius:14px;
 margin-bottom:20px;
 }
 
-.couponChoices{
-display:flex;
-flex-direction:column;
-gap:10px;
-margin-bottom:12px;
-}
-
-.couponChoices label{
+.couponToggle{
 display:flex;
 align-items:center;
-gap:8px;
+gap:10px;
 font-size:16px;
+margin-bottom:12px;
+cursor:pointer;
+}
+
+.couponToggle input{
+width:20px;
+height:20px;
+margin:0;
+cursor:pointer;
 }
 
 .couponBox{
@@ -321,25 +323,9 @@ margin-top:10px;
 display:block;
 }
 
-.couponRow{
-display:flex;
-gap:10px;
-flex-wrap:wrap;
-}
-
 .couponRow input{
-flex:1;
-min-width:180px;
+width:100%;
 margin:0;
-}
-
-.couponApplyBtn{
-width:auto;
-min-width:120px;
-padding:14px 18px;
-font-size:16px;
-margin:0;
-background:#3b82f6;
 }
 
 .couponResult{
@@ -517,15 +503,13 @@ $priceText;
 </select>
 
 <div class="couponSection">
-<div class="infoText">کد تخفیف دارید؟</div>
-<div class="couponChoices">
-<label><input type="radio" name="has_coupon" value="no" checked> کد تخفیف ندارم</label>
-<label><input type="radio" name="has_coupon" value="yes"> کد تخفیف دارم</label>
-</div>
+<label class="couponToggle">
+<input type="checkbox" name="has_coupon" id="hasCouponCheck" value="1">
+<span>کد تخفیف دارید؟</span>
+</label>
 <div class="couponBox" id="couponBox">
 <div class="couponRow">
-<input type="text" name="coupon_code" id="couponCode" placeholder="کد 10 رقمی تخفیف">
-<button type="button" class="couponApplyBtn" id="applyCouponBtn">اعمال کد</button>
+<input type="text" name="coupon_code" id="couponCode" placeholder="کد را وارد کنید" autocomplete="off">
 </div>
 <div class="couponResult" id="couponResult"></div>
 </div>
@@ -787,22 +771,22 @@ const planSelect = document.getElementById('planSelect');
 const couponBox = document.getElementById('couponBox');
 const couponResult = document.getElementById('couponResult');
 const couponCodeInput = document.getElementById('couponCode');
-const couponRadios = document.querySelectorAll('input[name="has_coupon"]');
+const hasCouponCheck = document.getElementById('hasCouponCheck');
+let couponTimer = null;
 
-couponRadios.forEach(function(radio){
-    radio.addEventListener('change', function(){
-        if(this.value === 'yes'){
-            couponBox.classList.add('is-open');
-        } else {
-            couponBox.classList.remove('is-open');
-            couponResult.className = 'couponResult';
-            couponResult.textContent = '';
-        }
-    });
-});
+function resetCouponResult(){
+    couponResult.className = 'couponResult';
+    couponResult.textContent = '';
+}
 
-document.getElementById('applyCouponBtn').addEventListener('click', function(){
+function validateCoupon(){
     const plan = planSelect.value;
+    const code = couponCodeInput.value.trim();
+
+    if(!hasCouponCheck.checked){
+        resetCouponResult();
+        return;
+    }
 
     if(plan === ''){
         couponResult.className = 'couponResult is-error';
@@ -810,11 +794,8 @@ document.getElementById('applyCouponBtn').addEventListener('click', function(){
         return;
     }
 
-    const code = couponCodeInput.value.trim();
-
     if(code === ''){
-        couponResult.className = 'couponResult is-error';
-        couponResult.textContent = 'کد تخفیف را وارد کنید';
+        resetCouponResult();
         return;
     }
 
@@ -833,13 +814,32 @@ document.getElementById('applyCouponBtn').addEventListener('click', function(){
         couponResult.innerHTML =
             'تخفیف ' + data.percent + '٪ اعمال شد<br>' +
             'مبلغ پلن: ' + data.original_text + '<br>' +
-            '<b>مبلغ قابل پرداخت: ' + data.final_text + '</b>';
+            '<b>اینقدر باید پرداخت کنید: ' + data.final_text + '</b>';
     })
     .catch(function(){
         couponResult.className = 'couponResult is-error';
         couponResult.textContent = 'خطا در بررسی کد تخفیف';
     });
+}
+
+hasCouponCheck.addEventListener('change', function(){
+    if(this.checked){
+        couponBox.classList.add('is-open');
+        couponCodeInput.focus();
+        validateCoupon();
+    } else {
+        couponBox.classList.remove('is-open');
+        couponCodeInput.value = '';
+        resetCouponResult();
+    }
 });
+
+couponCodeInput.addEventListener('input', function(){
+    clearTimeout(couponTimer);
+    couponTimer = setTimeout(validateCoupon, 400);
+});
+
+planSelect.addEventListener('change', validateCoupon);
 
 </script>
 
