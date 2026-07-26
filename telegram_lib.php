@@ -490,6 +490,20 @@ if(!function_exists('telegramConfigPath')){
         return ['ok' => true, 'message' => $newmsg];
     }
 
+    function telegramTicketItemFromLast($username, $last, $unread = false){
+        return [
+            'username' => $username,
+            'mobile' => telegramGetUserMobile($username),
+            'text' => trim((string)($last['text'] ?? '')),
+            'image' => trim((string)($last['image'] ?? '')),
+            'date' => $last['date'] ?? '',
+            'time' => $last['time'] ?? '',
+            'timestamp' => intval($last['timestamp'] ?? 0),
+            'unread' => $unread,
+            'last_sender' => $last['sender'] ?? ''
+        ];
+    }
+
     function telegramUnreadTickets($limit = 15){
         $data = telegramLoadSupport();
         $items = [];
@@ -512,15 +526,36 @@ if(!function_exists('telegramConfigPath')){
                 continue;
             }
 
-            $items[] = [
-                'username' => $username,
-                'mobile' => telegramGetUserMobile($username),
-                'text' => trim((string)($last['text'] ?? '')),
-                'image' => trim((string)($last['image'] ?? '')),
-                'date' => $last['date'] ?? '',
-                'time' => $last['time'] ?? '',
-                'timestamp' => intval($last['timestamp'] ?? 0)
-            ];
+            $items[] = telegramTicketItemFromLast($username, $last, true);
+        }
+
+        usort($items, function($a, $b){
+            return ($b['timestamp'] <=> $a['timestamp']);
+        });
+
+        return array_slice($items, 0, $limit);
+    }
+
+    function telegramRecentTickets($limit = 10){
+        $data = telegramLoadSupport();
+        $items = [];
+
+        foreach($data as $ticket){
+            $username = trim((string)($ticket['user'] ?? ''));
+            $messages = $ticket['messages'] ?? [];
+
+            if($username === '' || !is_array($messages) || count($messages) === 0){
+                continue;
+            }
+
+            $last = end($messages);
+
+            if(!is_array($last)){
+                continue;
+            }
+
+            $unread = (($last['sender'] ?? '') === 'user' && empty($last['seen_by_admin']));
+            $items[] = telegramTicketItemFromLast($username, $last, $unread);
         }
 
         usort($items, function($a, $b){
@@ -547,15 +582,71 @@ if(!function_exists('telegramConfigPath')){
         return implode("\n", $lines);
     }
 
+    function telegramBuildTicketCard($item){
+        $preview = ($item['text'] ?? '') !== '' ? $item['text'] : 'یک تصویر ارسال شده است';
+        $title = !empty($item['unread']) ? '📨 پیام خوانده‌نشده' : '💬 گفتگوی اخیر';
+        $body = $title . "\n\n";
+        $body .= 'کاربر: ' . ($item['username'] ?? '-') . "\n";
+
+        if(!empty($item['mobile'])){
+            $body .= 'موبایل: ' . $item['mobile'] . "\n";
+        }
+
+        $body .= 'زمان: ' . trim(($item['date'] ?? '') . ' ' . ($item['time'] ?? '')) . "\n";
+
+        if(($item['last_sender'] ?? '') === 'admin'){
+            $body .= "آخرین پیام: پشتیبانی\n\n";
+        }
+        else{
+            $body .= "آخرین پیام: کاربر\n\n";
+        }
+
+        $body .= $preview;
+        return $body;
+    }
+
+    function telegramBuildUnreadCard($item){
+        return telegramBuildTicketCard($item);
+    }
+
     function telegramSendUnreadTickets($chatId, $config = null){
         $items = telegramUnreadTickets(10);
+        $source = 'unread';
 
         if(count($items) === 0){
+            $items = telegramRecentTickets(8);
+            $source = 'recent';
+        }
+
+        if(count($items) === 0){
+            telegramSendMessage(
+                $chatId,
+                "هنوز گفتگویی برای نمایش نیست.",
+                ['reply_markup' => telegramMainKeyboard()],
+                $config
+            );
             return 0;
         }
 
+        if($source === 'unread'){
+            telegramSendMessage(
+                $chatId,
+                '📨 ' . count($items) . ' پیام خوانده‌نشده:',
+                ['reply_markup' => telegramMainKeyboard()],
+                $config
+            );
+        }
+        else{
+            telegramSendMessage(
+                $chatId,
+                "پیام خوانده‌نشده‌ای نیست.\nآخرین گفتگوها:",
+                ['reply_markup' => telegramMainKeyboard()],
+                $config
+            );
+        }
+
         foreach($items as $item){
-            telegramSendMessage($chatId, telegramBuildUnreadCard($item), [
+            telegramSendMessage($chatId, telegramBuildTicketCard($item), [
                 'reply_markup' => telegramTicketActionKeyboard($item['username'])
             ], $config);
         }
@@ -749,13 +840,7 @@ if(!function_exists('telegramConfigPath')){
         }
 
         if($text === '/messages' || $text === 'پیام کاربران'){
-            $count = telegramSendUnreadTickets($chatId, $config);
-
-            if($count === 0){
-                // عمداً سکوت وقتی پیام خوانده‌نشده نیست
-                return;
-            }
-
+            telegramSendUnreadTickets($chatId, $config);
             return;
         }
 
