@@ -1,0 +1,14 @@
+[Unit]
+Description=PNV Telegram bot long-polling worker
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/html
+ExecStart=/usr/bin/php /var/www/html/telegram_poll.php --loop
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

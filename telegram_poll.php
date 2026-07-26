@@ -7,6 +7,7 @@ if(PHP_SAPI !== 'cli'){
 
 require_once __DIR__ . '/telegram_lib.php';
 
+$loop = in_array('--loop', $argv ?? [], true);
 $config = telegramLoadConfig();
 
 if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
@@ -21,54 +22,74 @@ if($lock === false || !flock($lock, LOCK_EX | LOCK_NB)){
 }
 
 $stateFile = __DIR__ . '/db/telegram_updates.json';
-$state = file_exists($stateFile) ? json_decode(file_get_contents($stateFile), true) : [];
 
-if(!is_array($state)){
-    $state = [];
-}
+do {
+    $config = telegramLoadConfig();
 
-$offset = intval($state['offset'] ?? 0);
-$updates = telegramApiRequest('getUpdates', [
-    'offset' => $offset,
-    'timeout' => 20,
-    'allowed_updates' => json_encode(['message', 'callback_query'])
-], [], $config);
-
-if(empty($updates['ok']) || !is_array($updates['result'] ?? null)){
-    flock($lock, LOCK_UN);
-    fclose($lock);
-    fwrite(STDERR, ($updates['description'] ?? 'Unable to fetch Telegram updates') . PHP_EOL);
-    exit(1);
-}
-
-foreach($updates['result'] as $update){
-    $updateId = intval($update['update_id'] ?? 0);
-
-    if($updateId > 0){
-        $state['offset'] = $updateId + 1;
-    }
-
-    if(isset($update['callback_query'])){
-        telegramHandleCallback($update['callback_query'], $config);
+    if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
+        if(!$loop){
+            break;
+        }
+        sleep(3);
         continue;
     }
 
-    $message = $update['message'] ?? [];
-    $chatId = (string)($message['chat']['id'] ?? '');
-    $text = trim((string)($message['text'] ?? ''));
+    $state = file_exists($stateFile) ? json_decode(file_get_contents($stateFile), true) : [];
 
-    if($chatId === '' || $text === '' || !telegramCanUseBot($chatId, $config)){
+    if(!is_array($state)){
+        $state = [];
+    }
+
+    $offset = intval($state['offset'] ?? 0);
+    $updates = telegramApiRequest('getUpdates', [
+        'offset' => $offset,
+        'timeout' => $loop ? 25 : 5,
+        'allowed_updates' => json_encode(['message', 'callback_query'])
+    ], [], $config);
+
+    if(empty($updates['ok']) || !is_array($updates['result'] ?? null)){
+        if(!$loop){
+            flock($lock, LOCK_UN);
+            fclose($lock);
+            fwrite(STDERR, ($updates['description'] ?? 'Unable to fetch Telegram updates') . PHP_EOL);
+            exit(1);
+        }
+
+        sleep(2);
         continue;
     }
 
-    telegramHandleAdminText($chatId, $text, $config);
-}
+    foreach($updates['result'] as $update){
+        $updateId = intval($update['update_id'] ?? 0);
 
-file_put_contents(
-    $stateFile,
-    json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-    LOCK_EX
-);
+        if($updateId > 0){
+            $state['offset'] = $updateId + 1;
+        }
+
+        // offset را زود ذخیره کن تا در صورت خطا، آپدیت تکرار نشود
+        file_put_contents(
+            $stateFile,
+            json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+
+        if(isset($update['callback_query'])){
+            telegramHandleCallback($update['callback_query'], $config);
+            continue;
+        }
+
+        $message = $update['message'] ?? [];
+        $chatId = (string)($message['chat']['id'] ?? '');
+        $text = trim((string)($message['text'] ?? ''));
+
+        if($chatId === '' || $text === '' || !telegramCanUseBot($chatId, $config)){
+            continue;
+        }
+
+        telegramHandleAdminText($chatId, $text, $config);
+    }
+
+} while($loop);
 
 flock($lock, LOCK_UN);
 fclose($lock);
