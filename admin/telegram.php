@@ -42,17 +42,12 @@ if(isset($_POST['test'])){
         $error = $result['description'] ?? 'ارسال پیام آزمایشی ناموفق بود';
     }
     else{
-        $sent = telegramSendToAdmins(
-            "✅ اتصال بات تلگرام برقرار است.\nدکمه «پیام کاربران» یا دستور /messages را برای مشاهده پیام‌های خوانده‌نشده بزنید.",
-            [
-                'reply_markup' => json_encode([
-                    'keyboard' => [[['text' => 'پیام کاربران']]],
-                    'resize_keyboard' => true
-                ], JSON_UNESCAPED_UNICODE)
-            ],
-            [],
-            $config
-        );
+        $sent = [];
+
+        foreach(telegramAdminChatIds($config) as $chatId){
+            telegramShowHome($chatId, $config, null);
+            $sent[] = ['ok' => true];
+        }
 
         $failed = false;
         $details = [];
