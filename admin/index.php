@@ -812,6 +812,12 @@ class="supportMenu">
 
 </a>
 
+<a href="telegram.php">
+
+تنظیمات بات تلگرام
+
+</a>
+
 <a href="index.php?page=upload">
 
 آپلود فایل کاربران سرورها

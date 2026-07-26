@@ -7,6 +7,8 @@ header("Location: index.php");
 exit;
 }
 
+require_once __DIR__ . '/telegram_lib.php';
+
 $user = $_SESSION['user'];
 
 $file = "db/support.json";
@@ -200,7 +202,9 @@ $newmsg = [
 
 'time'=>date('H:i'),
 
-'timestamp'=>time()
+'timestamp'=>time(),
+
+'seen_by_admin'=>false
 
 ];
 
@@ -244,8 +248,32 @@ json_encode(
 $data,
 JSON_UNESCAPED_UNICODE|
 JSON_PRETTY_PRINT
-)
+),
+LOCK_EX
 );
+
+try{
+    $mobile = '';
+    $usersFile = __DIR__ . '/db/users.json';
+
+    if(file_exists($usersFile)){
+        $users = json_decode(file_get_contents($usersFile), true);
+
+        if(is_array($users)){
+            foreach($users as $userData){
+                if(($userData['username'] ?? '') === $user){
+                    $mobile = trim((string)($userData['mobile'] ?? ''));
+                    break;
+                }
+            }
+        }
+    }
+
+    telegramSendSupportNotification($user, $newmsg, $mobile);
+}
+catch(Throwable $e){
+    error_log('Telegram support notification failed: ' . $e->getMessage());
+}
 
 header("Location: support.php");
 exit;
