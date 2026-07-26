@@ -371,13 +371,135 @@ if(!function_exists('telegramConfigPath')){
         return json_encode(['inline_keyboard' => $rows], JSON_UNESCAPED_UNICODE);
     }
 
+    function telegramPaymentsPath(){
+        return __DIR__ . '/invoices/payments.csv';
+    }
+
+    function telegramIsPendingStatus($status){
+        $status = trim((string)$status);
+        return $status !== 'تایید شد' && $status !== 'رد شد';
+    }
+
+    function telegramLoadPendingPayments($kind = 'خرید', $limit = 20){
+        $file = telegramPaymentsPath();
+        $items = [];
+
+        if(!file_exists($file)){
+            return [];
+        }
+
+        $handle = fopen($file, 'r');
+
+        while(($row = fgetcsv($handle)) !== false){
+            $type = trim((string)($row[9] ?? ''));
+            $status = trim((string)($row[6] ?? 'درحال بررسی'));
+
+            if(!telegramIsPendingStatus($status)){
+                continue;
+            }
+
+            if($kind === 'خرید'){
+                if($type !== 'خرید' && $type !== ''){
+                    continue;
+                }
+            }
+            elseif($type !== $kind){
+                continue;
+            }
+
+            $username = trim((string)($row[0] ?? ''));
+
+            $items[] = [
+                'username' => $username,
+                'mobile' => telegramGetUserMobile($username),
+                'target' => trim((string)($row[1] ?? '')),
+                'plan' => trim((string)($row[2] ?? '')),
+                'tracking' => trim((string)($row[3] ?? '')),
+                'date' => trim((string)($row[4] ?? '')),
+                'time' => trim((string)($row[5] ?? '')),
+                'status' => $status !== '' ? $status : 'درحال بررسی',
+                'created' => intval($row[8] ?? 0),
+                'type' => $type !== '' ? $type : 'خرید',
+                'coupon' => trim((string)($row[10] ?? '')),
+                'discount' => trim((string)($row[11] ?? ''))
+            ];
+        }
+
+        fclose($handle);
+
+        usort($items, function($a, $b){
+            return ($b['created'] <=> $a['created']);
+        });
+
+        return array_slice($items, 0, $limit);
+    }
+
+    function telegramPaymentTitle($kind){
+        return $kind === 'تمدید' ? 'تمدیدهای جدید' : 'خریدهای جدید';
+    }
+
+    function telegramPaymentEmoji($kind){
+        return $kind === 'تمدید' ? '♻️' : '🛒';
+    }
+
+    function telegramFormatPaymentDetail($item, $kind){
+        $title = telegramPaymentEmoji($kind) . ' ' . telegramPaymentTitle($kind);
+        $label = $kind === 'تمدید' ? 'لینک اشتراک' : 'نام کانفیگ';
+        $lines = [
+            $title,
+            '',
+            'کاربر: ' . ($item['username'] ?? '-'),
+        ];
+
+        if(!empty($item['mobile'])){
+            $lines[] = 'موبایل: ' . $item['mobile'];
+        }
+
+        $lines[] = $label . ': ' . ($item['target'] ?? '-');
+        $lines[] = 'پلن: ' . ($item['plan'] ?? '-');
+        $lines[] = 'پیگیری: ' . ($item['tracking'] ?? '-');
+        $lines[] = 'تاریخ: ' . trim(($item['date'] ?? '') . ' ' . ($item['time'] ?? ''));
+        $lines[] = 'وضعیت: ' . ($item['status'] ?? 'درحال بررسی');
+
+        if(!empty($item['coupon'])){
+            $lines[] = 'کد تخفیف: ' . $item['coupon'];
+            if($item['discount'] !== ''){
+                $lines[] = 'درصد تخفیف: ' . $item['discount'] . '٪';
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = 'فعلاً فقط اطلاع‌رسانی است.';
+
+        return implode("\n", $lines);
+    }
+
     function telegramHomeText(){
-        return "🏠 منوی اصلی\n\nیکی از بخش‌ها را انتخاب کنید:";
+        $buyCount = count(telegramLoadPendingPayments('خرید', 50));
+        $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
+        $msgCount = count(telegramUnreadTickets(50));
+
+        $lines = [
+            '🏠 منوی اصلی',
+            '',
+            'یکی از بخش‌ها را انتخاب کنید:',
+            '',
+            'پیام کاربران: ' . $msgCount,
+            'خریدهای جدید: ' . $buyCount,
+            'تمدیدهای جدید: ' . $renewCount
+        ];
+
+        return implode("\n", $lines);
     }
 
     function telegramHomeKeyboard(){
+        $buyCount = count(telegramLoadPendingPayments('خرید', 50));
+        $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
+
         return telegramInline([
-            [['text' => '📨 پیام کاربران', 'callback_data' => 'menu:messages']]
+            [['text' => 'پیام کاربران', 'callback_data' => 'menu:messages']],
+            [['text' => 'خریدهای جدید' . ($buyCount ? " ({$buyCount})" : ''), 'callback_data' => 'menu:buys']],
+            [['text' => 'تمدیدهای جدید' . ($renewCount ? " ({$renewCount})" : ''), 'callback_data' => 'menu:renews']]
         ]);
     }
 
@@ -494,6 +616,135 @@ if(!function_exists('telegramConfigPath')){
         }
 
         return $newId;
+    }
+
+    function telegramPaymentsListText($kind, $items){
+        $title = telegramPaymentEmoji($kind) . ' ' . telegramPaymentTitle($kind);
+
+        if(count($items) === 0){
+            return $title . "\n\nمورد جدیدی برای بررسی نیست.";
+        }
+
+        return $title . "\n\n" . count($items) . " مورد در انتظار بررسی\nیکی را انتخاب کنید:";
+    }
+
+    function telegramPaymentsListKeyboard($kind, $items){
+        $prefix = $kind === 'تمدید' ? 'renew:' : 'buy:';
+        $rows = [telegramBackRow('menu:home')];
+
+        foreach($items as $i => $item){
+            $label = ($item['username'] ?? '-') . ' | ' . telegramLimitText($item['plan'] ?? '', 24);
+            $rows[] = [[
+                'text' => telegramLimitText($label, 60),
+                'callback_data' => $prefix . $i
+            ]];
+        }
+
+        if(count($items) > 4){
+            $rows[] = telegramBackRow('menu:home');
+        }
+
+        return telegramInline($rows);
+    }
+
+    function telegramPaymentDetailKeyboard($kind){
+        $back = $kind === 'تمدید' ? 'menu:renews' : 'menu:buys';
+        return telegramInline([
+            telegramBackRow($back)
+        ]);
+    }
+
+    function telegramShowPayments($chatId, $kind, $config = null, $messageId = null){
+        $items = telegramLoadPendingPayments($kind, 15);
+        $session = telegramGetSession($chatId);
+
+        if(!$messageId && is_array($session)){
+            $messageId = intval($session['screen_message_id'] ?? 0) ?: null;
+        }
+
+        $id = telegramShowPage(
+            $chatId,
+            telegramPaymentsListText($kind, $items),
+            telegramPaymentsListKeyboard($kind, $items),
+            $config,
+            $messageId
+        );
+
+        telegramSetSession($chatId, [
+            'screen' => $kind === 'تمدید' ? 'renews' : 'buys',
+            'screen_message_id' => $id,
+            'payment_kind' => $kind,
+            'payment_items' => $items,
+            'updated_at' => time()
+        ]);
+
+        return $id;
+    }
+
+    function telegramShowPaymentDetail($chatId, $kind, $index, $config = null, $messageId = null){
+        $session = telegramGetSession($chatId);
+        $items = [];
+
+        if(is_array($session) && ($session['payment_kind'] ?? '') === $kind && is_array($session['payment_items'] ?? null)){
+            $items = $session['payment_items'];
+        }
+        else{
+            $items = telegramLoadPendingPayments($kind, 15);
+        }
+
+        if(!$messageId && is_array($session)){
+            $messageId = intval($session['screen_message_id'] ?? 0) ?: null;
+        }
+
+        if(!isset($items[$index])){
+            return telegramShowPayments($chatId, $kind, $config, $messageId);
+        }
+
+        $id = telegramShowPage(
+            $chatId,
+            telegramFormatPaymentDetail($items[$index], $kind),
+            telegramPaymentDetailKeyboard($kind),
+            $config,
+            $messageId
+        );
+
+        telegramSetSession($chatId, [
+            'screen' => 'payment_detail',
+            'screen_message_id' => $id,
+            'payment_kind' => $kind,
+            'payment_items' => $items,
+            'updated_at' => time()
+        ]);
+
+        return $id;
+    }
+
+    function telegramNotifyNewPayment($kind, $row){
+        $username = trim((string)($row[0] ?? ''));
+        $item = [
+            'username' => $username,
+            'mobile' => telegramGetUserMobile($username),
+            'target' => trim((string)($row[1] ?? '')),
+            'plan' => trim((string)($row[2] ?? '')),
+            'tracking' => trim((string)($row[3] ?? '')),
+            'date' => trim((string)($row[4] ?? '')),
+            'time' => trim((string)($row[5] ?? '')),
+            'status' => trim((string)($row[6] ?? 'درحال بررسی')),
+            'created' => intval($row[8] ?? time()),
+            'type' => $kind,
+            'coupon' => trim((string)($row[10] ?? '')),
+            'discount' => trim((string)($row[11] ?? ''))
+        ];
+
+        $text = "🔔 " . telegramFormatPaymentDetail($item, $kind);
+        $backMenu = $kind === 'تمدید' ? 'menu:renews' : 'menu:buys';
+
+        return telegramSendToAdmins($text, [
+            'reply_markup' => telegramInline([
+                telegramBackRow('menu:home'),
+                [['text' => 'مشاهده لیست', 'callback_data' => $backMenu]]
+            ])
+        ]);
     }
 
     function telegramShowHome($chatId, $config = null, $messageId = null){
@@ -847,6 +1098,28 @@ if(!function_exists('telegramConfigPath')){
 
         if($data === 'menu:messages'){
             telegramShowMessages($chatId, $config, $messageId);
+            return;
+        }
+
+        if($data === 'menu:buys'){
+            telegramShowPayments($chatId, 'خرید', $config, $messageId);
+            return;
+        }
+
+        if($data === 'menu:renews'){
+            telegramShowPayments($chatId, 'تمدید', $config, $messageId);
+            return;
+        }
+
+        if(strpos($data, 'buy:') === 0){
+            $index = intval(substr($data, 4));
+            telegramShowPaymentDetail($chatId, 'خرید', $index, $config, $messageId);
+            return;
+        }
+
+        if(strpos($data, 'renew:') === 0){
+            $index = intval(substr($data, 6));
+            telegramShowPaymentDetail($chatId, 'تمدید', $index, $config, $messageId);
             return;
         }
 

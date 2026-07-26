@@ -7,6 +7,8 @@ if(!isset($_SESSION['user'])){
     exit;
 }
 
+require_once __DIR__ . '/telegram_lib.php';
+
 $message = "";
 $error = "";
 
@@ -86,6 +88,13 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
         fputcsv($file,$row);
 
         fclose($file);
+
+        try{
+            telegramNotifyNewPayment('تمدید', $row);
+        }
+        catch(Throwable $e){
+            error_log('Telegram renew notification failed: ' . $e->getMessage());
+        }
 
         $message = "درخواست تمدید ثبت شد و درحال بررسی است";
     }
