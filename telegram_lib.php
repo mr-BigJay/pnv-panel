@@ -240,13 +240,13 @@ if(!function_exists('telegramConfigPath')){
         $file = __DIR__ . '/db/support.json';
 
         if(!file_exists($file)){
-            return "📨 پیام کاربران\n\nپیام جدیدی وجود ندارد.";
+            return '';
         }
 
         $tickets = json_decode(file_get_contents($file), true);
 
         if(!is_array($tickets)){
-            return "📨 پیام کاربران\n\nپیام جدیدی وجود ندارد.";
+            return '';
         }
 
         $items = [];
@@ -267,7 +267,7 @@ if(!function_exists('telegramConfigPath')){
         }
 
         if(count($items) === 0){
-            return "📨 پیام کاربران\n\nپیام خوانده‌نشده‌ای ندارید.";
+            return '';
         }
 
         return "📨 پیام کاربران (" . count($items) . ")\n\n" . implode("\n", array_slice($items, 0, 20));
