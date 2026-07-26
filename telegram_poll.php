@@ -31,7 +31,7 @@ $offset = intval($state['offset'] ?? 0);
 $updates = telegramApiRequest('getUpdates', [
     'offset' => $offset,
     'timeout' => 20,
-    'allowed_updates' => json_encode(['message'])
+    'allowed_updates' => json_encode(['message', 'callback_query'])
 ], [], $config);
 
 if(empty($updates['ok']) || !is_array($updates['result'] ?? null)){
@@ -41,48 +41,27 @@ if(empty($updates['ok']) || !is_array($updates['result'] ?? null)){
     exit(1);
 }
 
-$keyboard = json_encode([
-    'keyboard' => [[['text' => 'پیام کاربران']]],
-    'resize_keyboard' => true
-], JSON_UNESCAPED_UNICODE);
-
 foreach($updates['result'] as $update){
     $updateId = intval($update['update_id'] ?? 0);
-    $message = $update['message'] ?? [];
-    $chatId = (string)($message['chat']['id'] ?? '');
-    $text = trim((string)($message['text'] ?? ''));
 
     if($updateId > 0){
         $state['offset'] = $updateId + 1;
     }
 
-    if($chatId === '' || !telegramCanUseBot($chatId, $config)){
+    if(isset($update['callback_query'])){
+        telegramHandleCallback($update['callback_query'], $config);
         continue;
     }
 
-    if($text === '/start'){
-        telegramApiRequest('sendMessage', [
-            'chat_id' => $chatId,
-            'text' => "بات پنل فعال است.\nوقتی کاربر پیام جدید بفرستد، اینجا اطلاع داده می‌شود.",
-            'reply_markup' => $keyboard
-        ], [], $config);
+    $message = $update['message'] ?? [];
+    $chatId = (string)($message['chat']['id'] ?? '');
+    $text = trim((string)($message['text'] ?? ''));
+
+    if($chatId === '' || $text === '' || !telegramCanUseBot($chatId, $config)){
         continue;
     }
 
-    if($text === '/messages' || $text === 'پیام کاربران'){
-        $summary = telegramSupportSummary();
-
-        // فقط وقتی پیام خوانده‌نشده واقعی وجود دارد پاسخ بده
-        if($summary === ''){
-            continue;
-        }
-
-        telegramApiRequest('sendMessage', [
-            'chat_id' => $chatId,
-            'text' => $summary,
-            'reply_markup' => $keyboard
-        ], [], $config);
-    }
+    telegramHandleAdminText($chatId, $text, $config);
 }
 
 file_put_contents(

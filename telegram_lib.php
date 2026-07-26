@@ -5,6 +5,14 @@ if(!function_exists('telegramConfigPath')){
         return __DIR__ . '/db/telegram.json';
     }
 
+    function telegramSessionsPath(){
+        return __DIR__ . '/db/telegram_sessions.json';
+    }
+
+    function telegramSupportPath(){
+        return __DIR__ . '/db/support.json';
+    }
+
     function telegramLoadConfig(){
         $defaults = [
             'enabled' => false,
@@ -86,6 +94,13 @@ if(!function_exists('telegramConfigPath')){
         }
 
         return substr($text, 0, $length);
+    }
+
+    function telegramMainKeyboard(){
+        return json_encode([
+            'keyboard' => [[['text' => 'پیام کاربران']]],
+            'resize_keyboard' => true
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     function telegramApiRequest($method, $params = [], $files = [], $config = null){
@@ -176,6 +191,23 @@ if(!function_exists('telegramConfigPath')){
             : ['ok' => false, 'description' => 'ارتباط با تلگرام برقرار نشد'];
     }
 
+    function telegramSendMessage($chatId, $text, $extra = [], $config = null){
+        $params = array_merge([
+            'chat_id' => $chatId,
+            'text' => telegramLimitText($text, 4096)
+        ], $extra);
+
+        return telegramApiRequest('sendMessage', $params, [], $config);
+    }
+
+    function telegramAnswerCallback($callbackId, $text = '', $config = null){
+        return telegramApiRequest('answerCallbackQuery', [
+            'callback_query_id' => $callbackId,
+            'text' => telegramLimitText($text, 200),
+            'show_alert' => false
+        ], [], $config);
+    }
+
     function telegramSendToAdmins($text, $extra = [], $files = [], $config = null){
         if($config === null){
             $config = telegramLoadConfig();
@@ -205,54 +237,223 @@ if(!function_exists('telegramConfigPath')){
         return $results;
     }
 
-    function telegramSendSupportNotification($username, $message, $mobile = ''){
-        $text = trim((string)($message['text'] ?? ''));
-        $image = trim((string)($message['image'] ?? ''));
-        $body = "🔔 پیام جدید کاربر\n\n";
-        $body .= "کاربر: " . $username . "\n";
-
-        if($mobile !== '' && $mobile !== '-'){
-            $body .= "موبایل: " . $mobile . "\n";
-        }
-
-        $body .= "زمان: " . ($message['date'] ?? '') . ' ' . ($message['time'] ?? '') . "\n\n";
-        $body .= $text !== '' ? $text : 'یک تصویر ارسال شده است';
-
-        $file = __DIR__ . '/' . ltrim($image, '/');
-
-        if($image !== '' && is_file($file)){
-            return telegramSendToAdmins($body, [], ['photo' => $file]);
-        }
-
-        return telegramSendToAdmins($body);
-    }
-
-    function telegramSetCommands($config = null){
-        return telegramApiRequest('setMyCommands', [
-            'commands' => json_encode([
-                ['command' => 'start', 'description' => 'نمایش منو'],
-                ['command' => 'messages', 'description' => 'پیام کاربران']
-            ], JSON_UNESCAPED_UNICODE)
-        ], [], $config);
-    }
-
-    function telegramSupportSummary(){
-        $file = __DIR__ . '/db/support.json';
+    function telegramLoadSessions(){
+        $file = telegramSessionsPath();
 
         if(!file_exists($file)){
+            return [];
+        }
+
+        $data = json_decode(file_get_contents($file), true);
+        return is_array($data) ? $data : [];
+    }
+
+    function telegramSaveSessions($sessions){
+        file_put_contents(
+            telegramSessionsPath(),
+            json_encode($sessions, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function telegramGetSession($chatId){
+        $sessions = telegramLoadSessions();
+        return is_array($sessions[(string)$chatId] ?? null) ? $sessions[(string)$chatId] : null;
+    }
+
+    function telegramSetSession($chatId, $session){
+        $sessions = telegramLoadSessions();
+        $sessions[(string)$chatId] = $session;
+        telegramSaveSessions($sessions);
+    }
+
+    function telegramClearSession($chatId){
+        $sessions = telegramLoadSessions();
+        unset($sessions[(string)$chatId]);
+        telegramSaveSessions($sessions);
+    }
+
+    function telegramLoadSupport(){
+        $file = telegramSupportPath();
+
+        if(!file_exists($file)){
+            return [];
+        }
+
+        $data = json_decode(file_get_contents($file), true);
+        return is_array($data) ? $data : [];
+    }
+
+    function telegramSaveSupport($data){
+        file_put_contents(
+            telegramSupportPath(),
+            json_encode(array_values($data), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function telegramFindTicketIndex($data, $username){
+        foreach($data as $i => $ticket){
+            if(($ticket['user'] ?? '') === $username){
+                return $i;
+            }
+        }
+
+        return -1;
+    }
+
+    function telegramGetUserMobile($username){
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!file_exists($usersFile)){
             return '';
         }
 
-        $tickets = json_decode(file_get_contents($file), true);
+        $users = json_decode(file_get_contents($usersFile), true);
 
-        if(!is_array($tickets)){
+        if(!is_array($users)){
             return '';
         }
 
+        foreach($users as $user){
+            if(($user['username'] ?? '') === $username){
+                return trim((string)($user['mobile'] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    function telegramTicketActionKeyboard($username){
+        return json_encode([
+            'inline_keyboard' => [[
+                ['text' => 'مشاهده گفتگو', 'callback_data' => 'hist:' . $username],
+                ['text' => 'پاسخ', 'callback_data' => 'reply:' . $username]
+            ]]
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    function telegramCancelKeyboard(){
+        return json_encode([
+            'keyboard' => [[['text' => 'انصراف']], [['text' => 'پیام کاربران']]],
+            'resize_keyboard' => true
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    function telegramFormatHistory($username, $limit = 20){
+        $data = telegramLoadSupport();
+        $index = telegramFindTicketIndex($data, $username);
+
+        if($index < 0){
+            return "گفتگویی برای کاربر «{$username}» پیدا نشد.";
+        }
+
+        $messages = $data[$index]['messages'] ?? [];
+
+        if(!is_array($messages) || count($messages) === 0){
+            return "گفتگوی کاربر «{$username}» خالی است.";
+        }
+
+        $slice = array_slice($messages, -$limit);
+        $lines = ["🗂 گفتگو با {$username}", ''];
+
+        foreach($slice as $msg){
+            $who = (($msg['sender'] ?? '') === 'admin') ? '🛠 پشتیبانی' : '👤 کاربر';
+            $time = trim(($msg['date'] ?? '') . ' ' . ($msg['time'] ?? ''));
+            $text = trim((string)($msg['text'] ?? ''));
+
+            if($text === '' && !empty($msg['image'])){
+                $text = '[تصویر]';
+            }
+
+            if(!empty($msg['edited'])){
+                $text .= ' (ویرایش‌شده)';
+            }
+
+            $lines[] = $who . ($time !== '' ? " ({$time})" : '') . ':';
+            $lines[] = $text !== '' ? $text : '-';
+            $lines[] = '';
+        }
+
+        return telegramLimitText(trim(implode("\n", $lines)), 4000);
+    }
+
+    function telegramMarkSeenByAdmin($username){
+        $data = telegramLoadSupport();
+        $index = telegramFindTicketIndex($data, $username);
+
+        if($index < 0){
+            return false;
+        }
+
+        $changed = false;
+
+        foreach($data[$index]['messages'] as $j => $msg){
+            if(($msg['sender'] ?? '') === 'user' && empty($msg['seen_by_admin'])){
+                $data[$index]['messages'][$j]['seen_by_admin'] = true;
+                $changed = true;
+            }
+        }
+
+        if($changed){
+            telegramSaveSupport($data);
+        }
+
+        return $changed;
+    }
+
+    function telegramAddAdminReply($username, $text){
+        $text = trim((string)$text);
+
+        if($username === '' || $text === ''){
+            return ['ok' => false, 'error' => 'متن پاسخ خالی است'];
+        }
+
+        $data = telegramLoadSupport();
+        $index = telegramFindTicketIndex($data, $username);
+
+        if($index < 0){
+            return ['ok' => false, 'error' => 'تیکت کاربر پیدا نشد'];
+        }
+
+        $now = time();
+        $newmsg = [
+            'id' => uniqid(),
+            'sender' => 'admin',
+            'text' => $text,
+            'image' => '',
+            'date' => date('Y/m/d', $now),
+            'time' => date('H:i', $now),
+            'timestamp' => $now,
+            'seen_by_user' => false
+        ];
+
+        $data[$index]['messages'][] = $newmsg;
+        $data[$index]['status'] = 'answered';
+
+        foreach($data[$index]['messages'] as $j => $msg){
+            if(($msg['sender'] ?? '') === 'user'){
+                $data[$index]['messages'][$j]['seen_by_admin'] = true;
+            }
+        }
+
+        telegramSaveSupport($data);
+
+        return ['ok' => true, 'message' => $newmsg];
+    }
+
+    function telegramUnreadTickets($limit = 15){
+        $data = telegramLoadSupport();
         $items = [];
 
-        foreach($tickets as $ticket){
+        foreach($data as $ticket){
+            $username = trim((string)($ticket['user'] ?? ''));
             $messages = $ticket['messages'] ?? [];
+
+            if($username === '' || !is_array($messages) || count($messages) === 0){
+                continue;
+            }
+
             $last = end($messages);
 
             if(!is_array($last) || ($last['sender'] ?? '') !== 'user'){
@@ -263,13 +464,215 @@ if(!function_exists('telegramConfigPath')){
                 continue;
             }
 
-            $items[] = '• ' . ($ticket['user'] ?? '-') . ': ' . telegramLimitText(trim((string)($last['text'] ?? 'تصویر')), 120);
+            $items[] = [
+                'username' => $username,
+                'mobile' => telegramGetUserMobile($username),
+                'text' => trim((string)($last['text'] ?? '')),
+                'image' => trim((string)($last['image'] ?? '')),
+                'date' => $last['date'] ?? '',
+                'time' => $last['time'] ?? '',
+                'timestamp' => intval($last['timestamp'] ?? 0)
+            ];
         }
+
+        usort($items, function($a, $b){
+            return ($b['timestamp'] <=> $a['timestamp']);
+        });
+
+        return array_slice($items, 0, $limit);
+    }
+
+    function telegramSupportSummary(){
+        $items = telegramUnreadTickets(20);
 
         if(count($items) === 0){
             return '';
         }
 
-        return "📨 پیام کاربران (" . count($items) . ")\n\n" . implode("\n", array_slice($items, 0, 20));
+        $lines = ['📨 پیام کاربران (' . count($items) . ')', ''];
+
+        foreach($items as $item){
+            $preview = $item['text'] !== '' ? $item['text'] : 'تصویر';
+            $lines[] = '• ' . $item['username'] . ': ' . telegramLimitText($preview, 120);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    function telegramSendUnreadTickets($chatId, $config = null){
+        $items = telegramUnreadTickets(10);
+
+        if(count($items) === 0){
+            return 0;
+        }
+
+        foreach($items as $item){
+            $preview = $item['text'] !== '' ? $item['text'] : 'یک تصویر ارسال شده است';
+            $body = "📨 پیام خوانده‌نشده\n\n";
+            $body .= 'کاربر: ' . $item['username'] . "\n";
+
+            if($item['mobile'] !== ''){
+                $body .= 'موبایل: ' . $item['mobile'] . "\n";
+            }
+
+            $body .= 'زمان: ' . trim($item['date'] . ' ' . $item['time']) . "\n\n";
+            $body .= $preview;
+
+            telegramSendMessage($chatId, $body, [
+                'reply_markup' => telegramTicketActionKeyboard($item['username'])
+            ], $config);
+        }
+
+        return count($items);
+    }
+
+    function telegramSendSupportNotification($username, $message, $mobile = ''){
+        $text = trim((string)($message['text'] ?? ''));
+        $image = trim((string)($message['image'] ?? ''));
+        $history = telegramFormatHistory($username, 8);
+
+        $header = "🔔 پیام جدید کاربر\n\n";
+        $header .= 'کاربر: ' . $username . "\n";
+
+        if($mobile !== '' && $mobile !== '-'){
+            $header .= 'موبایل: ' . $mobile . "\n";
+        }
+
+        $header .= 'زمان: ' . ($message['date'] ?? '') . ' ' . ($message['time'] ?? '') . "\n\n";
+        $header .= "—— پیام جدید ——\n";
+        $header .= $text !== '' ? $text : 'یک تصویر ارسال شده است';
+
+        $body = $header . "\n\n—— گفتگوی اخیر ——\n" . $history;
+        $extra = [
+            'reply_markup' => telegramTicketActionKeyboard($username)
+        ];
+        $file = __DIR__ . '/' . ltrim($image, '/');
+        $results = [];
+
+        if($image !== '' && is_file($file)){
+            $results = telegramSendToAdmins($header, [], ['photo' => $file]);
+            $results = array_merge($results, telegramSendToAdmins($body, $extra));
+            return $results;
+        }
+
+        return telegramSendToAdmins($body, $extra);
+    }
+
+    function telegramSetCommands($config = null){
+        return telegramApiRequest('setMyCommands', [
+            'commands' => json_encode([
+                ['command' => 'start', 'description' => 'نمایش منو'],
+                ['command' => 'messages', 'description' => 'پیام کاربران'],
+                ['command' => 'cancel', 'description' => 'لغو پاسخ']
+            ], JSON_UNESCAPED_UNICODE)
+        ], [], $config);
+    }
+
+    function telegramHandleCallback($callback, $config = null){
+        $callbackId = $callback['id'] ?? '';
+        $chatId = (string)($callback['message']['chat']['id'] ?? '');
+        $data = trim((string)($callback['data'] ?? ''));
+
+        if($chatId === '' || !telegramCanUseBot($chatId, $config)){
+            telegramAnswerCallback($callbackId, 'دسترسی ندارید', $config);
+            return;
+        }
+
+        if($data === 'cancel'){
+            telegramClearSession($chatId);
+            telegramAnswerCallback($callbackId, 'لغو شد', $config);
+            telegramSendMessage($chatId, 'حالت پاسخ لغو شد.', [
+                'reply_markup' => telegramMainKeyboard()
+            ], $config);
+            return;
+        }
+
+        if(strpos($data, 'hist:') === 0){
+            $username = substr($data, 5);
+            telegramAnswerCallback($callbackId, 'در حال نمایش گفتگو', $config);
+            telegramMarkSeenByAdmin($username);
+            telegramSendMessage($chatId, telegramFormatHistory($username, 25), [
+                'reply_markup' => telegramTicketActionKeyboard($username)
+            ], $config);
+            return;
+        }
+
+        if(strpos($data, 'reply:') === 0){
+            $username = substr($data, 6);
+            telegramSetSession($chatId, [
+                'mode' => 'reply',
+                'username' => $username,
+                'updated_at' => time()
+            ]);
+            telegramAnswerCallback($callbackId, 'آماده پاسخ', $config);
+            telegramSendMessage(
+                $chatId,
+                "✍️ پاسخ به کاربر «{$username}»\n\nمتن پاسخ را همین‌جا بنویسید.\nبرای لغو، «انصراف» یا /cancel را بزنید.",
+                ['reply_markup' => telegramCancelKeyboard()],
+                $config
+            );
+            return;
+        }
+
+        telegramAnswerCallback($callbackId, '', $config);
+    }
+
+    function telegramHandleAdminText($chatId, $text, $config = null){
+        $text = trim((string)$text);
+
+        if($text === '/start'){
+            telegramClearSession($chatId);
+            telegramSendMessage(
+                $chatId,
+                "بات پنل فعال است.\nوقتی کاربر پیام جدید بفرستد، اینجا اطلاع داده می‌شود.\nمی‌توانید گفتگو را ببینید و از همین‌جا پاسخ دهید.",
+                ['reply_markup' => telegramMainKeyboard()],
+                $config
+            );
+            return;
+        }
+
+        if($text === '/cancel' || $text === 'انصراف'){
+            telegramClearSession($chatId);
+            telegramSendMessage($chatId, 'حالت پاسخ لغو شد.', [
+                'reply_markup' => telegramMainKeyboard()
+            ], $config);
+            return;
+        }
+
+        if($text === '/messages' || $text === 'پیام کاربران'){
+            $count = telegramSendUnreadTickets($chatId, $config);
+
+            if($count === 0){
+                // عمداً سکوت وقتی پیام خوانده‌نشده نیست
+                return;
+            }
+
+            return;
+        }
+
+        $session = telegramGetSession($chatId);
+
+        if(is_array($session) && ($session['mode'] ?? '') === 'reply'){
+            $username = trim((string)($session['username'] ?? ''));
+            $result = telegramAddAdminReply($username, $text);
+            telegramClearSession($chatId);
+
+            if(empty($result['ok'])){
+                telegramSendMessage(
+                    $chatId,
+                    'ثبت پاسخ ناموفق بود: ' . ($result['error'] ?? 'خطای نامشخص'),
+                    ['reply_markup' => telegramMainKeyboard()],
+                    $config
+                );
+                return;
+            }
+
+            telegramSendMessage(
+                $chatId,
+                "✅ پاسخ برای کاربر «{$username}» ثبت شد و در پنل کاربر نمایش داده می‌شود.",
+                ['reply_markup' => telegramMainKeyboard()],
+                $config
+            );
+        }
     }
 }
