@@ -111,14 +111,6 @@ if(!function_exists('telegramConfigPath')){
         $proxy = telegramProxyUrl($config);
 
         if(function_exists('curl_init')){
-            $payload = $params;
-
-            foreach($files as $key => $path){
-                if(is_file($path)){
-                    $payload[$key] = new CURLFile($path);
-                }
-            }
-
             $curlTimeout = 25;
             if(isset($params['timeout'])){
                 $curlTimeout = max(25, intval($params['timeout']) + 10);
@@ -126,10 +118,53 @@ if(!function_exists('telegramConfigPath')){
 
             $curl = curl_init($url);
             curl_setopt($curl, CURLOPT_POST, true);
-            curl_setopt($curl, CURLOPT_POSTFIELDS, $payload);
             curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
             curl_setopt($curl, CURLOPT_TIMEOUT, $curlTimeout);
+
+            if(count($files) > 0){
+                $payload = $params;
+
+                if(isset($payload['reply_markup']) && is_array($payload['reply_markup'])){
+                    $payload['reply_markup'] = json_encode(
+                        $payload['reply_markup'],
+                        JSON_UNESCAPED_UNICODE
+                    );
+                }
+
+                foreach($files as $key => $path){
+                    if(is_file($path)){
+                        $payload[$key] = new CURLFile($path);
+                    }
+                }
+
+                curl_setopt($curl, CURLOPT_POSTFIELDS, $payload);
+            }
+            else{
+                $payload = $params;
+
+                // اگر کیبورد به‌صورت JSON string آمده، به آرایه برگردان
+                if(isset($payload['reply_markup']) && is_string($payload['reply_markup'])){
+                    $decodedMarkup = json_decode($payload['reply_markup'], true);
+                    if(is_array($decodedMarkup)){
+                        $payload['reply_markup'] = $decodedMarkup;
+                    }
+                }
+
+                if(isset($payload['allowed_updates']) && is_string($payload['allowed_updates'])){
+                    $decodedUpdates = json_decode($payload['allowed_updates'], true);
+                    if(is_array($decodedUpdates)){
+                        $payload['allowed_updates'] = $decodedUpdates;
+                    }
+                }
+
+                curl_setopt($curl, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+                curl_setopt(
+                    $curl,
+                    CURLOPT_POSTFIELDS,
+                    json_encode($payload, JSON_UNESCAPED_UNICODE)
+                );
+            }
 
             if($proxy !== ''){
                 $proxyType = CURLPROXY_SOCKS5_HOSTNAME;
@@ -358,15 +393,24 @@ if(!function_exists('telegramConfigPath')){
         return "📨 پیام کاربران\n\nپیام خوانده‌نشده‌ای نیست.\nآخرین گفتگوها:";
     }
 
+    function telegramBackRow($callback){
+        return [['text' => 'بازگشت', 'callback_data' => $callback]];
+    }
+
     function telegramMessagesKeyboard($items){
         $rows = [
-            [['text' => '⬅️ بازگشت', 'callback_data' => 'menu:home']]
+            telegramBackRow('menu:home')
         ];
 
         foreach($items as $item){
             $name = $item['username'] ?? '-';
-            $label = (!empty($item['unread']) ? '🔴 ' : '') . $name;
+            $label = (!empty($item['unread']) ? '● ' : '') . $name;
             $rows[] = [['text' => telegramLimitText($label, 60), 'callback_data' => 'chat:' . $name]];
+        }
+
+        // اگر لیست طولانی بود، بازگشت پایین هم باشد
+        if(count($items) > 4){
+            $rows[] = telegramBackRow('menu:home');
         }
 
         return telegramInline($rows);
@@ -374,21 +418,22 @@ if(!function_exists('telegramConfigPath')){
 
     function telegramChatKeyboard($username){
         return telegramInline([
-            [['text' => '⬅️ بازگشت', 'callback_data' => 'menu:messages']],
-            [['text' => '✍️ پاسخ', 'callback_data' => 'reply:' . $username]]
+            telegramBackRow('menu:messages'),
+            [['text' => 'پاسخ', 'callback_data' => 'reply:' . $username]],
+            telegramBackRow('menu:messages')
         ]);
     }
 
     function telegramReplyPageKeyboard($username){
         return telegramInline([
-            [['text' => '⬅️ بازگشت', 'callback_data' => 'chat:' . $username]],
+            telegramBackRow('chat:' . $username),
             [['text' => 'انصراف', 'callback_data' => 'menu:messages']]
         ]);
     }
 
     function telegramTicketActionKeyboard($username){
         return telegramInline([
-            [['text' => '⬅️ بازگشت', 'callback_data' => 'menu:home']],
+            telegramBackRow('menu:home'),
             [
                 ['text' => 'مشاهده گفتگو', 'callback_data' => 'chat:' . $username],
                 ['text' => 'پاسخ', 'callback_data' => 'reply:' . $username]
@@ -413,6 +458,13 @@ if(!function_exists('telegramConfigPath')){
             $edited = telegramEditMessage($chatId, $messageId, $text, $extra, $config);
 
             if(!empty($edited['ok'])){
+                // اطمینان از ست شدن دکمه‌ها
+                telegramApiRequest('editMessageReplyMarkup', [
+                    'chat_id' => $chatId,
+                    'message_id' => intval($messageId),
+                    'reply_markup' => $keyboard
+                ], [], $config);
+
                 telegramUpdateSessionScreen($chatId, [
                     'screen_message_id' => intval($messageId)
                 ]);
@@ -420,7 +472,8 @@ if(!function_exists('telegramConfigPath')){
             }
         }
 
-        telegramSendMessage($chatId, "⋯", [
+        // حذف کیبورد قدیمی پایین صفحه
+        telegramSendMessage($chatId, ".", [
             'reply_markup' => json_encode(['remove_keyboard' => true])
         ], $config);
 
@@ -431,6 +484,13 @@ if(!function_exists('telegramConfigPath')){
             telegramUpdateSessionScreen($chatId, [
                 'screen_message_id' => $newId
             ]);
+
+            // اگر به هر دلیل دکمه ننشست، دوباره ست کن
+            telegramApiRequest('editMessageReplyMarkup', [
+                'chat_id' => $chatId,
+                'message_id' => $newId,
+                'reply_markup' => $keyboard
+            ], [], $config);
         }
 
         return $newId;
