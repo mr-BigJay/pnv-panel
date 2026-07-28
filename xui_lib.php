@@ -194,11 +194,55 @@ if(!function_exists('xuiConfigPath')){
         return $out;
     }
 
+    function xuiGenerateUuid(){
+        $data = random_bytes(16);
+        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
+        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
+
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+    }
+
+    function xuiSanitizeClientEmail($value){
+        $value = trim((string)$value);
+        $value = preg_replace('/[^A-Za-z0-9._-]+/', '_', $value);
+        $value = trim($value, '._-');
+
+        if($value === ''){
+            $value = 'client_' . xuiGenerateSubId(8);
+        }
+
+        // 3x-ui email/remark should stay reasonably short
+        if(strlen($value) > 64){
+            $value = substr($value, 0, 64);
+        }
+
+        return $value;
+    }
+
     function xuiBuildClientEmail($configName, $mobile){
-        $configName = trim((string)$configName);
+        $configName = xuiSanitizeClientEmail($configName);
         $mobile = preg_replace('/\D+/', '', (string)$mobile);
         $last4 = strlen($mobile) >= 4 ? substr($mobile, -4) : '0000';
-        return $configName . '_' . $last4;
+        return xuiSanitizeClientEmail($configName . '_' . $last4);
+    }
+
+    function xuiIsEnabled($config = null){
+        if($config === null){
+            $config = xuiLoadConfig();
+        }
+
+        $value = $config['enabled'] ?? false;
+
+        if(is_bool($value)){
+            return $value;
+        }
+
+        if(is_int($value) || is_float($value)){
+            return intval($value) === 1;
+        }
+
+        $value = strtolower(trim((string)$value));
+        return in_array($value, ['1', 'true', 'yes', 'on'], true);
     }
 
     function xuiBuildSubLink($host, $subId, $config = null){
@@ -388,50 +432,79 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiCreateClient($server, $email, $gb, $subId = ''){
+        $email = xuiSanitizeClientEmail($email);
+
+        if($email === ''){
+            return ['ok' => false, 'error' => 'نام کلاینت (email) خالی است'];
+        }
+
         if($subId === ''){
             $subId = xuiGenerateSubId(16);
         }
 
         $inboundId = intval($server['inbound_id'] ?? 1);
         $bytes = xuiGbToBytes($gb);
+        $uuid = xuiGenerateUuid();
 
-        $payload = [
+        $client = [
+            'id' => $uuid,
             'email' => $email,
             'enable' => true,
             'expiryTime' => 0,
             'totalGB' => $bytes,
             'limitIp' => 0,
             'subId' => $subId,
-            'tgId' => '',
+            'tgId' => 0,
             'comment' => 'pnv-panel',
-            'inboundIds' => [$inboundId]
+            'flow' => '',
+            'reset' => 0
         ];
 
-        // shape A: nested client
+        $errors = [];
+
+        // Modern Clients API
         $result = xuiApiRequest($server, 'POST', '/panel/api/clients/add', [
-            'client' => $payload,
+            'client' => $client,
             'inboundIds' => [$inboundId]
         ]);
 
-        if(empty($result['success'])){
-            // shape B: flat body
-            $result = xuiApiRequest($server, 'POST', '/panel/api/clients/add', $payload);
-        }
-
-        if(empty($result['success'])){
+        if(!empty($result['success'])){
             return [
-                'ok' => false,
-                'error' => $result['msg'] ?? 'ساخت کاربر در 3x-ui ناموفق بود'
+                'ok' => true,
+                'email' => $email,
+                'sub_id' => $subId,
+                'link' => xuiBuildSubLink($server['host'] ?? '', $subId),
+                'server' => $server,
+                'raw' => $result
             ];
         }
 
+        $errors[] = 'clients/add: ' . ($result['msg'] ?? 'ناموفق');
+
+        // Legacy Inbounds API (widely compatible)
+        $legacy = xuiApiRequest($server, 'POST', '/panel/api/inbounds/addClient', [
+            'id' => $inboundId,
+            'settings' => json_encode([
+                'clients' => [$client]
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        ]);
+
+        if(!empty($legacy['success'])){
+            return [
+                'ok' => true,
+                'email' => $email,
+                'sub_id' => $subId,
+                'link' => xuiBuildSubLink($server['host'] ?? '', $subId),
+                'server' => $server,
+                'raw' => $legacy
+            ];
+        }
+
+        $errors[] = 'inbounds/addClient: ' . ($legacy['msg'] ?? 'ناموفق');
+
         return [
-            'ok' => true,
-            'email' => $email,
-            'sub_id' => $subId,
-            'link' => xuiBuildSubLink($server['host'] ?? '', $subId),
-            'server' => $server,
-            'raw' => $result
+            'ok' => false,
+            'error' => 'ساخت کاربر در 3x-ui ناموفق بود برای «' . $email . '». ' . implode(' | ', $errors)
         ];
     }
 
@@ -460,7 +533,7 @@ if(!function_exists('xuiConfigPath')){
     function xuiProvisionBuy($paymentRow){
         $config = xuiLoadConfig();
 
-        if(empty($config['enabled'])){
+        if(!xuiIsEnabled($config)){
             return ['ok' => false, 'error' => 'اتوماسیون 3x-ui غیرفعال است'];
         }
 
@@ -471,6 +544,10 @@ if(!function_exists('xuiConfigPath')){
 
         if($gb <= 0){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
+        }
+
+        if($configName === ''){
+            $configName = $username !== '' ? $username : ('user' . xuiGenerateSubId(6));
         }
 
         $mobile = xuiGetUserMobile($username);
@@ -507,7 +584,7 @@ if(!function_exists('xuiConfigPath')){
     function xuiProvisionRenew($paymentRow){
         $config = xuiLoadConfig();
 
-        if(empty($config['enabled'])){
+        if(!xuiIsEnabled($config)){
             return ['ok' => false, 'error' => 'اتوماسیون 3x-ui غیرفعال است'];
         }
 

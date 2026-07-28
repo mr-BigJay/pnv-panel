@@ -486,12 +486,7 @@ if(!function_exists('telegramConfigPath')){
     }
 
     function telegramXuiEnabled(){
-        if(!function_exists('xuiLoadConfig')){
-            return false;
-        }
-
-        $config = xuiLoadConfig();
-        return !empty($config['enabled']);
+        return function_exists('xuiIsEnabled') ? xuiIsEnabled() : false;
     }
 
     function telegramPaymentActionRows($kind, $csvIndex){

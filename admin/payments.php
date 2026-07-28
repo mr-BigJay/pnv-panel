@@ -114,7 +114,7 @@ if(isset($_POST['approve_payment'])){
 
     $xuiConfig = xuiLoadConfig();
 
-    if(!empty($xuiConfig['enabled'])){
+    if(function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])){
 
         $result = xuiApprovePaymentIndex($index, 'خرید');
 

@@ -39,7 +39,7 @@ $link=trim($_POST['approve_link'] ?? '');
 
 $xuiConfig = xuiLoadConfig();
 
-if(!empty($xuiConfig['enabled'])){
+if(function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])){
 
 $result = xuiApprovePaymentIndex($index, 'تمدید');
 

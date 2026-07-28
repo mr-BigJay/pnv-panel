@@ -106,8 +106,8 @@ if(!function_exists('telegramXuiActionKeyboard')){
             }
         }
         else{
-            if(!function_exists('xuiLoadConfig') || empty(xuiLoadConfig()['enabled'])){
-                $text = "❌ اتوماسیون 3x-ui خاموش است.\nاز پنل ادمین → سرورهای 3x-ui آن را فعال کنید.";
+            if(!function_exists('xuiIsEnabled') || !xuiIsEnabled()){
+                $text = "❌ اتوماسیون 3x-ui خاموش است.\nاز پنل ادمین → سرورهای 3x-ui آن را فعال و ذخیره کنید.";
             }
             else{
                 $result = xuiApprovePaymentIndex($index, $kind);
