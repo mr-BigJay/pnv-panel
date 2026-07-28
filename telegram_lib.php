@@ -479,6 +479,9 @@ if(!function_exists('telegramConfigPath')){
             }
         }
 
+        $lines[] = '';
+        $lines[] = 'از دکمه‌های تایید یا رد استفاده کنید.';
+
         return implode("\n", $lines);
     }
 
