@@ -21,7 +21,11 @@ $config = xuiLoadConfig();
 $message = '';
 $error = '';
 
-if(isset($_POST['save'])){
+function xuiAdminH($value){
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+function xuiAdminReadPostedServers(){
     $servers = [];
 
     foreach(($_POST['server_id'] ?? []) as $i => $id){
@@ -37,134 +41,321 @@ if(isset($_POST['save'])){
         ];
     }
 
+    return $servers;
+}
+
+function xuiAdminReadPostedConfig(){
     $buyIds = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string)($_POST['buy_server_ids'] ?? '')))));
     $renewIds = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string)($_POST['renew_server_ids'] ?? '')))));
 
-    $config = [
+    return [
         'enabled' => isset($_POST['enabled']),
         'sub_port' => intval($_POST['sub_port'] ?? 2096),
         'buy_server_ids' => $buyIds,
         'renew_server_ids' => $renewIds,
-        'servers' => $servers
+        'servers' => xuiAdminReadPostedServers()
     ];
+}
 
+if(isset($_POST['save'])){
+    $config = xuiAdminReadPostedConfig();
     xuiSaveConfig($config);
     $message = 'تنظیمات سرورهای 3x-ui ذخیره شد.';
 }
 
 if(isset($_POST['test_id'])){
-    $config = xuiLoadConfig();
+    // اول مقادیر فرم را ذخیره کن تا تست با توکن تازه کار کند
+    $config = xuiAdminReadPostedConfig();
+    xuiSaveConfig($config);
+
     $server = xuiFindServerById(trim((string)$_POST['test_id']), $config);
 
     if(!$server){
         $error = 'سرور پیدا نشد';
     }
     else{
-        $test = xuiTestServer($server);
+        $token = trim((string)($server['api_token'] ?? ''));
 
-        if(!empty($test['ok'])){
-            $message = 'اتصال به «' . ($server['name'] ?? $server['id']) . '» موفق بود. تعداد inbound: ' . count($test['inbounds'] ?? []);
+        if($token === '' || strpos($token, 'REPLACE_TOKEN_') === 0){
+            $error = 'برای «' . ($server['name'] ?? $server['id']) . '» هنوز API Token واقعی وارد نشده است.';
         }
         else{
-            $error = 'تست ناموفق: ' . ($test['error'] ?? 'خطای نامشخص');
+            $test = xuiTestServer($server);
+
+            if(!empty($test['ok'])){
+                $message = 'اتصال به «' . ($server['name'] ?? $server['id']) . '» موفق بود. تعداد inbound: ' . count($test['inbounds'] ?? []);
+            }
+            else{
+                $error = 'تست ناموفق: ' . ($test['error'] ?? 'خطای نامشخص');
+            }
         }
     }
 }
 
-function h($value){
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-}
-
 $backUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php';
+$dashboardUrl = $backUrl;
 ?>
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تنظیمات سرورهای 3x-ui</title>
+<title>سرورهای 3x-ui</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;padding:20px;background:#0f172a;color:#fff;font-family:tahoma;direction:rtl}
-.box{max-width:980px;margin:auto;background:#1e293b;border-radius:20px;padding:28px}
-h2{margin:0 0 20px;text-align:center}
-.msg,.err{padding:12px 14px;border-radius:12px;margin-bottom:16px;line-height:1.8}
-.msg{background:#166534}.err{background:#991b1b}
-label{display:block;margin:14px 0 8px;color:#cbd5e1}
-input{width:100%;padding:12px;border:0;border-radius:10px;background:#0f172a;color:#fff}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.server{background:#0f172a;border-radius:14px;padding:16px;margin-top:18px}
-.server h3{margin:0 0 10px}
-.toggle{display:flex;align-items:center;gap:10px}
-.toggle input{width:18px;height:18px}
-button,.back{display:inline-block;width:100%;margin-top:14px;padding:14px;border:0;border-radius:12px;background:#22c55e;color:#fff;font:inherit;cursor:pointer;text-align:center;text-decoration:none}
-.test{background:#2563eb;width:auto;padding:10px 16px}
-.back{background:#334155;margin-top:18px}
-.hint{color:#94a3b8;font-size:13px;line-height:1.8;margin-top:8px}
-@media(max-width:700px){.row{grid-template-columns:1fr}body{padding:10px}.box{padding:18px}}
+body{
+margin:0;
+padding:20px;
+background:#0f172a;
+color:#fff;
+font-family:tahoma,sans-serif;
+direction:rtl;
+}
+.wrap{
+width:100%;
+max-width:820px;
+margin:0 auto;
+}
+.topbar{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:12px;
+margin-bottom:16px;
+}
+.topbar h1{
+margin:0;
+font-size:22px;
+font-weight:700;
+}
+.topbar a{
+color:#93c5fd;
+text-decoration:none;
+font-size:14px;
+}
+.box{
+background:#1e293b;
+border-radius:18px;
+padding:22px;
+margin-bottom:16px;
+}
+.box h2{
+margin:0 0 14px;
+font-size:17px;
+color:#e2e8f0;
+}
+.msg,.err{
+padding:12px 14px;
+border-radius:12px;
+margin-bottom:16px;
+line-height:1.9;
+font-size:14px;
+}
+.msg{background:#14532d;color:#bbf7d0}
+.err{background:#7f1d1d;color:#fecaca}
+.field{
+margin-bottom:14px;
+}
+.field label{
+display:block;
+margin:0 0 7px;
+color:#cbd5e1;
+font-size:13px;
+}
+.field input{
+width:100%;
+padding:12px 14px;
+border:0;
+border-radius:10px;
+background:#0f172a;
+color:#fff;
+font:inherit;
+font-size:14px;
+}
+.field input[dir="ltr"]{
+direction:ltr;
+text-align:left;
+}
+.toggle{
+display:flex;
+align-items:center;
+gap:10px;
+margin-bottom:16px;
+padding:12px 14px;
+background:#0f172a;
+border-radius:12px;
+}
+.toggle input{
+width:18px;
+height:18px;
+margin:0;
+flex:0 0 auto;
+}
+.toggle span{
+color:#e2e8f0;
+font-size:14px;
+line-height:1.7;
+}
+.hint{
+margin:0;
+color:#94a3b8;
+font-size:12px;
+line-height:1.9;
+}
+.server{
+background:#0f172a;
+border:1px solid #334155;
+border-radius:14px;
+padding:16px;
+margin-bottom:14px;
+}
+.server:last-child{margin-bottom:0}
+.server-head{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+margin-bottom:12px;
+}
+.server-head h3{
+margin:0;
+font-size:16px;
+}
+.badge{
+font-size:11px;
+padding:4px 8px;
+border-radius:999px;
+background:#1e293b;
+color:#94a3b8;
+direction:ltr;
+}
+.actions{
+display:flex;
+flex-wrap:wrap;
+gap:10px;
+margin-top:8px;
+}
+button,.btn{
+appearance:none;
+border:0;
+border-radius:12px;
+padding:13px 16px;
+font:inherit;
+font-size:15px;
+cursor:pointer;
+text-align:center;
+text-decoration:none;
+color:#fff;
+}
+.btn-save{background:#22c55e;width:100%;margin-top:8px}
+.btn-test{background:#2563eb}
+.btn-back{background:#334155;width:100%;margin-top:12px;display:block}
+@media(max-width:640px){
+body{padding:12px}
+.box{padding:16px;border-radius:14px}
+.topbar h1{font-size:18px}
+.server-head{flex-direction:column;align-items:flex-start}
+}
 </style>
 </head>
 <body>
-<div class="box">
-<h2>تنظیمات سرورهای 3x-ui</h2>
+<div class="wrap">
 
-<?php if($message !== ''){ ?><div class="msg"><?php echo h($message); ?></div><?php } ?>
-<?php if($error !== ''){ ?><div class="err"><?php echo h($error); ?></div><?php } ?>
+<div class="topbar">
+<h1>سرورهای 3x-ui</h1>
+<a href="<?php echo xuiAdminH($dashboardUrl); ?>">بازگشت به داشبورد</a>
+</div>
+
+<?php if($message !== ''){ ?><div class="msg"><?php echo xuiAdminH($message); ?></div><?php } ?>
+<?php if($error !== ''){ ?><div class="err"><?php echo xuiAdminH($error); ?></div><?php } ?>
 
 <form method="post">
+
+<div class="box">
+<h2>تنظیمات کلی</h2>
+
 <label class="toggle">
 <input type="checkbox" name="enabled" <?php echo !empty($config['enabled']) ? 'checked' : ''; ?>>
-<span>فعال‌سازی ساخت/تمدید خودکار</span>
+<span>فعال‌سازی ساخت و تمدید خودکار</span>
 </label>
 
-<label>پورت Subscription</label>
-<input type="number" name="sub_port" value="<?php echo (int)($config['sub_port'] ?? 2096); ?>">
+<div class="field">
+<label for="sub_port">پورت Subscription</label>
+<input id="sub_port" type="number" name="sub_port" value="<?php echo (int)($config['sub_port'] ?? 2096); ?>" dir="ltr">
+</div>
 
-<label>سرورهای خرید جدید (با ویرگول)</label>
-<input type="text" name="buy_server_ids" value="<?php echo h(implode(',', $config['buy_server_ids'] ?? [])); ?>" placeholder="vip,vip3,vip4">
+<div class="field">
+<label for="buy_server_ids">سرورهای خرید جدید (با ویرگول)</label>
+<input id="buy_server_ids" type="text" name="buy_server_ids" value="<?php echo xuiAdminH(implode(',', $config['buy_server_ids'] ?? [])); ?>" placeholder="vip,vip3,vip4" dir="ltr">
+</div>
 
-<label>سرورهای مجاز تمدید (با ویرگول)</label>
-<input type="text" name="renew_server_ids" value="<?php echo h(implode(',', $config['renew_server_ids'] ?? [])); ?>" placeholder="vip,vip2,vip3,vip4">
-<div class="hint">خرید جدید به‌صورت چرخشی بین سرورهای خرید انجام می‌شود. تمدید همیشه روی همان سرور لینک قبلی است.</div>
+<div class="field">
+<label for="renew_server_ids">سرورهای مجاز تمدید (با ویرگول)</label>
+<input id="renew_server_ids" type="text" name="renew_server_ids" value="<?php echo xuiAdminH(implode(',', $config['renew_server_ids'] ?? [])); ?>" placeholder="vip,vip2,vip3,vip4" dir="ltr">
+</div>
+
+<p class="hint">خرید جدید بین سرورهای خرید می‌چرخد. تمدید همیشه روی همان سرور لینک قبلی انجام می‌شود. توکن‌ها را از Settings → Security → API Token در پنل 3x-ui بردارید.</p>
+</div>
+
+<div class="box">
+<h2>سرورها</h2>
 
 <?php foreach(($config['servers'] ?? []) as $i => $server){ ?>
 <div class="server">
-<h3><?php echo h($server['name'] ?? $server['id'] ?? ('سرور ' . ($i+1))); ?></h3>
-<input type="hidden" name="server_id[]" value="<?php echo h($server['id'] ?? ''); ?>">
-<div class="row">
-<div>
-<label>نام</label>
-<input type="text" name="server_name[]" value="<?php echo h($server['name'] ?? ''); ?>">
+<div class="server-head">
+<h3><?php echo xuiAdminH($server['name'] ?? $server['id'] ?? ('سرور ' . ($i + 1))); ?></h3>
+<span class="badge"><?php echo xuiAdminH($server['id'] ?? ''); ?></span>
 </div>
-<div>
+
+<input type="hidden" name="server_id[]" value="<?php echo xuiAdminH($server['id'] ?? ''); ?>">
+
+<div class="field">
+<label>نام نمایشی</label>
+<input type="text" name="server_name[]" value="<?php echo xuiAdminH($server['name'] ?? ''); ?>">
+</div>
+
+<div class="field">
 <label>Host اشتراک</label>
-<input type="text" name="server_host[]" value="<?php echo h($server['host'] ?? ''); ?>">
+<input type="text" name="server_host[]" value="<?php echo xuiAdminH($server['host'] ?? ''); ?>" dir="ltr">
 </div>
+
+<div class="field">
+<label>آدرس پنل 3x-ui</label>
+<input type="text" name="server_url[]" value="<?php echo xuiAdminH($server['base_url'] ?? ''); ?>" dir="ltr" autocomplete="off">
 </div>
-<label>آدرس پنل</label>
-<input type="text" name="server_url[]" value="<?php echo h($server['base_url'] ?? ''); ?>" dir="ltr">
+
+<div class="field">
 <label>API Token</label>
-<input type="text" name="server_token[]" value="<?php echo h($server['api_token'] ?? ''); ?>" dir="ltr">
-<div class="row">
-<div>
+<input type="text" name="server_token[]" value="<?php echo xuiAdminH($server['api_token'] ?? ''); ?>" dir="ltr" autocomplete="off" placeholder="توکن Bearer را اینجا بگذارید">
+</div>
+
+<div class="field">
 <label>Inbound ID</label>
-<input type="number" name="server_inbound[]" value="<?php echo (int)($server['inbound_id'] ?? 1); ?>">
+<input type="number" name="server_inbound[]" value="<?php echo (int)($server['inbound_id'] ?? 1); ?>" dir="ltr">
 </div>
-<div>
+
+<div class="field">
 <label>Username (اختیاری)</label>
-<input type="text" name="server_user[]" value="<?php echo h($server['username'] ?? ''); ?>">
+<input type="text" name="server_user[]" value="<?php echo xuiAdminH($server['username'] ?? ''); ?>" autocomplete="off">
 </div>
-</div>
+
+<div class="field">
 <label>Password (اختیاری)</label>
-<input type="text" name="server_pass[]" value="<?php echo h($server['password'] ?? ''); ?>">
-<button class="test" type="submit" name="test_id" value="<?php echo h($server['id'] ?? ''); ?>">تست اتصال</button>
+<input type="password" name="server_pass[]" value="<?php echo xuiAdminH($server['password'] ?? ''); ?>" autocomplete="new-password">
+</div>
+
+<div class="actions">
+<button class="btn btn-test" type="submit" name="test_id" value="<?php echo xuiAdminH($server['id'] ?? ''); ?>">تست اتصال</button>
+</div>
 </div>
 <?php } ?>
+</div>
 
-<button type="submit" name="save">ذخیره تنظیمات</button>
+<button class="btn btn-save" type="submit" name="save" value="1">ذخیره تنظیمات</button>
 </form>
 
-<a class="back" href="<?php echo h($backUrl); ?>">بازگشت</a>
+<a class="btn btn-back" href="<?php echo xuiAdminH($backUrl); ?>">بازگشت به داشبورد</a>
+
 </div>
 </body>
 </html>
