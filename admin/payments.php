@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../xui_lib.php';
+
 if(!isset($_SESSION['admin'])){
     exit;
 }
@@ -108,7 +110,25 @@ if(isset($_POST['approve_payment'])){
 
     $index = intval($_POST['approve_index']);
 
-    $link = trim($_POST['approve_link']);
+    $link = trim($_POST['approve_link'] ?? '');
+
+    $xuiConfig = xuiLoadConfig();
+
+    if(!empty($xuiConfig['enabled'])){
+
+        $result = xuiApprovePaymentIndex($index, 'خرید');
+
+        if(empty($result['ok'])){
+            $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
+            header('Location: index.php?page=payments');
+            exit;
+        }
+
+        $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
+        header('Location: index.php?page=payments');
+        exit;
+
+    }
 
     if(!isValidSubscriptionLink($link)){
 

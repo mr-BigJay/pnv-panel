@@ -7,6 +7,8 @@ if(!isset($_SESSION['user'])){
     exit;
 }
 
+require_once __DIR__ . '/telegram_lib.php';
+
 $plans = [];
 
 if(file_exists("db/plans.json")){
@@ -111,6 +113,13 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
         fputcsv($file,$row);
 
         fclose($file);
+
+        try{
+            telegramNotifyNewPayment('خرید', $row);
+        }
+        catch(Throwable $e){
+            error_log('Telegram buy notification failed: ' . $e->getMessage());
+        }
 
         $message = "رسید شما دریافت شد و حداکثر تا یک ساعت آینده بررسی خواهد شد";
     }

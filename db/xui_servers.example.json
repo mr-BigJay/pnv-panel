@@ -1,0 +1,48 @@
+{
+  "enabled": false,
+  "sub_port": 2096,
+  "buy_server_ids": ["vip", "vip3", "vip4"],
+  "renew_server_ids": ["vip", "vip2", "vip3", "vip4"],
+  "servers": [
+    {
+      "id": "vip",
+      "name": "VIP 1",
+      "base_url": "https://vip.boozhaan.ir:2415/5MM166IBMn8D4nQtU9/",
+      "api_token": "REPLACE_TOKEN_VIP1",
+      "inbound_id": 1,
+      "host": "vip.boozhaan.ir",
+      "username": "BigJay",
+      "password": ""
+    },
+    {
+      "id": "vip2",
+      "name": "VIP 2",
+      "base_url": "https://vip2.boozhaan.ir:2415/kYaeX9oDRpCzgGiNYF/",
+      "api_token": "REPLACE_TOKEN_VIP2",
+      "inbound_id": 1,
+      "host": "vip2.boozhaan.ir",
+      "username": "BigJay",
+      "password": ""
+    },
+    {
+      "id": "vip3",
+      "name": "VIP 3",
+      "base_url": "https://vip3.boozhaan.ir:2415/UTbC7cdgPRAZKoddKz/",
+      "api_token": "REPLACE_TOKEN_VIP3",
+      "inbound_id": 1,
+      "host": "vip3.boozhaan.ir",
+      "username": "BigJay",
+      "password": ""
+    },
+    {
+      "id": "vip4",
+      "name": "VIP 4",
+      "base_url": "https://vip4.boozhaan.ir:2415/ddc8JteTWcm4r5FsQ8/",
+      "api_token": "REPLACE_TOKEN_VIP4",
+      "inbound_id": 1,
+      "host": "vip4.boozhaan.ir",
+      "username": "BigJay",
+      "password": ""
+    }
+  ]
+}

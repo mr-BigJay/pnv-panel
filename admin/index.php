@@ -812,6 +812,12 @@ class="supportMenu">
 
 </a>
 
+<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('xui-servers.php') : 'xui-servers.php', ENT_QUOTES, 'UTF-8'); ?>">
+
+سرورهای 3x-ui
+
+</a>
+
 <a href="index.php?page=upload">
 
 آپلود فایل کاربران سرورها

@@ -4,6 +4,8 @@ if(!isset($_SESSION['admin'])){
 exit;
 }
 
+require_once __DIR__ . '/../xui_lib.php';
+
 $paymentsFile='../invoices/payments.csv';
 $usersFile='../db/users.json';
 
@@ -33,7 +35,25 @@ fclose($f);
 if(isset($_POST['approve_payment'])){
 
 $index=intval($_POST['approve_index']);
-$link=trim($_POST['approve_link']);
+$link=trim($_POST['approve_link'] ?? '');
+
+$xuiConfig = xuiLoadConfig();
+
+if(!empty($xuiConfig['enabled'])){
+
+$result = xuiApprovePaymentIndex($index, 'تمدید');
+
+if(empty($result['ok'])){
+$_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
+header('Location:index.php?page=renews');
+exit;
+}
+
+$_SESSION['payment_message'] = 'تمدید تایید و اعمال شد: ' . ($result['link'] ?? '');
+header('Location:index.php?page=renews');
+exit;
+
+}
 
 if(isset($payments[$index])){
 
