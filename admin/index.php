@@ -165,7 +165,7 @@ $page = $_GET['page'] ?? 'dashboard';
 
 $supportActionResult = null;
 
-if($page === 'support'){
+if($page === 'support' && file_exists(__DIR__ . '/../support_lib.php')){
 
 require_once __DIR__ . '/../support_lib.php';
 
@@ -239,7 +239,7 @@ $supportFile =
 
 $hasUnreadSupport = false;
 
-if(file_exists($supportFile)){
+if(file_exists($supportFile) && file_exists(__DIR__ . '/../support_lib.php')){
 
 require_once __DIR__ . '/../support_lib.php';
 
@@ -315,7 +315,7 @@ $todayPayments = 0;
 $totalRenews = 0;
 $todayRenews = 0;
 
-$todayShamsi = date('Y/m/d');
+$todayShamsi = function_exists('pnvJalaliToday') ? pnvJalaliToday('/') : date('Y/m/d');
 
 foreach($payments as $pay){
 
@@ -369,6 +369,37 @@ count($renews);
 
 }
 
+}
+
+$telegramEnabled = false;
+$telegramConfigured = false;
+$xuiEnabled = false;
+$xuiConfigured = false;
+
+if(file_exists(__DIR__ . '/../telegram_lib.php')){
+    require_once __DIR__ . '/../telegram_lib.php';
+    if(function_exists('telegramLoadConfig')){
+        $tgConfig = telegramLoadConfig();
+        $telegramConfigured = trim((string)($tgConfig['bot_token'] ?? '')) !== '';
+        $telegramEnabled = !empty($tgConfig['enabled']) && $telegramConfigured;
+    }
+}
+
+if(file_exists(__DIR__ . '/../xui_lib.php')){
+    require_once __DIR__ . '/../xui_lib.php';
+    if(function_exists('xuiLoadConfig')){
+        $xuiConfig = xuiLoadConfig();
+        $hasToken = false;
+        foreach(($xuiConfig['servers'] ?? []) as $server){
+            $token = trim((string)($server['api_token'] ?? ''));
+            if($token !== '' && strpos($token, 'REPLACE_TOKEN_') !== 0){
+                $hasToken = true;
+                break;
+            }
+        }
+        $xuiConfigured = $hasToken;
+        $xuiEnabled = (function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])) && $hasToken;
+    }
 }
 
 if(isset($_POST['add_plan'])){
@@ -533,6 +564,8 @@ bottom:0;
 overflow:auto;
 padding:20px;
 box-sizing:border-box;
+z-index:40;
+transition:transform .2s ease;
 }
 
 .sidebar a{
@@ -544,6 +577,30 @@ margin-bottom:10px;
 text-decoration:none;
 color:white;
 position:relative;
+}
+
+.adminMenuBtn{
+display:none;
+position:fixed;
+top:12px;
+right:12px;
+z-index:50;
+width:44px;
+height:44px;
+border:0;
+border-radius:12px;
+background:#22c55e;
+color:#fff;
+font-size:22px;
+cursor:pointer;
+}
+
+.adminSidebarOverlay{
+display:none;
+position:fixed;
+inset:0;
+background:rgba(0,0,0,.45);
+z-index:35;
 }
 
 .content{
@@ -713,14 +770,26 @@ overflow:hidden;
 height:100dvh;
 }
 
+.adminMenuBtn{display:flex;align-items:center;justify-content:center}
+
 .sidebar{
-position:relative;
-width:100%;
-height:auto;
+position:fixed;
+width:min(86vw,280px);
+height:100%;
+transform:translateX(110%);
+}
+
+body.adminSidebarOpen .sidebar{
+transform:translateX(0);
+}
+
+body.adminSidebarOpen .adminSidebarOverlay{
+display:block;
 }
 
 .content{
 margin-right:0;
+padding-top:64px;
 }
 
 .content-support{
@@ -728,6 +797,7 @@ margin-right:0;
 height:100%;
 max-height:100dvh;
 min-height:0;
+padding-top:56px;
 }
 
 .content-support input,
@@ -758,7 +828,10 @@ grid-template-columns:1fr;
 
 <body class="<?php echo $page === 'support' ? 'adminPageSupport' : ''; ?>">
 
-<div class="sidebar">
+<button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
+<div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
+
+<div class="sidebar" id="adminSidebar">
 
 <h2>
 
@@ -835,6 +908,12 @@ class="supportMenu">
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('downloads.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت دانلودها
+
+</a>
+
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('telegram.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+تنظیمات بات تلگرام
 
 </a>
 
@@ -1034,6 +1113,25 @@ name="uploadcsv">
 
 <script>
 (function(){
+    const menuBtn = document.getElementById('adminMenuBtn');
+    const overlay = document.getElementById('adminSidebarOverlay');
+
+    function closeMenu(){
+        document.body.classList.remove('adminSidebarOpen');
+    }
+
+    function toggleMenu(){
+        document.body.classList.toggle('adminSidebarOpen');
+    }
+
+    if(menuBtn){
+        menuBtn.addEventListener('click', toggleMenu);
+    }
+
+    if(overlay){
+        overlay.addEventListener('click', closeMenu);
+    }
+
     const menuLink = document.getElementById('adminSupportMenu');
     if(!menuLink){
         return;

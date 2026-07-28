@@ -2,9 +2,11 @@
 
 require_once __DIR__ . '/../xui_lib.php';
 
-if(!isset($_SESSION['admin'])){
+require_once __DIR__ . '/auth.php';
+if(!pnvAdminIsLoggedIn()){
     exit;
 }
+$_SESSION['admin'] = true;
 
 $paymentsFile = '../invoices/payments.csv';
 $usersFile = '../db/users.json';
@@ -120,12 +122,12 @@ if(isset($_POST['approve_payment'])){
 
         if(empty($result['ok'])){
             $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-            header('Location: index.php?page=payments');
+            header('Location: ' . pnvAdminUrl('index.php?page=payments'));
             exit;
         }
 
         $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-        header('Location: index.php?page=payments');
+        header('Location: ' . pnvAdminUrl('index.php?page=payments'));
         exit;
 
     }
@@ -134,7 +136,7 @@ if(isset($_POST['approve_payment'])){
 
         $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
 
-        header('Location: index.php?page=payments');
+        header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
         exit;
 
@@ -160,7 +162,7 @@ if(isset($_POST['approve_payment'])){
 
     }
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
     exit;
 
@@ -176,7 +178,7 @@ if(isset($_POST['edit_link'])){
 
         $_SESSION['payment_error'] = 'لینک اشتراک معتبر وارد کنید';
 
-        header('Location: index.php?page=payments');
+        header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
         exit;
 
@@ -204,7 +206,7 @@ if(isset($_POST['edit_link'])){
 
     }
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
     exit;
 
@@ -234,7 +236,7 @@ if(isset($_POST['reject_payment'])){
 
     fclose($fp);
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
     exit;
 
@@ -262,7 +264,7 @@ if(isset($_GET['deletepayment'])){
 
     fclose($fp);
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments'));
 
     exit;
 
@@ -535,6 +537,12 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
     border:1px solid #ef4444;
 }
 
+.payTableWrap{
+    width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+}
+
 @media(max-width:900px){
 
     .dropdown{
@@ -548,6 +556,10 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
 
     .dropdown{
         width:180px;
+    }
+
+    .payTable{
+        min-width:640px;
     }
 
 }
@@ -582,6 +594,7 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
 
     <?php } ?>
 
+    <div class="payTableWrap">
     <table class="payTable">
 
         <thead>
@@ -744,13 +757,14 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
         </tbody>
 
     </table>
+    </div>
 
     <div class="pagination">
 
     <?php for($x=1; $x<=$totalPages; $x++){ ?>
 
         <a
-            href="index.php?page=payments&p=<?php echo $x; ?>"
+            href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=payments&p=' . $x), ENT_QUOTES, 'UTF-8'); ?>"
             class="<?php echo $x==$currentPage ? 'active' : ''; ?>">
 
             <?php echo $x; ?>

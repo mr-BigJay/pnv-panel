@@ -1,8 +1,10 @@
 <?php
 
-if(!isset($_SESSION['admin'])){
-exit;
+require_once __DIR__ . '/auth.php';
+if(!pnvAdminIsLoggedIn()){
+    exit;
 }
+$_SESSION['admin'] = true;
 
 require_once __DIR__ . '/../xui_lib.php';
 
@@ -45,12 +47,12 @@ $result = xuiApprovePaymentIndex($index, 'تمدید');
 
 if(empty($result['ok'])){
 $_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-header('Location:index.php?page=renews');
+header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 }
 
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد: ' . ($result['link'] ?? '');
-header('Location:index.php?page=renews');
+header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -70,7 +72,7 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-header('Location:index.php?page=renews');
+header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -95,7 +97,7 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-header('Location:index.php?page=renews');
+header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -120,7 +122,7 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-header('Location:index.php?page=renews');
+header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -583,7 +585,7 @@ function deleteItem(id){
 if(confirm('حذف شود؟')){
 
 location.href=
-'index.php?page=renews&deletepayment='+id;
+<?php echo json_encode(pnvAdminUrl('index.php?page=renews&deletepayment='), JSON_UNESCAPED_SLASHES); ?>+id;
 
 }
 

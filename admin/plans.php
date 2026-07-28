@@ -1,11 +1,7 @@
 <?php
 
-session_start();
-
-if(!isset($_SESSION['admin'])){
-header("Location: index.php");
-exit;
-}
+require_once __DIR__ . '/auth.php';
+pnvAdminRequireAuth();
 
 $plansFile = "../db/plans.json";
 
@@ -496,7 +492,7 @@ onclick="return confirm('پلن حذف شود؟')">
 
 </div>
 
-<a href="index.php"
+<a href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
 class="back">
 
 بازگشت به مدیریت

@@ -1,13 +1,9 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/auth.php';
+pnvAdminRequireAuth();
 
-require_once "functions.php";
-
-if(!isset($_SESSION['admin'])){
-header("Location: index.php");
-exit;
-}
+require_once __DIR__ . '/functions.php';
 
 $usersFile = '../db/users.json';
 
@@ -295,6 +291,16 @@ gap:12px;
 margin-bottom:20px;
 }
 
+.profileBtn{
+display:inline-block;
+background:#2563eb;
+color:white;
+padding:8px 12px;
+border-radius:8px;
+text-decoration:none;
+font-size:13px;
+margin-left:8px;
+}
 .backupBtn{
 background:#2563eb;
 padding:12px;
@@ -528,7 +534,7 @@ color:#94a3b8;
 </h2>
 
 <a
-href="index.php"
+href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
 class="backTop">
 
 بازگشت
@@ -600,6 +606,10 @@ $allUsers
 <div>
 <b>تاریخ ثبت نام:</b>
 <?php echo htmlspecialchars($u['created_at'] ?? '-'); ?>
+</div>
+
+<div style="margin-top:10px">
+<a class="profileBtn" href="<?php echo htmlspecialchars(pnvAdminUrl('user-profile.php?user=' . urlencode($u['username'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>">پروفایل / اشتراک‌ها</a>
 </div>
 
 </div>

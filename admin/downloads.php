@@ -1,11 +1,7 @@
 <?php
 
-session_start();
-
-if(!isset($_SESSION['admin'])){
-header("Location:index.php");
-exit;
-}
+require_once __DIR__ . '/auth.php';
+pnvAdminRequireAuth();
 
 $dir = __DIR__ . "/../down";
 
@@ -388,7 +384,7 @@ onclick="return confirm('فایل حذف شود؟')">
 <?php } ?>
 
 <a
-href="index.php"
+href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
 class="back">
 
 بازگشت

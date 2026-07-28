@@ -1,11 +1,7 @@
 <?php
 
-session_start();
-
-if(!isset($_SESSION['admin'])){
-header("Location: index.php");
-exit;
-}
+require_once __DIR__ . '/auth.php';
+pnvAdminRequireAuth();
 
 $file = "../db/support.json";
 
