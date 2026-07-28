@@ -495,16 +495,13 @@ if(!function_exists('telegramConfigPath')){
         $back = $kind === 'تمدید' ? 'menu:renews' : 'menu:buys';
         $rows = [telegramBackRow($back)];
 
-        if($csvIndex >= 0 && function_exists('telegramXuiActionKeyboard')){
+        // دکمه‌های تایید/رد خرید و تمدید همیشه روی ربات نمایش داده می‌شوند
+        if($csvIndex >= 0){
             $prefix = ($kind === 'تمدید') ? 'renew' : 'buy';
-            $row = [];
-
-            if(telegramXuiEnabled()){
-                $row[] = ['text' => 'تایید خودکار', 'callback_data' => 'xuiok:' . $prefix . ':' . intval($csvIndex)];
-            }
-
-            $row[] = ['text' => 'رد', 'callback_data' => 'xuino:' . $prefix . ':' . intval($csvIndex)];
-            $rows[] = $row;
+            $rows[] = [
+                ['text' => '✅ تایید', 'callback_data' => 'xuiok:' . $prefix . ':' . intval($csvIndex)],
+                ['text' => '⛔ رد', 'callback_data' => 'xuino:' . $prefix . ':' . intval($csvIndex)]
+            ];
         }
 
         return $rows;
@@ -780,6 +777,11 @@ if(!function_exists('telegramConfigPath')){
             $csvIndex = telegramXuiFindPaymentIndex($username, $created, $kind);
         }
 
+        if($csvIndex < 0 && function_exists('xuiLoadPayments')){
+            $all = xuiLoadPayments();
+            $csvIndex = count($all) > 0 ? (count($all) - 1) : -1;
+        }
+
         $rows = [
             telegramBackRow('menu:home'),
             [['text' => 'مشاهده لیست', 'callback_data' => $backMenu]]
@@ -787,14 +789,10 @@ if(!function_exists('telegramConfigPath')){
 
         if($csvIndex >= 0){
             $prefix = ($kind === 'تمدید') ? 'renew' : 'buy';
-            $actionRow = [];
-
-            if(telegramXuiEnabled()){
-                $actionRow[] = ['text' => 'تایید خودکار', 'callback_data' => 'xuiok:' . $prefix . ':' . $csvIndex];
-            }
-
-            $actionRow[] = ['text' => 'رد', 'callback_data' => 'xuino:' . $prefix . ':' . $csvIndex];
-            $rows[] = $actionRow;
+            $rows[] = [
+                ['text' => '✅ تایید', 'callback_data' => 'xuiok:' . $prefix . ':' . $csvIndex],
+                ['text' => '⛔ رد', 'callback_data' => 'xuino:' . $prefix . ':' . $csvIndex]
+            ];
         }
 
         return telegramSendToAdmins($text, [

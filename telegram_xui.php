@@ -10,8 +10,8 @@ if(!function_exists('telegramXuiActionKeyboard')){
         return json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => 'تایید خودکار', 'callback_data' => 'xuiok:' . $prefix . ':' . intval($index)],
-                    ['text' => 'رد', 'callback_data' => 'xuino:' . $prefix . ':' . intval($index)]
+                    ['text' => '✅ تایید', 'callback_data' => 'xuiok:' . $prefix . ':' . intval($index)],
+                    ['text' => '⛔ رد', 'callback_data' => 'xuino:' . $prefix . ':' . intval($index)]
                 ],
                 [
                     ['text' => 'بازگشت', 'callback_data' => 'menu:home']
@@ -22,13 +22,12 @@ if(!function_exists('telegramXuiActionKeyboard')){
 
     function telegramXuiFindPaymentIndex($username, $created, $kind = ''){
         $rows = xuiLoadPayments();
+        $username = trim((string)$username);
+        $created = intval($created);
+        $fallback = -1;
 
         foreach($rows as $i => $row){
-            if(trim((string)($row[0] ?? '')) !== trim((string)$username)){
-                continue;
-            }
-
-            if(intval($row[8] ?? 0) !== intval($created)){
+            if(trim((string)($row[0] ?? '')) !== $username){
                 continue;
             }
 
@@ -38,10 +37,47 @@ if(!function_exists('telegramXuiActionKeyboard')){
                 continue;
             }
 
-            return $i;
+            if(intval($row[8] ?? 0) === $created){
+                return $i;
+            }
+
+            // آخرین مورد هم‌نوع همین کاربر به‌عنوان پشتیبان
+            $fallback = $i;
         }
 
-        return -1;
+        return $fallback;
+    }
+
+    function telegramXuiFormatApproveResult($kind, $result){
+        if(empty($result['ok'])){
+            return '❌ تایید ' . $kind . " ناموفق بود\n" . ($result['error'] ?? 'خطای نامشخص');
+        }
+
+        if(!empty($result['already'])){
+            $link = trim((string)($result['link'] ?? ''));
+            return 'ℹ️ این ' . $kind . " قبلاً تایید شده است." . ($link !== '' ? ("\n" . $link) : '');
+        }
+
+        $lines = ['✅ ' . $kind . ' تایید شد'];
+
+        if(!empty($result['server_id'])){
+            $lines[] = 'سرور: ' . $result['server_id'];
+        }
+
+        if(!empty($result['email'])){
+            $lines[] = 'کلاینت: ' . $result['email'];
+        }
+
+        if(!empty($result['gb'])){
+            $lines[] = 'حجم: ' . $result['gb'] . 'GB';
+        }
+
+        if(!empty($result['link'])){
+            $lines[] = '';
+            $lines[] = $result['link'];
+        }
+
+        return implode("\n", $lines);
     }
 
     function telegramHandleXuiCallback($data, $chatId, $messageId, $config = null){
@@ -53,29 +89,50 @@ if(!function_exists('telegramXuiActionKeyboard')){
         $kindKey = $m[2];
         $index = intval($m[3]);
         $kind = ($kindKey === 'renew') ? 'تمدید' : 'خرید';
+        $backMenu = ($kindKey === 'renew') ? 'menu:renews' : 'menu:buys';
 
         if($action === 'no'){
-            $result = xuiRejectPaymentIndex($index, 'رد از تلگرام');
-            $text = !empty($result['ok'])
-                ? ('⛔ ' . $kind . ' رد شد.')
-                : ('خطا: ' . ($result['error'] ?? 'نامشخص'));
+            $payments = xuiLoadPayments();
+            $status = trim((string)($payments[$index][6] ?? ''));
+
+            if($status === 'تایید شد' || $status === 'رد شد'){
+                $text = 'ℹ️ این مورد قبلاً رسیدگی شده است (' . $status . ').';
+            }
+            else{
+                $result = xuiRejectPaymentIndex($index, 'رد از تلگرام');
+                $text = !empty($result['ok'])
+                    ? ('⛔ ' . $kind . ' رد شد.')
+                    : ('❌ خطا: ' . ($result['error'] ?? 'نامشخص'));
+            }
         }
         else{
-            $result = xuiApprovePaymentIndex($index, $kind);
-            $text = !empty($result['ok'])
-                ? ("✅ {$kind} تایید شد\n" . ($result['link'] ?? ''))
-                : ('❌ خطا: ' . ($result['error'] ?? 'نامشخص'));
+            if(!function_exists('xuiLoadConfig') || empty(xuiLoadConfig()['enabled'])){
+                $text = "❌ اتوماسیون 3x-ui خاموش است.\nاز پنل ادمین → سرورهای 3x-ui آن را فعال کنید.";
+            }
+            else{
+                $result = xuiApprovePaymentIndex($index, $kind);
+                $text = telegramXuiFormatApproveResult($kind, $result);
+            }
         }
+
+        $keyboard = json_encode([
+            'inline_keyboard' => [
+                [
+                    ['text' => 'مشاهده لیست', 'callback_data' => $backMenu],
+                    ['text' => 'منوی اصلی', 'callback_data' => 'menu:home']
+                ]
+            ]
+        ], JSON_UNESCAPED_UNICODE);
 
         if(function_exists('telegramEditMessage')){
             telegramEditMessage($chatId, $messageId, $text, [
-                'reply_markup' => json_encode([
-                    'inline_keyboard' => [[['text' => 'بازگشت', 'callback_data' => 'menu:home']]]
-                ], JSON_UNESCAPED_UNICODE)
+                'reply_markup' => $keyboard
             ], $config);
         }
         elseif(function_exists('telegramSendMessage')){
-            telegramSendMessage($chatId, $text, [], $config);
+            telegramSendMessage($chatId, $text, [
+                'reply_markup' => $keyboard
+            ], $config);
         }
 
         return true;
