@@ -110,45 +110,69 @@ font-family:tahoma,Arial,sans-serif;
 direction:rtl;
 line-height:1.7;
 }
-.box{
+.page{
 width:100%;
 max-width:720px;
 margin:0 auto;
-background:#1e293b;
-padding:28px 24px;
-border-radius:20px;
 }
-h2{
-margin:0 0 22px;
+h1{
+margin:0 0 18px;
 text-align:center;
 font-size:24px;
 font-weight:700;
 }
-h3{
-margin:28px 0 12px;
-padding-top:18px;
-border-top:1px solid #334155;
-font-size:16px;
-color:#e2e8f0;
-font-weight:700;
+.card{
+background:#1e293b;
+border:1px solid #334155;
+border-radius:18px;
+padding:20px 18px;
+margin-bottom:14px;
 }
-h3:first-of-type{
-margin-top:8px;
+.card h2{
+margin:0 0 14px;
+font-size:17px;
+font-weight:700;
+color:#e2e8f0;
+}
+.card-head{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+margin:0 0 16px;
+}
+.card-head h2{
+margin:0;
+}
+.badge{
+flex-shrink:0;
+padding:5px 10px;
+border-radius:999px;
+background:#0f172a;
+border:1px solid #475569;
+color:#94a3b8;
+font-size:12px;
+direction:ltr;
 }
 label{
 display:block;
 width:100%;
-margin:16px 0 8px;
-font-size:14px;
-color:#e2e8f0;
+margin:0 0 7px;
+font-size:13px;
+color:#cbd5e1;
 text-align:right;
+}
+.field{
+margin-bottom:14px;
+}
+.field:last-of-type{
+margin-bottom:0;
 }
 input[type="text"],
 input[type="number"],
 input[type="password"]{
 display:block;
 width:100%;
-max-width:100%;
 margin:0;
 padding:12px 14px;
 border:0;
@@ -167,7 +191,7 @@ text-align:left;
 display:flex;
 align-items:center;
 gap:10px;
-margin:0 0 8px;
+margin:0 0 14px;
 cursor:pointer;
 }
 .toggle input{
@@ -182,43 +206,34 @@ font-size:14px;
 color:#e2e8f0;
 }
 .hint{
-margin:8px 0 0;
+margin:0;
 padding:12px 14px;
-background:#172554;
+background:#0f172a;
 border-radius:12px;
-color:#cbd5e1;
+color:#94a3b8;
 font-size:13px;
 line-height:1.9;
 }
 .msg,.err{
 padding:12px 14px;
 border-radius:12px;
-margin:0 0 16px;
+margin:0 0 14px;
 font-size:14px;
 line-height:1.8;
 }
 .msg{background:#166534}
 .err{background:#991b1b}
-.server-title{
-margin:26px 0 4px;
-padding:12px 14px;
-background:#0f172a;
-border-radius:12px;
-font-size:15px;
-font-weight:700;
-color:#fff;
-}
 button,.back{
 display:block;
 width:100%;
-margin-top:12px;
-padding:14px;
+margin:0;
+padding:13px;
 border:0;
 border-radius:12px;
 background:#22c55e;
 color:#fff;
 font:inherit;
-font-size:16px;
+font-size:15px;
 cursor:pointer;
 text-align:center;
 text-decoration:none;
@@ -227,72 +242,102 @@ text-decoration:none;
 background:#2563eb;
 margin-top:14px;
 }
+.save{
+margin-top:4px;
+margin-bottom:14px;
+}
 .back{
 background:#334155;
-margin-top:18px;
 }
 @media(max-width:600px){
 body{padding:10px}
-.box{padding:20px 14px;border-radius:16px}
-h2{font-size:20px}
+.card{padding:16px 14px;border-radius:16px}
+h1{font-size:20px}
+.card-head{align-items:flex-start;flex-direction:column}
 }
 </style>
 </head>
 <body>
-<div class="box">
+<div class="page">
 
-<h2>سرورهای 3x-ui</h2>
+<h1>سرورهای 3x-ui</h1>
 
 <?php if($message !== ''){ ?><div class="msg"><?php echo xuiAdminH($message); ?></div><?php } ?>
 <?php if($error !== ''){ ?><div class="err"><?php echo xuiAdminH($error); ?></div><?php } ?>
 
 <form method="post" action="">
 
+<div class="card">
+<h2>تنظیمات کلی</h2>
+
 <label class="toggle">
 <input type="checkbox" name="enabled" value="1" <?php echo !empty($config['enabled']) ? 'checked' : ''; ?>>
 <span>فعال‌سازی ساخت و تمدید خودکار</span>
 </label>
 
+<div class="field">
 <label for="sub_port">پورت اشتراک</label>
 <input class="ltr" id="sub_port" type="number" name="sub_port" value="<?php echo (int)($config['sub_port'] ?? 2096); ?>">
+</div>
 
+<div class="field">
 <label for="buy_server_ids">سرورهای خرید جدید</label>
 <input class="ltr" id="buy_server_ids" type="text" name="buy_server_ids" value="<?php echo xuiAdminH(implode(',', $config['buy_server_ids'] ?? [])); ?>" placeholder="vip,vip3,vip4">
+</div>
 
+<div class="field">
 <label for="renew_server_ids">سرورهای مجاز تمدید</label>
 <input class="ltr" id="renew_server_ids" type="text" name="renew_server_ids" value="<?php echo xuiAdminH(implode(',', $config['renew_server_ids'] ?? [])); ?>" placeholder="vip,vip2,vip3,vip4">
+</div>
 
-<div class="hint">خرید جدید بین سرورهای خرید می‌چرخد. تمدید روی همان سرور لینک قبلی است. توکن را از Settings → Security → API Token کپی کنید.</div>
+<div class="hint">خرید جدید بین سرورهای خرید می‌چرخد. تمدید روی همان سرور لینک قبلی است.</div>
+</div>
 
 <?php foreach(($config['servers'] ?? []) as $i => $server){
     $sid = (string)($server['id'] ?? '');
     $sname = (string)($server['name'] ?? $sid);
 ?>
-<div class="server-title"><?php echo xuiAdminH($sname); ?> (<?php echo xuiAdminH($sid); ?>)</div>
+<div class="card">
+<div class="card-head">
+<h2><?php echo xuiAdminH($sname); ?></h2>
+<span class="badge"><?php echo xuiAdminH($sid); ?></span>
+</div>
+
 <input type="hidden" name="server_id[]" value="<?php echo xuiAdminH($sid); ?>">
 
+<div class="field">
 <label>نام</label>
 <input type="text" name="server_name[]" value="<?php echo xuiAdminH($server['name'] ?? ''); ?>">
+</div>
 
+<div class="field">
 <label>هاست اشتراک</label>
 <input class="ltr" type="text" name="server_host[]" value="<?php echo xuiAdminH($server['host'] ?? ''); ?>">
+</div>
 
+<div class="field">
 <label>آدرس پنل</label>
 <input class="ltr" type="text" name="server_url[]" value="<?php echo xuiAdminH($server['base_url'] ?? ''); ?>" autocomplete="off">
+</div>
 
+<div class="field">
 <label>API Token</label>
-<input class="ltr" type="text" name="server_token[]" value="<?php echo xuiAdminH($server['api_token'] ?? ''); ?>" autocomplete="off" placeholder="REPLACE_TOKEN را با توکن واقعی عوض کنید">
+<input class="ltr" type="text" name="server_token[]" value="<?php echo xuiAdminH($server['api_token'] ?? ''); ?>" autocomplete="off" placeholder="توکن واقعی را وارد کنید">
+</div>
 
+<div class="field">
 <label>Inbound ID</label>
 <input class="ltr" type="number" name="server_inbound[]" value="<?php echo (int)($server['inbound_id'] ?? 1); ?>">
+</div>
 
 <input type="hidden" name="server_user[]" value="<?php echo xuiAdminH($server['username'] ?? ''); ?>">
 <input type="hidden" name="server_pass[]" value="<?php echo xuiAdminH($server['password'] ?? ''); ?>">
 
-<button class="test" type="submit" name="test_id" value="<?php echo xuiAdminH($sid); ?>">تست اتصال <?php echo xuiAdminH($sname); ?></button>
+<button class="test" type="submit" name="test_id" value="<?php echo xuiAdminH($sid); ?>">تست اتصال</button>
+</div>
 <?php } ?>
 
-<button type="submit" name="save" value="1">ذخیره تنظیمات</button>
+<button class="save" type="submit" name="save" value="1">ذخیره تنظیمات</button>
 </form>
 
 <a class="back" href="<?php echo xuiAdminH($backUrl); ?>">بازگشت به مدیریت</a>
