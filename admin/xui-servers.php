@@ -15,6 +15,7 @@ else{
     }
 }
 
+require_once __DIR__ . '/admin_nav.php';
 require_once __DIR__ . '/../xui_lib.php';
 
 $config = xuiLoadConfig();
@@ -258,6 +259,8 @@ h1{font-size:20px}
 </style>
 </head>
 <body>
+<?php adminQuickNavStyles(); adminQuickNav('xui'); ?>
+
 <div class="page">
 
 <h1>سرورهای 3x-ui</h1>

@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/admin_nav.php';
+
 pnvAdminRequireAuth();
 
 $plansFile = "../db/plans.json";
@@ -84,7 +86,7 @@ JSON_PRETTY_PRINT
 )
 );
 
-header("Location: plans.php");
+header("Location: " . pnvAdminUrl('plans.php'));
 exit;
 
 }
@@ -108,7 +110,7 @@ JSON_PRETTY_PRINT
 )
 );
 
-header("Location: plans.php");
+header("Location: " . pnvAdminUrl('plans.php'));
 exit;
 
 }
@@ -313,6 +315,8 @@ font-size:16px;
 </head>
 
 <body>
+<?php adminQuickNavStyles(); adminQuickNav('plans'); ?>
+
 
 <div class="container">
 

@@ -1,9 +1,10 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
-pnvAdminRequireAuth();
+require_once __DIR__ . '/admin_nav.php';
+require_once "functions.php";
 
-require_once __DIR__ . '/functions.php';
+pnvAdminRequireAuth();
 
 $usersFile = '../db/users.json';
 
@@ -79,7 +80,7 @@ LOCK_EX
 
 }
 
-header("Location: users.php");
+header("Location: " . pnvAdminUrl('users.php'));
 exit;
 
 }
@@ -120,7 +121,7 @@ LOCK_EX
 
 }
 
-header("Location: users.php");
+header("Location: " . pnvAdminUrl('users.php'));
 exit;
 }
 
@@ -149,7 +150,7 @@ LOCK_EX
 
 }
 
-header("Location: users.php");
+header("Location: " . pnvAdminUrl('users.php'));
 exit;
 }
 
@@ -177,12 +178,15 @@ LOCK_EX
 
 }
 
-header("Location: users.php");
+header("Location: " . pnvAdminUrl('users.php'));
 exit;
 }
 
 $search =
 trim($_GET['search'] ?? '');
+
+$openProfile =
+trim($_GET['openProfile'] ?? '');
 
 if($search != ''){
 
@@ -291,16 +295,6 @@ gap:12px;
 margin-bottom:20px;
 }
 
-.profileBtn{
-display:inline-block;
-background:#2563eb;
-color:white;
-padding:8px 12px;
-border-radius:8px;
-text-decoration:none;
-font-size:13px;
-margin-left:8px;
-}
 .backupBtn{
 background:#2563eb;
 padding:12px;
@@ -519,11 +513,202 @@ user-select:none;
 color:#94a3b8;
 }
 
+#profileHost{
+display:none;
+position:fixed;
+inset:0;
+z-index:10000;
+}
+
+.profileOverlay{
+position:absolute;
+inset:0;
+background:rgba(0,0,0,0.5);
+backdrop-filter:blur(4px);
+}
+
+.profileModal{
+position:absolute;
+left:50%;
+top:50%;
+transform:translate(-50%,-50%);
+width:calc(100% - 24px);
+max-width:620px;
+max-height:88vh;
+overflow-y:auto;
+background:#1e293b;
+border-radius:18px;
+padding:20px;
+color:white;
+}
+
+.profileHeader{
+display:flex;
+align-items:center;
+justify-content:space-between;
+font-size:18px;
+font-weight:bold;
+margin-bottom:16px;
+}
+
+.profileCloseBtn{
+background:#475569;
+border:none;
+color:white;
+width:34px;
+height:34px;
+border-radius:10px;
+cursor:pointer;
+font-size:16px;
+}
+
+.profileInfo{
+background:#0f172a;
+border-radius:14px;
+padding:14px;
+margin-bottom:16px;
+line-height:30px;
+font-size:14px;
+}
+
+.infoItem span{
+color:#94a3b8;
+display:inline-block;
+min-width:110px;
+}
+
+.subsTitle{
+font-size:16px;
+font-weight:bold;
+margin-bottom:12px;
+}
+
+.emptySubs{
+text-align:center;
+color:#94a3b8;
+padding:24px 12px;
+}
+
+.subCard{
+background:#0f172a;
+border-radius:14px;
+padding:14px;
+margin-bottom:12px;
+}
+
+.subTop{
+display:flex;
+justify-content:space-between;
+align-items:flex-start;
+gap:10px;
+margin-bottom:10px;
+}
+
+.subPlan{
+font-weight:bold;
+font-size:15px;
+}
+
+.subStatus{
+font-size:12px;
+padding:6px 10px;
+border-radius:999px;
+white-space:nowrap;
+}
+
+.subStatusApproved{
+background:#14532d;
+color:#bbf7d0;
+}
+
+.subStatusRejected{
+background:#450a0a;
+color:#fecaca;
+}
+
+.subStatusPending{
+background:#422006;
+color:#fde68a;
+}
+
+.subMeta{
+font-size:13px;
+line-height:28px;
+color:#cbd5e1;
+margin-bottom:10px;
+}
+
+.subMeta b{
+color:#94a3b8;
+}
+
+.subLink{
+display:flex;
+gap:8px;
+}
+
+.subLink input{
+flex:1;
+padding:10px;
+border:none;
+border-radius:10px;
+background:#1e293b;
+color:white;
+font-size:12px;
+}
+
+.subLink button,
+.profilePagination button{
+border:none;
+border-radius:10px;
+background:#22c55e;
+color:white;
+padding:10px 14px;
+cursor:pointer;
+font-family:tahoma;
+}
+
+.subRejectReason,
+.subPendingNote{
+font-size:13px;
+line-height:26px;
+padding:10px;
+border-radius:10px;
+background:#1e293b;
+}
+
+.subRejectReason{
+color:#fecaca;
+}
+
+.subPendingNote{
+color:#fde68a;
+}
+
+.profilePagination{
+display:flex;
+gap:8px;
+justify-content:center;
+margin-top:14px;
+flex-wrap:wrap;
+}
+
+.profilePagination button{
+background:#334155;
+min-width:38px;
+}
+
+.profilePagination .activePage{
+background:#22c55e;
+}
+
 </style>
 
 </head>
 
 <body>
+<?php adminQuickNavStyles(); adminQuickNav('users'); ?>
+
 
 <div class="box">
 
@@ -544,7 +729,7 @@ class="backTop">
 <div class="topbar">
 
 <a
-href="users.php?backup=1"
+href="<?php echo htmlspecialchars(pnvAdminUrl('users.php?backup=1'), ENT_QUOTES, 'UTF-8'); ?>"
 class="backupBtn">
 
 دانلود بکاپ کاربران
@@ -608,10 +793,6 @@ $allUsers
 <?php echo htmlspecialchars($u['created_at'] ?? '-'); ?>
 </div>
 
-<div style="margin-top:10px">
-<a class="profileBtn" href="<?php echo htmlspecialchars(pnvAdminUrl('user-profile.php?user=' . urlencode($u['username'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>">پروفایل / اشتراک‌ها</a>
-</div>
-
 </div>
 
 <div class="menuWrap">
@@ -661,6 +842,13 @@ onclick="openPassModal(
 
 </button>
 
+<button
+onclick="loadProfile(<?php echo json_encode($u['username'], JSON_UNESCAPED_UNICODE); ?>)">
+
+مشاهده اشتراک‌ها
+
+</button>
+
 <a
 href="#"
 class="deleteBtn"
@@ -691,7 +879,7 @@ onclick="openDeleteModal(
 <?php for($x=1;$x<=$totalPages;$x++){ ?>
 
 <a
-href="users.php?p=<?php echo $x; ?>"
+href="<?php echo htmlspecialchars(pnvAdminUrl('users.php?p=' . $x), ENT_QUOTES, 'UTF-8'); ?>"
 class="<?php echo ($page==$x)?'activePage':''; ?>">
 
 <?php echo $x; ?>
@@ -715,7 +903,12 @@ id="modalContent"></div>
 
 </div>
 
+<div id="profileHost"></div>
+
 <script>
+
+const usersPageUrl = <?php echo json_encode(pnvAdminUrl('users.php'), JSON_UNESCAPED_UNICODE); ?>;
+const profileApiUrl = <?php echo json_encode(pnvAdminUrl('user-profile.php'), JSON_UNESCAPED_UNICODE); ?>;
 
 function toggleMenu(id){
 
@@ -964,7 +1157,7 @@ openModal(`
 </div>
 
 <a
-href="users.php?delete=${id}"
+href="${usersPageUrl}?delete=${id}"
 class="deleteButton">
 
 حذف کاربر
@@ -1000,6 +1193,58 @@ p.type='password';
 }
 
 }
+
+function loadProfile(user, page = 1){
+
+fetch(
+profileApiUrl + '?user='
++ encodeURIComponent(user)
++ '&p='
++ page,
+{credentials:'same-origin'}
+)
+.then(function(response){
+return response.text();
+})
+.then(function(html){
+
+document.getElementById('profileHost').innerHTML = html;
+document.getElementById('profileHost').style.display = 'block';
+
+})
+.catch(function(){
+alert('خطا در بارگذاری اشتراک‌ها');
+});
+
+}
+
+function closeProfileModal(){
+
+document.getElementById('profileHost').innerHTML = '';
+document.getElementById('profileHost').style.display = 'none';
+
+}
+
+function copySub(button){
+
+const input = button.previousElementSibling;
+
+if(!input){
+return;
+}
+
+input.select();
+input.setSelectionRange(0, 99999);
+navigator.clipboard.writeText(input.value);
+alert('کپی شد');
+
+}
+
+<?php if($openProfile !== ''){ ?>
+
+loadProfile(<?php echo json_encode($openProfile, JSON_UNESCAPED_UNICODE); ?>);
+
+<?php } ?>
 
 </script>
 

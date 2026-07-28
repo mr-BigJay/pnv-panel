@@ -1,12 +1,14 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
-pnvAdminRequireAuth();
 
-$username = trim((string)($_GET['user'] ?? ''));
+if(!pnvAdminIsLoggedIn()){
+    exit;
+}
+
+$username = trim($_GET['user'] ?? '');
 
 if($username === ''){
-    header('Location: ' . pnvAdminUrl('users.php'));
     exit;
 }
 
@@ -26,131 +28,229 @@ if(!is_array($users)){
 $userData = null;
 
 foreach($users as $u){
-    if(strtolower($u['username'] ?? '') === strtolower($username)){
+
+    if(
+        strtolower(trim($u['username'] ?? ''))
+        ===
+        strtolower($username)
+    ){
         $userData = $u;
         break;
     }
+
 }
 
 $purchases = [];
 
 if(file_exists($paymentsFile)){
+
     $f = fopen($paymentsFile, 'r');
 
     while(($d = fgetcsv($f)) !== false){
-        if(isset($d[0]) && strtolower(trim($d[0])) === strtolower($username)){
-            $purchases[] = [
-                'target' => $d[1] ?? '',
-                'plan' => $d[2] ?? '',
-                'date' => $d[4] ?? '',
-                'time' => $d[5] ?? '',
-                'status' => $d[6] ?? '',
-                'link' => $d[7] ?? '',
-                'type' => $d[9] ?? ''
-            ];
+
+        if(
+            !isset($d[0])
+            ||
+            strtolower(trim($d[0])) !== strtolower($username)
+        ){
+            continue;
         }
+
+        $type = trim($d[9] ?? 'خرید');
+
+        if($type === 'تمدید'){
+            continue;
+        }
+
+        $configName = trim($d[1] ?? '');
+
+        if(
+            stripos($configName, 'https://vip.') !== false
+            ||
+            stripos($configName, 'https://vip2.') !== false
+            ||
+            stripos($configName, 'https://vip3.') !== false
+            ||
+            stripos($configName, 'https://vip4.') !== false
+        ){
+            continue;
+        }
+
+        $purchases[] = [
+            'config' => $configName,
+            'plan' => $d[2] ?? '',
+            'tracking' => $d[3] ?? '',
+            'date' => $d[4] ?? '',
+            'time' => $d[5] ?? '',
+            'status' => trim($d[6] ?? 'درحال بررسی'),
+            'link' => trim($d[7] ?? ''),
+            'timestamp' => intval($d[8] ?? 0)
+        ];
+
     }
 
     fclose($f);
+
 }
 
 usort($purchases, function($a, $b){
-    return strcmp($b['date'] . ' ' . $b['time'], $a['date'] . ' ' . $a['time']);
+
+    $aTime = $a['timestamp'] ?: 0;
+    $bTime = $b['timestamp'] ?: 0;
+
+    if($aTime !== $bTime){
+        return $bTime <=> $aTime;
+    }
+
+    return strcmp(
+        ($b['date'] ?? '') . ' ' . ($b['time'] ?? ''),
+        ($a['date'] ?? '') . ' ' . ($a['time'] ?? '')
+    );
+
 });
 
-$page = max(1, intval($_GET['p'] ?? 1));
-$perPage = 10;
-$total = count($purchases);
-$totalPages = max(1, (int)ceil($total / $perPage));
+$page = intval($_GET['p'] ?? 1);
+$showAll = isset($_GET['all']) && $_GET['all'] === '1';
 
-if($page > $totalPages){
-    $page = $totalPages;
+if($page < 1){
+    $page = 1;
 }
 
-$purchasesPage = array_slice($purchases, ($page - 1) * $perPage, $perPage);
+$perPage = 5;
+$totalCount = count($purchases);
+$totalPages = max(1, (int)ceil($totalCount / $perPage));
 
-function upH($value){
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+if($showAll){
+    $purchasesPage = $purchases;
+    $totalPages = 1;
+    $page = 1;
+}
+else{
+    $start = ($page - 1) * $perPage;
+    $purchasesPage = array_slice($purchases, $start, $perPage);
+}
+
+function profileStatusClass($status){
+
+    if($status === 'تایید شد'){
+        return 'subStatusApproved';
+    }
+
+    if($status === 'رد شد'){
+        return 'subStatusRejected';
+    }
+
+    return 'subStatusPending';
+
 }
 
 ?>
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>پروفایل <?php echo upH($username); ?></title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;padding:16px;background:#0f172a;color:#fff;font-family:tahoma;direction:rtl}
-.box{max-width:860px;margin:0 auto;background:#1e293b;border-radius:16px;padding:20px}
-h2{margin:0 0 16px;text-align:center}
-.info{background:#0f172a;border-radius:12px;padding:14px;line-height:2;margin-bottom:16px}
-.card{background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px}
-.meta{color:#94a3b8;font-size:13px;margin-top:6px}
-.linkRow{display:flex;gap:8px;margin-top:10px}
-.linkRow input{flex:1;padding:10px;border:0;border-radius:8px;background:#1e293b;color:#fff;direction:ltr;text-align:left}
-.linkRow button,.back{border:0;border-radius:8px;padding:10px 14px;background:#2563eb;color:#fff;cursor:pointer;font:inherit}
-.back{display:inline-block;margin-top:14px;background:#334155;text-decoration:none}
-.pager{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
-.pager a{padding:8px 12px;border-radius:8px;background:#0f172a;color:#fff;text-decoration:none}
-.pager a.active{background:#22c55e}
-.empty{color:#94a3b8;text-align:center;padding:20px}
-.status{display:inline-block;padding:3px 8px;border-radius:8px;font-size:12px;background:#334155}
-</style>
-</head>
-<body>
-<div class="box">
-<h2>پروفایل کاربر</h2>
 
-<div class="info">
-<div><b>نام کاربری:</b> <?php echo upH($username); ?></div>
-<div><b>موبایل:</b> <?php echo upH($userData['mobile'] ?? '-'); ?></div>
-<div><b>معرف:</b> <?php echo upH($userData['referrer'] ?? '-'); ?></div>
-<div><b>کد معرف:</b> <?php echo upH($userData['referral_code'] ?? '-'); ?></div>
-<div><b>تعداد رکورد پرداخت:</b> <?php echo (int)$total; ?></div>
-</div>
+<div class="profileOverlay" onclick="closeProfileModal()"></div>
 
-<h3 style="margin:0 0 12px">اشتراک‌ها / پرداخت‌ها</h3>
+<div class="profileModal">
 
-<?php if(count($purchasesPage) === 0){ ?>
-<div class="empty">موردی یافت نشد</div>
-<?php } ?>
+    <div class="profileHeader">
+        👤 اشتراک‌های <?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>
+        <button type="button" class="profileCloseBtn" onclick="closeProfileModal()">✕</button>
+    </div>
 
-<?php foreach($purchasesPage as $sub){ ?>
-<div class="card">
-<div><b><?php echo upH($sub['plan'] !== '' ? $sub['plan'] : $sub['target']); ?></b></div>
-<div class="meta">
-<?php echo upH($sub['type'] !== '' ? $sub['type'] : 'خرید'); ?>
-|
-<span class="status"><?php echo upH($sub['status']); ?></span>
-|
-<?php echo upH(trim($sub['date'] . ' ' . $sub['time'])); ?>
-</div>
-<?php
-$showLink = trim($sub['link']);
-if($showLink === '' || $showLink === 'رد شد'){
-    $showLink = $sub['target'];
-}
-?>
-<?php if($showLink !== ''){ ?>
-<div class="linkRow">
-<input type="text" readonly value="<?php echo upH($showLink); ?>">
-<button type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value)">کپی</button>
-</div>
-<?php } ?>
-</div>
-<?php } ?>
+    <div class="profileInfo">
 
-<?php if($totalPages > 1){ ?>
-<div class="pager">
-<?php for($i = 1; $i <= $totalPages; $i++){ ?>
-<a class="<?php echo $i === $page ? 'active' : ''; ?>" href="<?php echo upH(pnvAdminUrl('user-profile.php?user=' . urlencode($username) . '&p=' . $i)); ?>"><?php echo $i; ?></a>
-<?php } ?>
-</div>
-<?php } ?>
+        <div class="infoItem">
+            <span>نام کاربری:</span>
+            <?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>
+        </div>
 
-<a class="back" href="<?php echo upH(pnvAdminUrl('users.php')); ?>">بازگشت به کاربران</a>
+        <div class="infoItem">
+            <span>شماره موبایل:</span>
+            <?php echo htmlspecialchars($userData['mobile'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+
+        <div class="infoItem">
+            <span>معرف:</span>
+            <?php echo htmlspecialchars($userData['referrer'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+
+        <div class="infoItem">
+            <span>تعداد خرید:</span>
+            <?php echo $totalCount; ?>
+        </div>
+
+    </div>
+
+    <div class="subsTitle">📦 لیست اشتراک‌های خریداری‌شده</div>
+
+    <?php if(count($purchasesPage) === 0){ ?>
+
+    <div class="emptySubs">اشتراکی یافت نشد</div>
+
+    <?php } ?>
+
+    <?php foreach($purchasesPage as $sub){
+
+        $status = $sub['status'] ?: 'درحال بررسی';
+        $statusClass = profileStatusClass($status);
+
+    ?>
+
+    <div class="subCard">
+
+        <div class="subTop">
+            <div class="subPlan"><?php echo htmlspecialchars($sub['plan'], ENT_QUOTES, 'UTF-8'); ?></div>
+            <span class="subStatus <?php echo $statusClass; ?>">
+                <?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>
+            </span>
+        </div>
+
+        <div class="subMeta">
+            <div><b>نام کانفیگ:</b> <?php echo htmlspecialchars($sub['config'], ENT_QUOTES, 'UTF-8'); ?></div>
+            <div><b>پیگیری:</b> <?php echo htmlspecialchars($sub['tracking'], ENT_QUOTES, 'UTF-8'); ?></div>
+            <div><b>تاریخ:</b> <?php echo htmlspecialchars($sub['date'], ENT_QUOTES, 'UTF-8'); ?> - <?php echo htmlspecialchars($sub['time'], ENT_QUOTES, 'UTF-8'); ?></div>
+        </div>
+
+        <?php if($status === 'تایید شد' && $sub['link'] !== ''){ ?>
+
+        <div class="subLink">
+            <input type="text" readonly value="<?php echo htmlspecialchars($sub['link'], ENT_QUOTES, 'UTF-8'); ?>">
+            <button type="button" onclick="copySub(this)">کپی لینک</button>
+        </div>
+
+        <?php } elseif($status === 'رد شد' && $sub['link'] !== ''){ ?>
+
+        <div class="subRejectReason">
+            <?php echo htmlspecialchars($sub['link'], ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+
+        <?php } elseif($status === 'درحال بررسی'){ ?>
+
+        <div class="subPendingNote">در انتظار تایید پرداخت</div>
+
+        <?php } ?>
+
+    </div>
+
+    <?php } ?>
+
+    <?php if(!$showAll && $totalPages > 1){ ?>
+
+    <div class="profilePagination">
+
+        <?php for($i = 1; $i <= $totalPages; $i++){ ?>
+
+        <button
+            type="button"
+            onclick="loadProfile(<?php echo json_encode($username, JSON_UNESCAPED_UNICODE); ?>, <?php echo $i; ?>)"
+            class="<?php echo $page === $i ? 'activePage' : ''; ?>">
+
+            <?php echo $i; ?>
+
+        </button>
+
+        <?php } ?>
+
+    </div>
+
+    <?php } ?>
+
 </div>
-</body>
-</html>

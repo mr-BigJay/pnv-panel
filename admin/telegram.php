@@ -13,6 +13,7 @@ else{
     }
 }
 
+require_once __DIR__ . '/admin_nav.php';
 require_once __DIR__ . '/../telegram_lib.php';
 
 $config = telegramLoadConfig();
@@ -109,6 +110,8 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 </style>
 </head>
 <body>
+<?php adminQuickNavStyles(); adminQuickNav('telegram'); ?>
+
 <div class="box">
 <h2>تنظیمات بات تلگرام</h2>
 

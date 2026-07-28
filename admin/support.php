@@ -1,888 +1,441 @@
 <?php
 
-require_once __DIR__ . '/auth.php';
-pnvAdminRequireAuth();
-
-$file = "../db/support.json";
-
-if(!file_exists($file)){
-file_put_contents($file,"[]");
+if(!isset($supportEmbedded)){
+    $supportEmbedded = false;
 }
 
-$data = json_decode(
-file_get_contents($file),
-true
-);
+require_once __DIR__ . '/../support_lib.php';
 
-if(!is_array($data)){
-$data = [];
+if(!$supportEmbedded && supportIsEmbeddedRequest()){
+    $supportEmbedded = true;
 }
 
-if(isset($_GET['user'])){
+if(!$supportEmbedded){
 
-$current = $_GET['user'];
+    require_once __DIR__ . '/auth.php';
 
-for($i=0;$i<count($data);$i++){
+    if(!pnvAdminIsLoggedIn()){
+        header('Location: ' . pnvAdminEntryUrl());
+        exit;
+    }
+
+}
+
+$file = __DIR__ . '/../db/support.json';
+$csrfField = supportCsrfField();
 
 if(
-isset($data[$i]['user'])
-&&
-$data[$i]['user']==$current
+    isset($supportActionResult)
+    && is_array($supportActionResult)
 ){
-
-if(isset($data[$i]['messages'])){
-
-for($j=0;$j<count($data[$i]['messages']);$j++){
-
-if(
-isset($data[$i]['messages'][$j]['sender'])
-&&
-$data[$i]['messages'][$j]['sender']=='user'
-){
-
-$data[$i]['messages'][$j]['seen_by_admin']=true;
-
+    $actionResult = $supportActionResult;
+}
+else{
+    $actionResult = supportProcessAdminActions($file, $supportEmbedded);
 }
 
+if($actionResult['redirect']){
+    header('Location: ' . $actionResult['redirect']);
+    exit;
 }
 
-}
-
-}
-
-}
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-}
-
-if(isset($_GET['delete'])){
-
-$msgid = $_GET['delete'];
-
-for($i=0;$i<count($data);$i++){
-
-if(isset($data[$i]['messages'])){
-
-for($j=0;$j<count($data[$i]['messages']);$j++){
-
-if(
-isset($data[$i]['messages'][$j]['id'])
-&&
-$data[$i]['messages'][$j]['id']==$msgid
-){
-
-unset($data[$i]['messages'][$j]);
-
-$data[$i]['messages'] =
-array_values(
-$data[$i]['messages']
-);
-
-}
-
-}
-
-}
-
-}
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-header(
-"Location: support.php?user=".$_GET['user']
-);
-
-exit;
-
-}
-
-if(isset($_POST['edit_id'])){
-
-$id =
-$_POST['edit_id'];
-
-$text =
-trim($_POST['edit_text']);
-
-for($i=0;$i<count($data);$i++){
-
-if(isset($data[$i]['messages'])){
-
-for($j=0;$j<count($data[$i]['messages']);$j++){
-
-if(
-isset($data[$i]['messages'][$j]['id'])
-&&
-$data[$i]['messages'][$j]['id']==$id
-){
-
-$data[$i]['messages'][$j]['text']=$text;
-
-$data[$i]['messages'][$j]['edited']=true;
-
-}
-
-}
-
-}
-
-}
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-header(
-"Location: support.php?user=".$_POST['user']
-);
-
-exit;
-
-}
-
-if(isset($_POST['reply'])){
-
-$user =
-$_POST['user'];
-
-$text =
-trim($_POST['message']);
-
-$image = "";
-
-if(
-isset($_FILES['image'])
-&&
-$_FILES['image']['size'] > 0
-){
-
-$ext =
-strtolower(
-pathinfo(
-$_FILES['image']['name'],
-PATHINFO_EXTENSION
-)
-);
-
-$allowed = [
-'jpg',
-'jpeg',
-'png',
-'webp'
-];
-
-if(in_array($ext,$allowed)){
-
-if(!file_exists("../uploads/support")){
-mkdir("../uploads/support",0777,true);
-}
-
-$filename =
-time().
-rand(1000,9999).
-".".
-$ext;
-
-$savePath =
-__DIR__ .
-"/../uploads/support/" .
-$filename;
-
-$image =
-"/uploads/support/" .
-$filename;
-
-move_uploaded_file(
-$_FILES['image']['tmp_name'],
-$savePath
-);
-
-}
-
-}
-
-for($i=0;$i<count($data);$i++){
-
-if(
-isset($data[$i]['user'])
-&&
-$data[$i]['user']==$user
-){
-
-if(!isset($data[$i]['messages'])){
-$data[$i]['messages']=[];
-}
-
-$data[$i]['messages'][] = [
-
-'id'=>uniqid(),
-
-'sender'=>'admin',
-
-'text'=>$text,
-
-'image'=>$image,
-
-'date'=>date('Y/m/d'),
-
-'time'=>date('H:i'),
-
-'timestamp'=>time(),
-
-'seen_by_user'=>false
-
-];
-
-$data[$i]['status']='answered';
-
-}
-
-}
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-header(
-"Location: support.php?user=".$user
-);
-
-exit;
-
-}
-
-$currentUser =
-$_GET['user'] ?? '';
-
-usort($data,function($a,$b){
-
-$aTime = 0;
-$bTime = 0;
-
-if(isset($a['messages']) && count($a['messages'])>0){
-
-$lastA =
-end($a['messages']);
-
-$aTime =
-$lastA['timestamp'] ?? 0;
-
-}
-
-if(isset($b['messages']) && count($b['messages'])>0){
-
-$lastB =
-end($b['messages']);
-
-$bTime =
-$lastB['timestamp'] ?? 0;
-
-}
-
-return $bTime - $aTime;
-
-});
-
+$data = supportSortTickets($actionResult['data']);
+$currentUser = $_GET['user'] ?? '';
+$editId = $_GET['edit'] ?? '';
+$supportError = $actionResult['error'] ?? '';
+$baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
+$cssHref = '../support_ui.css?v=12';
+$profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
+$usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
+$jsHref = '../support_ui.js';
+
+if(!$supportEmbedded){
 ?>
-
 <!DOCTYPE html>
-
 <html lang="fa">
-
 <head>
-
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>پیام‌های کاربران</title>
+<link rel="stylesheet" href="<?php echo htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<?php } else { ?>
+<link rel="stylesheet" href="<?php echo htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<?php } ?>
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+<div class="supportPage <?php echo $supportEmbedded ? 'supportEmbedded' : ''; ?> <?php echo $currentUser !== '' ? 'chat-active' : ''; ?>" id="supportPage">
 
-<title>
+<aside class="msgSidebar" id="supportSidebar">
 
-پشتیبانی مدیریت
+<div class="msgSidebarHead">
+<div class="msgSidebarHeadRow">
+<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
+<h2>پیام‌های کاربران</h2>
+</div>
+<div class="msgSearchWrap">
+<input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
+<div class="msgUserSearchResults" id="supportUserResults"></div>
+</div>
+</div>
 
-</title>
+<div class="msgList">
 
-<style>
-
-*{
-box-sizing:border-box;
-}
-
-body{
-margin:0;
-background:#0f172a;
-font-family:tahoma;
-direction:rtl;
-color:white;
-display:flex;
-height:100vh;
-overflow:hidden;
-}
-
-.sidebar{
-width:320px;
-background:#1e293b;
-overflow-y:auto;
-padding:15px;
-border-left:1px solid #334155;
-}
-
-.user{
-display:block;
-background:#0f172a;
-padding:14px;
-border-radius:14px;
-margin-bottom:10px;
-text-decoration:none;
-color:white;
-line-height:28px;
-}
-
-.user:hover{
-background:#334155;
-}
-
-.userTop{
-display:flex;
-align-items:center;
-gap:8px;
-margin-bottom:6px;
-}
-
-.redDot{
-width:10px;
-height:10px;
-background:#ef4444;
-border-radius:50%;
-display:inline-block;
-}
-
-.chatbox{
-flex:1;
-display:flex;
-flex-direction:column;
-padding:15px;
-}
-
-.chatHeader{
-background:#1e293b;
-padding:16px 20px;
-border-radius:18px;
-margin-bottom:14px;
-font-size:18px;
-font-weight:bold;
-}
-
-.messages{
-flex:1;
-overflow-y:auto;
-background:#1e293b;
-border-radius:18px;
-padding:15px;
-margin-bottom:15px;
-display:flex;
-flex-direction:column;
-}
-
-.msg{
-padding:14px;
-border-radius:16px;
-margin-bottom:12px;
-max-width:80%;
-line-height:30px;
-word-break:break-word;
-}
-
-.admin{
-background:#22c55e;
-margin-left:auto;
-}
-
-.usermsg{
-background:#334155;
-margin-right:auto;
-}
-
-.msg img{
-max-width:240px;
-border-radius:12px;
-margin-top:10px;
-display:block;
-}
-
-.time{
-font-size:11px;
-opacity:0.7;
-margin-top:8px;
-display:flex;
-gap:8px;
-align-items:center;
-flex-wrap:wrap;
-}
-
-.action{
-color:white;
-text-decoration:none;
-font-size:14px;
-width:28px;
-height:28px;
-display:flex;
-align-items:center;
-justify-content:center;
-background:rgba(255,255,255,0.12);
-border-radius:8px;
-}
-
-.sendbox{
-background:#1e293b;
-padding:12px;
-border-radius:18px;
-}
-
-.formrow{
-display:flex;
-gap:10px;
-align-items:flex-end;
-background:#0f172a;
-padding:10px;
-border-radius:16px;
-}
-
-.sidebuttons{
-display:flex;
-flex-direction:column;
-gap:6px;
-}
-
-textarea{
-flex:1;
-min-height:52px;
-max-height:180px;
-padding:14px;
-border:none;
-border-radius:14px;
-background:transparent;
-color:white;
-font-family:tahoma;
-resize:none;
-outline:none;
-line-height:28px;
-font-size:15px;
-overflow-y:auto;
-}
-
-.attach{
-width:42px;
-height:42px;
-background:#334155;
-border-radius:12px;
-display:flex;
-align-items:center;
-justify-content:center;
-cursor:pointer;
-font-size:18px;
-}
-
-.attach input{
-display:none;
-}
-
-.sendbtn{
-width:42px;
-height:42px;
-border:none;
-border-radius:12px;
-background:#22c55e;
-color:white;
-font-size:18px;
-cursor:pointer;
-}
-
-.editbox{
-margin-top:10px;
-}
-
-.editbox textarea{
-background:#0f172a;
-min-height:80px;
-}
-
-.editbtn{
-margin-top:10px;
-background:#22c55e;
-width:42px;
-height:42px;
-border:none;
-border-radius:12px;
-color:white;
-cursor:pointer;
-font-size:20px;
-padding:0;
-}
-
-.empty{
-margin:auto;
-color:#94a3b8;
-font-size:18px;
-}
-
-.back{
-display:block;
-background:#334155;
-padding:14px;
-border-radius:14px;
-text-align:center;
-text-decoration:none;
-color:white;
-margin-top:15px;
-}
-
-@media(max-width:768px){
-
-body{
-flex-direction:column;
-height:auto;
-overflow:auto;
-}
-
-.sidebar{
-width:100%;
-border-left:none;
-border-bottom:1px solid #334155;
-max-height:250px;
-}
-
-.messages{
-height:60vh;
-}
-
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="sidebar">
-
-<h2>
-
-پیام های کاربران
-
-</h2>
+<?php if(count($data) === 0){ ?>
+<div class="msgEmpty" style="padding:24px 12px;">
+<div class="msgEmptyIcon">📭</div>
+هنوز پیامی نیست<br>
+کاربران از پنل خود پیام می‌فرستند
+</div>
+<?php } ?>
 
 <?php foreach($data as $ticket){
 
-$hasUnread = false;
-
-if(isset($ticket['messages'])){
-
-foreach($ticket['messages'] as $msg){
-
-if(
-
-isset($msg['sender'])
-
-&&
-
-$msg['sender']=='user'
-
-&&
-
-empty($msg['seen_by_admin'])
-
-){
-
-$hasUnread = true;
-break;
-
-}
-
-}
-
-}
+    $ticketUser = $ticket['user'] ?? '';
+    $isActive = $currentUser === $ticketUser;
+    $unread = supportAdminUnreadCount($ticket);
+    $preview = supportTicketPreview($ticket);
+    $lastTs = supportTicketLastTimestamp($ticket);
 
 ?>
 
 <a
-href="?user=<?php echo urlencode($ticket['user']); ?>"
-class="user">
+    href="<?php echo htmlspecialchars(supportAdminUrl($ticketUser, $supportEmbedded), ENT_QUOTES, 'UTF-8'); ?>"
+    class="msgConv <?php echo $isActive ? 'active' : ''; ?>"
+    data-username="<?php echo htmlspecialchars($ticketUser, ENT_QUOTES, 'UTF-8'); ?>">
 
-<div class="userTop">
+    <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($ticketUser), ENT_QUOTES, 'UTF-8'); ?></div>
 
-<span>👤</span>
+    <div class="msgConvBody">
+        <div class="msgConvTop">
+            <span class="msgConvName"><?php echo htmlspecialchars($ticketUser, ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="msgConvTime"><?php echo htmlspecialchars(supportRelativeTime($lastTs), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="msgConvPreview <?php echo $unread > 0 ? 'unread' : ''; ?>">
+            <?php echo htmlspecialchars($preview, ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+    </div>
 
-<?php if($hasUnread){ ?>
-
-<span class="redDot"></span>
-
-<?php } ?>
-
-</div>
-
-<?php echo htmlspecialchars($ticket['user']); ?>
-
-<br>
-
-وضعیت:
-
-<?php echo htmlspecialchars($ticket['status'] ?? '-'); ?>
+    <?php if($unread > 0){ ?>
+    <span class="msgBadge"><?php echo $unread > 9 ? '9+' : $unread; ?></span>
+    <?php } ?>
 
 </a>
 
 <?php } ?>
 
-<a href="index.php"
-class="back">
-
-بازگشت
-
-</a>
-
 </div>
 
-<div class="chatbox">
-
-<?php if($currentUser==''){ ?>
-
-<div class="empty">
-
-یک کاربر را انتخاب کنید
-
-</div>
-
+<?php if(!$supportEmbedded){ ?>
+<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgBack" style="margin:12px;text-align:center;display:block;">بازگشت به داشبورد</a>
 <?php } ?>
 
-<?php if($currentUser!=''){ ?>
+</aside>
 
-<div class="chatHeader">
+<div class="supportChatbox" id="supportChatbox">
 
-چت با :
+<?php if($currentUser === ''){ ?>
 
-<?php echo htmlspecialchars($currentUser); ?>
-
+<div class="msgEmpty" style="margin:auto;">
+<div class="msgEmptyIcon">👈</div>
+یک کاربر را از لیست انتخاب کنید
 </div>
 
-<div class="messages">
+<?php } else { ?>
+
+<header class="msgHeader">
+<button type="button" class="supportBackBtn" id="supportBackBtn">← لیست</button>
+<div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($currentUser), ENT_QUOTES, 'UTF-8'); ?></div>
+<div class="msgHeaderInfo">
+<h2><?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?></h2>
+<p>پاسخ به کاربر</p>
+</div>
+<div class="supportChatHeaderActions">
+<button type="button" class="viewSubsBtn" onclick="openUserSubscriptions()">اشتراک‌ها</button>
+</div>
+</header>
+
+<?php if($supportError){ ?>
+<div class="msgFlash"><?php echo htmlspecialchars($supportError, ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } ?>
+
+<div class="supportMessages" id="supportMessages">
 
 <?php
+
+$hasMessages = false;
 
 foreach($data as $ticket){
 
-if(
-isset($ticket['user'])
-&&
-$ticket['user']==$currentUser
-){
+    if(($ticket['user'] ?? '') !== $currentUser){
+        continue;
+    }
 
-if(isset($ticket['messages'])){
+    if(empty($ticket['messages'])){
+        break;
+    }
 
-foreach($ticket['messages'] as $m){
+    $hasMessages = true;
 
-?>
+    foreach($ticket['messages'] as $m){
 
-<div class="msg <?php echo ($m['sender']=='admin') ? 'admin' : 'usermsg'; ?>">
+        echo supportRenderMessageHtml($m, [
+            'currentUser' => $currentUser,
+            'embedded' => $supportEmbedded,
+            'csrfField' => $csrfField,
+            'editId' => $editId,
+            'isAdmin' => true,
+            'baseUrl' => $baseUrl
+        ]);
 
-<?php echo nl2br(htmlspecialchars($m['text'] ?? '')); ?>
+    }
 
-<?php if(!empty($m['edited'])){ ?>
-
-<br>
-
-<small>
-
-(ویرایش شد)
-
-</small>
-
-<?php } ?>
-
-<?php if(!empty($m['image'])){ ?>
-
-<br>
-
-<img
-src="<?php echo '/'.ltrim($m['image'],'/'); ?>">
-
-<?php } ?>
-
-<div class="time">
-
-<?php echo $m['date'] ?? ''; ?>
-
--
-
-<?php echo $m['time'] ?? ''; ?>
-
-<a
-href="?user=<?php echo urlencode($currentUser); ?>&edit=<?php echo urlencode($m['id']); ?>"
-class="action">
-
-✏️
-
-</a>
-
-<a
-href="?user=<?php echo urlencode($currentUser); ?>&delete=<?php echo urlencode($m['id']); ?>"
-class="action">
-
-🗑
-
-</a>
-
-</div>
-
-<?php if(
-isset($_GET['edit'])
-&&
-$_GET['edit']==$m['id']
-){ ?>
-
-<form
-method="POST"
-class="editbox">
-
-<textarea
-name="edit_text"
-required><?php echo htmlspecialchars($m['text']); ?></textarea>
-
-<input
-type="hidden"
-name="edit_id"
-value="<?php echo htmlspecialchars($m['id']); ?>">
-
-<input
-type="hidden"
-name="user"
-value="<?php echo htmlspecialchars($currentUser); ?>">
-
-<button
-type="submit"
-class="editbtn">
-
-✓
-
-</button>
-
-</form>
-
-<?php } ?>
-
-</div>
-
-<?php
+    break;
 
 }
 
-}
-
-}
-
+if(!$hasMessages){
+    echo '<div class="msgEmpty"><div class="msgEmptyIcon">💬</div>هنوز پیامی رد و بدل نشده</div>';
 }
 
 ?>
 
 </div>
 
-<div class="sendbox">
+<footer class="supportSendbox">
+<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner" action="<?php echo htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8'); ?>">
 
-<form
-method="POST"
-enctype="multipart/form-data">
+<?php echo $csrfField; ?>
+<input type="hidden" name="reply" value="1">
+<input type="hidden" name="user" value="<?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?>">
 
-<input
-type="hidden"
-name="user"
-value="<?php echo htmlspecialchars($currentUser); ?>">
-
-<div class="formrow">
-
-<div class="sidebuttons">
-
-<label class="attach">
-
-📎
-
-<input
-type="file"
-name="image"
-accept="image/*">
-
+<label class="msgIconBtn msgIconBtn--attach" title="تصویر">📎
+<input type="file" name="image" id="supportImage" accept="image/*">
 </label>
 
-<button
-type="submit"
-name="reply"
-class="sendbtn">
+<textarea name="message" id="supportMessage" placeholder="ارسال پیام . . . ." rows="1"></textarea>
 
-➤
-
-</button>
-
-</div>
-
-<textarea
-name="message"
-id="message"
-placeholder="پاسخ پشتیبانی..."
-required></textarea>
-
-</div>
+<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال">➤</button>
 
 </form>
-
-</div>
+</footer>
 
 <?php } ?>
 
 </div>
 
+</div>
+
+<div id="profileHost"></div>
+
+<script src="../support_ui.js?v=5"></script>
 <script>
+(function(){
+    const supportMessages = document.getElementById('supportMessages');
+    const supportMessage = document.getElementById('supportMessage');
+    const supportSearch = document.getElementById('supportSearch');
+    const supportUserResults = document.getElementById('supportUserResults');
+    const supportBackBtn = document.getElementById('supportBackBtn');
+    const supportReplyForm = document.getElementById('supportReplyForm');
+    const currentUser = <?php echo json_encode($currentUser, JSON_UNESCAPED_UNICODE); ?>;
+    const pollUrl = <?php echo json_encode(
+        $supportEmbedded && function_exists('pnvAdminUrl')
+            ? pnvAdminUrl('support-api.php')
+            : 'support-api.php',
+        JSON_UNESCAPED_UNICODE
+    ); ?>;
+    const usersApiUrl = <?php echo json_encode($usersApiUrl, JSON_UNESCAPED_UNICODE); ?>;
+    const listUrl = <?php echo json_encode(supportAdminUrl('', $supportEmbedded), JSON_UNESCAPED_UNICODE); ?>;
+    const profileApiUrl = <?php echo json_encode($profileApiUrl, JSON_UNESCAPED_UNICODE); ?>;
+    let userSearchTimer = null;
+    let userSearchRequest = 0;
 
-const textarea =
-document.getElementById('message');
+    window.openUserSubscriptions = function(){
+        if(!currentUser){
+            return;
+        }
+        loadProfile(currentUser);
+    };
 
-if(textarea){
+    window.loadProfile = function(user){
+        fetch(
+            profileApiUrl + '?user=' + encodeURIComponent(user) + '&all=1',
+            {credentials:'same-origin'}
+        )
+        .then(function(r){ return r.text(); })
+        .then(function(html){
+            document.getElementById('profileHost').innerHTML = html;
+            document.getElementById('profileHost').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        })
+        .catch(function(){
+            alert('خطا در بارگذاری اشتراک‌ها');
+        });
+    };
 
-textarea.addEventListener('input',function(){
+    window.closeProfileModal = function(){
+        document.getElementById('profileHost').innerHTML = '';
+        document.getElementById('profileHost').style.display = 'none';
+        document.body.style.overflow = '';
+    };
 
-this.style.height='52px';
+    window.copySub = function(button){
+        const input = button.previousElementSibling;
+        if(!input){ return; }
+        input.select();
+        input.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(input.value);
+        alert('کپی شد');
+    };
 
-this.style.height=
-(this.scrollHeight)+'px';
+    document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape'){
+            closeProfileModal();
+        }
+    });
 
-});
+    SupportUI.bindTextareaGrow(supportMessage);
+    SupportUI.bindEnterToSend(supportMessage, supportReplyForm, true);
+    SupportUI.bindFormGuard(supportReplyForm, supportMessage, 'supportImage');
 
-}
+    function hideUserSearchResults(){
+        if(!supportUserResults){
+            return;
+        }
+        supportUserResults.classList.remove('is-open');
+        supportUserResults.innerHTML = '';
+    }
 
+    function openUserChat(username){
+        if(!username){
+            return;
+        }
+        const sep = listUrl.indexOf('?') >= 0 ? '&' : '?';
+        window.location.href = listUrl + sep + 'user=' + encodeURIComponent(username);
+    }
+
+    function renderUserSearchResults(users){
+        if(!supportUserResults){
+            return;
+        }
+
+        supportUserResults.innerHTML = '';
+
+        if(!users || users.length === 0){
+            supportUserResults.innerHTML = '<div class="msgUserSearchEmpty">کاربری یافت نشد</div>';
+            supportUserResults.classList.add('is-open');
+            return;
+        }
+
+        users.forEach(function(user){
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'msgUserSearchItem';
+            btn.innerHTML =
+                '<span class="msgUserSearchName">' + escapeHtml(user.username || '') + '</span>' +
+                '<span class="msgUserSearchMobile">' + escapeHtml(user.mobile || 'بدون موبایل') + '</span>';
+            btn.addEventListener('click', function(){
+                openUserChat(user.username || '');
+            });
+            supportUserResults.appendChild(btn);
+        });
+
+        supportUserResults.classList.add('is-open');
+    }
+
+    function escapeHtml(value){
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function searchUsersByQuery(query){
+        if(!supportUserResults){
+            return;
+        }
+
+        const requestId = ++userSearchRequest;
+
+        fetch(
+            usersApiUrl + '?q=' + encodeURIComponent(query),
+            {credentials:'same-origin'}
+        )
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(requestId !== userSearchRequest){
+                return;
+            }
+            renderUserSearchResults(data.users || []);
+        })
+        .catch(function(){
+            if(requestId !== userSearchRequest){
+                return;
+            }
+            hideUserSearchResults();
+        });
+    }
+
+    if(supportSearch){
+        supportSearch.addEventListener('input', function(){
+            const q = this.value.trim();
+            const qLower = q.toLowerCase();
+
+            document.querySelectorAll('.msgConv[data-username]').forEach(function(item){
+                const name = (item.dataset.username || '').toLowerCase();
+                item.style.display = name.includes(qLower) ? 'flex' : 'none';
+            });
+
+            clearTimeout(userSearchTimer);
+
+            if(q.length < 2){
+                hideUserSearchResults();
+                return;
+            }
+
+            userSearchTimer = setTimeout(function(){
+                searchUsersByQuery(q);
+            }, 250);
+        });
+
+        supportSearch.addEventListener('keydown', function(e){
+            if(e.key === 'Escape'){
+                hideUserSearchResults();
+            }
+        });
+    }
+
+    document.addEventListener('click', function(e){
+        if(
+            supportUserResults
+            && supportSearch
+            && !supportUserResults.contains(e.target)
+            && e.target !== supportSearch
+        ){
+            hideUserSearchResults();
+        }
+    });
+
+    if(supportBackBtn){
+        supportBackBtn.addEventListener('click', function(){
+            window.location.href = listUrl;
+        });
+    }
+
+    if(currentUser){
+        SupportUI.initPolling({
+            chatEl: supportMessages,
+            pollUrl: pollUrl,
+            getParams: function(since){
+                return '?user=' + encodeURIComponent(currentUser) + '&since=' + (since || 0);
+            },
+            classMap: {admin:'admin', user:'usermsg'},
+            interval: 5000
+        });
+    }
+})();
 </script>
 
+<?php if(!$supportEmbedded){ ?>
 </body>
-
 </html>
+<?php } ?>

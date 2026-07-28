@@ -51,15 +51,41 @@ function pnvAdminValidateLogin($username, $password){
         return null;
     }
 
-    foreach($admins as $admin){
+    $changed = false;
+
+    foreach($admins as $i => $admin){
 
         if(
-            ($admin['username'] ?? '') === $username
-            &&
-            ($admin['status'] ?? 'active') === 'active'
-            &&
-            ($admin['password'] ?? '') === $password
+            ($admin['username'] ?? '') !== $username
+            ||
+            ($admin['status'] ?? 'active') !== 'active'
         ){
+            continue;
+        }
+
+        $stored = (string)($admin['password'] ?? '');
+        $ok = false;
+
+        if(strpos($stored, '$2y$') === 0 || strpos($stored, '$2a$') === 0 || strpos($stored, '$2b$') === 0){
+            $ok = password_verify($password, $stored);
+        }
+        elseif(hash_equals($stored, $password)){
+            $ok = true;
+            // ارتقای نرم به هش
+            $admins[$i]['password'] = password_hash($password, PASSWORD_DEFAULT);
+            $changed = true;
+            $admin = $admins[$i];
+        }
+
+        if($ok){
+            if($changed){
+                file_put_contents(
+                    $path,
+                    json_encode($admins, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+                    LOCK_EX
+                );
+            }
+
             return $admin;
         }
 

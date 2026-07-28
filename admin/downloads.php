@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/admin_nav.php';
+
 pnvAdminRequireAuth();
 
 $dir = __DIR__ . "/../down";
@@ -64,7 +66,7 @@ if(file_exists($path)){
 unlink($path);
 }
 
-header("Location:downloads.php");
+header("Location: " . pnvAdminUrl('downloads.php'));
 exit;
 
 }
@@ -287,6 +289,8 @@ text-align:center;
 </head>
 
 <body>
+<?php adminQuickNavStyles(); adminQuickNav('downloads'); ?>
+
 
 <div class="box">
 
