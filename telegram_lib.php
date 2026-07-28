@@ -388,6 +388,46 @@ if(!function_exists('telegramConfigPath')){
         return json_encode(['inline_keyboard' => $rows], JSON_UNESCAPED_UNICODE);
     }
 
+    // فاصله نامرئی برای پهن‌تر و وسط‌چین شدن دکمه‌ها/متن در کادر تلگرام
+    function telegramInvisiblePadChar(){
+        return "\u{2800}";
+    }
+
+    function telegramMbLen($text){
+        $text = (string)$text;
+
+        if(function_exists('mb_strlen')){
+            return mb_strlen($text, 'UTF-8');
+        }
+
+        return strlen($text);
+    }
+
+    function telegramVisualPad($text, $width = 28){
+        $text = (string)$text;
+        $width = max(1, intval($width));
+        $len = telegramMbLen($text);
+
+        if($len >= $width){
+            return $text;
+        }
+
+        $blank = telegramInvisiblePadChar();
+        $pad = $width - $len;
+        $left = intdiv($pad, 2);
+        $right = $pad - $left;
+
+        return str_repeat($blank, $left) . $text . str_repeat($blank, $right);
+    }
+
+    function telegramWideSpacer($width = 34){
+        return str_repeat(telegramInvisiblePadChar(), max(1, intval($width)));
+    }
+
+    function telegramHomeMenuWidth(){
+        return 30;
+    }
+
     function telegramPaymentsPath(){
         return __DIR__ . '/invoices/payments.csv';
     }
@@ -591,15 +631,17 @@ if(!function_exists('telegramConfigPath')){
         $buyCount = count(telegramLoadPendingPayments('خرید', 50));
         $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
         $msgCount = count(telegramUnreadTickets(50));
+        $width = telegramHomeMenuWidth();
 
         $lines = [
-            '🏠 منوی اصلی',
+            telegramVisualPad('🏠 منوی اصلی', $width),
             '',
-            'یکی از بخش‌ها را انتخاب کنید:',
+            telegramVisualPad('یکی از بخش‌ها را انتخاب کنید', $width),
             '',
-            'پیام کاربران: ' . $msgCount,
-            'خریدهای جدید: ' . $buyCount,
-            'تمدیدهای جدید: ' . $renewCount
+            telegramVisualPad('پیام کاربران: ' . $msgCount, $width),
+            telegramVisualPad('خریدهای جدید: ' . $buyCount, $width),
+            telegramVisualPad('تمدیدهای جدید: ' . $renewCount, $width),
+            telegramWideSpacer($width + 4)
         ];
 
         return implode("\n", $lines);
@@ -608,11 +650,16 @@ if(!function_exists('telegramConfigPath')){
     function telegramHomeKeyboard(){
         $buyCount = count(telegramLoadPendingPayments('خرید', 50));
         $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
+        $width = telegramHomeMenuWidth();
+
+        $messages = 'پیام کاربران';
+        $buys = 'خریدهای جدید' . ($buyCount ? " ({$buyCount})" : '');
+        $renews = 'تمدیدهای جدید' . ($renewCount ? " ({$renewCount})" : '');
 
         return telegramInline([
-            [['text' => 'پیام کاربران', 'callback_data' => 'menu:messages']],
-            [['text' => 'خریدهای جدید' . ($buyCount ? " ({$buyCount})" : ''), 'callback_data' => 'menu:buys']],
-            [['text' => 'تمدیدهای جدید' . ($renewCount ? " ({$renewCount})" : ''), 'callback_data' => 'menu:renews']]
+            [['text' => telegramVisualPad($messages, $width), 'callback_data' => 'menu:messages']],
+            [['text' => telegramVisualPad($buys, $width), 'callback_data' => 'menu:buys']],
+            [['text' => telegramVisualPad($renews, $width), 'callback_data' => 'menu:renews']]
         ]);
     }
 
