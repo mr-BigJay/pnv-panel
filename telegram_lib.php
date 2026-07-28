@@ -247,6 +247,19 @@ if(!function_exists('telegramConfigPath')){
         return telegramApiRequest('editMessageText', $params, [], $config);
     }
 
+    function telegramDeleteMessage($chatId, $messageId, $config = null){
+        $messageId = intval($messageId);
+
+        if($messageId <= 0){
+            return ['ok' => false, 'description' => 'message_id نامعتبر است'];
+        }
+
+        return telegramApiRequest('deleteMessage', [
+            'chat_id' => $chatId,
+            'message_id' => $messageId
+        ], [], $config);
+    }
+
     function telegramAnswerCallback($callbackId, $text = '', $config = null){
         return telegramApiRequest('answerCallbackQuery', [
             'callback_query_id' => $callbackId,
@@ -798,6 +811,217 @@ if(!function_exists('telegramConfigPath')){
         ]);
     }
 
+    function telegramRemindersPath(){
+        return __DIR__ . '/db/telegram_reminders.json';
+    }
+
+    function telegramReminderIntervalSeconds(){
+        return 300;
+    }
+
+    function telegramLoadRemindersState(){
+        $file = telegramRemindersPath();
+
+        if(!file_exists($file)){
+            return [];
+        }
+
+        $data = json_decode(file_get_contents($file), true);
+        return is_array($data) ? $data : [];
+    }
+
+    function telegramSaveRemindersState($state){
+        if(!is_dir(__DIR__ . '/db')){
+            @mkdir(__DIR__ . '/db', 0755, true);
+        }
+
+        file_put_contents(
+            telegramRemindersPath(),
+            json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function telegramReminderKindState($state, $kind){
+        $item = is_array($state[$kind] ?? null) ? $state[$kind] : [];
+
+        return [
+            'last_sent_at' => intval($item['last_sent_at'] ?? 0),
+            'messages' => is_array($item['messages'] ?? null) ? $item['messages'] : []
+        ];
+    }
+
+    function telegramReminderText($kind, $count){
+        $count = max(1, intval($count));
+        $noun = $kind === 'تمدید' ? 'تمدید' : 'خرید';
+        $emoji = telegramPaymentEmoji($kind);
+
+        return $emoji . ' ' . $count . ' ' . $noun . ' جدید داری';
+    }
+
+    function telegramReminderKeyboard($kind){
+        $menu = $kind === 'تمدید' ? 'menu:renews' : 'menu:buys';
+
+        return telegramInline([
+            [['text' => 'مشاهده', 'callback_data' => $menu]]
+        ]);
+    }
+
+    function telegramClearReminderMessage($chatId, $messageId, $kind = null){
+        $chatId = (string)$chatId;
+        $messageId = intval($messageId);
+
+        if($chatId === '' || $messageId <= 0){
+            return;
+        }
+
+        $state = telegramLoadRemindersState();
+        $kinds = $kind === null ? ['خرید', 'تمدید'] : [$kind];
+        $changed = false;
+
+        foreach($kinds as $itemKind){
+            $entry = telegramReminderKindState($state, $itemKind);
+            $stored = intval($entry['messages'][$chatId] ?? 0);
+
+            if($stored === $messageId){
+                unset($entry['messages'][$chatId]);
+                $state[$itemKind] = $entry;
+                $changed = true;
+            }
+        }
+
+        if($changed){
+            telegramSaveRemindersState($state);
+        }
+    }
+
+    function telegramDeleteReminderMessages($kind, $messages, $config = null){
+        if(!is_array($messages) || count($messages) === 0){
+            return [];
+        }
+
+        $remaining = [];
+
+        foreach($messages as $chatId => $messageId){
+            $messageId = intval($messageId);
+
+            if($messageId <= 0){
+                continue;
+            }
+
+            $result = telegramDeleteMessage($chatId, $messageId, $config);
+
+            // اگر پیام از قبل حذف شده، رد شو؛ در غیر این صورت message_id را نگه ندار
+            if(empty($result['ok'])){
+                $description = (string)($result['description'] ?? '');
+
+                if(stripos($description, 'message to delete not found') === false
+                    && stripos($description, 'message can\'t be deleted') === false){
+                    // خطای موقتی؛ message_id را نگه می‌داریم تا بعداً دوباره تلاش شود
+                    $remaining[(string)$chatId] = $messageId;
+                }
+            }
+        }
+
+        return $remaining;
+    }
+
+    function telegramSendPendingReminder($kind, $count, $config = null){
+        $text = telegramReminderText($kind, $count);
+        $keyboard = telegramReminderKeyboard($kind);
+        $sentMessages = [];
+
+        foreach(telegramAdminChatIds($config) as $chatId){
+            $result = telegramSendMessage($chatId, $text, [
+                'reply_markup' => $keyboard
+            ], $config);
+
+            $messageId = intval($result['result']['message_id'] ?? 0);
+
+            if(!empty($result['ok']) && $messageId > 0){
+                $sentMessages[(string)$chatId] = $messageId;
+            }
+        }
+
+        return $sentMessages;
+    }
+
+    function telegramProcessPendingReminders($config = null){
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
+            return;
+        }
+
+        if(count(telegramAdminChatIds($config)) === 0){
+            return;
+        }
+
+        $state = telegramLoadRemindersState();
+        $interval = telegramReminderIntervalSeconds();
+        $now = time();
+        $changed = false;
+
+        foreach(['خرید', 'تمدید'] as $kind){
+            $count = count(telegramLoadPendingPayments($kind, 200));
+            $entry = telegramReminderKindState($state, $kind);
+
+            if($count <= 0){
+                if(count($entry['messages']) > 0){
+                    $entry['messages'] = telegramDeleteReminderMessages($kind, $entry['messages'], $config);
+                    $changed = true;
+                }
+
+                if($entry['last_sent_at'] !== 0 || count($entry['messages']) > 0){
+                    $entry['last_sent_at'] = 0;
+                    $state[$kind] = $entry;
+                    $changed = true;
+                }
+                elseif(!isset($state[$kind])){
+                    $state[$kind] = $entry;
+                }
+
+                continue;
+            }
+
+            // اولین بار که مورد در انتظار دیده می‌شود: تایمر را بدون ارسال شروع کن
+            // تا با نوتیفیکیشن لحظه‌ای خرید/تمدید تداخل نداشته باشد
+            if($entry['last_sent_at'] <= 0){
+                $entry['last_sent_at'] = $now;
+                $state[$kind] = $entry;
+                $changed = true;
+                continue;
+            }
+
+            if(($now - $entry['last_sent_at']) < $interval){
+                $state[$kind] = $entry;
+                continue;
+            }
+
+            // یادآوری قبلی را همزمان با ارسال جدید حذف کن تا چت شلوغ نشود
+            $entry['messages'] = telegramDeleteReminderMessages($kind, $entry['messages'], $config);
+            $newMessages = telegramSendPendingReminder($kind, $count, $config);
+
+            if(count($newMessages) > 0){
+                $entry['messages'] = $newMessages;
+                $entry['last_sent_at'] = $now;
+            }
+            else{
+                // اگر ارسال شکست خورد، کمی بعد دوباره تلاش شود
+                $entry['last_sent_at'] = $now - max(30, intval($interval / 2));
+            }
+
+            $state[$kind] = $entry;
+            $changed = true;
+        }
+
+        if($changed){
+            telegramSaveRemindersState($state);
+        }
+    }
+
     function telegramShowHome($chatId, $config = null, $messageId = null){
         $session = telegramGetSession($chatId);
 
@@ -1157,11 +1381,13 @@ if(!function_exists('telegramConfigPath')){
         }
 
         if($data === 'menu:buys'){
+            telegramClearReminderMessage($chatId, $messageId, 'خرید');
             telegramShowPayments($chatId, 'خرید', $config, $messageId);
             return;
         }
 
         if($data === 'menu:renews'){
+            telegramClearReminderMessage($chatId, $messageId, 'تمدید');
             telegramShowPayments($chatId, 'تمدید', $config, $messageId);
             return;
         }

@@ -55,6 +55,7 @@ do {
             exit(1);
         }
 
+        telegramProcessPendingReminders($config);
         sleep(2);
         continue;
     }
@@ -88,6 +89,9 @@ do {
 
         telegramHandleAdminText($chatId, $text, $config);
     }
+
+    // یادآوری خرید/تمدید در انتظار تایید (حدود هر ۵ دقیقه، با حذف پیام قبلی)
+    telegramProcessPendingReminders($config);
 
 } while($loop);
 
