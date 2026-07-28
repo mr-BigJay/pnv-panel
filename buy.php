@@ -7,6 +7,7 @@ if(!isset($_SESSION['user'])){
     exit;
 }
 
+require_once __DIR__ . '/coupon_lib.php';
 require_once __DIR__ . '/telegram_lib.php';
 
 $plans = [];
@@ -39,6 +40,9 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
     $tracking = trim($_POST['tracking']);
     $time = trim($_POST['time']);
     $date = trim($_POST['date']);
+    $hasCoupon = isset($_POST['has_coupon']);
+    $couponCode = trim($_POST['coupon_code'] ?? '');
+    $discountPercent = 0;
 
     if(strlen($subname) < 5 || strlen($subname) > 20){
 
@@ -89,6 +93,34 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
 
     if($error == ""){
 
+        if($hasCoupon){
+
+            if($couponCode === ''){
+                $error = 'کد تخفیف را وارد کنید';
+            }
+            else{
+                $couponResult = couponCalculateForPlan(
+                    $_SESSION['user'],
+                    $couponCode,
+                    $plan,
+                    $plans
+                );
+
+                if(empty($couponResult['ok'])){
+                    $error = $couponResult['error'] ?? 'کد تخفیف معتبر نیست';
+                }
+                else{
+                    $plan = $couponResult['plan_label'];
+                    $discountPercent = intval($couponResult['percent']);
+                }
+            }
+
+        }
+
+    }
+
+    if($error == ""){
+
         $status = "درحال بررسی";
 
         $link = "";
@@ -105,7 +137,9 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
             $status,
             $link,
             $created,
-            "خرید"
+            "خرید",
+            $hasCoupon ? strtoupper($couponCode) : '',
+            $discountPercent
         ];
 
         $file = fopen("invoices/payments.csv","a");
@@ -119,6 +153,10 @@ if($_SERVER['REQUEST_METHOD'] == "POST"){
         }
         catch(Throwable $e){
             error_log('Telegram buy notification failed: ' . $e->getMessage());
+        }
+
+        if($hasCoupon && $couponCode !== ''){
+            couponMarkUsed($couponCode, $_SESSION['user']);
         }
 
         $message = "رسید شما دریافت شد و حداکثر تا یک ساعت آینده بررسی خواهد شد";
@@ -261,6 +299,62 @@ margin-bottom:20px;
 line-height:30px;
 }
 
+.couponSection{
+background:#0f172a;
+padding:16px;
+border-radius:14px;
+margin-bottom:20px;
+}
+
+.couponToggle{
+display:flex;
+align-items:center;
+gap:10px;
+font-size:16px;
+margin-bottom:12px;
+cursor:pointer;
+}
+
+.couponToggle input{
+width:20px;
+height:20px;
+margin:0;
+cursor:pointer;
+}
+
+.couponBox{
+display:none;
+margin-top:10px;
+}
+
+.couponBox.is-open{
+display:block;
+}
+
+.couponRow input{
+width:100%;
+margin:0;
+}
+
+.couponResult{
+margin-top:12px;
+padding:12px;
+border-radius:12px;
+font-size:15px;
+line-height:1.8;
+display:none;
+}
+
+.couponResult.is-ok{
+display:block;
+background:#14532d;
+}
+
+.couponResult.is-error{
+display:block;
+background:#7f1d1d;
+}
+
 @media(max-width:768px){
 
 body{
@@ -345,7 +439,7 @@ name="subname"
 placeholder="نام دلخواه برای کانفیگ"
 required>
 
-<select name="plan" required>
+<select name="plan" id="planSelect" required>
 
 <option value="">
 انتخاب پلن
@@ -406,15 +500,28 @@ $priceText;
 
 ?>
 
-<option value="<?php echo $value; ?>">
+<option value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>" data-price="<?php echo (int)$plan['price']; ?>">
 
-<?php echo $value; ?>
+<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>
 
 </option>
 
 <?php } ?>
 
 </select>
+
+<div class="couponSection">
+<label class="couponToggle">
+<input type="checkbox" name="has_coupon" id="hasCouponCheck" value="1">
+<span>کد تخفیف دارید؟</span>
+</label>
+<div class="couponBox" id="couponBox">
+<div class="couponRow">
+<input type="text" name="coupon_code" id="couponCode" placeholder="کد را وارد کنید" autocomplete="off">
+</div>
+<div class="couponResult" id="couponResult"></div>
+</div>
+</div>
 
 <div class="infoText">
 
@@ -667,6 +774,80 @@ year + "/" + month + "/" + day;
 }
 
 setPersianDate();
+
+const planSelect = document.getElementById('planSelect');
+const couponBox = document.getElementById('couponBox');
+const couponResult = document.getElementById('couponResult');
+const couponCodeInput = document.getElementById('couponCode');
+const hasCouponCheck = document.getElementById('hasCouponCheck');
+let couponTimer = null;
+
+function resetCouponResult(){
+    couponResult.className = 'couponResult';
+    couponResult.textContent = '';
+}
+
+function validateCoupon(){
+    const plan = planSelect.value;
+    const code = couponCodeInput.value.trim();
+
+    if(!hasCouponCheck.checked){
+        resetCouponResult();
+        return;
+    }
+
+    if(plan === ''){
+        couponResult.className = 'couponResult is-error';
+        couponResult.textContent = 'ابتدا پلن را انتخاب کنید';
+        return;
+    }
+
+    if(code === ''){
+        resetCouponResult();
+        return;
+    }
+
+    fetch('coupon-api.php?plan=' + encodeURIComponent(plan) + '&code=' + encodeURIComponent(code), {
+        credentials: 'same-origin'
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if(!data.ok){
+            couponResult.className = 'couponResult is-error';
+            couponResult.textContent = data.error || 'کد تخفیف معتبر نیست';
+            return;
+        }
+
+        couponResult.className = 'couponResult is-ok';
+        couponResult.innerHTML =
+            'تخفیف ' + data.percent + '٪ اعمال شد<br>' +
+            'مبلغ پلن: ' + data.original_text + '<br>' +
+            '<b>اینقدر باید پرداخت کنید: ' + data.final_text + '</b>';
+    })
+    .catch(function(){
+        couponResult.className = 'couponResult is-error';
+        couponResult.textContent = 'خطا در بررسی کد تخفیف';
+    });
+}
+
+hasCouponCheck.addEventListener('change', function(){
+    if(this.checked){
+        couponBox.classList.add('is-open');
+        couponCodeInput.focus();
+        validateCoupon();
+    } else {
+        couponBox.classList.remove('is-open');
+        couponCodeInput.value = '';
+        resetCouponResult();
+    }
+});
+
+couponCodeInput.addEventListener('input', function(){
+    clearTimeout(couponTimer);
+    couponTimer = setTimeout(validateCoupon, 400);
+});
+
+planSelect.addEventListener('change', validateCoupon);
 
 </script>
 

@@ -3,477 +3,118 @@
 session_start();
 
 if(!isset($_SESSION['user'])){
-header("Location: index.php");
-exit;
+    header('Location: index.php');
+    exit;
 }
+
+require_once __DIR__ . '/coupon_lib.php';
 
 $username = $_SESSION['user'];
+$summary = couponGetUserSummary($username);
 
-$users = [];
-
-if(file_exists("db/users.json")){
-
-$users =
-json_decode(
-file_get_contents("db/users.json"),
-true
-);
-
+if(!$summary){
+    die('کاربر یافت نشد');
 }
 
-if(!is_array($users)){
-$users = [];
-}
-
-$currentUser = null;
-
-foreach($users as $u){
-
-if(
-isset($u['username']) &&
-$u['username'] == $username
-){
-
-$currentUser = $u;
-break;
-
-}
-
-}
-
-if(!$currentUser){
-
-die("کاربر یافت نشد");
-
-}
-
-if(!isset($currentUser['referral_code'])){
-
-$chars =
-'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-$code = '';
-
-for($i=0;$i<6;$i++){
-
-$code .=
-$chars[rand(0,strlen($chars)-1)];
-
-}
-
-$currentUser['referral_code'] = $code;
-
-foreach($users as $k => $u){
-
-if($u['username'] == $username){
-
-$users[$k] = $currentUser;
-
-}
-
-}
-
-file_put_contents(
-"db/users.json",
-json_encode(
-$users,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-}
-
-$myCode =
-$currentUser['referral_code'];
-
-$myLink =
-"https://panel.ticketin.ir/register.php?ref=" .
-$myCode;
-
-$inviteCount = 0;
-
-foreach($users as $u){
-
-if(
-isset($u['referrer']) &&
-trim($u['referrer']) == $myCode
-){
-
-$inviteCount++;
-
-}
-
-}
-
-$reward = "";
-
-if($inviteCount >= 20){
-
-$reward =
-"3 عدد کد تخفیف 100 درصدی";
-
-}
-
-elseif($inviteCount >= 10){
-
-$reward =
-"کد تخفیف 100 درصدی";
-
-}
-
-elseif($inviteCount >= 5){
-
-$reward =
-"تخفیف 40 درصدی";
-
-}
-
-elseif($inviteCount >= 3){
-
-$reward =
-"تخفیف 20 درصدی";
-
-}
-
-else{
-
-$reward =
-"هنوز پاداشی فعال نشده";
-
-}
+$myCode = $summary['referral_code'];
+$myLink = 'https://panel.ticketin.ir/register.php?ref=' . urlencode($myCode);
+$inviteCount = $summary['successful_count'];
+$reward = $summary['reward']['label'] ?? 'هنوز پاداشی فعال نشده';
+$activeCodes = $summary['active_codes'] ?? [];
 
 ?>
-
 <!DOCTYPE html>
-
 <html lang="fa">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
-
-<title>
-
-کوپن تخفیف
-
-</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>کوپن تخفیف</title>
+<link rel="stylesheet" href="user_panel.css?v=1">
 <style>
-
-*{
-box-sizing:border-box;
-}
-
-body{
-margin:0;
-padding:10px;
-background:#0f172a;
-font-family:tahoma;
-direction:rtl;
-color:white;
-}
-
-.container{
-width:100%;
-max-width:760px;
-margin:auto;
-}
-
-.box{
-background:#1e293b;
-border-radius:18px;
-padding:18px;
-margin-bottom:14px;
-}
-
-h2{
-text-align:center;
-font-size:24px;
-margin-bottom:20px;
-}
-
-.title{
-font-size:13px;
-color:#94a3b8;
-margin-bottom:8px;
-}
-
-.value{
-background:#0f172a;
-padding:14px;
-border-radius:10px;
-font-size:14px;
-line-height:28px;
-word-break:break-all;
-}
-
-.copybtn{
-width:100%;
-margin-top:10px;
-padding:12px;
-background:#22c55e;
-border:none;
-border-radius:10px;
-color:white;
-font-size:14px;
-cursor:pointer;
-}
-
-.stats{
-display:grid;
-grid-template-columns:1fr 1fr;
-gap:10px;
-margin-top:10px;
-}
-
-.stat{
-background:#0f172a;
-padding:14px;
-border-radius:10px;
-text-align:center;
-}
-
-.statNumber{
-font-size:24px;
-font-weight:bold;
-margin-bottom:6px;
-}
-
-.statLabel{
-font-size:12px;
-color:#94a3b8;
-}
-
-.reward{
-background:#0f172a;
-padding:16px;
-border-radius:12px;
-margin-top:14px;
-line-height:28px;
-font-size:14px;
-}
-
-.levels{
-margin-top:14px;
-background:#0f172a;
-padding:16px;
-border-radius:12px;
-line-height:32px;
-font-size:14px;
-}
-
-.back{
-display:block;
-margin-top:16px;
-text-align:center;
-background:#334155;
-padding:12px;
-border-radius:10px;
-color:white;
-text-decoration:none;
-font-size:15px;
-}
-
-@media(min-width:768px){
-
-body{
-padding:18px;
-}
-
-.container{
-max-width:920px;
-}
-
-.box{
-padding:22px;
-}
-
-h2{
-font-size:28px;
-}
-
-.value{
-font-size:15px;
-}
-
-.copybtn{
-width:auto;
-padding:12px 20px;
-font-size:14px;
-}
-
-.reward,
-.levels{
-font-size:15px;
-}
-
-}
-
+.couponPageBox{margin-bottom:14px;}
+.couponCodeItem{background:#0f172a;padding:14px;border-radius:12px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+.couponCodeText{font-size:18px;font-weight:700;letter-spacing:2px;word-break:break-all;}
+.couponCodeMeta{font-size:13px;color:#94a3b8;}
+.couponStats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+.couponStat{background:#0f172a;padding:14px;border-radius:12px;text-align:center;}
+.couponStatNum{font-size:24px;font-weight:700;margin-bottom:6px;}
+.couponStatLabel{font-size:12px;color:#94a3b8;}
+.couponLevels{background:#0f172a;padding:16px;border-radius:12px;line-height:1.9;font-size:14px;margin-top:12px;}
+.couponHint{font-size:13px;color:#94a3b8;line-height:1.8;margin-top:10px;}
 </style>
-
 </head>
+<body class="userPanel userPanel--dashboard">
 
-<body>
+<div class="userPanelWrap">
 
-<div class="container">
+<div class="userPanelBox couponPageBox">
+<h2 class="userPanelTitle">سیستم دعوت دوستان</h2>
 
-<div class="box">
-
-<h2>
-
-سیستم دعوت دوستان
-
-</h2>
-
-<div class="title">
-
-کد دعوت شما
-
+<div class="userPanelLabel">کد دعوت شما</div>
+<div class="userPanelRefbox" id="refcode"><?php echo htmlspecialchars($myCode, ENT_QUOTES, 'UTF-8'); ?></div>
+<button type="button" class="userPanelBtn" onclick="copyText('refcode')">کپی کد دعوت</button>
 </div>
 
-<div class="value"
-id="refcode">
+<div class="userPanelBox couponPageBox">
+<div class="userPanelLabel">لینک دعوت شما</div>
+<div class="userPanelRefbox" id="reflink"><?php echo htmlspecialchars($myLink, ENT_QUOTES, 'UTF-8'); ?></div>
+<button type="button" class="userPanelBtn" onclick="copyText('reflink')">کپی لینک دعوت</button>
 
-<?php echo $myCode; ?>
-
+<div class="couponStats">
+<div class="couponStat">
+<div class="couponStatNum"><?php echo (int)$inviteCount; ?></div>
+<div class="couponStatLabel">دعوت موفق (ثبت‌نام + خرید تایید‌شده)</div>
+</div>
+<div class="couponStat">
+<div class="couponStatNum"><?php echo htmlspecialchars($myCode, ENT_QUOTES, 'UTF-8'); ?></div>
+<div class="couponStatLabel">کد معرف شما</div>
+</div>
 </div>
 
-<button
-class="copybtn"
-onclick="copyText('refcode')">
-
-کپی کد دعوت
-
-</button>
-
+<div class="userPanelRefbox" style="margin-top:12px;">
+<b>پاداش فعال:</b><br><br><?php echo htmlspecialchars($reward, ENT_QUOTES, 'UTF-8'); ?>
 </div>
 
-<div class="box">
+<?php if(!empty($activeCodes)){ ?>
+<div class="userPanelLabel" style="margin-top:16px;">کدهای تخفیف فعال شما</div>
+<?php foreach($activeCodes as $coupon){ ?>
+<div class="couponCodeItem">
+<div>
+<div class="couponCodeText"><?php echo htmlspecialchars($coupon['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
+<div class="couponCodeMeta">تخفیف <?php echo (int)($coupon['percent'] ?? 0); ?>٪ — یک‌بار مصرف</div>
+</div>
+<button type="button" class="userPanelBtn" style="width:auto;min-width:90px;height:44px;padding:0 14px;" onclick="copyTextValue('<?php echo htmlspecialchars($coupon['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>')">کپی</button>
+</div>
+<?php } ?>
+<?php } ?>
 
-<div class="title">
-
-لینک دعوت شما
-
+<div class="couponLevels">
+<b>سطوح پاداش:</b><br><br>
+3 دعوت موفق → تخفیف 20 درصدی<br>
+5 دعوت موفق → تخفیف 40 درصدی<br>
+10 دعوت موفق → کد تخفیف 100 درصدی<br>
+20 دعوت موفق → 3 کد تخفیف 100 درصدی
 </div>
 
-<div class="value"
-id="reflink">
-
-<?php echo $myLink; ?>
-
+<div class="couponHint">
+با استفاده از هر کد تخفیف، شمارش دعوت‌ها از صفر شروع می‌شود. دعوت موفق یعنی کاربر با لینک/کد شما ثبت‌نام کرده و حداقل یک خرید تایید‌شده داشته باشد.
+</div>
 </div>
 
-<button
-class="copybtn"
-onclick="copyText('reflink')">
-
-کپی لینک دعوت
-
-</button>
-
-<div class="stats">
-
-<div class="stat">
-
-<div class="statNumber">
-
-<?php echo $inviteCount; ?>
-
-</div>
-
-<div class="statLabel">
-
-تعداد دعوت موفق
-
-</div>
-
-</div>
-
-<div class="stat">
-
-<div class="statNumber">
-
-<?php echo $myCode; ?>
-
-</div>
-
-<div class="statLabel">
-
-کد معرف
-
-</div>
-
-</div>
-
-</div>
-
-<div class="reward">
-
-<b>
-
-پاداش فعال:
-
-</b>
-
-<br><br>
-
-<?php echo $reward; ?>
-
-</div>
-
-<div class="levels">
-
-<b>
-
-سطوح پاداش:
-
-</b>
-
-<br><br>
-
-3 دعوت → تخفیف 20 درصدی
-<br>
-
-5 دعوت → تخفیف 40 درصدی
-<br>
-
-10 دعوت → کد تخفیف 100 درصدی
-<br>
-
-20 دعوت → 3 کد تخفیف 100 درصدی
-
-</div>
-
-</div>
-
-<a href="dashboard.php"
-class="back">
-
-بازگشت
-
-</a>
+<a href="dashboard.php" class="userPanelLink">بازگشت</a>
 
 </div>
 
 <script>
-
 function copyText(id){
-
-const text =
-document.getElementById(id).innerText;
-
-navigator.clipboard.writeText(text);
-
-alert("کپی شد");
-
+    navigator.clipboard.writeText(document.getElementById(id).innerText);
+    alert('کپی شد');
 }
-
+function copyTextValue(text){
+    navigator.clipboard.writeText(text);
+    alert('کپی شد');
+}
 </script>
 
 </body>
-
 </html>
