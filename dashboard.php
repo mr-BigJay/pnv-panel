@@ -77,207 +77,215 @@ function dashH($value){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>داشبورد کاربر</title>
-<link rel="stylesheet" href="user_panel.css?v=2">
+<link rel="stylesheet" href="user_panel.css?v=3">
 <style>
+html,body{
+height:100%;
+overflow:hidden;
+}
+body.userPanel--dashboard{
+min-height:100dvh;
+height:100dvh;
+align-items:stretch !important;
+padding:10px !important;
+overflow:hidden;
+}
 .dashPage{
-animation:dashIn .35s ease;
+height:100%;
+display:flex;
+flex-direction:column;
+animation:dashIn .3s ease;
 }
 @keyframes dashIn{
-from{opacity:0;transform:translateY(8px)}
+from{opacity:0;transform:translateY(6px)}
 to{opacity:1;transform:none}
+}
+.dashPage .userPanelBox{
+flex:1;
+display:flex;
+flex-direction:column;
+min-height:0;
+padding:16px 14px !important;
+border-radius:18px !important;
+overflow:hidden;
+}
+.userPanelTitle{
+margin:0 0 10px !important;
+font-size:20px !important;
 }
 .dashWelcome{
 background:#0f172a;
 border:1px solid #334155;
-border-radius:18px;
-padding:18px 16px;
-margin-bottom:18px;
+border-radius:14px;
+padding:12px;
+margin-bottom:10px;
+flex:0 0 auto;
 }
 .dashHello{
-margin:0 0 6px;
-font-size:14px;
+margin:0 0 2px;
+font-size:12px;
 color:#94a3b8;
 }
 .dashUser{
-margin:0 0 14px;
-font-size:22px;
+margin:0 0 8px;
+font-size:18px;
 font-weight:700;
 word-break:break-word;
+line-height:1.3;
 }
 .dashStats{
 display:grid;
 grid-template-columns:repeat(3,minmax(0,1fr));
-gap:8px;
+gap:6px;
 }
 .dashStat{
 background:#1e293b;
-border-radius:12px;
-padding:10px 8px;
+border-radius:10px;
+padding:8px 6px;
 text-align:center;
 }
 .dashStatNum{
-font-size:18px;
+font-size:16px;
 font-weight:700;
 color:#22c55e;
-line-height:1.2;
+line-height:1.1;
 }
 .dashStatLabel{
-margin-top:4px;
-font-size:11px;
+margin-top:3px;
+font-size:10px;
 color:#94a3b8;
-line-height:1.5;
-}
-.dashSection{
-margin-bottom:18px;
-}
-.dashSectionTitle{
-margin:0 0 10px;
-font-size:13px;
-color:#94a3b8;
-font-weight:700;
-letter-spacing:.2px;
+line-height:1.4;
 }
 .dashPrimaryGrid{
 display:grid;
 grid-template-columns:1fr 1fr;
-gap:10px;
+gap:8px;
+margin-bottom:10px;
+flex:0 0 auto;
 }
 .dashPrimary{
 display:flex;
-flex-direction:column;
+flex-direction:row;
+align-items:center;
 justify-content:center;
 gap:8px;
-min-height:118px;
-padding:16px;
-border-radius:16px;
+min-height:56px;
+padding:12px 10px;
+border-radius:14px;
 text-decoration:none;
 color:#fff;
+text-align:center;
 background:linear-gradient(180deg,#1f3a2c 0%,#163325 100%);
 border:1px solid #166534;
-transition:transform .15s ease, border-color .15s ease, background .15s ease;
-}
-.dashPrimary:hover{
-transform:translateY(-2px);
-border-color:#22c55e;
 }
 .dashPrimary--renew{
 background:linear-gradient(180deg,#1e3a5f 0%,#172554 100%);
 border-color:#1d4ed8;
 }
-.dashPrimary--renew:hover{
-border-color:#3b82f6;
-}
 .dashPrimaryIcon{
-width:36px;
-height:36px;
-border-radius:10px;
+width:28px;
+height:28px;
+border-radius:8px;
 display:flex;
 align-items:center;
 justify-content:center;
 background:rgba(34,197,94,.18);
 color:#86efac;
-font-size:18px;
+font-size:16px;
 font-weight:700;
+flex:0 0 auto;
 }
 .dashPrimary--renew .dashPrimaryIcon{
 background:rgba(59,130,246,.18);
 color:#93c5fd;
 }
 .dashPrimaryLabel{
-font-size:16px;
+font-size:13px;
 font-weight:700;
-line-height:1.5;
-}
-.dashPrimaryHint{
-font-size:12px;
-color:#cbd5e1;
-line-height:1.6;
+line-height:1.35;
 }
 .dashList{
 background:#0f172a;
 border:1px solid #334155;
-border-radius:16px;
+border-radius:14px;
 overflow:hidden;
+flex:1;
+min-height:0;
+display:flex;
+flex-direction:column;
 }
 .dashItem{
 display:flex;
 align-items:center;
 justify-content:space-between;
-gap:12px;
-padding:14px 14px;
+gap:8px;
+padding:0 12px;
+flex:1;
+min-height:40px;
 text-decoration:none;
 color:#fff;
 border-bottom:1px solid #1e293b;
-transition:background .15s ease;
 position:relative;
 }
-.dashItem:last-child{
-border-bottom:0;
-}
-.dashItem:hover{
-background:#1e293b;
-}
+.dashItem:last-child{border-bottom:0}
 .dashItemMain{
 display:flex;
 align-items:center;
-gap:12px;
+gap:10px;
 min-width:0;
 }
 .dashItemIcon{
-width:34px;
-height:34px;
-border-radius:10px;
+width:28px;
+height:28px;
+border-radius:8px;
 flex:0 0 auto;
 display:flex;
 align-items:center;
 justify-content:center;
 background:#1e293b;
 color:#93c5fd;
-font-size:14px;
+font-size:13px;
 font-weight:700;
 }
 .dashItemText{
-font-size:15px;
+font-size:13px;
 font-weight:700;
-line-height:1.5;
+line-height:1.3;
 }
 .dashItemMeta{
-font-size:12px;
+font-size:11px;
 color:#64748b;
+flex:0 0 auto;
 }
 .dashLogout{
 display:block;
-margin-top:4px;
-padding:14px;
-border-radius:14px;
+margin-top:10px;
+padding:11px;
+border-radius:12px;
 background:#7f1d1d;
 border:1px solid #dc2626;
 color:#fff;
 text-align:center;
 text-decoration:none;
-font-size:16px;
+font-size:14px;
 font-weight:700;
-transition:background .15s ease;
-}
-.dashLogout:hover{
-background:#991b1b;
+flex:0 0 auto;
 }
 .dashNotif{
 position:absolute;
-top:14px;
-left:14px;
-width:10px;
-height:10px;
+top:50%;
+left:12px;
+transform:translateY(-50%);
+width:8px;
+height:8px;
 border-radius:50%;
 background:#ef4444;
-box-shadow:0 0 10px rgba(239,68,68,.7);
-animation:userPanelPulse 1.5s infinite;
+box-shadow:0 0 8px rgba(239,68,68,.7);
 }
-@media(max-width:480px){
-.dashPrimaryGrid{grid-template-columns:1fr}
-.dashStats{grid-template-columns:1fr 1fr 1fr}
-.dashStatLabel{font-size:10px}
-.dashUser{font-size:20px}
+@media(max-width:360px){
+.dashPrimaryLabel{font-size:12px}
+.dashItemText{font-size:12px}
+.dashStatLabel{font-size:9px}
 }
 </style>
 </head>
@@ -307,24 +315,17 @@ animation:userPanelPulse 1.5s infinite;
 </div>
 </div>
 
-<section class="dashSection">
-<h2 class="dashSectionTitle">عملیات اصلی</h2>
 <div class="dashPrimaryGrid">
 <a class="dashPrimary" href="buy.php">
 <span class="dashPrimaryIcon">+</span>
 <span class="dashPrimaryLabel">خرید اشتراک جدید</span>
-<span class="dashPrimaryHint">ثبت رسید و دریافت کانفیگ</span>
 </a>
 <a class="dashPrimary dashPrimary--renew" href="renew.php">
 <span class="dashPrimaryIcon">↻</span>
 <span class="dashPrimaryLabel">تمدید اشتراک</span>
-<span class="dashPrimaryHint">افزایش حجم همان لینک</span>
 </a>
 </div>
-</section>
 
-<section class="dashSection">
-<h2 class="dashSectionTitle">مدیریت</h2>
 <div class="dashList">
 <a class="dashItem" href="subscriptions.php">
 <span class="dashItemMain">
@@ -363,7 +364,6 @@ animation:userPanelPulse 1.5s infinite;
 <span class="dashItemMeta"><?php echo $hasUnreadSupport ? 'پیام جدید' : 'گفتگو'; ?></span>
 </a>
 </div>
-</section>
 
 <a class="dashLogout" href="logout.php">خروج</a>
 
