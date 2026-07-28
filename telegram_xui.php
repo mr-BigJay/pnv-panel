@@ -118,18 +118,31 @@ if(!function_exists('telegramXuiActionKeyboard')){
         $keyboard = json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => 'مشاهده لیست', 'callback_data' => $backMenu],
-                    ['text' => 'منوی اصلی', 'callback_data' => 'menu:home']
+                    ['text' => 'بازگشت', 'callback_data' => $backMenu]
                 ]
             ]
         ], JSON_UNESCAPED_UNICODE);
 
         if(function_exists('telegramEditMessage')){
-            telegramEditMessage($chatId, $messageId, $text, [
+            $edited = telegramEditMessage($chatId, $messageId, $text, [
                 'reply_markup' => $keyboard
             ], $config);
+
+            if(!empty($edited['ok']) && function_exists('telegramUpdateSessionScreen')){
+                telegramUpdateSessionScreen($chatId, [
+                    'screen' => 'xui_result',
+                    'screen_message_id' => intval($messageId)
+                ]);
+                return true;
+            }
         }
-        elseif(function_exists('telegramSendMessage')){
+
+        if(function_exists('telegramShowPage')){
+            telegramShowPage($chatId, $text, $keyboard, $config, $messageId);
+            return true;
+        }
+
+        if(function_exists('telegramSendMessage')){
             telegramSendMessage($chatId, $text, [
                 'reply_markup' => $keyboard
             ], $config);
