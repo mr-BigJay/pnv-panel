@@ -6,10 +6,10 @@ require_once __DIR__ . '/functions.php';
 if(!function_exists('pnvAdminIsLoggedIn') || !pnvAdminIsLoggedIn()){
     if(!headers_sent()){
         header('Location: ' . (function_exists('pnvAdminEntryUrl') ? pnvAdminEntryUrl() : 'index.php'));
+        exit;
     }
-    else{
-        echo '<div style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">نشست مدیریت معتبر نیست. دوباره وارد شوید.</div>';
-    }
+
+    echo '<div style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">نشست مدیریت معتبر نیست. دوباره وارد شوید.</div>';
     return;
 }
 
