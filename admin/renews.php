@@ -125,6 +125,10 @@ $_SESSION['payment_message_detail'] = $reason;
 header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 
+}
+
+if(isset($_GET['deletepayment'])){
+
 $id=intval($_GET['deletepayment']);
 
 if(isset($payments[$id])){
@@ -167,18 +171,49 @@ $renews[]=[
 
 $renews=array_reverse($renews);
 
-function renewDisplayName($target){
+function renewParseSubTarget($target){
 $target = trim((string)$target);
+$out = [
+'vip' => '',
+'sub_id' => '',
+'label' => '-'
+];
 
 if($target === ''){
-return '-';
+return $out;
 }
 
-if(preg_match('#/sub/([^/?#]+)#i', $target, $m)){
-return $m[1];
+$host = '';
+$subId = '';
+
+if(preg_match('#https?://([^/:]+)(?::\d+)?/sub/([^/?#]+)#i', $target, $m)){
+$host = strtolower($m[1]);
+$subId = $m[2];
+}
+elseif(preg_match('#/sub/([^/?#]+)#i', $target, $m)){
+$subId = $m[1];
 }
 
-return $target;
+if(preg_match('/^(vip\d*)\./i', $host, $m)){
+$out['vip'] = strtolower($m[1]);
+}
+elseif(preg_match('/^(vip\d*)$/i', $host, $m)){
+$out['vip'] = strtolower($m[1]);
+}
+
+$out['sub_id'] = $subId;
+
+if($out['vip'] !== '' && $subId !== ''){
+$out['label'] = $out['vip'] . '-' . $subId;
+}
+elseif($subId !== ''){
+$out['label'] = $subId;
+}
+elseif($target !== ''){
+$out['label'] = $target;
+}
+
+return $out;
 }
 
 ?>
@@ -260,26 +295,49 @@ line-height:1;
 }
 
 .statusIcon{
-border:1.5px solid currentColor;
-background:transparent;
+border:none;
+color:#fff;
 }
 
 .statusIcon svg{
 width:18px;
 height:18px;
 display:block;
+stroke:#fff;
 }
 
 .statusIcon.is-ok{
-color:#22c55e;
+background:#22c55e;
 }
 
 .statusIcon.is-no{
-color:#ef4444;
+background:#ef4444;
 }
 
 .statusIcon.is-pending{
-color:#f59e0b;
+background:#f59e0b;
+}
+
+.subCopyBtn{
+display:block;
+width:100%;
+max-width:100%;
+border:none;
+background:transparent;
+color:#fff;
+font:inherit;
+font-size:13px;
+font-weight:700;
+text-align:right;
+padding:0;
+cursor:pointer;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+}
+
+.subCopyBtn:active{
+opacity:.75;
 }
 
 .dropdown{
@@ -435,7 +493,9 @@ $statusClass = 'is-no';
 }
 
 $mobile=getUserMobile($p[0] ?? '',$users);
-$targetName = renewDisplayName($p[1] ?? '');
+$parsedTarget = renewParseSubTarget($p[1] ?? '');
+$targetLabel = $parsedTarget['label'];
+$targetSubId = $parsedTarget['sub_id'];
 $planName = trim((string)($p[2] ?? '-'));
 if($planName === ''){
 $planName = '-';
@@ -451,7 +511,18 @@ $planName = '-';
 </div>
 
 <div class="renewCol renewColPlan">
-<b title="<?php echo htmlspecialchars((string)($p[1] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($targetName, ENT_QUOTES, 'UTF-8'); ?></b>
+<?php if($targetSubId !== ''){ ?>
+<button
+type="button"
+class="subCopyBtn"
+title="برای کپی SubID لمس کنید"
+onclick="copyRenewSubId(this)"
+data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
+<?php echo htmlspecialchars($targetLabel, ENT_QUOTES, 'UTF-8'); ?>
+</button>
+<?php } else { ?>
+<b><?php echo htmlspecialchars($targetLabel, ENT_QUOTES, 'UTF-8'); ?></b>
+<?php } ?>
 <span><?php echo htmlspecialchars($planName, ENT_QUOTES, 'UTF-8'); ?></span>
 </div>
 
@@ -588,6 +659,25 @@ openModal(
 function copySubId(id){
 navigator.clipboard.writeText(id);
 alert('SubID کپی شد');
+}
+
+function copyRenewSubId(btn){
+var id = (btn && btn.getAttribute('data-subid')) || '';
+if(!id){
+return;
+}
+
+if(navigator.clipboard && navigator.clipboard.writeText){
+navigator.clipboard.writeText(id).then(function(){
+btn.style.opacity = '0.55';
+setTimeout(function(){ btn.style.opacity = '1'; }, 250);
+}).catch(function(){
+window.prompt('SubID را کپی کنید:', id);
+});
+return;
+}
+
+window.prompt('SubID را کپی کنید:', id);
 }
 
 function openDetails(user,mobile,config,plan,track,date,time){
