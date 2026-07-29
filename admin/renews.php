@@ -190,6 +190,31 @@ function renewsListUrl($page){
 return pnvAdminUrl('index.php?page=renews&p=' . intval($page));
 }
 
+function renewParsePlanParts($plan){
+$plan = trim((string)$plan);
+$out = ['size' => '', 'price' => '', 'raw' => $plan !== '' ? $plan : '-'];
+
+if($plan === '' || $plan === '-'){
+return $out;
+}
+
+if(strpos($plan, ' - ') !== false){
+[$size, $price] = explode(' - ', $plan, 2);
+$out['size'] = trim($size);
+$out['price'] = trim($price);
+return $out;
+}
+
+if(preg_match('/^(.+?)\s*[-–]\s*(.+)$/u', $plan, $m)){
+$out['size'] = trim($m[1]);
+$out['price'] = trim($m[2]);
+return $out;
+}
+
+$out['size'] = $plan;
+return $out;
+}
+
 function renewParseSubTarget($target){
 $target = trim((string)$target);
 $out = [
@@ -238,121 +263,105 @@ return $out;
 
 ?>
 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+
 <style>
 
-/* حاشیه متعادل صفحه لیست تمدید */
-.content > .box{
-padding:18px 12px;
+body{
+background:linear-gradient(165deg,#0B1220 0%,#182537 55%,#0f172a 100%) !important;
+background-attachment:fixed !important;
+font-family:"Vazirmatn",tahoma,sans-serif !important;
 }
 
-.renewTable{
-background:#1e293b;
-border-radius:16px;
+.content{
+background:transparent !important;
+}
+
+.content > .box.renewsPage{
+background:rgba(24,37,55,.72);
+backdrop-filter:blur(14px);
+-webkit-backdrop-filter:blur(14px);
+border:1px solid rgba(148,163,184,.12);
+border-radius:24px;
+padding:20px 16px 18px;
+box-shadow:0 18px 50px rgba(0,0,0,.35);
 overflow:visible;
-color:#fff;
 }
 
-.renewRow{
-display:grid;
-grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) max-content;
-align-items:center;
-column-gap:12px;
-row-gap:0;
-padding:14px 12px;
-border-bottom:1px solid #334155;
-position:relative;
-}
-
-.renewRow:last-child{
-border-bottom:none;
-}
-
-.renewCol{
-min-width:0;
-font-size:13px;
-line-height:1.55;
-text-align:center;
-}
-
-.renewCol b{
-display:block;
-font-size:13px;
+.renewsPage h2{
+margin:0 0 18px;
+font-size:22px;
 font-weight:700;
-white-space:nowrap;
-overflow:hidden;
-text-overflow:ellipsis;
-text-align:center;
-margin-bottom:2px;
+letter-spacing:-.02em;
+text-align:right;
+color:#fff;
 }
 
-.renewCol span{
-display:block;
-color:#94a3b8;
-font-size:12px;
-white-space:nowrap;
-overflow:hidden;
-text-overflow:ellipsis;
-text-align:center;
-}
-
-.renewActions{
+.renewList{
 display:flex;
+flex-direction:column;
+gap:14px;
+}
+
+.renewCard{
+display:grid;
+grid-template-columns:minmax(0,.95fr) minmax(0,1.55fr) max-content;
 align-items:center;
-gap:8px;
-justify-content:center;
+gap:12px;
+padding:16px 14px;
+border-radius:16px;
+background:linear-gradient(180deg,rgba(30,41,59,.95),rgba(15,23,42,.92));
+border:1px solid rgba(148,163,184,.10);
+box-shadow:0 10px 28px rgba(0,0,0,.28);
 position:relative;
-flex-wrap:nowrap;
-flex-shrink:0;
-white-space:nowrap;
-padding-inline:2px;
 }
 
-.menuBtn,
-.statusIcon{
-width:34px !important;
-height:34px;
-min-width:34px;
-border-radius:10px;
-display:inline-flex;
-align-items:center;
+.renewCardEmpty{
 justify-content:center;
-flex:0 0 34px;
-box-sizing:border-box;
-margin:0 !important;
-padding:0 !important;
+text-align:center;
+color:#94a3b8;
+font-size:14px;
+padding:28px 16px;
 }
 
-.menuBtn{
-border:none;
-background:#334155;
-color:#fff;
-font-size:16px;
-cursor:pointer;
-line-height:1;
+.renewColUser,
+.renewColPlan{
+min-width:0;
 }
 
-.statusIcon{
-border:none;
-color:#fff;
+.renewColUser{
+text-align:right;
+padding-inline-end:2px;
 }
 
-.statusIcon svg{
-width:16px;
-height:16px;
+.renewUserName{
 display:block;
-stroke:#fff;
+font-size:14px;
+font-weight:700;
+color:#fff;
+line-height:1.35;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
 }
 
-.statusIcon.is-ok{
-background:#22c55e;
+.renewUserMobile{
+display:block;
+margin-top:4px;
+font-size:12px;
+color:#94a3b8;
+line-height:1.3;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+direction:ltr;
+unicode-bidi:plaintext;
 }
 
-.statusIcon.is-no{
-background:#ef4444;
-}
-
-.statusIcon.is-pending{
-background:#f59e0b;
+.renewColPlan{
+text-align:center;
 }
 
 .subCopyBtn{
@@ -362,21 +371,120 @@ max-width:100%;
 border:none;
 background:transparent;
 color:#fff;
-font:inherit;
-font-size:13px;
+font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+font-size:12.5px;
 font-weight:700;
 text-align:center;
 padding:0 !important;
-margin:0 0 2px !important;
+margin:0 0 10px !important;
 cursor:pointer;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
+letter-spacing:.01em;
 }
 
 .subCopyBtn:active{
 opacity:.75;
 }
+
+.renewPlanFallback{
+display:block;
+font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+font-size:12.5px;
+font-weight:700;
+margin-bottom:10px;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+}
+
+.renewPills{
+display:flex;
+flex-wrap:wrap;
+justify-content:center;
+gap:6px;
+}
+
+.renewPill{
+display:inline-flex;
+align-items:center;
+justify-content:center;
+max-width:100%;
+padding:5px 10px;
+border-radius:999px;
+background:rgba(51,65,85,.85);
+border:1px solid rgba(148,163,184,.12);
+color:#e2e8f0;
+font-size:11px;
+font-weight:600;
+line-height:1.2;
+white-space:nowrap;
+}
+
+.renewPill strong{
+color:#4ade80;
+font-weight:700;
+margin-inline-start:4px;
+}
+
+.renewActions{
+display:flex;
+align-items:center;
+justify-content:center;
+gap:8px;
+position:relative;
+flex-shrink:0;
+}
+
+.menuBtn{
+width:30px !important;
+height:30px;
+min-width:30px;
+border:none;
+border-radius:10px;
+background:#1e293b;
+color:#e2e8f0;
+font-size:15px;
+cursor:pointer;
+line-height:1;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+flex:0 0 30px;
+box-sizing:border-box;
+margin:0 !important;
+padding:0 !important;
+box-shadow:inset 0 0 0 1px rgba(148,163,184,.16);
+}
+
+.statusIcon{
+width:22px !important;
+height:22px;
+min-width:22px;
+border:none;
+border-radius:999px;
+color:#fff;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+flex:0 0 22px;
+box-sizing:border-box;
+margin:0 !important;
+padding:0 !important;
+box-shadow:0 4px 10px rgba(0,0,0,.25);
+}
+
+.statusIcon svg{
+width:12px;
+height:12px;
+display:block;
+stroke:#fff;
+}
+
+.statusIcon.is-ok{background:#22c55e}
+.statusIcon.is-no{background:#ef4444}
+.statusIcon.is-pending{background:#f59e0b}
 
 .dropdown{
 display:none;
@@ -386,13 +494,11 @@ width:180px;
 padding:10px;
 border-radius:14px;
 z-index:100000;
-box-shadow:0 10px 30px rgba(0,0,0,.35);
+box-shadow:0 14px 36px rgba(0,0,0,.45);
 border:1px solid #334155;
 }
 
-.dropdown.active{
-display:block;
-}
+.dropdown.active{display:block}
 
 .dropdown button{
 width:100%;
@@ -403,15 +509,11 @@ margin-bottom:8px;
 background:#334155;
 color:#fff;
 cursor:pointer;
+font-family:inherit;
 }
 
-.dropdown button:last-child{
-margin-bottom:0;
-}
-
-.red{
-background:#ef4444 !important;
-}
+.dropdown button:last-child{margin-bottom:0}
+.red{background:#ef4444 !important}
 
 .modalOverlay{
 position:fixed;
@@ -431,29 +533,12 @@ border-radius:18px;
 width:100%;
 max-width:420px;
 color:#fff;
+font-family:inherit;
 }
 
-.modal h3{
-margin:0 0 12px;
-text-align:center;
-}
-
-.modal .resultLead{
-text-align:center;
-font-size:16px;
-font-weight:700;
-margin:8px 0 10px;
-}
-
-.modal .resultDetail{
-text-align:center;
-font-size:12px;
-line-height:1.8;
-color:#cbd5e1;
-word-break:break-all;
-margin-bottom:16px;
-}
-
+.modal h3{margin:0 0 12px;text-align:center}
+.modal .resultLead{text-align:center;font-size:16px;font-weight:700;margin:8px 0 10px}
+.modal .resultDetail{text-align:center;font-size:12px;line-height:1.8;color:#cbd5e1;word-break:break-all;margin-bottom:16px}
 .modal .resultOk .resultLead{color:#86efac}
 .modal .resultErr .resultLead{color:#fecaca}
 
@@ -467,13 +552,10 @@ border-radius:10px;
 background:#0f172a;
 color:#fff;
 box-sizing:border-box;
+font-family:inherit;
 }
 
-.modalBtns{
-display:flex;
-gap:10px;
-}
-
+.modalBtns{display:flex;gap:10px}
 .modalBtns button{
 flex:1;
 padding:12px;
@@ -481,55 +563,76 @@ border:none;
 border-radius:10px;
 cursor:pointer;
 color:#fff;
+font-family:inherit;
 }
 
 .green{background:#22c55e}
 .gray{background:#475569}
 
+.renewsPage .pagination{
+margin-top:18px;
+text-align:center;
+}
+
+.renewsPage .pagination a{
+display:inline-flex;
+align-items:center;
+justify-content:center;
+min-width:36px;
+padding:8px 12px;
+margin:4px;
+background:#1e293b;
+color:#fff;
+border-radius:10px;
+text-decoration:none;
+border:1px solid rgba(148,163,184,.12);
+}
+
+.renewsPage .pagination a.active{
+background:#22c55e;
+border-color:transparent;
+}
+
 @media(max-width:560px){
-.content > .box{
-padding:14px 10px;
+.content > .box.renewsPage{
+padding:16px 12px 14px;
+border-radius:22px;
 }
-.renewRow{
-grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) max-content;
-column-gap:10px;
-padding:13px 8px;
+.renewCard{
+grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr) max-content;
+gap:10px;
+padding:14px 12px;
 }
-.menuBtn,
-.statusIcon{
-width:32px !important;
-height:32px;
-min-width:32px;
-flex:0 0 32px;
-border-radius:9px;
-}
-.statusIcon svg{
-width:15px;
-height:15px;
-}
+.renewUserName{font-size:13px}
+.renewUserMobile{font-size:11px}
+.subCopyBtn,
+.renewPlanFallback{font-size:11.5px}
+.renewPill{font-size:10.5px;padding:4px 8px}
 .menuBtn{
-font-size:15px;
+width:28px !important;
+height:28px;
+min-width:28px;
+flex:0 0 28px;
 }
-.renewCol,
-.renewCol b,
-.subCopyBtn{
-font-size:12px;
+.statusIcon{
+width:20px !important;
+height:20px;
+min-width:20px;
+flex:0 0 20px;
 }
-.renewCol span{
-font-size:11px;
-}
+.statusIcon svg{width:11px;height:11px}
 }
 
 </style>
 
-<div class="box">
+<div class="box renewsPage">
 
 <h2>لیست تمدید ها</h2>
 
-<div class="renewTable">
+<div class="renewList">
 
 <?php if($totalItems === 0){ ?>
-<div class="renewRow" style="justify-content:center;color:#94a3b8">تمدیدی برای نمایش نیست</div>
+<div class="renewCard renewCardEmpty">تمدیدی برای نمایش نیست</div>
 <?php } ?>
 
 <?php foreach($renewsPage as $r){
@@ -554,21 +657,18 @@ $mobile=getUserMobile($p[0] ?? '',$users);
 $parsedTarget = renewParseSubTarget($p[1] ?? '');
 $targetLabel = $parsedTarget['label'];
 $targetSubId = $parsedTarget['sub_id'];
-$planName = trim((string)($p[2] ?? '-'));
-if($planName === ''){
-$planName = '-';
-}
+$planParts = renewParsePlanParts($p[2] ?? '');
 
 ?>
 
-<div class="renewRow">
+<div class="renewCard">
 
-<div class="renewCol renewColUser">
-<b><?php echo htmlspecialchars($p[0] ?? '-', ENT_QUOTES, 'UTF-8'); ?></b>
-<span><?php echo htmlspecialchars($mobile, ENT_QUOTES, 'UTF-8'); ?></span>
+<div class="renewColUser">
+<span class="renewUserName"><?php echo htmlspecialchars($p[0] ?? '-', ENT_QUOTES, 'UTF-8'); ?></span>
+<span class="renewUserMobile"><?php echo htmlspecialchars($mobile !== '' ? $mobile : '—', ENT_QUOTES, 'UTF-8'); ?></span>
 </div>
 
-<div class="renewCol renewColPlan">
+<div class="renewColPlan">
 <?php if($targetSubId !== ''){ ?>
 <button
 type="button"
@@ -579,24 +679,34 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 <?php echo htmlspecialchars($targetLabel, ENT_QUOTES, 'UTF-8'); ?>
 </button>
 <?php } else { ?>
-<b><?php echo htmlspecialchars($targetLabel, ENT_QUOTES, 'UTF-8'); ?></b>
+<span class="renewPlanFallback"><?php echo htmlspecialchars($targetLabel, ENT_QUOTES, 'UTF-8'); ?></span>
 <?php } ?>
-<span><?php echo htmlspecialchars($planName, ENT_QUOTES, 'UTF-8'); ?></span>
+
+<div class="renewPills">
+<?php if($planParts['size'] !== ''){ ?>
+<span class="renewPill">حجم<strong><?php echo htmlspecialchars($planParts['size'], ENT_QUOTES, 'UTF-8'); ?></strong></span>
+<?php } ?>
+<?php if($planParts['price'] !== ''){ ?>
+<span class="renewPill">قیمت<strong><?php echo htmlspecialchars($planParts['price'], ENT_QUOTES, 'UTF-8'); ?></strong></span>
+<?php } elseif($planParts['size'] === ''){ ?>
+<span class="renewPill"><strong><?php echo htmlspecialchars($planParts['raw'], ENT_QUOTES, 'UTF-8'); ?></strong></span>
+<?php } ?>
+</div>
 </div>
 
 <div class="renewActions">
 
 <?php if($statusClass === 'is-ok'){ ?>
 <span class="statusIcon is-ok" title="تایید شد" aria-label="تایید شد">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
 </span>
 <?php } elseif($statusClass === 'is-no'){ ?>
 <span class="statusIcon is-no" title="رد شد" aria-label="رد شد">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
 </span>
 <?php } else { ?>
 <span class="statusIcon is-pending" title="درحال بررسی" aria-label="درحال بررسی">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
 </span>
 <?php } ?>
 
@@ -636,7 +746,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 </div>
 
 <?php if($totalPages > 1){ ?>
-<div class="pagination" style="margin-top:18px;">
+<div class="pagination">
 <?php for($x = 1; $x <= $totalPages; $x++){ ?>
 <a
 href="<?php echo htmlspecialchars(renewsListUrl($x), ENT_QUOTES, 'UTF-8'); ?>"
