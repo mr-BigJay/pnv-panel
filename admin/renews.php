@@ -186,11 +186,11 @@ return $out;
 $host = '';
 $subId = '';
 
-if(preg_match('#https?://([^/:]+)(?::\d+)?/sub/([^/?#]+)#i', $target, $m)){
+if(preg_match('~https?://([^/:]+)(?::\d+)?/sub/([^/?#]+)~i', $target, $m)){
 $host = strtolower($m[1]);
 $subId = $m[2];
 }
-elseif(preg_match('#/sub/([^/?#]+)#i', $target, $m)){
+elseif(preg_match('~/sub/([^/?#]+)~i', $target, $m)){
 $subId = $m[1];
 }
 
