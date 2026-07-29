@@ -246,6 +246,7 @@ border-bottom:none;
 min-width:0;
 font-size:13px;
 line-height:1.45;
+text-align:center;
 }
 
 .renewCol b{
@@ -255,6 +256,7 @@ font-weight:700;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
+text-align:center;
 }
 
 .renewCol span{
@@ -264,13 +266,14 @@ font-size:12px;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
+text-align:center;
 }
 
 .renewActions{
 display:flex;
 align-items:center;
 gap:8px;
-justify-content:flex-start;
+justify-content:center;
 position:relative;
 }
 
@@ -329,7 +332,7 @@ color:#fff;
 font:inherit;
 font-size:13px;
 font-weight:700;
-text-align:right;
+text-align:center;
 padding:0;
 cursor:pointer;
 white-space:nowrap;
