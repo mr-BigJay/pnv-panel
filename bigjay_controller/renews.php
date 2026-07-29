@@ -3,7 +3,14 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/functions.php';
 
-if(!function_exists('pnvAdminIsLoggedIn') || !pnvAdminIsLoggedIn()){
+// لاگین جدید (pnv_admin) یا سشن قدیمی پنل (admin)
+// مهم: pnvAdminIsLoggedIn() سشن قدیمی را پاک می‌کند؛ اینجا مستقیم چک می‌کنیم
+$renewsLoggedIn = (
+    !empty($_SESSION['pnv_admin']['user'])
+    && !empty($_SESSION['pnv_admin']['token'])
+) || !empty($_SESSION['admin']);
+
+if(!$renewsLoggedIn){
     if(!headers_sent()){
         header('Location: ' . (function_exists('pnvAdminEntryUrl') ? pnvAdminEntryUrl() : 'index.php'));
         exit;
@@ -12,6 +19,9 @@ if(!function_exists('pnvAdminIsLoggedIn') || !pnvAdminIsLoggedIn()){
     echo '<div style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">نشست مدیریت معتبر نیست. دوباره وارد شوید.</div>';
     return;
 }
+
+// هم‌تراز کردن فلگ‌ها برای بقیه کدها
+$_SESSION['admin'] = true;
 
 if(file_exists(__DIR__ . '/../xui_lib.php')){
     require_once __DIR__ . '/../xui_lib.php';
@@ -76,9 +86,11 @@ if(isset($_POST['approve_payment'])){
 $index=intval($_POST['approve_index']);
 $link=trim($_POST['approve_link'] ?? '');
 
-$xuiConfig = xuiLoadConfig();
+$xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig')
+    ? xuiIsEnabled(xuiLoadConfig())
+    : false;
 
-if(function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])){
+if($xuiEnabled && function_exists('xuiApprovePaymentIndex')){
 
 $result = xuiApprovePaymentIndex($index, 'تمدید');
 
