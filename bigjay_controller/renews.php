@@ -1,34 +1,54 @@
 <?php
 
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/functions.php';
+// Live panel includes this from /bigjay_controller/ where auth.php & functions.php
+// are often missing (HTTP 404). Hard require_once fatals → blank content area.
+foreach ([__DIR__ . '/auth.php', __DIR__ . '/functions.php'] as $renewsBootFile) {
+    if (is_file($renewsBootFile)) {
+        require_once $renewsBootFile;
+    }
+}
 
-// لاگین جدید (pnv_admin) یا سشن قدیمی پنل (admin)
-// مهم: pnvAdminIsLoggedIn() سشن قدیمی را پاک می‌کند؛ اینجا مستقیم چک می‌کنیم
+if (!function_exists('pnvAdminUrl')) {
+    function pnvAdminUrl($path = 'index.php') {
+        $base = defined('PNV_ADMIN_BASE') ? rtrim(PNV_ADMIN_BASE, '/') : '/bigjay_controller';
+        if ($path === '' || $path === 'index.php') {
+            return $base . '/';
+        }
+        if (strpos($path, '?') !== false) {
+            [$file, $query] = explode('?', $path, 2);
+            return $base . '/' . ltrim($file, '/') . '?' . $query;
+        }
+        return $base . '/' . ltrim($path, '/');
+    }
+}
+
+// Accept new pnv_admin session OR legacy $_SESSION['admin'].
+// Do NOT call pnvAdminIsLoggedIn() — it unsets legacy admin and blanks the page.
 $renewsLoggedIn = (
     !empty($_SESSION['pnv_admin']['user'])
     && !empty($_SESSION['pnv_admin']['token'])
 ) || !empty($_SESSION['admin']);
 
-if(!$renewsLoggedIn){
-    if(!headers_sent()){
-        header('Location: ' . (function_exists('pnvAdminEntryUrl') ? pnvAdminEntryUrl() : 'index.php'));
-        exit;
-    }
-
+if (!$renewsLoggedIn) {
+    // Match old payments.php behavior when embedded in index
     echo '<div style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">نشست مدیریت معتبر نیست. دوباره وارد شوید.</div>';
     return;
 }
 
-// هم‌تراز کردن فلگ‌ها برای بقیه کدها
 $_SESSION['admin'] = true;
 
-if(file_exists(__DIR__ . '/../xui_lib.php')){
+if (is_file(__DIR__ . '/../xui_lib.php')) {
     require_once __DIR__ . '/../xui_lib.php';
 }
 
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
+if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
+    $paymentsFile = __DIR__ . '/../invoices/payments.csv';
+}
+if (!is_file($usersFile) && is_file(__DIR__ . '/../db/users.json')) {
+    $usersFile = __DIR__ . '/../db/users.json';
+}
 
 $payments = [];
 $users = [];
