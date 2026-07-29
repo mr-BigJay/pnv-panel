@@ -399,9 +399,14 @@ if(!function_exists('telegramConfigPath')){
         return json_encode(['inline_keyboard' => $rows], JSON_UNESCAPED_UNICODE);
     }
 
-    // فاصله نامرئی برای پهن‌تر و وسط‌چین شدن دکمه‌ها/متن در کادر تلگرام
+    // فاصله‌ای که تلگرام معمولاً از انتهای دکمه حذفش نمی‌کند
     function telegramInvisiblePadChar(){
-        return "\u{2800}";
+        return "\u{00A0}"; // NBSP
+    }
+
+    function telegramPadAnchor(){
+        // نگه‌دارنده تا تلگرام فاصله‌های ابتدا/انتهای دکمه را trim نکند
+        return "\u{2060}"; // WORD JOINER
     }
 
     function telegramMbLen($text){
@@ -414,31 +419,58 @@ if(!function_exists('telegramConfigPath')){
         return strlen($text);
     }
 
-    function telegramVisualPad($text, $width = null){
+    function telegramStripPadNoise($text){
         $text = (string)$text;
+        // پد/انکر قبلی را بردار تا دوباره پد نشود
+        $text = str_replace([
+            "\u{2800}",
+            "\u{00A0}",
+            "\u{3000}",
+            "\u{2007}",
+            "\u{2060}",
+            "\u{200B}",
+            "\u{200E}",
+            "\u{200F}"
+        ], '', $text);
+
+        return trim($text);
+    }
+
+    function telegramVisualPad($text, $width = null){
+        $text = telegramStripPadNoise($text);
         $width = $width === null ? telegramMenuWidth() : max(1, intval($width));
         $len = telegramMbLen($text);
+        $blank = telegramInvisiblePadChar();
+        $anchor = telegramPadAnchor();
 
         if($len >= $width){
-            return $text;
+            // حتی متن بلند را با انکر ببند تا trim نشود
+            return $anchor . $text . $anchor;
         }
 
-        $blank = telegramInvisiblePadChar();
         $pad = $width - $len;
         $left = intdiv($pad, 2);
         $right = $pad - $left;
 
-        return str_repeat($blank, $left) . $text . str_repeat($blank, $right);
+        return $anchor
+            . str_repeat($blank, $left)
+            . $text
+            . str_repeat($blank, $right)
+            . $anchor;
     }
 
     function telegramWideSpacer($width = null){
-        $width = $width === null ? (telegramMenuWidth() + 6) : max(1, intval($width));
-        return str_repeat(telegramInvisiblePadChar(), $width);
+        $width = $width === null ? (telegramMenuWidth() + 8) : max(1, intval($width));
+        $blank = telegramInvisiblePadChar();
+        $anchor = telegramPadAnchor();
+
+        // یک خط خیلی پهن برای کش آمدن حباب پیام
+        return $anchor . str_repeat($blank, $width) . $anchor;
     }
 
     function telegramMenuWidth(){
-        // عریض‌تر از قبل تا کادر منو وسط و پهن دیده شود
-        return 38;
+        // عرض هدف دکمه‌های تک‌ستونه (تقریباً تمام عرض چت موبایل)
+        return 46;
     }
 
     function telegramHomeMenuWidth(){
@@ -450,8 +482,11 @@ if(!function_exists('telegramConfigPath')){
         $lines = preg_split("/\r\n|\n|\r/", (string)$text);
         $out = [];
 
+        // خط پهن اول باعث می‌شود حباب پیام عریض شود
+        $out[] = telegramWideSpacer($width + 10);
+
         foreach($lines as $line){
-            if(trim($line) === ''){
+            if(telegramStripPadNoise($line) === ''){
                 $out[] = '';
                 continue;
             }
@@ -459,12 +494,12 @@ if(!function_exists('telegramConfigPath')){
             $out[] = telegramVisualPad($line, $width);
         }
 
-        $out[] = telegramWideSpacer($width + 6);
+        $out[] = telegramWideSpacer($width + 10);
         return implode("\n", $out);
     }
 
     function telegramPadButtonText($text, $width = null){
-        $text = trim((string)$text);
+        $text = telegramStripPadNoise($text);
 
         if($text === ''){
             return $text;
@@ -486,8 +521,8 @@ if(!function_exists('telegramConfigPath')){
                 continue;
             }
 
-            // ردیف تک‌دکمه‌ای را پهن کن؛ ردیف چندتایی را کمی جمع‌وجورتر
-            $rowWidth = count($row) === 1 ? $width : max(12, intdiv($width, count($row)));
+            // ردیف تک‌دکمه‌ای را تقریباً تمام‌عرض کن
+            $rowWidth = count($row) === 1 ? $width : max(14, intdiv($width, count($row)) + 2);
 
             foreach($row as $c => $btn){
                 if(!is_array($btn) || !isset($btn['text'])){
