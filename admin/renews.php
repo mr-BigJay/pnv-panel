@@ -240,9 +240,9 @@ return $out;
 
 <style>
 
-/* کمتر کردن حاشیه دو سمت صفحه لیست تمدید */
+/* حاشیه متعادل صفحه لیست تمدید */
 .content > .box{
-padding:16px 10px;
+padding:18px 12px;
 }
 
 .renewTable{
@@ -250,15 +250,15 @@ background:#1e293b;
 border-radius:16px;
 overflow:visible;
 color:#fff;
-margin:0 -4px;
 }
 
 .renewRow{
 display:grid;
-grid-template-columns:minmax(0,1.05fr) minmax(0,1.35fr) auto;
+grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) max-content;
 align-items:center;
-gap:6px;
-padding:8px 6px;
+column-gap:12px;
+row-gap:0;
+padding:14px 12px;
 border-bottom:1px solid #334155;
 position:relative;
 }
@@ -269,25 +269,26 @@ border-bottom:none;
 
 .renewCol{
 min-width:0;
-font-size:12px;
-line-height:1.35;
+font-size:13px;
+line-height:1.55;
 text-align:center;
 }
 
 .renewCol b{
 display:block;
-font-size:12px;
+font-size:13px;
 font-weight:700;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
 text-align:center;
+margin-bottom:2px;
 }
 
 .renewCol span{
 display:block;
 color:#94a3b8;
-font-size:11px;
+font-size:12px;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
@@ -297,24 +298,25 @@ text-align:center;
 .renewActions{
 display:flex;
 align-items:center;
-gap:4px;
+gap:8px;
 justify-content:center;
 position:relative;
 flex-wrap:nowrap;
 flex-shrink:0;
 white-space:nowrap;
+padding-inline:2px;
 }
 
 .menuBtn,
 .statusIcon{
-width:28px !important;
-height:28px;
-min-width:28px;
-border-radius:8px;
+width:34px !important;
+height:34px;
+min-width:34px;
+border-radius:10px;
 display:inline-flex;
 align-items:center;
 justify-content:center;
-flex:0 0 28px;
+flex:0 0 34px;
 box-sizing:border-box;
 margin:0 !important;
 padding:0 !important;
@@ -324,7 +326,7 @@ padding:0 !important;
 border:none;
 background:#334155;
 color:#fff;
-font-size:14px;
+font-size:16px;
 cursor:pointer;
 line-height:1;
 }
@@ -335,8 +337,8 @@ color:#fff;
 }
 
 .statusIcon svg{
-width:14px;
-height:14px;
+width:16px;
+height:16px;
 display:block;
 stroke:#fff;
 }
@@ -361,11 +363,11 @@ border:none;
 background:transparent;
 color:#fff;
 font:inherit;
-font-size:12px;
+font-size:13px;
 font-weight:700;
 text-align:center;
 padding:0 !important;
-margin:0 !important;
+margin:0 0 2px !important;
 cursor:pointer;
 white-space:nowrap;
 overflow:hidden;
@@ -486,38 +488,35 @@ color:#fff;
 
 @media(max-width:560px){
 .content > .box{
-padding:12px 6px;
-}
-.renewTable{
-margin:0 -2px;
+padding:14px 10px;
 }
 .renewRow{
-grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) auto;
-gap:4px;
-padding:8px 4px;
+grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) max-content;
+column-gap:10px;
+padding:13px 8px;
 }
 .menuBtn,
 .statusIcon{
-width:26px !important;
-height:26px;
-min-width:26px;
-flex:0 0 26px;
-border-radius:7px;
+width:32px !important;
+height:32px;
+min-width:32px;
+flex:0 0 32px;
+border-radius:9px;
 }
 .statusIcon svg{
-width:12px;
-height:12px;
+width:15px;
+height:15px;
 }
 .menuBtn{
-font-size:13px;
+font-size:15px;
 }
 .renewCol,
 .renewCol b,
 .subCopyBtn{
-font-size:11px;
+font-size:12px;
 }
 .renewCol span{
-font-size:10px;
+font-size:11px;
 }
 }
 
