@@ -265,22 +265,31 @@ if(!function_exists('xuiConfigPath')){
         }
 
         // لینک کامل داخل متن کثیف (فرم وب متن دکمه را هم می‌چسباند)
-        if(preg_match('#https?://(?:vip\d*)\.boozhaan\.ir(?::\d+)?/sub/[A-Za-z0-9]+#i', $link, $m)){
-            return $m[0];
-        }
-
         if(preg_match('#https?://([^/\s:?]+)(?::(\d+))?/sub/([A-Za-z0-9]+)#i', $link, $m)){
-            $port = $m[2] !== '' ? (':' . $m[2]) : '';
+            $port = ($m[2] ?? '') !== '' ? (':' . $m[2]) : '';
             return 'https://' . strtolower($m[1]) . $port . '/sub/' . $m[3];
         }
 
-        if(preg_match('#(?:vip\d*)\.boozhaan\.ir(?::\d+)?/sub/[A-Za-z0-9]+#i', $link, $m)){
+        if(preg_match('#(?:vip\d*)\.[a-z0-9.-]+(?::\d+)?/sub/[A-Za-z0-9]+#i', $link, $m)){
             return 'https://' . $m[0];
         }
 
         // vip3-subid یا فقط SubID
         if(preg_match('/^(vip\d*)-([A-Za-z0-9]{8,32})$/i', $link, $m)){
-            return xuiBuildSubLink(strtolower($m[1]) . '.boozhaan.ir', $m[2]);
+            $config = function_exists('xuiLoadConfig') ? xuiLoadConfig() : [];
+            $prefix = strtolower($m[1]);
+            $host = $prefix . '.boozhaan.ir';
+
+            foreach(($config['servers'] ?? []) as $server){
+                $serverHost = strtolower(trim((string)($server['host'] ?? '')));
+
+                if($serverHost !== '' && strpos($serverHost, $prefix . '.') === 0){
+                    $host = $serverHost;
+                    break;
+                }
+            }
+
+            return xuiBuildSubLink($host, $m[2], $config ?: null);
         }
 
         if(preg_match('/^[A-Za-z0-9]{8,32}$/', $link)){
@@ -607,15 +616,86 @@ if(!function_exists('xuiConfigPath')){
         return $client;
     }
 
+    function xuiDeepFindSubIdValue($data, $subId, $depth = 0){
+        $subId = trim((string)$subId);
+
+        if($subId === '' || $depth > 4 || !is_array($data)){
+            return false;
+        }
+
+        foreach(['subId', 'sub_id', 'subscriptionId', 'subscription_id', 'sub'] as $key){
+            if(isset($data[$key]) && strcasecmp(trim((string)$data[$key]), $subId) === 0){
+                return true;
+            }
+        }
+
+        foreach($data as $value){
+            if(is_string($value) || is_numeric($value)){
+                if(strcasecmp(trim((string)$value), $subId) === 0){
+                    return true;
+                }
+                continue;
+            }
+
+            if(is_array($value) && xuiDeepFindSubIdValue($value, $subId, $depth + 1)){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     function xuiClientMatchesSubId($client, $subId){
         if(!is_array($client)){
             return false;
         }
 
         $subId = trim((string)$subId);
-        $candidate = trim((string)($client['subId'] ?? $client['sub_id'] ?? ''));
 
-        return $subId !== '' && strcasecmp($candidate, $subId) === 0;
+        if($subId === ''){
+            return false;
+        }
+
+        foreach(['subId', 'sub_id', 'subscriptionId', 'subscription_id', 'sub'] as $key){
+            $candidate = trim((string)($client[$key] ?? ''));
+
+            if($candidate !== '' && strcasecmp($candidate, $subId) === 0){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function xuiExtractClientFromListItem($item, $fallbackSubId = ''){
+        if(!is_array($item)){
+            return null;
+        }
+
+        $inboundId = $item['inboundId'] ?? $item['inbound_id'] ?? null;
+        $raw = $item['client'] ?? $item['obj'] ?? $item;
+        $client = xuiNormalizeClientRecord(is_array($raw) ? $raw : null, $inboundId);
+
+        if($client === null){
+            return null;
+        }
+
+        if(($client['subId'] ?? '') === ''){
+            foreach(['subId', 'sub_id', 'subscriptionId', 'subscription_id'] as $key){
+                $value = trim((string)($item[$key] ?? ($raw[$key] ?? '')));
+
+                if($value !== ''){
+                    $client['subId'] = $value;
+                    break;
+                }
+            }
+        }
+
+        if(($client['subId'] ?? '') === '' && $fallbackSubId !== ''){
+            $client['subId'] = trim((string)$fallbackSubId);
+        }
+
+        return $client;
     }
 
     function xuiClientMatchesUuid($client, $uuid){
@@ -719,12 +799,14 @@ if(!function_exists('xuiConfigPath')){
 
             if(is_array($obj)){
                 // بعضی نسخه‌ها obj را مستقیم آرایه inbound می‌دهند
-                if(isset($obj[0]) || count($obj) === 0){
-                    return $obj;
+                if($obj === [] || array_keys($obj) === range(0, count($obj) - 1)){
+                    return array_values($obj);
                 }
 
-                if(isset($obj['list']) && is_array($obj['list'])){
-                    return $obj['list'];
+                foreach(['list', 'items', 'inbounds', 'data'] as $key){
+                    if(isset($obj[$key]) && is_array($obj[$key])){
+                        return array_values($obj[$key]);
+                    }
                 }
             }
         }
@@ -759,24 +841,37 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiClientsListFromResponse($result){
-        if(!is_array($result) || empty($result['success'])){
+        if(!is_array($result)){
             return [];
         }
 
-        $obj = $result['obj'] ?? null;
+        // بعضی نسخه‌ها success ندارند ولی items دارند
+        $pools = [];
 
-        if(!is_array($obj)){
-            return [];
-        }
-
-        // بعضی نسخه‌ها obj را مستقیم آرایه کلاینت می‌دهند
-        if(isset($obj[0]) || count($obj) === 0){
-            return array_values($obj);
+        if(isset($result['obj'])){
+            $pools[] = $result['obj'];
         }
 
         foreach(['items', 'list', 'clients', 'data', 'rows'] as $key){
-            if(isset($obj[$key]) && is_array($obj[$key])){
-                return array_values($obj[$key]);
+            if(isset($result[$key])){
+                $pools[] = $result[$key];
+            }
+        }
+
+        foreach($pools as $obj){
+            if(!is_array($obj)){
+                continue;
+            }
+
+            // obj مستقیم آرایه کلاینت
+            if($obj === [] || array_keys($obj) === range(0, count($obj) - 1)){
+                return array_values($obj);
+            }
+
+            foreach(['items', 'list', 'clients', 'data', 'rows'] as $key){
+                if(isset($obj[$key]) && is_array($obj[$key])){
+                    return array_values($obj[$key]);
+                }
             }
         }
 
@@ -786,21 +881,52 @@ if(!function_exists('xuiConfigPath')){
     function xuiFindClientInClientsApi($server, $subId = '', $uuid = ''){
         $page = 1;
         $pageSize = 200;
+        $subId = trim((string)$subId);
+        $uuid = trim((string)$uuid);
 
         // اول با search مستقیم Sub ID (API جدید 3x-ui → obj.items)
         if($subId !== ''){
-            $searched = xuiApiRequest(
-                $server,
-                'GET',
+            $searchPaths = [
                 '/panel/api/clients/list/paged?page=1&pageSize=' . $pageSize
-                . '&search=' . rawurlencode($subId)
-                . '&filter=&protocol=&sort=email&order=ascend'
-            );
+                    . '&search=' . rawurlencode($subId)
+                    . '&filter=&protocol=&sort=email&order=ascend',
+                '/panel/api/clients/list/paged?page=1&size=' . $pageSize
+                    . '&search=' . rawurlencode($subId),
+            ];
 
-            foreach(xuiClientsListFromResponse($searched) as $item){
-                $client = xuiNormalizeClientRecord($item['client'] ?? $item);
+            foreach($searchPaths as $path){
+                $searched = xuiApiRequest($server, 'GET', $path);
+                $hits = [];
 
-                if($client && xuiClientMatchesSubId($client, $subId)){
+                foreach(xuiClientsListFromResponse($searched) as $item){
+                    $client = xuiExtractClientFromListItem($item, $subId);
+
+                    if($client === null){
+                        continue;
+                    }
+
+                    if(xuiClientMatchesSubId($client, $subId) || xuiDeepFindSubIdValue($item, $subId)){
+                        if(($client['subId'] ?? '') === ''){
+                            $client['subId'] = $subId;
+                        }
+
+                        return xuiHydrateClientByEmail($server, $client);
+                    }
+
+                    if(trim((string)($client['email'] ?? '')) !== ''){
+                        $hits[] = $client;
+                    }
+                }
+
+                // جستجوی دقیق SubID اگر فقط یک کلاینت برگرداند، همان را بپذیر
+                // (بعضی پنل‌ها subId را در رکورد لیست خالی می‌گذارند)
+                if(count($hits) === 1){
+                    $client = $hits[0];
+
+                    if(($client['subId'] ?? '') === ''){
+                        $client['subId'] = $subId;
+                    }
+
                     return xuiHydrateClientByEmail($server, $client);
                 }
             }
@@ -815,14 +941,18 @@ if(!function_exists('xuiConfigPath')){
         }
 
         foreach($fullList as $item){
-            $client = xuiNormalizeClientRecord($item['client'] ?? $item);
+            $client = xuiExtractClientFromListItem($item, $subId);
 
             if($client === null){
                 continue;
             }
 
-            if(($subId !== '' && xuiClientMatchesSubId($client, $subId))
+            if(($subId !== '' && (xuiClientMatchesSubId($client, $subId) || xuiDeepFindSubIdValue($item, $subId)))
                 || ($uuid !== '' && xuiClientMatchesUuid($client, $uuid))){
+                if($subId !== '' && ($client['subId'] ?? '') === ''){
+                    $client['subId'] = $subId;
+                }
+
                 return xuiHydrateClientByEmail($server, $client);
             }
         }
@@ -844,14 +974,18 @@ if(!function_exists('xuiConfigPath')){
             }
 
             foreach($list as $item){
-                $client = xuiNormalizeClientRecord($item['client'] ?? $item);
+                $client = xuiExtractClientFromListItem($item, $subId);
 
                 if($client === null){
                     continue;
                 }
 
-                if(($subId !== '' && xuiClientMatchesSubId($client, $subId))
+                if(($subId !== '' && (xuiClientMatchesSubId($client, $subId) || xuiDeepFindSubIdValue($item, $subId)))
                     || ($uuid !== '' && xuiClientMatchesUuid($client, $uuid))){
+                    if($subId !== '' && ($client['subId'] ?? '') === ''){
+                        $client['subId'] = $subId;
+                    }
+
                     return xuiHydrateClientByEmail($server, $client);
                 }
             }
@@ -1386,7 +1520,7 @@ if(!function_exists('xuiConfigPath')){
         $serversToTry = [];
         $seenServer = [];
 
-        $pushServer = function($server) use (&$serversToTry, &$seenServer, $allowed){
+        $pushServer = function($server, $ignoreAllowList = false) use (&$serversToTry, &$seenServer, $allowed){
             if(!is_array($server)){
                 return;
             }
@@ -1397,7 +1531,7 @@ if(!function_exists('xuiConfigPath')){
                 return;
             }
 
-            if(is_array($allowed) && count($allowed) > 0 && $id !== '' && !in_array($id, $allowed, true)){
+            if(!$ignoreAllowList && is_array($allowed) && count($allowed) > 0 && $id !== '' && !in_array($id, $allowed, true)){
                 return;
             }
 
@@ -1409,18 +1543,19 @@ if(!function_exists('xuiConfigPath')){
         };
 
         if(($parsed['host'] ?? '') !== ''){
-            $pushServer(xuiFindServerByHost($parsed['host'], $config));
+            // سرور هاست لینک را همیشه اول امتحان کن
+            $pushServer(xuiFindServerByHost($parsed['host'], $config), true);
         }
 
         if(is_array($allowed) && count($allowed) > 0){
             foreach($allowed as $serverId){
-                $pushServer(xuiFindServerById($serverId, $config));
+                $pushServer(xuiFindServerById($serverId, $config), true);
             }
         }
-        else{
-            foreach(($config['servers'] ?? []) as $server){
-                $pushServer($server);
-            }
+
+        // باقی سرورها هم به‌عنوان fallback (SubID ممکن است روی VIP دیگری باشد)
+        foreach(($config['servers'] ?? []) as $server){
+            $pushServer($server, true);
         }
 
         if(count($serversToTry) === 0){
