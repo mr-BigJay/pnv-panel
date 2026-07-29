@@ -758,11 +758,36 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
+    function xuiClientsListFromResponse($result){
+        if(!is_array($result) || empty($result['success'])){
+            return [];
+        }
+
+        $obj = $result['obj'] ?? null;
+
+        if(!is_array($obj)){
+            return [];
+        }
+
+        // بعضی نسخه‌ها obj را مستقیم آرایه کلاینت می‌دهند
+        if(isset($obj[0]) || count($obj) === 0){
+            return array_values($obj);
+        }
+
+        foreach(['items', 'list', 'clients', 'data', 'rows'] as $key){
+            if(isset($obj[$key]) && is_array($obj[$key])){
+                return array_values($obj[$key]);
+            }
+        }
+
+        return [];
+    }
+
     function xuiFindClientInClientsApi($server, $subId = '', $uuid = ''){
         $page = 1;
         $pageSize = 200;
 
-        // اول با search مستقیم Sub ID (API جدید 3x-ui)
+        // اول با search مستقیم Sub ID (API جدید 3x-ui → obj.items)
         if($subId !== ''){
             $searched = xuiApiRequest(
                 $server,
@@ -772,41 +797,37 @@ if(!function_exists('xuiConfigPath')){
                 . '&filter=&protocol=&sort=email&order=ascend'
             );
 
-            if(!empty($searched['success'])){
-                $obj = $searched['obj'] ?? [];
-                $list = $obj['list'] ?? $obj['clients'] ?? [];
+            foreach(xuiClientsListFromResponse($searched) as $item){
+                $client = xuiNormalizeClientRecord($item['client'] ?? $item);
 
-                if(is_array($list)){
-                    foreach($list as $item){
-                        $client = xuiNormalizeClientRecord($item['client'] ?? $item);
-
-                        if($client && xuiClientMatchesSubId($client, $subId)){
-                            return xuiHydrateClientByEmail($server, $client);
-                        }
-                    }
+                if($client && xuiClientMatchesSubId($client, $subId)){
+                    return xuiHydrateClientByEmail($server, $client);
                 }
             }
         }
 
         // لیست کامل
         $full = xuiApiRequest($server, 'GET', '/panel/api/clients/list');
+        $fullList = xuiClientsListFromResponse($full);
 
-        if(!empty($full['success']) && is_array($full['obj'] ?? null)){
-            foreach($full['obj'] as $item){
-                $client = xuiNormalizeClientRecord($item['client'] ?? $item);
+        if(count($fullList) === 0 && is_array($full['obj'] ?? null) && isset(($full['obj'])[0])){
+            $fullList = array_values($full['obj']);
+        }
 
-                if($client === null){
-                    continue;
-                }
+        foreach($fullList as $item){
+            $client = xuiNormalizeClientRecord($item['client'] ?? $item);
 
-                if(($subId !== '' && xuiClientMatchesSubId($client, $subId))
-                    || ($uuid !== '' && xuiClientMatchesUuid($client, $uuid))){
-                    return xuiHydrateClientByEmail($server, $client);
-                }
+            if($client === null){
+                continue;
+            }
+
+            if(($subId !== '' && xuiClientMatchesSubId($client, $subId))
+                || ($uuid !== '' && xuiClientMatchesUuid($client, $uuid))){
+                return xuiHydrateClientByEmail($server, $client);
             }
         }
 
-        // صفحه‌بندی درست با pageSize (نه size)
+        // صفحه‌بندی درست با pageSize (نه size) و کلید items
         while($page <= 100){
             $result = xuiApiRequest(
                 $server,
@@ -816,14 +837,9 @@ if(!function_exists('xuiConfigPath')){
                 . '&search=&filter=&protocol=&sort=email&order=ascend'
             );
 
-            if(empty($result['success'])){
-                break;
-            }
+            $list = xuiClientsListFromResponse($result);
 
-            $obj = $result['obj'] ?? [];
-            $list = $obj['list'] ?? $obj['clients'] ?? [];
-
-            if(!is_array($list) || count($list) === 0){
+            if(count($list) === 0){
                 break;
             }
 
