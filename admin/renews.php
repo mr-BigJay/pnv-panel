@@ -269,6 +269,34 @@ return $out;
 }
 }
 
+if(!function_exists('renewFormatPlanLine')){
+function renewFormatPlanLine($planParts){
+$size = trim((string)($planParts['size'] ?? ''));
+$price = trim((string)($planParts['price'] ?? ''));
+$raw = trim((string)($planParts['raw'] ?? ''));
+
+if($price !== ''){
+$price = preg_replace('/\s*هزار\s*تومان/u', ' تومن', $price);
+$price = preg_replace('/\s*تومان/u', ' تومن', $price);
+$price = preg_replace('/\s+/u', ' ', trim($price));
+}
+
+if($size !== '' && $price !== ''){
+return $size . ' - ' . $price;
+}
+
+if($size !== ''){
+return $size;
+}
+
+if($price !== ''){
+return $price;
+}
+
+return $raw !== '' ? $raw : '—';
+}
+}
+
 
 if(!function_exists('renewParseSubTarget')){
 function renewParseSubTarget($target){
@@ -361,6 +389,7 @@ color:#fff;
 display:flex;
 flex-direction:column;
 gap:14px;
+overflow:visible;
 }
 
 .renewCard{
@@ -370,10 +399,11 @@ align-items:center;
 gap:12px;
 padding:16px 14px;
 border-radius:16px;
-background:linear-gradient(180deg,rgba(30,41,59,.95),rgba(15,23,42,.92));
+background:#1e293b;
 border:1px solid rgba(148,163,184,.10);
 box-shadow:0 10px 28px rgba(0,0,0,.28);
 position:relative;
+overflow:visible;
 }
 
 .renewCardEmpty{
@@ -434,7 +464,7 @@ font-size:12.5px;
 font-weight:700;
 text-align:center;
 padding:0 !important;
-margin:0 0 10px !important;
+margin:0 0 6px !important;
 cursor:pointer;
 white-space:nowrap;
 overflow:hidden;
@@ -451,39 +481,22 @@ display:block;
 font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 font-size:12.5px;
 font-weight:700;
-margin-bottom:10px;
+margin-bottom:6px;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
 }
 
-.renewPills{
-display:flex;
-flex-wrap:wrap;
-justify-content:center;
-gap:6px;
-}
-
-.renewPill{
-display:inline-flex;
-align-items:center;
-justify-content:center;
-max-width:100%;
-padding:5px 10px;
-border-radius:999px;
-background:rgba(51,65,85,.85);
-border:1px solid rgba(148,163,184,.12);
-color:#e2e8f0;
-font-size:11px;
+.renewPlanLine{
+display:block;
+text-align:center;
+color:#86efac;
+font-size:12px;
 font-weight:600;
-line-height:1.2;
+line-height:1.35;
 white-space:nowrap;
-}
-
-.renewPill strong{
-color:#4ade80;
-font-weight:700;
-margin-inline-start:4px;
+overflow:hidden;
+text-overflow:ellipsis;
 }
 
 .renewActions{
@@ -493,6 +506,7 @@ justify-content:center;
 gap:8px;
 position:relative;
 flex-shrink:0;
+overflow:visible;
 }
 
 .menuBtn{
@@ -501,7 +515,7 @@ height:30px;
 min-width:30px;
 border:none;
 border-radius:10px;
-background:#1e293b;
+background:#334155;
 color:#e2e8f0;
 font-size:15px;
 cursor:pointer;
@@ -514,6 +528,8 @@ box-sizing:border-box;
 margin:0 !important;
 padding:0 !important;
 box-shadow:inset 0 0 0 1px rgba(148,163,184,.16);
+-webkit-tap-highlight-color:transparent;
+touch-action:manipulation;
 }
 
 .statusIcon{
@@ -546,12 +562,15 @@ stroke:#fff;
 
 .dropdown{
 display:none;
-position:fixed;
+position:absolute;
+top:calc(100% + 6px);
+left:0;
+right:auto;
 background:#0f172a;
 width:180px;
 padding:10px;
 border-radius:14px;
-z-index:100000;
+z-index:50;
 box-shadow:0 14px 36px rgba(0,0,0,.45);
 border:1px solid #334155;
 }
@@ -568,6 +587,7 @@ background:#334155;
 color:#fff;
 cursor:pointer;
 font-family:inherit;
+-webkit-tap-highlight-color:transparent;
 }
 
 .dropdown button:last-child{margin-bottom:0}
@@ -665,7 +685,7 @@ padding:14px 12px;
 .renewUserMobile{font-size:11px}
 .subCopyBtn,
 .renewPlanFallback{font-size:11.5px}
-.renewPill{font-size:10.5px;padding:4px 8px}
+.renewPlanLine{font-size:11px}
 .menuBtn{
 width:28px !important;
 height:28px;
@@ -716,6 +736,7 @@ $parsedTarget = renewParseSubTarget($p[1] ?? '');
 $targetLabel = $parsedTarget['label'];
 $targetSubId = $parsedTarget['sub_id'];
 $planParts = renewParsePlanParts($p[2] ?? '');
+$planLine = renewFormatPlanLine($planParts);
 
 ?>
 
@@ -740,16 +761,7 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 <span class="renewPlanFallback"><?php echo htmlspecialchars($targetLabel, ENT_QUOTES, 'UTF-8'); ?></span>
 <?php } ?>
 
-<div class="renewPills">
-<?php if($planParts['size'] !== ''){ ?>
-<span class="renewPill">حجم<strong><?php echo htmlspecialchars($planParts['size'], ENT_QUOTES, 'UTF-8'); ?></strong></span>
-<?php } ?>
-<?php if($planParts['price'] !== ''){ ?>
-<span class="renewPill">قیمت<strong><?php echo htmlspecialchars($planParts['price'], ENT_QUOTES, 'UTF-8'); ?></strong></span>
-<?php } elseif($planParts['size'] === ''){ ?>
-<span class="renewPill"><strong><?php echo htmlspecialchars($planParts['raw'], ENT_QUOTES, 'UTF-8'); ?></strong></span>
-<?php } ?>
-</div>
+<span class="renewPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
 </div>
 
 <div class="renewActions">
@@ -772,11 +784,12 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 class="menuBtn"
 type="button"
 aria-label="منو"
+aria-expanded="false"
 onclick="openMenu(event,'m<?php echo $i; ?>')">
 ⋮
 </button>
 
-<div class="dropdown" id="m<?php echo $i; ?>">
+<div class="dropdown" id="m<?php echo $i; ?>" onclick="event.stopPropagation()">
 <button type="button" onclick="openDetails(
 '<?php echo htmlspecialchars($p[0] ?? '-',ENT_QUOTES); ?>',
 '<?php echo htmlspecialchars($mobile,ENT_QUOTES); ?>',
@@ -829,45 +842,45 @@ var renewResultError = <?php echo json_encode($paymentError, JSON_UNESCAPED_UNIC
 var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews'), JSON_UNESCAPED_UNICODE); ?>;
 
 function closeMenus(){
-document.querySelectorAll('.dropdown').forEach(function(el){
+document.querySelectorAll('.dropdown.active').forEach(function(el){
 el.classList.remove('active');
 });
 }
 
+var renewMenuIgnoreUntil = 0;
+
 function openMenu(e,id){
-e.stopPropagation();
-closeMenus();
+if(e && e.preventDefault){ e.preventDefault(); }
+if(e && e.stopPropagation){ e.stopPropagation(); }
 
 var m=document.getElementById(id);
 if(!m){ return; }
 
+var willOpen = !m.classList.contains('active');
+closeMenus();
+
+if(!willOpen){
+return;
+}
+
 m.classList.add('active');
-
-var btn = e.currentTarget || e.target;
-var r=btn.getBoundingClientRect();
-var width = 180;
-var left = r.left;
-var top = r.bottom + 6;
-
-if(left + width > window.innerWidth - 8){
-left = r.right - width;
+renewMenuIgnoreUntil = Date.now() + 350;
 }
 
-if(left < 8){
-left = 8;
+document.addEventListener('click', function(){
+if(Date.now() < renewMenuIgnoreUntil){
+return;
 }
+closeMenus();
+});
 
-if(top + 180 > window.innerHeight - 8){
-top = Math.max(8, r.top - 180);
+document.addEventListener('keydown', function(ev){
+if(ev.key === 'Escape'){
+closeMenus();
 }
+});
 
-m.style.top = top + 'px';
-m.style.left = left + 'px';
-}
-
-document.addEventListener('click', closeMenus);
 window.addEventListener('resize', closeMenus);
-window.addEventListener('scroll', closeMenus, true);
 
 function openModal(html){
 closeMenus();
