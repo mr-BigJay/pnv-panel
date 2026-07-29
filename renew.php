@@ -8,6 +8,7 @@ if(!isset($_SESSION['user'])){
 }
 
 require_once __DIR__ . '/coupon_lib.php';
+require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/telegram_lib.php';
 
 $plans = [];
@@ -73,7 +74,7 @@ function renewLoadUserSubscriptions($username){
         $link = trim($data[7] ?? '');
         $type = trim($data[9] ?? '');
 
-        if($type === 'خرید' && renewIsValidSubLink($link)){
+        if($type === 'خرید' && renewIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
             $key = strtolower($link);
             $linkIndex[$key] = [
                 'name' => $col1,
@@ -81,7 +82,7 @@ function renewLoadUserSubscriptions($username){
             ];
         }
 
-        if($type === 'تمدید' && renewIsValidSubLink($col1)){
+        if($type === 'تمدید' && renewIsValidSubLink($col1) && !pnvIsSubLinkCleared($username, $col1)){
             $key = strtolower($col1);
 
             if(!isset($linkIndex[$key])){

@@ -1,14 +1,31 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/../subscription_lib.php';
 
 if(!pnvAdminIsLoggedIn()){
+    http_response_code(403);
     exit;
 }
 
-$username = trim($_GET['user'] ?? '');
+$username = trim($_GET['user'] ?? $_POST['user'] ?? '');
 
 if($username === ''){
+    http_response_code(400);
+    exit('user required');
+}
+
+// حذف لینک اشتراک قدیمی (برای کسانی که اشتباه خرید زدند به‌جای تمدید)
+if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['clear_link'])){
+    header('Content-Type: application/json; charset=utf-8');
+
+    $result = pnvClearUserSubscriptionLink(
+        $username,
+        trim((string)($_POST['tracking'] ?? '')),
+        intval($_POST['timestamp'] ?? 0)
+    );
+
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -76,15 +93,20 @@ if(file_exists($paymentsFile)){
             continue;
         }
 
+        $link = trim($d[7] ?? '');
+        $status = trim($d[6] ?? 'درحال بررسی');
+        $linkCleared = ($status === 'تایید شد' && $link === '');
+
         $purchases[] = [
             'config' => $configName,
             'plan' => $d[2] ?? '',
             'tracking' => $d[3] ?? '',
             'date' => $d[4] ?? '',
             'time' => $d[5] ?? '',
-            'status' => trim($d[6] ?? 'درحال بررسی'),
-            'link' => trim($d[7] ?? ''),
-            'timestamp' => intval($d[8] ?? 0)
+            'status' => $status,
+            'link' => $link,
+            'timestamp' => intval($d[8] ?? 0),
+            'link_cleared' => $linkCleared
         ];
 
     }
@@ -146,6 +168,15 @@ function profileStatusClass($status){
 
 ?>
 
+<style>
+.subsHint{font-size:12px;line-height:24px;color:#94a3b8;margin:-4px 0 14px}
+.subClearedNote{font-size:13px;line-height:26px;padding:10px;border-radius:10px;background:#1e293b;color:#fbbf24}
+.subLink{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.subLink input{flex:1;min-width:140px;padding:10px;border:none;border-radius:10px;background:#1e293b;color:#fff;font-size:12px}
+.subLink button{border:none;border-radius:10px;background:#22c55e;color:#fff;padding:10px 14px;cursor:pointer;font-family:tahoma;white-space:nowrap}
+.subLink .subClearBtn{background:#dc2626}
+</style>
+
 <div class="profileOverlay" onclick="closeProfileModal()"></div>
 
 <div class="profileModal">
@@ -180,6 +211,7 @@ function profileStatusClass($status){
     </div>
 
     <div class="subsTitle">📦 لیست اشتراک‌های خریداری‌شده</div>
+    <div class="subsHint">اگر کاربر اشتباه خرید زده به‌جای تمدید، از «حذف لینک» برای پاک کردن لینک قدیمی از پنل کاربر استفاده کنید. سابقه پرداخت باقی می‌ماند.</div>
 
     <?php if(count($purchasesPage) === 0){ ?>
 
@@ -213,8 +245,21 @@ function profileStatusClass($status){
 
         <div class="subLink">
             <input type="text" readonly value="<?php echo htmlspecialchars($sub['link'], ENT_QUOTES, 'UTF-8'); ?>">
-            <button type="button" onclick="copySub(this)">کپی لینک</button>
+            <button type="button" onclick="copySub(this)">کپی</button>
+            <button
+                type="button"
+                class="subClearBtn"
+                data-user="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>"
+                data-tracking="<?php echo htmlspecialchars($sub['tracking'], ENT_QUOTES, 'UTF-8'); ?>"
+                data-timestamp="<?php echo intval($sub['timestamp']); ?>"
+                onclick="clearSubLink(this)">
+                حذف لینک
+            </button>
         </div>
+
+        <?php } elseif(!empty($sub['link_cleared'])){ ?>
+
+        <div class="subClearedNote">لینک این اشتراک از پنل کاربر حذف شده است</div>
 
         <?php } elseif($status === 'رد شد' && $sub['link'] !== ''){ ?>
 

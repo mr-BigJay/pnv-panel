@@ -666,6 +666,27 @@ color:white;
 padding:10px 14px;
 cursor:pointer;
 font-family:tahoma;
+white-space:nowrap;
+}
+
+.subLink .subClearBtn{
+background:#dc2626;
+}
+
+.subsHint{
+font-size:12px;
+line-height:24px;
+color:#94a3b8;
+margin:-4px 0 14px;
+}
+
+.subClearedNote{
+font-size:13px;
+line-height:26px;
+padding:10px;
+border-radius:10px;
+background:#1e293b;
+color:#fbbf24;
 }
 
 .subRejectReason,
@@ -1227,7 +1248,9 @@ document.getElementById('profileHost').style.display = 'none';
 
 function copySub(button){
 
-const input = button.previousElementSibling;
+const input = button.parentElement
+    ? button.parentElement.querySelector('input')
+    : button.previousElementSibling;
 
 if(!input){
 return;
@@ -1237,6 +1260,58 @@ input.select();
 input.setSelectionRange(0, 99999);
 navigator.clipboard.writeText(input.value);
 alert('کپی شد');
+
+}
+
+function clearSubLink(button){
+
+const user = button.getAttribute('data-user') || '';
+const tracking = button.getAttribute('data-tracking') || '';
+const timestamp = button.getAttribute('data-timestamp') || '0';
+
+if(!user || !tracking){
+alert('اطلاعات اشتراک ناقص است');
+return;
+}
+
+if(!confirm('لینک این اشتراک از پنل کاربر حذف شود؟\nسابقه پرداخت باقی می‌ماند.')){
+return;
+}
+
+button.disabled = true;
+button.textContent = '...';
+
+const body = new URLSearchParams();
+body.set('clear_link', '1');
+body.set('user', user);
+body.set('tracking', tracking);
+body.set('timestamp', timestamp);
+
+fetch(profileApiUrl, {
+method: 'POST',
+headers: {
+'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+},
+body: body.toString(),
+credentials: 'same-origin'
+})
+.then(function(res){ return res.json(); })
+.then(function(data){
+if(!data || !data.ok){
+alert((data && data.error) ? data.error : 'حذف لینک ناموفق بود');
+button.disabled = false;
+button.textContent = 'حذف لینک';
+return;
+}
+
+alert(data.message || 'لینک حذف شد');
+loadProfile(user);
+})
+.catch(function(){
+alert('خطا در ارتباط با سرور');
+button.disabled = false;
+button.textContent = 'حذف لینک';
+});
 
 }
 

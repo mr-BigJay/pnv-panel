@@ -3,6 +3,7 @@
 session_start();
 
 require_once "phpqrcode/qrlib.php";
+require_once __DIR__ . '/subscription_lib.php';
 
 if(!isset($_SESSION['user'])){
 header("Location: index.php");
@@ -357,6 +358,8 @@ $statusClass = "reject";
 
 <?php if($status == "تایید شد"){ ?>
 
+<?php if(trim((string)$link) !== '' && !pnvIsSubLinkCleared($_SESSION['user'], $link)){ ?>
+
 <div id="sub<?php echo $i; ?>">
 
 <?php echo htmlspecialchars($link); ?>
@@ -395,6 +398,12 @@ QR_ECLEVEL_L,
 <img src="<?php echo $qrfile; ?>">
 
 </div>
+
+<?php } else { ?>
+
+<div class="empty">لینک این اشتراک توسط پشتیبانی حذف شده است</div>
+
+<?php } ?>
 
 <?php } ?>
 
