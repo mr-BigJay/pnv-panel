@@ -221,19 +221,25 @@ return $out;
 
 <style>
 
+/* کمتر کردن حاشیه دو سمت صفحه لیست تمدید */
+.content > .box{
+padding:16px 10px;
+}
+
 .renewTable{
 background:#1e293b;
 border-radius:16px;
 overflow:visible;
 color:#fff;
+margin:0 -4px;
 }
 
 .renewRow{
 display:grid;
-grid-template-columns:minmax(0,1.1fr) minmax(0,1.2fr) auto;
+grid-template-columns:minmax(0,1.05fr) minmax(0,1.35fr) auto;
 align-items:center;
-gap:10px;
-padding:10px 12px;
+gap:6px;
+padding:8px 6px;
 border-bottom:1px solid #334155;
 position:relative;
 }
@@ -244,14 +250,14 @@ border-bottom:none;
 
 .renewCol{
 min-width:0;
-font-size:13px;
-line-height:1.45;
+font-size:12px;
+line-height:1.35;
 text-align:center;
 }
 
 .renewCol b{
 display:block;
-font-size:13px;
+font-size:12px;
 font-weight:700;
 white-space:nowrap;
 overflow:hidden;
@@ -262,7 +268,7 @@ text-align:center;
 .renewCol span{
 display:block;
 color:#94a3b8;
-font-size:12px;
+font-size:11px;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
@@ -272,28 +278,34 @@ text-align:center;
 .renewActions{
 display:flex;
 align-items:center;
-gap:8px;
+gap:4px;
 justify-content:center;
 position:relative;
+flex-wrap:nowrap;
+flex-shrink:0;
+white-space:nowrap;
 }
 
 .menuBtn,
 .statusIcon{
-width:38px;
-height:38px;
-border-radius:10px;
+width:28px !important;
+height:28px;
+min-width:28px;
+border-radius:8px;
 display:inline-flex;
 align-items:center;
 justify-content:center;
-flex:0 0 38px;
+flex:0 0 28px;
 box-sizing:border-box;
+margin:0 !important;
+padding:0 !important;
 }
 
 .menuBtn{
 border:none;
 background:#334155;
 color:#fff;
-font-size:18px;
+font-size:14px;
 cursor:pointer;
 line-height:1;
 }
@@ -304,8 +316,8 @@ color:#fff;
 }
 
 .statusIcon svg{
-width:18px;
-height:18px;
+width:14px;
+height:14px;
 display:block;
 stroke:#fff;
 }
@@ -330,10 +342,11 @@ border:none;
 background:transparent;
 color:#fff;
 font:inherit;
-font-size:13px;
+font-size:12px;
 font-weight:700;
 text-align:center;
-padding:0;
+padding:0 !important;
+margin:0 !important;
 cursor:pointer;
 white-space:nowrap;
 overflow:hidden;
@@ -453,17 +466,40 @@ color:#fff;
 .gray{background:#475569}
 
 @media(max-width:560px){
-.renewRow{
-grid-template-columns:minmax(0,1fr) auto;
-grid-template-areas:
-"user actions"
-"plan actions";
-gap:6px 10px;
-padding:10px;
+.content > .box{
+padding:12px 6px;
 }
-.renewColUser{grid-area:user}
-.renewColPlan{grid-area:plan}
-.renewActions{grid-area:actions;align-self:center}
+.renewTable{
+margin:0 -2px;
+}
+.renewRow{
+grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) auto;
+gap:4px;
+padding:8px 4px;
+}
+.menuBtn,
+.statusIcon{
+width:26px !important;
+height:26px;
+min-width:26px;
+flex:0 0 26px;
+border-radius:7px;
+}
+.statusIcon svg{
+width:12px;
+height:12px;
+}
+.menuBtn{
+font-size:13px;
+}
+.renewCol,
+.renewCol b,
+.subCopyBtn{
+font-size:11px;
+}
+.renewCol span{
+font-size:10px;
+}
 }
 
 </style>
