@@ -171,6 +171,25 @@ $renews[]=[
 
 $renews=array_reverse($renews);
 
+$perPage = 20;
+$currentPage = intval($_GET['p'] ?? 1);
+if($currentPage < 1){
+$currentPage = 1;
+}
+
+$totalItems = count($renews);
+$totalPages = max(1, (int)ceil($totalItems / $perPage));
+if($currentPage > $totalPages){
+$currentPage = $totalPages;
+}
+
+$start = ($currentPage - 1) * $perPage;
+$renewsPage = array_slice($renews, $start, $perPage);
+
+function renewsListUrl($page){
+return pnvAdminUrl('index.php?page=renews&p=' . intval($page));
+}
+
 function renewParseSubTarget($target){
 $target = trim((string)$target);
 $out = [
@@ -510,11 +529,11 @@ font-size:10px;
 
 <div class="renewTable">
 
-<?php if(count($renews) === 0){ ?>
+<?php if($totalItems === 0){ ?>
 <div class="renewRow" style="justify-content:center;color:#94a3b8">تمدیدی برای نمایش نیست</div>
 <?php } ?>
 
-<?php foreach($renews as $r){
+<?php foreach($renewsPage as $r){
 
 $i=$r['index'];
 $p=$r['data'];
@@ -616,6 +635,18 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 <?php } ?>
 
 </div>
+
+<?php if($totalPages > 1){ ?>
+<div class="pagination" style="margin-top:18px;">
+<?php for($x = 1; $x <= $totalPages; $x++){ ?>
+<a
+href="<?php echo htmlspecialchars(renewsListUrl($x), ENT_QUOTES, 'UTF-8'); ?>"
+class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
+<?php echo $x; ?>
+</a>
+<?php } ?>
+</div>
+<?php } ?>
 
 </div>
 
