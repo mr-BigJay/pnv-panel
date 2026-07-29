@@ -848,14 +848,14 @@ if(!function_exists('telegramConfigPath')){
 
     function telegramMessagesText($items, $source){
         if(count($items) === 0){
-            return "📨 پیام کاربران\n\nهنوز گفتگویی برای نمایش نیست.";
+            return telegramCenterLines("📨 پیام کاربران\n\nهنوز گفتگویی برای نمایش نیست.");
         }
 
         if($source === 'unread'){
-            return "📨 پیام کاربران\n\n" . count($items) . " پیام خوانده‌نشده\nکاربر را انتخاب کنید:";
+            return telegramCenterLines("📨 پیام کاربران\n\n" . count($items) . " پیام خوانده‌نشده\nکاربر را انتخاب کنید:");
         }
 
-        return "📨 پیام کاربران\n\nپیام خوانده‌نشده‌ای نیست.\nآخرین گفتگوها:";
+        return telegramCenterLines("📨 پیام کاربران\n\nپیام خوانده‌نشده‌ای نیست.\nآخرین گفتگوها:");
     }
 
     function telegramBackRow($callback){
@@ -1051,17 +1051,18 @@ if(!function_exists('telegramConfigPath')){
         $total = intval($pageData['total'] ?? 0);
         $page = intval($pageData['page'] ?? 0) + 1;
         $pages = intval($pageData['pages'] ?? 1);
-        $items = $pageData['items'] ?? [];
 
         if($total === 0){
-            return $title . "\n\nهنوز مورد تایید/رد شده‌ای ثبت نشده است.";
+            return telegramCenterLines($title . "\n\nهنوز مورد تایید/رد شده‌ای ثبت نشده است.");
         }
 
-        return $title
+        return telegramCenterLines(
+            $title
             . "\n\n"
             . $total . " مورد رسیدگی‌شده"
             . "\nصفحه " . $page . " از " . $pages
-            . "\nآخرین موارد را انتخاب کنید:";
+            . "\nآخرین موارد را انتخاب کنید:"
+        );
     }
 
     function telegramReportStatusIcon($status){
