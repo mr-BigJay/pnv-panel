@@ -291,7 +291,18 @@ if(!function_exists('telegramConfigPath')){
                 $params['text'] = telegramLimitText($text, 4096);
             }
 
-            $results[] = telegramApiRequest($method, $params, $files, $config);
+            if(isset($params['reply_markup'])){
+                $params['reply_markup'] = telegramPadKeyboard($params['reply_markup']);
+            }
+
+            $result = telegramApiRequest($method, $params, $files, $config);
+            $results[] = $result;
+
+            $messageId = intval($result['result']['message_id'] ?? 0);
+
+            if($messageId > 0){
+                telegramRememberUiMessage($chatId, $messageId);
+            }
         }
 
         return $results;
@@ -403,9 +414,9 @@ if(!function_exists('telegramConfigPath')){
         return strlen($text);
     }
 
-    function telegramVisualPad($text, $width = 28){
+    function telegramVisualPad($text, $width = null){
         $text = (string)$text;
-        $width = max(1, intval($width));
+        $width = $width === null ? telegramMenuWidth() : max(1, intval($width));
         $len = telegramMbLen($text);
 
         if($len >= $width){
@@ -420,12 +431,184 @@ if(!function_exists('telegramConfigPath')){
         return str_repeat($blank, $left) . $text . str_repeat($blank, $right);
     }
 
-    function telegramWideSpacer($width = 34){
-        return str_repeat(telegramInvisiblePadChar(), max(1, intval($width)));
+    function telegramWideSpacer($width = null){
+        $width = $width === null ? (telegramMenuWidth() + 6) : max(1, intval($width));
+        return str_repeat(telegramInvisiblePadChar(), $width);
+    }
+
+    function telegramMenuWidth(){
+        // عریض‌تر از قبل تا کادر منو وسط و پهن دیده شود
+        return 38;
     }
 
     function telegramHomeMenuWidth(){
-        return 30;
+        return telegramMenuWidth();
+    }
+
+    function telegramCenterLines($text, $width = null){
+        $width = $width === null ? telegramMenuWidth() : max(1, intval($width));
+        $lines = preg_split("/\r\n|\n|\r/", (string)$text);
+        $out = [];
+
+        foreach($lines as $line){
+            if(trim($line) === ''){
+                $out[] = '';
+                continue;
+            }
+
+            $out[] = telegramVisualPad($line, $width);
+        }
+
+        $out[] = telegramWideSpacer($width + 6);
+        return implode("\n", $out);
+    }
+
+    function telegramPadButtonText($text, $width = null){
+        $text = trim((string)$text);
+
+        if($text === ''){
+            return $text;
+        }
+
+        return telegramVisualPad($text, $width);
+    }
+
+    function telegramPadKeyboard($keyboardJson, $width = null){
+        $width = $width === null ? telegramMenuWidth() : max(1, intval($width));
+        $data = is_array($keyboardJson) ? $keyboardJson : json_decode((string)$keyboardJson, true);
+
+        if(!is_array($data) || !isset($data['inline_keyboard']) || !is_array($data['inline_keyboard'])){
+            return is_string($keyboardJson) ? $keyboardJson : json_encode($data, JSON_UNESCAPED_UNICODE);
+        }
+
+        foreach($data['inline_keyboard'] as $r => $row){
+            if(!is_array($row)){
+                continue;
+            }
+
+            // ردیف تک‌دکمه‌ای را پهن کن؛ ردیف چندتایی را کمی جمع‌وجورتر
+            $rowWidth = count($row) === 1 ? $width : max(12, intdiv($width, count($row)));
+
+            foreach($row as $c => $btn){
+                if(!is_array($btn) || !isset($btn['text'])){
+                    continue;
+                }
+
+                $data['inline_keyboard'][$r][$c]['text'] = telegramPadButtonText($btn['text'], $rowWidth);
+            }
+        }
+
+        return json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    function telegramRememberUiMessage($chatId, $messageId){
+        $chatId = (string)$chatId;
+        $messageId = intval($messageId);
+
+        if($chatId === '' || $messageId <= 0){
+            return;
+        }
+
+        $session = telegramGetSession($chatId);
+        if(!is_array($session)){
+            $session = [];
+        }
+
+        $ids = is_array($session['ui_message_ids'] ?? null) ? $session['ui_message_ids'] : [];
+        $ids[] = $messageId;
+
+        if(!empty($session['screen_message_id'])){
+            $ids[] = intval($session['screen_message_id']);
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+
+        if(count($ids) > 30){
+            $ids = array_slice($ids, -30);
+        }
+
+        telegramSetSession($chatId, array_merge($session, [
+            'ui_message_ids' => $ids,
+            'updated_at' => time()
+        ]));
+    }
+
+    function telegramPurgeUiMessages($chatId, $keepIds = [], $config = null){
+        $chatId = (string)$chatId;
+
+        if($chatId === ''){
+            return;
+        }
+
+        $keep = [];
+        foreach((array)$keepIds as $id){
+            $id = intval($id);
+            if($id > 0){
+                $keep[$id] = true;
+            }
+        }
+
+        $session = telegramGetSession($chatId);
+        if(!is_array($session)){
+            $session = [];
+        }
+
+        $ids = is_array($session['ui_message_ids'] ?? null) ? $session['ui_message_ids'] : [];
+
+        if(!empty($session['screen_message_id'])){
+            $ids[] = intval($session['screen_message_id']);
+        }
+
+        // یادآورها هم باید با تعویض صفحه پاک شوند
+        $reminders = telegramLoadRemindersState();
+        foreach(['خرید', 'تمدید'] as $kind){
+            $stored = intval(($reminders[$kind]['messages'][$chatId] ?? 0));
+            if($stored > 0){
+                $ids[] = $stored;
+            }
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        $kept = [];
+
+        foreach($ids as $id){
+            if(isset($keep[$id])){
+                $kept[] = $id;
+                continue;
+            }
+
+            // اول کیبورد را بردار تا حتی اگر حذف نشد شلوغ نماند
+            telegramApiRequest('editMessageReplyMarkup', [
+                'chat_id' => $chatId,
+                'message_id' => $id,
+                'reply_markup' => json_encode(['inline_keyboard' => []])
+            ], [], $config);
+
+            $deleted = telegramDeleteMessage($chatId, $id, $config);
+
+            if(empty($deleted['ok'])){
+                // اگر حذف نشد، حداقل بدون دکمه بماند؛ id را نگه ندار
+            }
+        }
+
+        // reminder state cleanup for this chat
+        $changed = false;
+        foreach(['خرید', 'تمدید'] as $kind){
+            $entry = telegramReminderKindState($reminders, $kind);
+            if(isset($entry['messages'][$chatId])){
+                unset($entry['messages'][$chatId]);
+                $reminders[$kind] = $entry;
+                $changed = true;
+            }
+        }
+        if($changed){
+            telegramSaveRemindersState($reminders);
+        }
+
+        telegramSetSession($chatId, array_merge($session, [
+            'ui_message_ids' => $kept,
+            'updated_at' => time()
+        ]));
     }
 
     function telegramPaymentsPath(){
@@ -676,7 +859,7 @@ if(!function_exists('telegramConfigPath')){
     }
 
     function telegramBackRow($callback){
-        return [['text' => 'بازگشت', 'callback_data' => $callback]];
+        return [['text' => telegramPadButtonText('بازگشت'), 'callback_data' => $callback]];
     }
 
     function telegramMessagesKeyboard($items){
@@ -729,10 +912,19 @@ if(!function_exists('telegramConfigPath')){
             $session = [];
         }
 
-        telegramSetSession($chatId, array_merge($session, $patch, ['updated_at' => time()]));
+        $merged = array_merge($session, $patch, ['updated_at' => time()]);
+
+        if(!empty($merged['screen_message_id'])){
+            $ids = is_array($merged['ui_message_ids'] ?? null) ? $merged['ui_message_ids'] : [];
+            $ids[] = intval($merged['screen_message_id']);
+            $merged['ui_message_ids'] = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        }
+
+        telegramSetSession($chatId, $merged);
     }
 
     function telegramShowPage($chatId, $text, $keyboard, $config = null, $messageId = null){
+        $keyboard = telegramPadKeyboard($keyboard);
         $extra = ['reply_markup' => $keyboard];
         $session = telegramGetSession($chatId);
         $oldScreenId = is_array($session) ? intval($session['screen_message_id'] ?? 0) : 0;
@@ -755,10 +947,6 @@ if(!function_exists('telegramConfigPath')){
                 'reply_markup' => $keyboard
             ], [], $config);
 
-            telegramUpdateSessionScreen($chatId, [
-                'screen_message_id' => intval($editId)
-            ]);
-
             return intval($editId);
         };
 
@@ -766,10 +954,9 @@ if(!function_exists('telegramConfigPath')){
         $editedId = $tryEdit($messageId);
 
         if($editedId > 0){
-            if($oldScreenId > 0 && $oldScreenId !== $editedId){
-                telegramDeleteMessage($chatId, $oldScreenId, $config);
-            }
-
+            telegramPurgeUiMessages($chatId, [$editedId], $config);
+            telegramRememberUiMessage($chatId, $editedId);
+            telegramUpdateSessionScreen($chatId, ['screen_message_id' => $editedId]);
             return $editedId;
         }
 
@@ -778,10 +965,9 @@ if(!function_exists('telegramConfigPath')){
             $editedId = $tryEdit($oldScreenId);
 
             if($editedId > 0){
-                if($messageId > 0){
-                    telegramDeleteMessage($chatId, $messageId, $config);
-                }
-
+                telegramPurgeUiMessages($chatId, [$editedId], $config);
+                telegramRememberUiMessage($chatId, $editedId);
+                telegramUpdateSessionScreen($chatId, ['screen_message_id' => $editedId]);
                 return $editedId;
             }
         }
@@ -799,7 +985,9 @@ if(!function_exists('telegramConfigPath')){
             telegramDeleteMessage($chatId, $cleanerId, $config);
         }
 
-        // منو/صفحه قبلی را حذف کن تا ربات شلوغ نشود
+        // همه منو/اعلان/یادآور قبلی را پاک کن؛ فقط صفحه جدید بماند
+        telegramPurgeUiMessages($chatId, [$newId], $config);
+
         foreach([$oldScreenId, $messageId] as $obsoleteId){
             if($obsoleteId > 0 && $obsoleteId !== $newId){
                 telegramDeleteMessage($chatId, $obsoleteId, $config);
@@ -807,6 +995,7 @@ if(!function_exists('telegramConfigPath')){
         }
 
         if($newId > 0){
+            telegramRememberUiMessage($chatId, $newId);
             telegramUpdateSessionScreen($chatId, [
                 'screen_message_id' => $newId
             ]);
@@ -825,10 +1014,14 @@ if(!function_exists('telegramConfigPath')){
         $title = telegramPaymentEmoji($kind) . ' ' . telegramPaymentTitle($kind);
 
         if(count($items) === 0){
-            return $title . "\n\nمورد جدیدی برای بررسی نیست.\nاز دکمه گزارش می‌توانید سوابق را ببینید.";
+            return telegramCenterLines(
+                $title . "\n\nمورد جدیدی برای بررسی نیست.\nاز دکمه گزارش می‌توانید سوابق را ببینید."
+            );
         }
 
-        return $title . "\n\n" . count($items) . " مورد در انتظار بررسی\nیکی را انتخاب کنید:";
+        return telegramCenterLines(
+            $title . "\n\n" . count($items) . " مورد در انتظار بررسی\nیکی را انتخاب کنید:"
+        );
     }
 
     function telegramPaymentsListKeyboard($kind, $items){
@@ -1237,19 +1430,38 @@ if(!function_exists('telegramConfigPath')){
     }
 
     function telegramSendPendingReminder($kind, $count, $config = null){
-        $text = telegramReminderText($kind, $count);
+        $text = telegramCenterLines(telegramReminderText($kind, $count));
         $keyboard = telegramReminderKeyboard($kind);
         $sentMessages = [];
 
         foreach(telegramAdminChatIds($config) as $chatId){
+            // قبل از یادآور جدید، منوی قبلی همین چت را خلوت کن
+            $session = telegramGetSession($chatId);
+            $oldScreen = is_array($session) ? intval($session['screen_message_id'] ?? 0) : 0;
+
             $result = telegramSendMessage($chatId, $text, [
-                'reply_markup' => $keyboard
+                'reply_markup' => telegramPadKeyboard($keyboard)
             ], $config);
 
             $messageId = intval($result['result']['message_id'] ?? 0);
 
-            if(!empty($result['ok']) && $messageId > 0){
+            if($messageId > 0){
                 $sentMessages[(string)$chatId] = $messageId;
+                telegramRememberUiMessage($chatId, $messageId);
+
+                if($oldScreen > 0 && $oldScreen !== $messageId){
+                    telegramApiRequest('editMessageReplyMarkup', [
+                        'chat_id' => $chatId,
+                        'message_id' => $oldScreen,
+                        'reply_markup' => json_encode(['inline_keyboard' => []])
+                    ], [], $config);
+                    telegramDeleteMessage($chatId, $oldScreen, $config);
+                }
+
+                telegramUpdateSessionScreen($chatId, [
+                    'screen_message_id' => $messageId,
+                    'screen' => 'reminder'
+                ]);
             }
         }
 

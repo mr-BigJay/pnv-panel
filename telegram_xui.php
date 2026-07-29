@@ -115,6 +115,10 @@ if(!function_exists('telegramXuiActionKeyboard')){
             }
         }
 
+        if(function_exists('telegramCenterLines')){
+            $text = telegramCenterLines($text);
+        }
+
         $keyboard = json_encode([
             'inline_keyboard' => [
                 [
@@ -123,9 +127,23 @@ if(!function_exists('telegramXuiActionKeyboard')){
             ]
         ], JSON_UNESCAPED_UNICODE);
 
+        // همیشه از ShowPage استفاده کن تا منوهای قبلی پاک شوند
+        if(function_exists('telegramShowPage')){
+            $id = telegramShowPage($chatId, $text, $keyboard, $config, $messageId);
+
+            if(function_exists('telegramUpdateSessionScreen')){
+                telegramUpdateSessionScreen($chatId, [
+                    'screen' => 'xui_result',
+                    'screen_message_id' => intval($id)
+                ]);
+            }
+
+            return true;
+        }
+
         if(function_exists('telegramEditMessage')){
             $edited = telegramEditMessage($chatId, $messageId, $text, [
-                'reply_markup' => $keyboard
+                'reply_markup' => function_exists('telegramPadKeyboard') ? telegramPadKeyboard($keyboard) : $keyboard
             ], $config);
 
             if(!empty($edited['ok']) && function_exists('telegramUpdateSessionScreen')){
@@ -137,14 +155,9 @@ if(!function_exists('telegramXuiActionKeyboard')){
             }
         }
 
-        if(function_exists('telegramShowPage')){
-            telegramShowPage($chatId, $text, $keyboard, $config, $messageId);
-            return true;
-        }
-
         if(function_exists('telegramSendMessage')){
             telegramSendMessage($chatId, $text, [
-                'reply_markup' => $keyboard
+                'reply_markup' => function_exists('telegramPadKeyboard') ? telegramPadKeyboard($keyboard) : $keyboard
             ], $config);
         }
 
