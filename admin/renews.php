@@ -186,11 +186,15 @@ return $out;
 $host = '';
 $subId = '';
 
-if(preg_match('~https?://([^/:]+)(?::\d+)?/sub/([^/?#]+)~i', $target, $m)){
+// فقط SubID الفبانumeric؛ متن اضافه فرم را نگیر
+if(preg_match('~https?://([^/:]+)(?::\d+)?/sub/([A-Za-z0-9]+)~i', $target, $m)){
 $host = strtolower($m[1]);
 $subId = $m[2];
 }
-elseif(preg_match('~/sub/([^/?#]+)~i', $target, $m)){
+elseif(preg_match('~/sub/([A-Za-z0-9]+)~i', $target, $m)){
+$subId = $m[1];
+}
+elseif(preg_match('~\b([A-Za-z0-9]{8,32})\b~', $target, $m)){
 $subId = $m[1];
 }
 
@@ -208,9 +212,6 @@ $out['label'] = $out['vip'] . '-' . $subId;
 }
 elseif($subId !== ''){
 $out['label'] = $subId;
-}
-elseif($target !== ''){
-$out['label'] = $target;
 }
 
 return $out;

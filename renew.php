@@ -33,6 +33,12 @@ if(!is_array($cards)){
 
 function renewIsValidSubLink($value){
 
+    $value = renewNormalizeSubLink($value);
+
+    if($value === ''){
+        return false;
+    }
+
     $validDomains = [
         'vip.boozhaan.ir',
         'vip2.boozhaan.ir',
@@ -47,6 +53,31 @@ function renewIsValidSubLink($value){
     }
 
     return false;
+}
+
+function renewNormalizeSubLink($value){
+    $value = trim((string)$value);
+
+    if($value === ''){
+        return '';
+    }
+
+    // لینک کامل داخل متن کثیف
+    if(preg_match('~https?://(?:vip\d*)\.boozhaan\.ir(?::\d+)?/sub/[A-Za-z0-9]+~i', $value, $m)){
+        return $m[0];
+    }
+
+    // فقط SubID خام
+    if(preg_match('/^[A-Za-z0-9]{8,32}$/', $value)){
+        return $value;
+    }
+
+    // SubID در ابتدای متن خراب
+    if(preg_match('/^\s*([A-Za-z0-9]{8,32})\b/u', $value, $m)){
+        return $m[1];
+    }
+
+    return trim(preg_split('/\s+/u', $value)[0] ?? '');
 }
 
 function renewLoadUserSubscriptions($username){
@@ -75,6 +106,7 @@ function renewLoadUserSubscriptions($username){
         $type = trim($data[9] ?? '');
 
         if($type === 'خرید' && renewIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
+            $link = renewNormalizeSubLink($link);
             $key = strtolower($link);
             $linkIndex[$key] = [
                 'name' => $col1,
@@ -83,6 +115,7 @@ function renewLoadUserSubscriptions($username){
         }
 
         if($type === 'تمدید' && renewIsValidSubLink($col1) && !pnvIsSubLinkCleared($username, $col1)){
+            $col1 = renewNormalizeSubLink($col1);
             $key = strtolower($col1);
 
             if(!isset($linkIndex[$key])){
@@ -112,7 +145,7 @@ $error = "";
 
 if($_SERVER['REQUEST_METHOD'] == "POST"){
 
-    $sub = trim($_POST['sub']);
+    $sub = renewNormalizeSubLink($_POST['sub'] ?? '');
     $plan = trim($_POST['plan']);
     $tracking = trim($_POST['tracking']);
     $time = trim($_POST['time']);
