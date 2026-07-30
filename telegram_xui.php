@@ -72,6 +72,10 @@ if(!function_exists('telegramXuiActionKeyboard')){
             $lines[] = 'حجم: ' . $result['gb'] . 'GB';
         }
 
+        if(!empty($result['days'])){
+            $lines[] = 'مدت: ' . intval($result['days']) . ' روز';
+        }
+
         if(!empty($result['link'])){
             $lines[] = '';
             $lines[] = $result['link'];

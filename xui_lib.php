@@ -179,6 +179,177 @@ if(!function_exists('xuiConfigPath')){
         return 0;
     }
 
+    function xuiLoadPlans(){
+        $path = __DIR__ . '/db/plans.json';
+
+        if(!is_file($path)){
+            return [];
+        }
+
+        $data = json_decode((string)file_get_contents($path), true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    function xuiFormatPlanPriceLabel($price){
+        $price = intval($price);
+
+        if($price < 1000){
+            return number_format($price) . ' هزار تومان';
+        }
+
+        $million = rtrim(rtrim(number_format($price / 1000, 3), '0'), '.');
+
+        return $million . ' میلیون تومان';
+    }
+
+    function xuiPlanIsUnlimited($plan){
+        $days = trim((string)($plan['days'] ?? ''));
+
+        if($days === '' || $days === 'نامحدود' || strcasecmp($days, 'unlimited') === 0){
+            return true;
+        }
+
+        return intval($days) <= 0;
+    }
+
+    function xuiPlanDurationDays($plan){
+        if(!is_array($plan) || xuiPlanIsUnlimited($plan)){
+            return 0;
+        }
+
+        return max(0, intval($plan['days'] ?? 0));
+    }
+
+    /**
+     * Resolve plan row from payment CSV plan label.
+     * Supports plain labels and coupon labels ("name - price | تخفیف ...").
+     */
+    function xuiFindPlanByPaymentText($planText){
+        $planText = trim((string)$planText);
+        $plans = xuiLoadPlans();
+
+        if($planText === '' || count($plans) === 0){
+            return null;
+        }
+
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $name = trim((string)($plan['name'] ?? ''));
+
+            if($name === ''){
+                continue;
+            }
+
+            $label = $name . ' - ' . xuiFormatPlanPriceLabel($plan['price'] ?? 0);
+
+            if($label === $planText){
+                return $plan;
+            }
+        }
+
+        $nameMatches = [];
+
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $name = trim((string)($plan['name'] ?? ''));
+
+            if($name === ''){
+                continue;
+            }
+
+            $prefix = $name . ' - ';
+
+            if(strpos($planText, $prefix) !== 0){
+                continue;
+            }
+
+            $priceText = xuiFormatPlanPriceLabel($plan['price'] ?? 0);
+
+            if(strpos($planText, $priceText) !== false){
+                return $plan;
+            }
+
+            $nameMatches[] = $plan;
+        }
+
+        if(count($nameMatches) === 1){
+            return $nameMatches[0];
+        }
+
+        // Same volume name, different durations: prefer matching GB + unique days if only one limited/unlimited fits
+        $gb = xuiParsePlanGb($planText);
+
+        if($gb > 0 && count($nameMatches) > 1){
+            $byGb = array_values(array_filter($nameMatches, function($plan) use ($gb){
+                return xuiParsePlanGb($plan['name'] ?? '') === $gb;
+            }));
+
+            if(count($byGb) === 1){
+                return $byGb[0];
+            }
+        }
+
+        return null;
+    }
+
+    function xuiResolvePlanDaysFromPaymentText($planText){
+        $plan = xuiFindPlanByPaymentText($planText);
+
+        if(!$plan){
+            return 0;
+        }
+
+        return xuiPlanDurationDays($plan);
+    }
+
+    /** Duration days → 3x-ui expiryTime (negative = Start After First Use). */
+    function xuiDaysToExpiryTime($days){
+        $days = intval($days);
+
+        if($days <= 0){
+            return 0;
+        }
+
+        return -1 * $days * 86400000;
+    }
+
+    function xuiExtendExpiryTime($currentExpiry, $addDays){
+        $addDays = intval($addDays);
+
+        if($addDays <= 0){
+            return intval($currentExpiry);
+        }
+
+        $addMs = $addDays * 86400000;
+        $current = intval($currentExpiry);
+        $nowMs = (int)round(microtime(true) * 1000);
+
+        if($current === 0){
+            // Was unlimited → start-after-first-use for the new period
+            return -1 * $addMs;
+        }
+
+        if($current < 0){
+            // Not started yet → lengthen pending duration
+            return $current - $addMs;
+        }
+
+        if($current <= $nowMs){
+            // Expired → new absolute window from now
+            return $nowMs + $addMs;
+        }
+
+        // Active absolute → extend
+        return $current + $addMs;
+    }
+
     function xuiGbToBytes($gb){
         return intval($gb) * 1024 * 1024 * 1024;
     }
@@ -1241,7 +1412,7 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
-    function xuiCreateClient($server, $email, $gb, $subId = ''){
+    function xuiCreateClient($server, $email, $gb, $subId = '', $days = 0){
         $email = xuiSanitizeClientEmail($email);
 
         if($email === ''){
@@ -1255,12 +1426,14 @@ if(!function_exists('xuiConfigPath')){
         $inboundId = intval($server['inbound_id'] ?? 1);
         $bytes = xuiGbToBytes($gb);
         $uuid = xuiGenerateUuid();
+        $days = max(0, intval($days));
 
         $client = [
             'id' => $uuid,
             'email' => $email,
             'enable' => true,
-            'expiryTime' => 0,
+            // 0 = unlimited time; negative ms = Duration (days) with Start After First Use
+            'expiryTime' => xuiDaysToExpiryTime($days),
             'totalGB' => $bytes,
             'limitIp' => 0,
             'subId' => $subId,
@@ -1285,6 +1458,7 @@ if(!function_exists('xuiConfigPath')){
                 'sub_id' => $subId,
                 'link' => xuiBuildSubLink($server['host'] ?? '', $subId),
                 'server' => $server,
+                'days' => $days,
                 'raw' => $result
             ];
         }
@@ -1306,6 +1480,7 @@ if(!function_exists('xuiConfigPath')){
                 'sub_id' => $subId,
                 'link' => xuiBuildSubLink($server['host'] ?? '', $subId),
                 'server' => $server,
+                'days' => $days,
                 'raw' => $legacy
             ];
         }
@@ -1342,11 +1517,12 @@ if(!function_exists('xuiConfigPath')){
         return 0;
     }
 
-    function xuiAdjustClientTrafficLegacy($server, $client, $addGb){
+    function xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays = 0){
         $email = trim((string)($client['email'] ?? ''));
         $clientId = trim((string)($client['id'] ?? ''));
         $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
         $addBytes = xuiGbToBytes($addGb);
+        $addDays = max(0, intval($addDays));
 
         if($email === '' || $clientId === '' || $inboundId <= 0){
             return [
@@ -1361,6 +1537,7 @@ if(!function_exists('xuiConfigPath')){
         $currentTotal = xuiClientTotalBytes($client);
         $updated['totalGB'] = $currentTotal + $addBytes;
         $updated['enable'] = true;
+        $updated['expiryTime'] = xuiExtendExpiryTime($updated['expiryTime'] ?? 0, $addDays);
 
         if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
             $updated['subId'] = $client['subId'];
@@ -1383,19 +1560,21 @@ if(!function_exists('xuiConfigPath')){
         return [
             'ok' => true,
             'raw' => $result,
-            'method' => 'updateClient'
+            'method' => 'updateClient',
+            'days' => $addDays
         ];
     }
 
-    function xuiAdjustClientTraffic($server, $email, $addGb, $client = null){
+    function xuiAdjustClientTraffic($server, $email, $addGb, $client = null, $addDays = 0){
         $bytes = xuiGbToBytes($addGb);
         $email = trim((string)$email);
+        $addDays = max(0, intval($addDays));
         $errors = [];
 
         if($email !== ''){
             $result = xuiApiRequest($server, 'POST', '/panel/api/clients/bulkAdjust', [
                 'emails' => [$email],
-                'addDays' => 0,
+                'addDays' => $addDays,
                 'addBytes' => $bytes
             ]);
 
@@ -1403,7 +1582,8 @@ if(!function_exists('xuiConfigPath')){
                 return [
                     'ok' => true,
                     'raw' => $result,
-                    'method' => 'bulkAdjust'
+                    'method' => 'bulkAdjust',
+                    'days' => $addDays
                 ];
             }
 
@@ -1411,7 +1591,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         if(is_array($client)){
-            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb);
+            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays);
 
             if(!empty($legacy['ok'])){
                 return $legacy;
@@ -1439,6 +1619,7 @@ if(!function_exists('xuiConfigPath')){
         $configName = trim((string)($paymentRow[1] ?? ''));
         $planText = trim((string)($paymentRow[2] ?? ''));
         $gb = xuiParsePlanGb($planText);
+        $days = xuiResolvePlanDaysFromPaymentText($planText);
 
         if($gb <= 0){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
@@ -1463,7 +1644,7 @@ if(!function_exists('xuiConfigPath')){
             $email .= '_' . substr(xuiGenerateSubId(6), 0, 4);
         }
 
-        $created = xuiCreateClient($server, $email, $gb);
+        $created = xuiCreateClient($server, $email, $gb, '', $days);
 
         if(empty($created['ok'])){
             return $created;
@@ -1475,7 +1656,8 @@ if(!function_exists('xuiConfigPath')){
             'email' => $created['email'],
             'sub_id' => $created['sub_id'],
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'days' => $days
         ];
     }
 
@@ -1490,6 +1672,7 @@ if(!function_exists('xuiConfigPath')){
         $subLink = xuiNormalizeSubLink($rawSubLink);
         $planText = trim((string)($paymentRow[2] ?? ''));
         $gb = xuiParsePlanGb($planText);
+        $days = xuiResolvePlanDaysFromPaymentText($planText);
 
         if($gb <= 0){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
@@ -1590,7 +1773,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $email = trim((string)($client['email'] ?? ''));
-        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client);
+        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
 
         if(empty($adjusted['ok'])){
             return $adjusted;
@@ -1608,7 +1791,8 @@ if(!function_exists('xuiConfigPath')){
             'email' => $email,
             'sub_id' => $subId,
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'days' => $days
         ];
     }
 
