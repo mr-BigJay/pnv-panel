@@ -9,6 +9,7 @@ if(!isset($_SESSION['user'])){
 
 require_once __DIR__ . '/coupon_lib.php';
 require_once __DIR__ . '/telegram_lib.php';
+require_once __DIR__ . '/plan_ui_lib.php';
 
 $plans = [];
 
@@ -19,6 +20,12 @@ if(file_exists("db/plans.json")){
         true
     );
 }
+
+if(!is_array($plans)){
+    $plans = [];
+}
+
+$plansUi = pnvPlansForStepUi($plans);
 
 $cards = [];
 
@@ -410,6 +417,158 @@ line-height:26px;
 
 }
 
+.stepTabs{
+display:flex;
+gap:8px;
+margin-bottom:22px;
+}
+
+.stepTab{
+flex:1;
+text-align:center;
+padding:10px 8px;
+border-radius:12px;
+background:#0f172a;
+color:#94a3b8;
+font-size:14px;
+font-weight:700;
+}
+
+.stepTab.is-active{
+background:#14532d;
+color:#bbf7d0;
+}
+
+.formStep{display:none}
+.formStep.is-active{display:block}
+
+.catGrid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:10px;
+margin-bottom:18px;
+}
+
+.catCard{
+width:100%;
+padding:18px 12px;
+border:1px solid #334155;
+border-radius:16px;
+background:#0f172a;
+color:#e2e8f0;
+font-size:16px;
+font-weight:700;
+cursor:pointer;
+line-height:1.5;
+}
+
+.catCard.is-active{
+border-color:#22c55e;
+background:#14532d;
+color:#fff;
+box-shadow:inset 0 0 0 1px #22c55e;
+}
+
+.planGrid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:10px;
+margin-bottom:18px;
+}
+
+.planChip{
+width:100%;
+padding:16px 12px;
+border:1px solid #334155;
+border-radius:16px;
+background:#0f172a;
+color:#fff;
+cursor:pointer;
+text-align:center;
+}
+
+.planChip .planName{
+display:block;
+font-size:18px;
+font-weight:700;
+margin-bottom:6px;
+}
+
+.planChip .planPrice{
+display:block;
+font-size:14px;
+color:#86efac;
+font-weight:700;
+}
+
+.planChip .planDays{
+display:block;
+margin-top:4px;
+font-size:12px;
+color:#94a3b8;
+}
+
+.planChip.is-active{
+border-color:#22c55e;
+background:#052e16;
+}
+
+.planEmpty{
+display:none;
+padding:16px;
+border-radius:14px;
+background:#0f172a;
+color:#94a3b8;
+text-align:center;
+margin-bottom:18px;
+font-size:15px;
+}
+
+.planEmpty.is-visible{display:block}
+
+.planSummary{
+display:none;
+background:#0f172a;
+border:1px solid #334155;
+border-radius:14px;
+padding:14px 16px;
+margin-bottom:18px;
+font-size:15px;
+line-height:1.8;
+color:#cbd5e1;
+}
+
+.planSummary.is-visible{display:block}
+.planSummary b{color:#86efac}
+
+.btnGhost{
+width:100%;
+padding:14px;
+margin-bottom:12px;
+background:#334155;
+border:none;
+border-radius:14px;
+color:white;
+font-size:18px;
+cursor:pointer;
+}
+
+.btnNext:disabled{
+opacity:.45;
+cursor:not-allowed;
+}
+
+@media(max-width:768px){
+.planGrid,
+.catGrid{
+grid-template-columns:1fr 1fr;
+}
+.catCard,
+.planChip .planName{
+font-size:15px;
+}
+}
+
 </style>
 
 </head>
@@ -432,83 +591,41 @@ line-height:26px;
 <div class="err"><?php echo $error; ?></div>
 <?php } ?>
 
-<form method="POST">
+<div class="stepTabs">
+<div class="stepTab is-active" id="stepTab1">1 پلن</div>
+<div class="stepTab" id="stepTab2">2 پرداخت</div>
+</div>
+
+<form method="POST" id="buyForm">
+
+<div class="formStep is-active" id="step1">
 
 <input type="text"
 name="subname"
+id="subnameInput"
 placeholder="نام دلخواه برای کانفیگ"
 required>
 
-<select name="plan" id="planSelect" required>
+<div class="infoText">نوع اشتراک را انتخاب کنید</div>
 
-<option value="">
-انتخاب پلن
-</option>
+<div class="catGrid">
+<button type="button" class="catCard" data-cat="unlimited">نامحدود زمانی</button>
+<button type="button" class="catCard" data-cat="limited">محدود زمانی</button>
+</div>
 
-<?php
+<div class="infoText" id="planListTitle" style="display:none">انتخاب پلن</div>
+<div class="planEmpty" id="planEmpty">در این دسته پلنی تعریف نشده است</div>
+<div class="planGrid" id="planGrid"></div>
 
-function formatPrice($price){
+<input type="hidden" name="plan" id="planSelect" value="" required>
 
-$price = intval($price);
+<button type="button" class="btnNext" id="toStep2" disabled>ادامه</button>
 
-if($price < 1000){
+</div>
 
-return
-number_format($price)
-.
-" هزار تومان";
+<div class="formStep" id="step2">
 
-}
-
-$million =
-$price / 1000;
-
-$million =
-rtrim(
-rtrim(
-number_format($million,3),
-'0'
-),
-'.'
-);
-
-return
-$million
-.
-" میلیون تومان";
-
-}
-
-foreach($plans as $plan){
-
-$priceText =
-formatPrice($plan['price']);
-
-$daysText =
-($plan['days']=='نامحدود')
-?
-'نامحدود'
-:
-$plan['days'].' روز';
-
-$value =
-$plan['name']
-.
-" - "
-.
-$priceText;
-
-?>
-
-<option value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>" data-price="<?php echo (int)$plan['price']; ?>">
-
-<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>
-
-</option>
-
-<?php } ?>
-
-</select>
+<div class="planSummary" id="planSummary"></div>
 
 <div class="couponSection">
 <label class="couponToggle">
@@ -538,9 +655,9 @@ onchange="showCard()">
 
 <?php foreach($cards as $card){ ?>
 
-<option value="<?php echo $card['card']; ?>">
+<option value="<?php echo htmlspecialchars($card['card'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
 
-<?php echo $card['name']; ?>
+<?php echo htmlspecialchars($card['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
 
 </option>
 
@@ -594,11 +711,15 @@ required>
 
 </div>
 
+<button type="button" class="btnGhost" id="backStep1">بازگشت به انتخاب پلن</button>
+
 <button type="submit">
 
 ثبت خرید
 
 </button>
+
+</div>
 
 </form>
 
@@ -775,12 +896,120 @@ year + "/" + month + "/" + day;
 
 setPersianDate();
 
+const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const planSelect = document.getElementById('planSelect');
+const planGrid = document.getElementById('planGrid');
+const planEmpty = document.getElementById('planEmpty');
+const planListTitle = document.getElementById('planListTitle');
+const planSummary = document.getElementById('planSummary');
+const toStep2Btn = document.getElementById('toStep2');
+const backStep1Btn = document.getElementById('backStep1');
+const step1 = document.getElementById('step1');
+const step2 = document.getElementById('step2');
+const stepTab1 = document.getElementById('stepTab1');
+const stepTab2 = document.getElementById('stepTab2');
 const couponBox = document.getElementById('couponBox');
 const couponResult = document.getElementById('couponResult');
 const couponCodeInput = document.getElementById('couponCode');
 const hasCouponCheck = document.getElementById('hasCouponCheck');
 let couponTimer = null;
+let selectedCategory = '';
+let selectedPlan = null;
+
+function updateContinueState(){
+    toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
+}
+
+function renderPlans(){
+    planGrid.innerHTML = '';
+    planEmpty.classList.remove('is-visible');
+
+    if(!selectedCategory){
+        planListTitle.style.display = 'none';
+        updateContinueState();
+        return;
+    }
+
+    planListTitle.style.display = 'block';
+    const list = (plansData || []).filter(function(p){ return p.category === selectedCategory; });
+
+    if(list.length === 0){
+        planEmpty.classList.add('is-visible');
+        selectedPlan = null;
+        planSelect.value = '';
+        updateContinueState();
+        return;
+    }
+
+    list.forEach(function(plan){
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'planChip' + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '');
+        btn.innerHTML =
+            '<span class="planName"></span>' +
+            '<span class="planPrice"></span>' +
+            '<span class="planDays"></span>';
+        btn.querySelector('.planName').textContent = plan.name;
+        btn.querySelector('.planPrice').textContent = plan.price_short;
+        btn.querySelector('.planDays').textContent = plan.days_label;
+        btn.addEventListener('click', function(){
+            selectedPlan = plan;
+            planSelect.value = plan.value;
+            planSelect.dispatchEvent(new Event('change'));
+            renderPlans();
+            updateContinueState();
+        });
+        planGrid.appendChild(btn);
+    });
+
+    updateContinueState();
+}
+
+document.querySelectorAll('.catCard').forEach(function(card){
+    card.addEventListener('click', function(){
+        selectedCategory = card.getAttribute('data-cat');
+        document.querySelectorAll('.catCard').forEach(function(el){ el.classList.remove('is-active'); });
+        card.classList.add('is-active');
+        selectedPlan = null;
+        planSelect.value = '';
+        planSelect.dispatchEvent(new Event('change'));
+        renderPlans();
+    });
+});
+
+function showStep(step){
+    const isOne = step === 1;
+    step1.classList.toggle('is-active', isOne);
+    step2.classList.toggle('is-active', !isOne);
+    stepTab1.classList.toggle('is-active', isOne);
+    stepTab2.classList.toggle('is-active', !isOne);
+
+    if(!isOne && selectedPlan){
+        planSummary.classList.add('is-visible');
+        planSummary.innerHTML = 'پلن انتخابی: <b>' + selectedPlan.name + '</b> — ' + selectedPlan.price_text +
+            '<br>نوع: ' + (selectedCategory === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی');
+        validateCoupon();
+    }
+}
+
+toStep2Btn.addEventListener('click', function(){
+    const subname = document.getElementById('subnameInput');
+    if(subname && !subname.checkValidity()){
+        subname.reportValidity();
+        return;
+    }
+    if(!planSelect.value){
+        alert('لطفا پلن را انتخاب کنید');
+        return;
+    }
+    showStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+backStep1Btn.addEventListener('click', function(){
+    showStep(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 function resetCouponResult(){
     couponResult.className = 'couponResult';
@@ -848,6 +1077,10 @@ couponCodeInput.addEventListener('input', function(){
 });
 
 planSelect.addEventListener('change', validateCoupon);
+
+<?php if($error != ''){ ?>
+showStep(2);
+<?php } ?>
 
 </script>
 
