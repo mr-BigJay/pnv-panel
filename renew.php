@@ -446,7 +446,15 @@ toStep2Btn.addEventListener('click', function(){
     showStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
-backStep1Btn.addEventListener('click', function(){ showStep(1); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+backStep1Btn.addEventListener('click', function(){
+    resetPaySession();
+    showStep(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+const userBackLink = document.querySelector('.userBack');
+if(userBackLink){
+    userBackLink.addEventListener('click', function(){ resetPaySession(); });
+}
 toStep3Btn.addEventListener('click', function(){
     if(!currentPay || currentPay.status !== 'paid') return;
     const sub = document.getElementById('subInput').value.trim();
@@ -480,6 +488,33 @@ planSelect.addEventListener('change', validateCoupon);
 
 function formatRemain(sec){ sec = Math.max(0, parseInt(sec,10)||0); return String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0'); }
 function stopPayWatchers(){ if(payPollTimer){clearInterval(payPollTimer);payPollTimer=null;} if(payTickTimer){clearInterval(payTickTimer);payTickTimer=null;} }
+
+function resetPaySession(){
+    stopPayWatchers();
+    const cancelId = currentPay && currentPay.id ? currentPay.id : '';
+    currentPay = null;
+    if(instantPay){ instantPay.hidden = true; }
+    if(instantApproved){ instantApproved.hidden = true; }
+    if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
+    if(instantAmount){ instantAmount.textContent = '—'; }
+    if(instantTimer){ instantTimer.textContent = '۱۰:۰۰'; }
+    if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
+    if(startPayBtn){
+        startPayBtn.disabled = false;
+        startPayBtn.textContent = 'شروع مهلت پرداخت (۱۰ دقیقه)';
+    }
+    if(cancelId){
+        const body = new URLSearchParams();
+        body.set('action', 'cancel');
+        body.set('id', cancelId);
+        fetch('instant-pay-api.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: body.toString()
+        }).catch(function(){});
+    }
+}
 
 function renderPay(item){
     currentPay = item;

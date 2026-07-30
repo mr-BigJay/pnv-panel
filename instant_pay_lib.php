@@ -178,6 +178,52 @@ if(!function_exists('instantPayPath')){
         return $items;
     }
 
+    /**
+     * لغو سفارش‌های waiting کاربر (انصراف / بازگشت).
+     */
+    function instantPayCancelUserWaiting($username, $id = null, $items = null){
+        $username = trim((string)$username);
+        $id = $id !== null ? trim((string)$id) : null;
+
+        if($items === null){
+            $items = instantPayExpireDue();
+        }
+
+        $changed = false;
+
+        foreach($items as $i => $item){
+            if(($item['user'] ?? '') !== $username){
+                continue;
+            }
+
+            if(($item['status'] ?? '') !== 'waiting'){
+                continue;
+            }
+
+            if($id !== null && $id !== '' && ($item['id'] ?? '') !== $id){
+                continue;
+            }
+
+            $items[$i]['status'] = 'cancelled';
+            $items[$i]['message'] = 'لغو توسط کاربر';
+            $items[$i]['cancelled_at'] = time();
+            $changed = true;
+
+            $csvIndex = intval($item['csv_index'] ?? -1);
+
+            if($csvIndex >= 0 && function_exists('xuiRejectPaymentIndex')){
+                xuiRejectPaymentIndex($csvIndex, 'لغو شد');
+            }
+        }
+
+        if($changed){
+            instantPaySave($items);
+            $items = instantPayLoad();
+        }
+
+        return $items;
+    }
+
     function instantPayPublicView($item){
         if(!is_array($item)){
             return null;
@@ -308,22 +354,8 @@ if(!function_exists('instantPayPath')){
 
         $items = instantPayExpireDue();
 
-        // جلوگیری از چند سفارش باز همزمان برای یک کاربر
-        foreach($items as $item){
-            if(($item['user'] ?? '') !== $username){
-                continue;
-            }
-
-            if(($item['status'] ?? '') !== 'waiting'){
-                continue;
-            }
-
-            return [
-                'ok' => true,
-                'reused' => true,
-                'item' => instantPayPublicView($item)
-            ];
-        }
+        // سفارش waiting قبلی را ببند تا مبلغ/تایمر تازه ساخته شود
+        $items = instantPayCancelUserWaiting($username, null, $items);
 
         $code = instantPayAllocateCode($items);
 

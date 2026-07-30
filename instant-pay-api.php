@@ -43,6 +43,13 @@ if($action === 'status'){
     exit;
 }
 
+if($action === 'cancel'){
+    $id = trim((string)($_GET['id'] ?? $_POST['id'] ?? ''));
+    instantPayCancelUserWaiting($username, $id !== '' ? $id : null);
+    echo json_encode(['ok' => true, 'cancelled' => true], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if($action === 'create'){
     $input = $_POST;
 
