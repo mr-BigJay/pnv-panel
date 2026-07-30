@@ -3,7 +3,7 @@
 body{
 background:linear-gradient(165deg,#0B1220 0%,#0f172a 55%,#111827 100%);
 background-attachment:fixed;
-font-family:tahoma,sans-serif;
+font-family:"Vazirmatn",tahoma,sans-serif;
 direction:rtl;
 color:#fff;
 padding:18px 14px 28px;
@@ -128,6 +128,7 @@ border:1px solid #334155;
 border-radius:14px;
 box-sizing:border-box;
 font-size:16px;
+font-family:inherit;
 background:#0f172a;
 color:#fff;
 }
@@ -144,6 +145,7 @@ border-radius:16px;
 color:#fff;
 font-size:18px;
 font-weight:700;
+font-family:inherit;
 cursor:pointer;
 }
 .btnNext{
