@@ -37,7 +37,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=5">
+<link rel="stylesheet" href="plan_step_ui.css?v=6">
 </head>
 <body>
 <div class="box">
@@ -124,10 +124,6 @@ $h = static function($v){
 <button type="button" class="copybtn" id="copyCardBtn">کپی شماره کارت</button>
 </div>
 
-<div class="warnExact" id="warnExact" hidden>
-باید <b>دقیقاً همین مبلغ</b> را کارت‌به‌کارت کنید؛ در غیر این صورت پرداخت تأیید نمی‌شود.
-</div>
-
 <button type="button" class="btnGhost" id="backStep1">بازگشت به انتخاب پلن</button>
 <button type="button" id="startPayBtn">شروع مهلت پرداخت (۱۰ دقیقه)</button>
 
@@ -135,20 +131,15 @@ $h = static function($v){
 <div class="instantPayHead" id="instantPayHead">مهلت پرداخت</div>
 <div class="instantTimer" id="instantTimer">۱۰:۰۰</div>
 
-<div class="instantBaseRow" id="instantBaseRow" hidden>
-<span>قیمت پلن:</span> <b id="instantPlanToman">—</b>
-</div>
-
-<div class="instantAmountLabel">مبلغ قابل پرداخت (ریال)</div>
+<div class="instantAmountLabel">مبلغ قابل پرداخت</div>
 <div class="instantAmount" id="instantAmount">—</div>
-<div class="instantCodeHint">۴ رقم آخر مبلغ، کد سفارش است: <b id="instantCode">----</b></div>
 
 <div class="instantActions">
-<button type="button" class="copybtn" id="copyAmountBtn">کپی مبلغ ریالی</button>
+<button type="button" class="copybtn" id="copyAmountBtn">کپی مبلغ</button>
 <button type="button" class="copybtn" id="copyCardBtn2">کپی کارت</button>
 </div>
 
-<div class="instantStatus" id="instantStatus">در انتظار واریز…</div>
+<div class="instantStatus" id="instantStatus" hidden></div>
 
 <div class="instantApproved" id="instantApproved" hidden>
 <div class="instantDoneTitle">پرداخت شما تأیید شد ✅</div>
@@ -204,16 +195,12 @@ const payCardBox = document.getElementById('payCardBox');
 const payCardOwner = document.getElementById('payCardOwner');
 const payCardNumber = document.getElementById('payCardNumber');
 const startPayBtn = document.getElementById('startPayBtn');
-const warnExact = document.getElementById('warnExact');
 const instantPay = document.getElementById('instantPay');
 const instantPayHead = document.getElementById('instantPayHead');
 const instantTimer = document.getElementById('instantTimer');
 const instantAmount = document.getElementById('instantAmount');
-const instantCode = document.getElementById('instantCode');
 const instantStatus = document.getElementById('instantStatus');
 const instantApproved = document.getElementById('instantApproved');
-const instantPlanToman = document.getElementById('instantPlanToman');
-const instantBaseRow = document.getElementById('instantBaseRow');
 const resultMeta = document.getElementById('resultMeta');
 const resultLink = document.getElementById('resultLink');
 
@@ -390,18 +377,12 @@ function stopPayWatchers(){
 function renderPay(item){
     currentPay = item;
     instantPay.hidden = false;
-    warnExact.hidden = false;
     instantAmount.textContent = item.amount_text || '—';
-    instantCode.textContent = item.code || '----';
     instantTimer.textContent = formatRemain(item.remaining);
-
-    if(item.plan_toman_text){
-        instantPlanToman.textContent = item.plan_toman_text;
-        instantBaseRow.hidden = false;
-    }
 
     if(item.status === 'processing'){
         instantPayHead.textContent = 'در حال آماده‌سازی';
+        instantStatus.hidden = false;
         instantStatus.textContent = 'واریز دیده شد؛ در حال ساخت اشتراک…';
         instantApproved.hidden = true;
         return;
@@ -421,7 +402,7 @@ function renderPay(item){
         stopPayWatchers();
         instantPayHead.textContent = 'مهلت تمام شد';
         instantStatus.hidden = false;
-        instantStatus.textContent = 'مهلت ۱۰ دقیقه‌ای تمام شد. دوباره شروع کنید.';
+        instantStatus.textContent = 'مهلت پرداخت تمام شد. دوباره شروع کنید.';
         instantApproved.hidden = true;
         startPayBtn.disabled = false;
         startPayBtn.textContent = 'شروع مهلت جدید';
@@ -437,8 +418,8 @@ function renderPay(item){
     }
 
     instantPayHead.textContent = 'مهلت پرداخت';
-    instantStatus.hidden = false;
-    instantStatus.textContent = '۱۰ دقیقه فرصت دارید. دقیقاً همین مبلغ ریالی را واریز کنید.';
+    instantStatus.hidden = true;
+    instantStatus.textContent = '';
     instantApproved.hidden = true;
 }
 
@@ -515,7 +496,7 @@ document.getElementById('copyCardBtn').addEventListener('click', function(){ cop
 document.getElementById('copyCardBtn2').addEventListener('click', function(){ copyText(payCardNumber.textContent.trim(), 'شماره کارت کپی شد'); });
 document.getElementById('copyAmountBtn').addEventListener('click', function(){
     if(!currentPay) return;
-    copyText(currentPay.amount, 'مبلغ ریالی کپی شد');
+    copyText(currentPay.amount, 'مبلغ کپی شد');
 });
 document.getElementById('copyLinkBtn').addEventListener('click', function(){ copyText(resultLink.textContent.trim(), 'لینک کپی شد'); });
 </script>
