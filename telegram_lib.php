@@ -1123,7 +1123,8 @@ if(!function_exists('telegramConfigPath')){
         return $id;
     }
 
-    function telegramNotifyNewPayment($kind, $row){
+    function telegramNotifyNewPayment($kind, $row, $opts = []){
+        $confirmed = !empty($opts['confirmed']);
         $username = trim((string)($row[0] ?? ''));
         $created = intval($row[8] ?? time());
         $item = [
@@ -1134,14 +1135,28 @@ if(!function_exists('telegramConfigPath')){
             'tracking' => trim((string)($row[3] ?? '')),
             'date' => trim((string)($row[4] ?? '')),
             'time' => trim((string)($row[5] ?? '')),
-            'status' => trim((string)($row[6] ?? 'درحال بررسی')),
+            'status' => trim((string)($row[6] ?? ($confirmed ? 'تایید شد' : 'درحال بررسی'))),
             'created' => $created,
             'type' => $kind,
             'coupon' => trim((string)($row[10] ?? '')),
-            'discount' => trim((string)($row[11] ?? ''))
+            'discount' => trim((string)($row[11] ?? '')),
+            'link' => trim((string)($row[7] ?? ''))
         ];
 
-        $text = "🔔 " . telegramFormatPaymentDetail($item, $kind);
+        if($confirmed){
+            $text = "✅ پرداخت تأیید شد — " . telegramFormatPaymentDetail($item, $kind);
+            if($item['link'] !== ''){
+                $text .= "\n\nلینک:\n" . $item['link'];
+            }
+            $amount = intval($row[12] ?? 0);
+            if($amount > 0){
+                $text .= "\nمبلغ: " . number_format($amount) . ' ریال';
+            }
+        }
+        else{
+            $text = "🔔 " . telegramFormatPaymentDetail($item, $kind);
+        }
+
         $backMenu = $kind === 'تمدید' ? 'menu:renews' : 'menu:buys';
         $csvIndex = -1;
 
@@ -1159,7 +1174,8 @@ if(!function_exists('telegramConfigPath')){
             [['text' => 'مشاهده لیست', 'callback_data' => $backMenu]]
         ];
 
-        if($csvIndex >= 0){
+        // دکمه تایید/رد فقط برای پرداخت‌های در انتظار دستی
+        if(!$confirmed && $csvIndex >= 0){
             $prefix = ($kind === 'تمدید') ? 'renew' : 'buy';
             $rows[] = [
                 ['text' => '✅ تایید', 'callback_data' => 'xuiok:' . $prefix . ':' . $csvIndex],

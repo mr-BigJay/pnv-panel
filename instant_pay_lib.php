@@ -433,13 +433,7 @@ if(!function_exists('instantPayPath')){
         $items[] = $item;
         instantPaySave($items);
 
-        if(function_exists('telegramNotifyNewPayment')){
-            try{
-                telegramNotifyNewPayment($type, $row);
-            }catch(Throwable $e){
-                error_log('instant pay telegram notify failed: ' . $e->getMessage());
-            }
-        }
+        // اطلاع تلگرام فقط بعد از تأیید پرداخت ارسال می‌شود (نه در شروع مهلت)
 
         return [
             'ok' => true,
@@ -526,6 +520,37 @@ if(!function_exists('instantPayPath')){
 
         if(!empty($found['coupon_code']) && function_exists('couponMarkUsed')){
             couponMarkUsed($found['coupon_code'], $found['user']);
+        }
+
+        // اطلاع‌رسانی تلگرام فقط بعد از تأیید نهایی
+        if(function_exists('telegramNotifyNewPayment')){
+            try{
+                $payments = xuiLoadPayments();
+                $notifyRow = $payments[$csvIndex] ?? null;
+
+                if(!is_array($notifyRow)){
+                    $notifyRow = [
+                        $found['user'] ?? '',
+                        ($found['type'] ?? '') === 'تمدید' ? ($found['sub'] ?? '') : ($found['subname'] ?? ''),
+                        $found['plan'] ?? '',
+                        'AUTO-' . ($found['code'] ?? ''),
+                        $meta['date'] ?? date('Y/m/d'),
+                        $meta['time'] ?? date('H:i'),
+                        'تایید شد',
+                        $items[$idx]['link'] ?? '',
+                        intval($found['created_at'] ?? time()),
+                        $found['type'] ?? 'خرید',
+                        $found['coupon_code'] ?? '',
+                        intval($found['discount_percent'] ?? 0),
+                        intval($found['amount'] ?? 0),
+                        $found['code'] ?? ''
+                    ];
+                }
+
+                telegramNotifyNewPayment($found['type'] ?? 'خرید', $notifyRow, ['confirmed' => true]);
+            }catch(Throwable $e){
+                error_log('instant pay telegram confirm notify failed: ' . $e->getMessage());
+            }
         }
 
         return [
