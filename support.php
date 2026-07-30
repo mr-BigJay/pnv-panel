@@ -39,7 +39,7 @@ foreach($data as $ticket){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>پیام به پشتیبانی</title>
-<link rel="stylesheet" href="support_ui.css?v=20">
+<link rel="stylesheet" href="support_ui.css?v=31">
 <link rel="stylesheet" href="fonts.css">
 </head>
 <body>
@@ -85,10 +85,8 @@ foreach($data as $ticket){
 <?php echo $csrfField; ?>
 <input type="hidden" name="send" value="1">
 
-<label class="msgIconBtn msgIconBtn--attach" title="پیوست تصویر">
-📎
-<input type="file" name="image" id="userImage" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
-</label>
+<button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtn" title="پیوست تصویر" aria-label="پیوست تصویر">📎</button>
+<input type="file" name="image" id="userImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
 
 <textarea
     name="message"
@@ -96,14 +94,14 @@ foreach($data as $ticket){
     placeholder="ارسال پیام . . . ."
     rows="1"></textarea>
 
-<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال">➤</button>
+<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
 
 </form>
 </footer>
 
 </div>
 
-<script src="support_ui.js?v=20"></script>
+<script src="support_ui.js?v=31"></script>
 <script>
 (function(){
     const userChat = document.getElementById('userChat');
@@ -113,7 +111,7 @@ foreach($data as $ticket){
     SupportUI.bindTextareaGrow(messageInput);
     SupportUI.bindEnterToSend(messageInput, userSupportForm, true);
     SupportUI.bindFormGuard(userSupportForm, messageInput, 'userImage');
-    SupportUI.bindImageAttach(userSupportForm, 'userImage');
+    SupportUI.bindImageAttach(userSupportForm, 'userImage', 'attachBtn');
     SupportUI.bindMessageActions({
         chatEl: userChat,
         form: userSupportForm,

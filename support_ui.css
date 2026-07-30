@@ -66,18 +66,22 @@ color:var(--msg-muted);
 }
 
 .msgBack{
-width:40px;
+min-width:40px;
+width:auto;
 height:40px;
-display:flex;
+padding:0 12px;
+display:inline-flex;
 align-items:center;
 justify-content:center;
+gap:6px;
 border-radius:12px;
 background:var(--msg-card);
 color:var(--msg-text);
 text-decoration:none;
-font-size:18px;
+font-size:13px;
 flex-shrink:0;
 border:1px solid var(--msg-border);
+white-space:nowrap;
 }
 
 .msgAvatar{
@@ -203,39 +207,51 @@ to{opacity:1;transform:translateY(0);}
 .msg.user,
 .msg.usermsg{
 background:var(--msg-in);
+color:var(--msg-text);
 margin-right:auto;
 margin-left:0;
 border-bottom-right-radius:4px;
 }
 
-.msgBubble.is-me,
-.msg.user:not(.usermsg){
-/* user panel: own messages */
-}
-
-.msgApp--user .msg.usermsg{
+/* پنل کاربر: پیام خود کاربر */
+.msgApp--user .msg.usermsg,
+.msgApp--user .msgBubble.is-user{
 background:var(--msg-user);
 margin-left:auto;
 margin-right:0;
 border-bottom-left-radius:4px;
-color:white;
+border-bottom-right-radius:var(--msg-bubble);
+color:#fff;
 }
 
-.msgApp--user .msg.admin{
-background:var(--msg-in);
+/* پنل کاربر: پیام پشتیبانی (ورودی) — متن روشن روی حباب تیره */
+.msgApp--user .msg.admin,
+.msgApp--user .msgBubble.is-admin{
+background:#1e293b;
+color:#f1f5f9;
 margin-right:auto;
 margin-left:0;
 border-bottom-right-radius:4px;
+border-bottom-left-radius:var(--msg-bubble);
 }
 
+/* فقط پنل ادمین: حباب سبز برای پیام ادمین */
 .supportPage .msg.admin,
-.msgBubble.is-admin,
-.msg.admin{
+.supportPage .msgBubble.is-admin{
 background:var(--msg-admin);
 color:#052e16;
 margin-left:auto;
 margin-right:0;
 border-bottom-left-radius:4px;
+border-bottom-right-radius:var(--msg-bubble);
+}
+
+.msgText{
+color:inherit;
+}
+
+.msgMeta{
+color:inherit;
 }
 
 .msgBubble img,
@@ -383,6 +399,7 @@ font-size:18px;
 .msgIconBtn--attach{
 background:var(--msg-in);
 color:var(--msg-text);
+position:relative;
 }
 
 .msgIconBtn--send{
@@ -390,8 +407,16 @@ background:var(--msg-admin);
 color:#052e16;
 }
 
-.msgIconBtn input{
-display:none;
+.msgFileInput{
+position:absolute;
+width:1px;
+height:1px;
+padding:0;
+margin:-1px;
+overflow:hidden;
+clip:rect(0,0,0,0);
+border:0;
+opacity:0;
 }
 
 .msgEmpty{
@@ -1146,6 +1171,13 @@ display:block;
 #supportUiOverlay{
 position:relative;
 z-index:1200;
+pointer-events:none;
+}
+
+#supportUiOverlay .supportSheet,
+#supportUiOverlay .supportCrop{
+pointer-events:auto;
+z-index:1201;
 }
 
 .supportSheet{
@@ -1192,8 +1224,16 @@ border-bottom:none;
 color:#fca5a5;
 }
 
-.supportSheetCard button.ghost{
+.supportSheetCard button.is-disabled,
+.supportSheetCard button:disabled{
+opacity:.55;
 color:#94a3b8;
+cursor:default;
+}
+
+.msgBubble.is-holding{
+outline:2px solid rgba(34,197,94,.7);
+outline-offset:2px;
 }
 
 .supportCrop{

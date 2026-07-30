@@ -107,7 +107,7 @@
         return root;
     }
 
-    function bindImageAttach(form, imageId){
+    function bindImageAttach(form, imageId, attachBtnId){
         if(!form){ return; }
         const input = document.getElementById(imageId);
         if(!input){ return; }
@@ -115,6 +115,7 @@
         ensureOverlay();
         const cropModal = document.getElementById('supportCropModal');
         const canvas = document.getElementById('supportCropCanvas');
+        if(!cropModal || !canvas){ return; }
         const ctx = canvas.getContext('2d');
         let sourceImg = null;
         let crop = {x:0,y:0,w:0,h:0};
@@ -144,7 +145,7 @@
                 const dt = new DataTransfer();
                 dt.items.add(file);
                 input.files = dt.files;
-                return input.files && input.files.length > 0;
+                return !!(input.files && input.files.length);
             }catch(err){
                 return false;
             }
@@ -274,11 +275,12 @@
             }, 'image/jpeg', 0.88);
         };
 
-        const attachBtn = form.querySelector('.msgIconBtn--attach');
+        const attachBtn = (attachBtnId && document.getElementById(attachBtnId))
+            || form.querySelector('.msgIconBtn--attach');
         if(attachBtn){
             attachBtn.addEventListener('click', function(e){
-                if(e.target === input){ return; }
                 e.preventDefault();
+                e.stopPropagation();
                 input.click();
             });
         }
@@ -296,7 +298,10 @@
         });
 
         form.addEventListener('submit', function(e){
-            if(submitting){ return; }
+            if(submitting){
+                e.preventDefault();
+                return;
+            }
             if(cropModal && !cropModal.hidden){
                 e.preventDefault();
                 alert('ابتدا برش تصویر را تایید یا لغو کنید');
@@ -311,11 +316,14 @@
                 return;
             }
 
-            if(hasPending && !hasInputFile){
+            // Always post images via FormData for reliable mobile upload
+            if(hasPending || hasInputFile){
                 e.preventDefault();
                 submitting = true;
                 const fd = new FormData(form);
-                fd.set('image', pendingBlob, pendingName);
+                if(hasPending){
+                    fd.set('image', pendingBlob, pendingName);
+                }
                 const action = form.getAttribute('action') || window.location.href;
                 fetch(action, {
                     method: 'POST',
@@ -390,6 +398,7 @@
             const canEdit = bubble.dataset.canEdit === '1';
             const canDelete = bubble.dataset.canDelete === '1';
             const canReply = bubble.dataset.canReply === '1';
+            const isOwn = bubble.dataset.own === '1';
             const msgId = bubble.dataset.msgId || '';
             const text = bubble.dataset.text || '';
             const actions = [];
@@ -397,12 +406,29 @@
             if(canReply){ actions.push({key:'reply', label:'پاسخ'}); }
             if(canEdit){ actions.push({key:'edit', label:'ویرایش'}); }
             if(canDelete){ actions.push({key:'delete', label:'حذف', danger:true}); }
-            if(!actions.length){ return; }
+
+            if(!actions.length){
+                if(isOwn && role !== 'admin'){
+                    actions.push({
+                        key:'info',
+                        label:'مهلت ویرایش (۱۵ دقیقه) / حذف (۵ دقیقه) گذشته',
+                        disabled:true
+                    });
+                }else{
+                    return;
+                }
+            }
+
+            try{ if(navigator.vibrate){ navigator.vibrate(18); } }catch(err){}
 
             sheet.innerHTML =
                 '<div class="supportSheetCard">' +
                 actions.map(function(a){
-                    return '<button type="button" data-act="'+a.key+'" class="'+(a.danger?'danger':'')+'">'+a.label+'</button>';
+                    const cls = [
+                        a.danger ? 'danger' : '',
+                        a.disabled ? 'is-disabled' : ''
+                    ].filter(Boolean).join(' ');
+                    return '<button type="button" data-act="'+a.key+'" class="'+cls+'"'+(a.disabled?' disabled':'')+'>'+a.label+'</button>';
                 }).join('') +
                 '<button type="button" data-act="cancel" class="ghost">انصراف</button>' +
                 '</div>';
@@ -412,7 +438,7 @@
                 btn.onclick = function(){
                     const act = btn.getAttribute('data-act');
                     closeSheet();
-                    if(act === 'cancel'){ return; }
+                    if(act === 'cancel' || act === 'info'){ return; }
                     if(act === 'reply'){
                         setReply(msgId, text || 'پیام');
                         const ta = form.querySelector('textarea');
@@ -451,14 +477,20 @@
         }
 
         let holdTimer = null;
+        let holdStart = null;
+        let holdBubble = null;
+
         function clearHold(){
             if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; }
+            if(holdBubble){ holdBubble.classList.remove('is-holding'); }
+            holdStart = null;
+            holdBubble = null;
         }
 
         chatEl.addEventListener('contextmenu', function(e){
             const bubble = e.target.closest('.msgBubble');
             if(!bubble || !chatEl.contains(bubble)){ return; }
-            if(e.target.closest('a,button,textarea,input,img')){ return; }
+            if(e.target.closest('button,textarea,input')){ return; }
             e.preventDefault();
             openSheet(bubble);
         });
@@ -466,15 +498,29 @@
         chatEl.addEventListener('touchstart', function(e){
             const bubble = e.target.closest('.msgBubble');
             if(!bubble || !chatEl.contains(bubble)){ return; }
-            if(e.target.closest('a,button,textarea,input')){ return; }
+            if(e.target.closest('button,textarea,input')){ return; }
             clearHold();
+            const touch = e.touches && e.touches[0];
+            holdStart = touch ? {x: touch.clientX, y: touch.clientY} : null;
+            holdBubble = bubble;
+            bubble.classList.add('is-holding');
             holdTimer = setTimeout(function(){
-                openSheet(bubble);
-            }, 480);
+                const target = holdBubble;
+                clearHold();
+                if(target){ openSheet(target); }
+            }, 420);
+        }, {passive:true});
+
+        chatEl.addEventListener('touchmove', function(e){
+            if(!holdStart || !e.touches || !e.touches[0]){ return; }
+            const dx = e.touches[0].clientX - holdStart.x;
+            const dy = e.touches[0].clientY - holdStart.y;
+            if((dx * dx + dy * dy) > 100){
+                clearHold();
+            }
         }, {passive:true});
 
         chatEl.addEventListener('touchend', clearHold);
-        chatEl.addEventListener('touchmove', clearHold);
         chatEl.addEventListener('touchcancel', clearHold);
         sheet.addEventListener('click', function(e){
             if(e.target === sheet){ closeSheet(); }

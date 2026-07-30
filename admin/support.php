@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=20';
+$cssHref = '../support_ui.css?v=31';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=20';
+$jsHref = '../support_ui.js?v=31';
 
 if(!$supportEmbedded){
 ?>
@@ -207,13 +207,12 @@ if(!$hasMessages){
 <input type="hidden" name="reply" value="1">
 <input type="hidden" name="user" value="<?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?>">
 
-<label class="msgIconBtn msgIconBtn--attach" title="تصویر">📎
-<input type="file" name="image" id="supportImage" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
-</label>
+<button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtnAdmin" title="تصویر" aria-label="پیوست تصویر">📎</button>
+<input type="file" name="image" id="supportImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
 
 <textarea name="message" id="supportMessage" placeholder="ارسال پیام . . . ." rows="1"></textarea>
 
-<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال">➤</button>
+<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
 
 </form>
 </footer>
@@ -345,7 +344,7 @@ if(!$hasMessages){
     SupportUI.bindEnterToSend(supportMessage, supportReplyForm, true);
     SupportUI.bindFormGuard(supportReplyForm, supportMessage, 'supportImage');
     if(supportReplyForm){
-        SupportUI.bindImageAttach(supportReplyForm, 'supportImage');
+        SupportUI.bindImageAttach(supportReplyForm, 'supportImage', 'attachBtnAdmin');
         SupportUI.bindMessageActions({
             chatEl: supportMessages,
             form: supportReplyForm,
