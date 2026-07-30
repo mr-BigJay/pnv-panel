@@ -62,7 +62,7 @@ content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=3">
+<link rel="stylesheet" href="plan_step_ui.css?v=4">
 
 </head>
 
@@ -183,9 +183,14 @@ required>
 <div class="instantPay" id="instantPay" hidden>
 <div class="instantPayHead">مهلت پرداخت</div>
 <div class="instantTimer" id="instantTimer">۱۰:۰۰</div>
-<div class="instantAmountLabel">مبلغ قابل پرداخت</div>
+<div class="instantBaseRow" id="instantBaseRow" hidden>
+<span>قیمت پلن:</span>
+<b id="instantBase">—</b>
+</div>
+<div class="instantAmountLabel">مبلغ واریز (کمتر از قیمت پلن)</div>
 <div class="instantAmount" id="instantAmount">—</div>
-<div class="instantCodeHint">۴ رقم آخر مبلغ، کد شناسایی سفارش شماست: <b id="instantCode">----</b></div>
+<div class="instantCodeHint">۴ رقم آخر مبلغ، کد شناسایی سفارش است — <span id="instantSavedHint"></span></div>
+<div class="instantCodeHint">کد سفارش: <b id="instantCode">----</b></div>
 <div class="instantActions">
 <button type="button" class="copybtn" id="copyAmountBtn">کپی مبلغ</button>
 <button type="button" class="copybtn" id="copyCardBtn2">کپی کارت</button>
@@ -263,6 +268,9 @@ const instantCode = document.getElementById('instantCode');
 const instantStatus = document.getElementById('instantStatus');
 const instantDone = document.getElementById('instantDone');
 const instantLink = document.getElementById('instantLink');
+const instantBase = document.getElementById('instantBase');
+const instantBaseRow = document.getElementById('instantBaseRow');
+const instantSavedHint = document.getElementById('instantSavedHint');
 let couponTimer = null;
 let selectedCategory = '';
 let selectedPlan = null;
@@ -473,6 +481,16 @@ function renderPay(item){
     instantAmount.textContent = item.amount_text || (Number(item.amount||0).toLocaleString('en-US') + ' تومان');
     instantCode.textContent = item.code || '----';
     instantTimer.textContent = formatRemain(item.remaining);
+
+    if(instantBase && item.base_text){
+        instantBase.textContent = item.base_text;
+        if(instantBaseRow){ instantBaseRow.hidden = false; }
+    }
+    if(instantSavedHint){
+        instantSavedHint.textContent = item.saved_text
+            ? ('حدود ' + item.saved_text + ' کمتر از قیمت پلن')
+            : 'دقیقاً همین مبلغ را واریز کنید';
+    }
 
     if(item.status === 'paid'){
         stopPayWatchers();

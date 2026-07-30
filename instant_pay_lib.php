@@ -96,13 +96,25 @@ if(!function_exists('instantPayPath')){
         $baseToman = intval($baseToman);
         $code = intval($code);
 
+        // همیشه کمتر از مبلغ اعلامی پلن:
+        // بازه: [base-9000 .. base-1] و ۴ رقم آخر = کد
+        // مثال: ۱۵۰٬۰۰۰ + کد ۹۲۸۵ → ۱۴۹٬۲۸۵ تومان
         if($baseToman < 10000){
-            // برای مبالغ خیلی کوچک: خود کد + پایه
-            return $baseToman + $code;
+            $amount = max(1000, $baseToman - ($code % 1000));
+            return $amount < $baseToman ? $amount : max(1, $baseToman - 1);
         }
 
-        // ۴ رقم آخر مبلغ = کد یکتا
-        return (intdiv($baseToman, 10000) * 10000) + $code;
+        $amount = ($baseToman - 10000) + $code;
+
+        if($amount >= $baseToman){
+            $amount = $baseToman - 1;
+        }
+
+        if($amount <= 0){
+            $amount = max(1, $baseToman - 1);
+        }
+
+        return $amount;
     }
 
     function instantPayFindPlan($planValue, $plans){
@@ -161,12 +173,25 @@ if(!function_exists('instantPayPath')){
         $expires = intval($item['expires_at'] ?? 0);
         $now = time();
         $remaining = max(0, $expires - $now);
+        $amount = intval($item['amount'] ?? 0);
+        $base = intval($item['base_amount'] ?? 0);
+
+        if($base <= 0){
+            // سازگاری با سفارش‌های قدیمی
+            $base = $amount > 0 ? (intdiv($amount, 10000) * 10000 + 10000) : 0;
+        }
+
+        $saved = max(0, $base - $amount);
 
         return [
             'id' => $item['id'] ?? '',
             'status' => $item['status'] ?? '',
-            'amount' => intval($item['amount'] ?? 0),
-            'amount_text' => number_format(intval($item['amount'] ?? 0)) . ' تومان',
+            'amount' => $amount,
+            'amount_text' => number_format($amount) . ' تومان',
+            'base_amount' => $base,
+            'base_text' => $base > 0 ? (number_format($base) . ' تومان') : '',
+            'saved' => $saved,
+            'saved_text' => $saved > 0 ? (number_format($saved) . ' تومان') : '',
             'code' => str_pad((string)intval($item['code'] ?? 0), 4, '0', STR_PAD_LEFT),
             'card' => $item['card'] ?? '',
             'card_name' => $item['card_name'] ?? '',
@@ -325,6 +350,7 @@ if(!function_exists('instantPayPath')){
             'card' => $card,
             'card_name' => $cardName,
             'amount' => $amount,
+            'base_amount' => $baseToman,
             'code' => $code,
             'status' => 'waiting',
             'created_at' => $now,

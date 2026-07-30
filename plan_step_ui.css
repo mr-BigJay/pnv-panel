@@ -451,6 +451,21 @@ font-size:13px;
 color:#94a3b8;
 margin-bottom:6px;
 }
+.instantBaseRow{
+display:flex;
+justify-content:center;
+gap:8px;
+align-items:center;
+font-size:13px;
+color:#94a3b8;
+margin-bottom:8px;
+}
+.instantBaseRow b{
+color:#e2e8f0;
+font-weight:700;
+text-decoration:line-through;
+opacity:.85;
+}
 .instantAmount{
 font-size:28px;
 font-weight:800;

@@ -168,7 +168,7 @@ content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=3">
+<link rel="stylesheet" href="plan_step_ui.css?v=4">
 
 </head>
 
@@ -305,9 +305,14 @@ required>
 <div class="instantPay" id="instantPay" hidden>
 <div class="instantPayHead">مهلت پرداخت</div>
 <div class="instantTimer" id="instantTimer">۱۰:۰۰</div>
-<div class="instantAmountLabel">مبلغ قابل پرداخت</div>
+<div class="instantBaseRow" id="instantBaseRow" hidden>
+<span>قیمت پلن:</span>
+<b id="instantBase">—</b>
+</div>
+<div class="instantAmountLabel">مبلغ واریز (کمتر از قیمت پلن)</div>
 <div class="instantAmount" id="instantAmount">—</div>
-<div class="instantCodeHint">۴ رقم آخر مبلغ، کد شناسایی سفارش شماست: <b id="instantCode">----</b></div>
+<div class="instantCodeHint">۴ رقم آخر مبلغ، کد شناسایی سفارش است — <span id="instantSavedHint"></span></div>
+<div class="instantCodeHint">کد سفارش: <b id="instantCode">----</b></div>
 <div class="instantActions">
 <button type="button" class="copybtn" id="copyAmountBtn">کپی مبلغ</button>
 <button type="button" class="copybtn" id="copyCardBtn2">کپی کارت</button>
