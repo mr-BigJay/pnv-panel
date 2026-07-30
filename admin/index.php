@@ -1,7 +1,68 @@
 <?php
 
-require_once __DIR__ . '/auth.php';
-require_once "functions.php";
+// bigjay_controller اغلب auth/functions را کنار index ندارد؛ soft-load کن
+$__pnvBootCandidates = [
+    __DIR__ . '/auth.php',
+    __DIR__ . '/../admin/auth.php',
+];
+foreach($__pnvBootCandidates as $__pnvBootFile){
+    if(is_file($__pnvBootFile)){
+        require_once $__pnvBootFile;
+        break;
+    }
+}
+
+$__pnvFuncCandidates = [
+    __DIR__ . '/functions.php',
+    __DIR__ . '/../admin/functions.php',
+];
+foreach($__pnvFuncCandidates as $__pnvBootFile){
+    if(is_file($__pnvBootFile)){
+        require_once $__pnvBootFile;
+        break;
+    }
+}
+
+if(!function_exists('pnvAdminIsLoggedIn')){
+    if(session_status() === PHP_SESSION_NONE){
+        session_start();
+    }
+    if(!defined('PNV_ADMIN_BASE')){
+        define('PNV_ADMIN_BASE', '/bigjay_controller');
+    }
+    function pnvAdminIsLoggedIn(){
+        $ok = !empty($_SESSION['pnv_admin']['user']) && !empty($_SESSION['pnv_admin']['token']);
+        if($ok){
+            $_SESSION['admin'] = true;
+        }
+        return $ok || !empty($_SESSION['admin']);
+    }
+    function pnvAdminLogout(){
+        unset($_SESSION['pnv_admin'], $_SESSION['admin']);
+    }
+    function pnvAdminValidateLogin($u, $p){ return null; }
+    function pnvAdminLogin($admin){ $_SESSION['admin'] = true; }
+    function pnvAdminEntryUrl(){ return rtrim(PNV_ADMIN_BASE, '/') . '/'; }
+    function pnvAdminUrl($path = 'index.php'){
+        $base = rtrim(PNV_ADMIN_BASE, '/');
+        if($path === '' || $path === 'index.php'){ return $base . '/'; }
+        return $base . '/' . ltrim($path, '/');
+    }
+    function pnvAdminRequireAuth(){
+        if(!pnvAdminIsLoggedIn()){
+            header('Location: ' . pnvAdminEntryUrl());
+            exit;
+        }
+    }
+}
+
+if(!function_exists('statusColor')){
+    function statusColor($status){
+        if($status=='تایید شد'){ return '#22c55e'; }
+        if($status=='رد شد'){ return '#ef4444'; }
+        return '#eab308';
+    }
+}
 
 if(isset($_GET['logout'])){
 
