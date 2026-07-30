@@ -57,6 +57,8 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-
 
 <script src="<?php echo htmlspecialchars(pnvAdminUrl('sw-cleanup.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 
+<link rel="stylesheet" href="/fonts.css">
+
 <style>
 
 body{
@@ -543,6 +545,8 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-
 </title>
 
 <script src="<?php echo htmlspecialchars(pnvAdminUrl('sw-cleanup.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+
+<link rel="stylesheet" href="/fonts.css">
 
 <style>
 

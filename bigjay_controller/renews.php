@@ -349,16 +349,14 @@ return $out;
 
 ?>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/fonts.css">
 
 <style>
 
 body{
 background:linear-gradient(165deg,#0B1220 0%,#182537 55%,#0f172a 100%) !important;
 background-attachment:fixed !important;
-font-family:"Vazirmatn",tahoma,sans-serif !important;
+font-family:tahoma,sans-serif !important;
 }
 
 .content{
@@ -378,9 +376,10 @@ overflow:visible;
 
 .renewsPage h2{
 margin:0 0 18px;
-font-size:22px;
-font-weight:700;
-letter-spacing:-.02em;
+font-size:24px;
+font-family:"Lalezar",tahoma,sans-serif;
+font-weight:400;
+letter-spacing:0;
 text-align:right;
 color:#fff;
 }
