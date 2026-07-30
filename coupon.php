@@ -17,106 +17,220 @@ if(!$summary){
     die('کاربر یافت نشد');
 }
 
-$myCode = $summary['referral_code'];
+$myCode = (string)($summary['referral_code'] ?? '');
 $myLink = 'https://panel.ticketin.ir/register.php?ref=' . urlencode($myCode);
-$inviteCount = $summary['successful_count'];
-$reward = $summary['reward']['label'] ?? 'هنوز پاداشی فعال نشده';
+$inviteCount = intval($summary['successful_count'] ?? 0);
+$reward = $summary['reward'] ?? [];
+$rewardLabel = trim((string)($reward['label'] ?? ''));
+$rewardActive = intval($reward['percent'] ?? 0) > 0;
 $activeCodes = $summary['active_codes'] ?? [];
+
+if($rewardLabel === ''){
+    $rewardLabel = 'هنوز پاداشی فعال نشده';
+}
+
+$tiers = [
+    ['need' => 3,  'title' => 'تخفیف ۲۰٪', 'desc' => '۳ دعوت موفق → یک کد ۲۰ درصدی'],
+    ['need' => 5,  'title' => 'تخفیف ۴۰٪', 'desc' => '۵ دعوت موفق → یک کد ۴۰ درصدی'],
+    ['need' => 10, 'title' => 'کد ۱۰۰٪', 'desc' => '۱۰ دعوت موفق → یک کد ۱۰۰ درصدی'],
+    ['need' => 20, 'title' => '۳ کد ۱۰۰٪', 'desc' => '۲۰ دعوت موفق → سه کد ۱۰۰ درصدی'],
+];
+
+$nextNeed = null;
+foreach($tiers as $tier){
+    if($inviteCount < intval($tier['need'])){
+        $nextNeed = intval($tier['need']);
+        break;
+    }
+}
+
+$progressPct = 100;
+if($nextNeed !== null && $nextNeed > 0){
+    $progressPct = max(0, min(100, round(($inviteCount / $nextNeed) * 100)));
+}
+
+$h = static function($value){
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
 
 ?>
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>کوپن تخفیف</title>
-<link rel="stylesheet" href="user_nav.css?v=1">
+<title>دعوت دوستان</title>
 <link rel="stylesheet" href="fonts.css">
-<link rel="stylesheet" href="user_panel.css?v=6">
-<style>
-.couponPageBox{margin-bottom:14px;}
-.couponCodeItem{background:#0f172a;padding:14px;border-radius:12px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
-.couponCodeText{font-size:18px;font-weight:700;letter-spacing:2px;word-break:break-all;}
-.couponCodeMeta{font-size:13px;color:#94a3b8;}
-.couponStats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
-.couponStat{background:#0f172a;padding:14px;border-radius:12px;text-align:center;}
-.couponStatNum{font-size:24px;font-weight:700;margin-bottom:6px;}
-.couponStatLabel{font-size:12px;color:#94a3b8;}
-.couponLevels{background:#0f172a;padding:16px;border-radius:12px;line-height:1.9;font-size:14px;margin-top:12px;}
-.couponHint{font-size:13px;color:#94a3b8;line-height:1.8;margin-top:10px;}
-.userPageWrap .userBackBar{margin-bottom:14px;}
-</style>
+<link rel="stylesheet" href="user_nav.css?v=1">
+<link rel="stylesheet" href="coupon_ui.css?v=1">
 </head>
-<body class="userPage userPanel--dashboard">
+<body class="couponPage">
 
-<div class="userPageWrap">
+<div class="couponApp">
 
-<?php userBackBar('dashboard.php', 'سیستم دعوت دوستان'); ?>
+<?php userBackBar('dashboard.php', 'دعوت دوستان'); ?>
 
-<div class="userPageBox couponPageBox">
-
-<div class="userPageLabel">کد دعوت شما</div>
-<div class="userPageRefbox" id="refcode"><?php echo htmlspecialchars($myCode, ENT_QUOTES, 'UTF-8'); ?></div>
-<button type="button" class="userPageBtn" onclick="copyText('refcode')">کپی کد دعوت</button>
+<section class="couponSection">
+<div class="couponCodeCard">
+<div class="couponCodeLabel">کد دعوت شما</div>
+<div class="couponCodeHero" id="refcode"><?php echo $h($myCode); ?></div>
+<button type="button" class="couponBtn" id="copyCodeBtn">کپی کد</button>
 </div>
+</section>
 
-<div class="userPageBox couponPageBox">
-<div class="userPageLabel">لینک دعوت شما</div>
-<div class="userPageRefbox" id="reflink"><?php echo htmlspecialchars($myLink, ENT_QUOTES, 'UTF-8'); ?></div>
-<button type="button" class="userPageBtn" onclick="copyText('reflink')">کپی لینک دعوت</button>
+<section class="couponSection">
+<div class="couponLinkRow">
+<div class="couponLinkMeta">
+<div class="couponLinkLabel">لینک دعوت</div>
+<div class="couponLinkValue" id="reflink" title="<?php echo $h($myLink); ?>"><?php echo $h($myLink); ?></div>
+</div>
+<button type="button" class="couponBtn couponBtn--ghost couponBtn--sm" id="copyLinkBtn">کپی</button>
+</div>
+</section>
 
-<div class="couponStats">
-<div class="couponStat">
-<div class="couponStatNum"><?php echo (int)$inviteCount; ?></div>
-<div class="couponStatLabel">دعوت موفق (ثبت‌نام + خرید تایید‌شده)</div>
+<section class="couponSection">
+<div class="couponProgressCard">
+<div class="couponProgressTop">
+<div class="couponProgressCount">
+<?php echo $inviteCount; ?>
+<span>دعوت موفق</span>
 </div>
-<div class="couponStat">
-<div class="couponStatNum"><?php echo htmlspecialchars($myCode, ENT_QUOTES, 'UTF-8'); ?></div>
-<div class="couponStatLabel">کد معرف شما</div>
+<div class="couponProgressHint">
+<?php if($nextNeed !== null){ ?>
+تا سطح بعد: <?php echo max(0, $nextNeed - $inviteCount); ?> دعوت
+<?php } else { ?>
+به بالاترین سطح رسیدید
+<?php } ?>
 </div>
 </div>
+<div class="couponProgressTrack" aria-hidden="true">
+<div class="couponProgressFill" style="width:<?php echo (int)$progressPct; ?>%"></div>
+</div>
+<div class="couponProgressSub">ثبت‌نام با لینک/کد شما + حداقل یک خرید تاییدشده</div>
+</div>
+</section>
 
-<div class="userPageRefbox" style="margin-top:12px;">
-<b>پاداش فعال:</b><br><br><?php echo htmlspecialchars($reward, ENT_QUOTES, 'UTF-8'); ?>
+<section class="couponSection">
+<div class="couponStatusPill <?php echo $rewardActive ? 'is-active' : ''; ?>">
+<span class="couponStatusDot" aria-hidden="true"></span>
+<span><b>پاداش فعال:</b> <?php echo $h($rewardLabel); ?></span>
 </div>
+</section>
 
 <?php if(!empty($activeCodes)){ ?>
-<div class="userPageLabel" style="margin-top:16px;">کدهای تخفیف فعال شما</div>
+<section class="couponSection">
+<div class="couponTierHead"><h2>کدهای تخفیف فعال</h2></div>
+<div class="couponActiveList">
 <?php foreach($activeCodes as $coupon){ ?>
-<div class="couponCodeItem">
+<div class="couponActiveItem">
 <div>
-<div class="couponCodeText"><?php echo htmlspecialchars($coupon['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
-<div class="couponCodeMeta">تخفیف <?php echo (int)($coupon['percent'] ?? 0); ?>٪ — یک‌بار مصرف</div>
+<div class="couponActiveCode"><?php echo $h($coupon['code'] ?? ''); ?></div>
+<div class="couponActiveMeta">تخفیف <?php echo (int)($coupon['percent'] ?? 0); ?>٪ — یک‌بار مصرف</div>
 </div>
-<button type="button" class="userPageBtn" style="width:auto;min-width:90px;height:44px;padding:0 14px;" onclick="copyTextValue('<?php echo htmlspecialchars($coupon['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>')">کپی</button>
+<button
+    type="button"
+    class="couponBtn couponBtn--ghost couponBtn--sm"
+    data-copy="<?php echo $h($coupon['code'] ?? ''); ?>"
+>کپی</button>
 </div>
 <?php } ?>
+</div>
+</section>
 <?php } ?>
 
-<div class="couponLevels">
-<b>سطوح پاداش:</b><br><br>
-3 دعوت موفق → تخفیف 20 درصدی<br>
-5 دعوت موفق → تخفیف 40 درصدی<br>
-10 دعوت موفق → کد تخفیف 100 درصدی<br>
-20 دعوت موفق → 3 کد تخفیف 100 درصدی
+<section class="couponSection">
+<div class="couponTierHead"><h2>سطوح پاداش</h2></div>
+<div class="couponTierList">
+<?php foreach($tiers as $tier){
+    $need = intval($tier['need']);
+    $reached = $inviteCount >= $need;
+?>
+<div class="couponTierRow <?php echo $reached ? 'is-reached' : ''; ?>">
+<div class="couponTierBadge"><?php echo $need; ?></div>
+<div class="couponTierBody">
+<div class="couponTierTitle"><?php echo $h($tier['title']); ?></div>
+<div class="couponTierDesc"><?php echo $h($tier['desc']); ?></div>
 </div>
+</div>
+<?php } ?>
+</div>
+</section>
 
 <div class="couponHint">
-با استفاده از هر کد تخفیف، شمارش دعوت‌ها از صفر شروع می‌شود. دعوت موفق یعنی کاربر با لینک/کد شما ثبت‌نام کرده و حداقل یک خرید تایید‌شده داشته باشد.
-</div>
+با استفاده از هر کد تخفیف، شمارش دعوت‌ها از صفر شروع می‌شود. دعوت موفق یعنی کاربر با لینک یا کد شما ثبت‌نام کرده و حداقل یک خرید تاییدشده داشته باشد.
 </div>
 
 </div>
+
+<div class="couponToast" id="couponToast">کپی شد</div>
 
 <script>
-function copyText(id){
-    navigator.clipboard.writeText(document.getElementById(id).innerText);
-    alert('کپی شد');
-}
-function copyTextValue(text){
-    navigator.clipboard.writeText(text);
-    alert('کپی شد');
-}
+(function(){
+    var toast = document.getElementById('couponToast');
+    var toastTimer = null;
+
+    function showToast(msg){
+        if(!toast){ return; }
+        toast.textContent = msg || 'کپی شد';
+        toast.classList.add('is-show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function(){
+            toast.classList.remove('is-show');
+        }, 1600);
+    }
+
+    function copyValue(text){
+        if(!text){ return; }
+        if(navigator.clipboard && navigator.clipboard.writeText){
+            navigator.clipboard.writeText(text).then(function(){
+                showToast('کپی شد');
+            }).catch(function(){
+                fallbackCopy(text);
+            });
+            return;
+        }
+        fallbackCopy(text);
+    }
+
+    function fallbackCopy(text){
+        var area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        try{
+            document.execCommand('copy');
+            showToast('کپی شد');
+        }catch(e){
+            showToast('کپی ناموفق بود');
+        }
+        document.body.removeChild(area);
+    }
+
+    var codeBtn = document.getElementById('copyCodeBtn');
+    var linkBtn = document.getElementById('copyLinkBtn');
+    var codeEl = document.getElementById('refcode');
+    var linkEl = document.getElementById('reflink');
+
+    if(codeBtn && codeEl){
+        codeBtn.addEventListener('click', function(){
+            copyValue(codeEl.textContent.trim());
+        });
+    }
+    if(linkBtn && linkEl){
+        linkBtn.addEventListener('click', function(){
+            copyValue(linkEl.getAttribute('title') || linkEl.textContent.trim());
+        });
+    }
+
+    document.querySelectorAll('[data-copy]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            copyValue(btn.getAttribute('data-copy') || '');
+        });
+    });
+})();
 </script>
 
 </body>
