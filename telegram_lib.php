@@ -631,17 +631,14 @@ if(!function_exists('telegramConfigPath')){
         $buyCount = count(telegramLoadPendingPayments('خرید', 50));
         $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
         $msgCount = count(telegramUnreadTickets(50));
-        $width = telegramHomeMenuWidth();
 
         $lines = [
-            telegramVisualPad('🏠 منوی اصلی', $width),
+            '🎛 پنل مدیریت Ticketin',
             '',
-            telegramVisualPad('یکی از بخش‌ها را انتخاب کنید', $width),
-            '',
-            telegramVisualPad('پیام کاربران: ' . $msgCount, $width),
-            telegramVisualPad('خریدهای جدید: ' . $buyCount, $width),
-            telegramVisualPad('تمدیدهای جدید: ' . $renewCount, $width),
-            telegramWideSpacer($width + 4)
+            'وضعیت امروز',
+            '🛒 خریدهای جدید: ' . $buyCount,
+            '♻️ تمدیدهای جدید: ' . $renewCount,
+            '📨 پیام کاربران: ' . $msgCount
         ];
 
         return implode("\n", $lines);
@@ -650,17 +647,68 @@ if(!function_exists('telegramConfigPath')){
     function telegramHomeKeyboard(){
         $buyCount = count(telegramLoadPendingPayments('خرید', 50));
         $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
-        $width = telegramHomeMenuWidth();
 
-        $messages = 'پیام کاربران';
-        $buys = 'خریدهای جدید' . ($buyCount ? " ({$buyCount})" : '');
-        $renews = 'تمدیدهای جدید' . ($renewCount ? " ({$renewCount})" : '');
+        $buys = '🛒 خریدهای جدید' . ($buyCount ? ' (' . $buyCount . ')' : '');
+        $renews = '♻️ تمدیدهای جدید' . ($renewCount ? ' (' . $renewCount . ')' : '');
 
         return telegramInline([
-            [['text' => telegramVisualPad($messages, $width), 'callback_data' => 'menu:messages']],
-            [['text' => telegramVisualPad($buys, $width), 'callback_data' => 'menu:buys']],
-            [['text' => telegramVisualPad($renews, $width), 'callback_data' => 'menu:renews']]
+            [
+                ['text' => telegramLimitText($buys, 32), 'callback_data' => 'menu:buys'],
+                ['text' => telegramLimitText($renews, 32), 'callback_data' => 'menu:renews']
+            ],
+            [
+                ['text' => '📊 گزارش خریدها', 'callback_data' => 'menu:buyreport'],
+                ['text' => '📈 گزارش تمدیدها', 'callback_data' => 'menu:renewreport']
+            ],
+            [
+                ['text' => '⚙️ تنظیمات', 'callback_data' => 'menu:settings']
+            ]
         ]);
+    }
+
+    function telegramSettingsText(){
+        $msgCount = count(telegramUnreadTickets(50));
+        $buyCount = count(telegramLoadPendingPayments('خرید', 50));
+        $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
+        $xuiOn = function_exists('xuiIsEnabled') && xuiIsEnabled();
+
+        $lines = [
+            '⚙️ تنظیمات',
+            '',
+            'اتوماسیون 3x-ui: ' . ($xuiOn ? 'روشن ✅' : 'خاموش ⛔'),
+            'پیام خوانده‌نشده: ' . $msgCount,
+            'خرید در انتظار: ' . $buyCount,
+            'تمدید در انتظار: ' . $renewCount
+        ];
+
+        return implode("\n", $lines);
+    }
+
+    function telegramSettingsKeyboard(){
+        $msgCount = count(telegramUnreadTickets(50));
+        $messages = '📨 پیام کاربران' . ($msgCount ? ' (' . $msgCount . ')' : '');
+
+        return telegramInline([
+            [['text' => telegramLimitText($messages, 60), 'callback_data' => 'menu:messages']],
+            telegramBackRow('menu:home')
+        ]);
+    }
+
+    function telegramShowSettings($chatId, $config = null, $messageId = null){
+        $id = telegramShowPage(
+            $chatId,
+            telegramSettingsText(),
+            telegramSettingsKeyboard(),
+            $config,
+            $messageId
+        );
+
+        telegramUpdateSessionScreen($chatId, [
+            'screen' => 'settings',
+            'screen_message_id' => intval($id)
+        ]);
+
+        return $id;
     }
 
     function telegramMessagesText($items, $source){
@@ -1682,6 +1730,11 @@ if(!function_exists('telegramConfigPath')){
 
         if($data === 'menu:home' || $data === 'home'){
             telegramShowHome($chatId, $config, $messageId);
+            return;
+        }
+
+        if($data === 'menu:settings'){
+            telegramShowSettings($chatId, $config, $messageId);
             return;
         }
 
