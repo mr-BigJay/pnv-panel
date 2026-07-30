@@ -55,6 +55,36 @@ if(isset($_POST['set_webhook'])){
     }
 }
 
+if(isset($_POST['fetch_chat'])){
+    $config = baleLoadConfig();
+    $updates = baleApiRequest('getUpdates', [], $config);
+
+    if(empty($updates['ok'])){
+        $error = $updates['description'] ?? 'دریافت آپدیت از بله ناموفق بود';
+    }
+    else{
+        $found = [];
+        foreach(($updates['result'] ?? []) as $upd){
+            $msg = $upd['message'] ?? ($upd['edited_message'] ?? null);
+            if(!is_array($msg)){ continue; }
+            $cid = (string)($msg['chat']['id'] ?? '');
+            if($cid !== ''){
+                $found[$cid] = true;
+            }
+        }
+
+        if(count($found) === 0){
+            $error = 'هنوز پیامی پیدا نشد. یک‌بار در بازو /start بزنید و دوباره همین دکمه را بزنید.';
+        }
+        else{
+            $ids = array_keys($found);
+            $config['admin_chat_ids'] = implode(',', $ids);
+            baleSaveConfig($config);
+            $message = 'شناسه چت ذخیره شد: ' . implode(', ', $ids);
+        }
+    }
+}
+
 if(isset($_POST['test'])){
     $config = baleLoadConfig();
     $me = baleGetMe($config);
@@ -150,7 +180,8 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <div class="hint">برای امنیت، توکن ذخیره‌شده اینجا کامل نشان داده نمی‌شود. اگر خالی بگذارید و ذخیره کنید، توکن قبلی حفظ می‌شود.</div>
 
 <label for="admin_chat_ids">شناسه چت مدیر</label>
-<input class="ltr" type="text" id="admin_chat_ids" name="admin_chat_ids" value="<?php echo htmlspecialchars($config['admin_chat_ids'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="با /start خودکار پر می‌شود">
+<input class="ltr" type="text" id="admin_chat_ids" name="admin_chat_ids" value="<?php echo htmlspecialchars($config['admin_chat_ids'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="با /start یا دکمه زیر پر می‌شود">
+<div class="hint">اگر خالی است: در بله به بازو `/start` بزنید، بعد همین صفحه را رفرش کنید یا دکمه «خواندن شناسه از بله» را بزنید.</div>
 
 <label for="pay_window_seconds">مهلت پرداخت (ثانیه)</label>
 <input class="ltr" type="number" id="pay_window_seconds" name="pay_window_seconds" min="60" value="<?php echo intval($config['pay_window_seconds'] ?? 600); ?>">
@@ -158,6 +189,7 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></div>
 
 <button type="submit" name="save">ذخیره تنظیمات</button>
+<button type="submit" name="fetch_chat" class="test">خواندن شناسه چت از بله</button>
 <button type="submit" name="set_webhook" class="hook">ثبت Webhook در بله</button>
 <button type="submit" name="test" class="test">تست ارتباط و ارسال پیام</button>
 </form>

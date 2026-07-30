@@ -52,13 +52,25 @@ if(!baleIsAdminChat($chatId, $config)){
 }
 
 if($text === '/start' || $text === 'start'){
+    // همیشه chat_id را نشان بده تا ادمین بتواند در پنل ذخیره کند
+    if($chatId !== '' && !in_array($chatId, $adminIds, true)){
+        $ids = $adminIds;
+        $ids[] = $chatId;
+        $config['admin_chat_ids'] = implode(',', array_values(array_unique($ids)));
+        baleSaveConfig($config);
+        $adminIds = baleAdminChatIds($config);
+    }
+
     baleSendMessage(
         $chatId,
-        "ربات پرداخت آنی فعال است.\nپیام واریز @postbank_bot را به اینجا فوروارد کنید تا سفارش‌ها خودکار تأیید شوند.",
+        "ربات پرداخت آنی فعال است.\n"
+        . "شناسه چت شما: {$chatId}\n\n"
+        . "همین عدد را در پنل ادمین → بله → «شناسه چت مدیر» ذخیره کنید.\n"
+        . "بعد پیام‌های واریز @postbank_bot را به همین بازو فوروارد کنید.",
         [],
         $config
     );
-    echo json_encode(['ok' => true, 'start' => true]);
+    echo json_encode(['ok' => true, 'start' => true, 'chat_id' => $chatId]);
     exit;
 }
 
