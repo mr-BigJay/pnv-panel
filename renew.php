@@ -161,10 +161,10 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=6">
+<link rel="stylesheet" href="plan_step_ui.css?v=7">
 </head>
-<body>
-<div class="box">
+<body class="theme-receipt">
+<div class="box box--receipt">
 
 <div class="topBar">
 <a class="userBack" href="dashboard.php">بازگشت</a>
@@ -236,8 +236,9 @@ $h = static function($v){
 </div>
 </div>
 
-<div class="sectionTitle">کارت مقصد</div>
-<select id="cardSelect">
+<div class="payDest">
+<div class="fieldLabel payDestLabel">کارت مقصد</div>
+<select id="cardSelect" class="cardSelect">
 <option value="">انتخاب کارت</option>
 <?php foreach($cards as $card){
     $name = (string)($card['name'] ?? '');
@@ -249,13 +250,17 @@ $h = static function($v){
 </select>
 
 <div class="payCardBox" id="payCardBox" hidden>
+<div class="payCardGlow" aria-hidden="true"></div>
 <div class="payCardOwner" id="payCardOwner">—</div>
-<div class="payCardNumber" id="payCardNumber">—</div>
-<button type="button" class="copybtn" id="copyCardBtn">کپی شماره کارت</button>
+<div class="payCardNumber" id="payCardNumber" data-raw="">—</div>
+<button type="button" class="copybtn copybtn--quiet" id="copyCardBtn">کپی شماره کارت</button>
+</div>
 </div>
 
+<div class="payActions">
 <button type="button" class="btnGhost" id="backStep1">بازگشت به انتخاب پلن</button>
 <button type="button" id="startPayBtn">شروع مهلت پرداخت (۱۰ دقیقه)</button>
+</div>
 
 <div class="instantPay" id="instantPay" hidden>
 <div class="instantPayHead" id="instantPayHead">مهلت پرداخت</div>
@@ -263,8 +268,8 @@ $h = static function($v){
 <div class="instantAmountLabel">مبلغ قابل پرداخت</div>
 <div class="instantAmount" id="instantAmount">—</div>
 <div class="instantActions">
-<button type="button" class="copybtn" id="copyAmountBtn">کپی مبلغ</button>
-<button type="button" class="copybtn" id="copyCardBtn2">کپی کارت</button>
+<button type="button" class="copybtn copybtn--quiet" id="copyAmountBtn">کپی مبلغ</button>
+<button type="button" class="copybtn copybtn--quiet" id="copyCardBtn2">کپی کارت</button>
 </div>
 <div class="instantStatus" id="instantStatus" hidden></div>
 <div class="instantApproved" id="instantApproved" hidden>
@@ -416,25 +421,32 @@ function showStep(step){
     if(stepLine2) stepLine2.classList.toggle('is-active', step > 2);
     if(step === 2 && selectedPlan){
         planSummary.classList.add('is-visible');
-        let html = 'پلن: <b>' + selectedPlan.name + '</b> — ' + selectedPlan.price_text;
-        html += '<br>نوع: ' + (selectedCategory === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی');
-        if(selectedCategory === 'limited') html += '<br>مدت: <b>' + (selectedPlan.days_label || '—') + '</b>';
+        let html = '<div class="receiptLine">پلن: <b>' + selectedPlan.name + '</b> — ' + selectedPlan.price_text + '</div>';
+        html += '<div class="receiptLine receiptMuted">نوع: ' + (selectedCategory === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی') + '</div>';
+        if(selectedCategory === 'limited') html += '<div class="receiptLine">مدت: <b>' + (selectedPlan.days_label || '—') + '</b></div>';
         const sub = document.getElementById('subInput').value.trim();
-        if(sub) html += '<br>اشتراک: <b style="word-break:break-all">' + sub + '</b>';
+        if(sub) html += '<div class="receiptLine receiptMuted" style="word-break:break-all">اشتراک: <b>' + sub + '</b></div>';
         planSummary.innerHTML = html;
         syncCardBox();
         validateCoupon();
     }
 }
 
+function formatCardNumber(num){
+    const digits = String(num || '').replace(/\D/g, '');
+    if(!digits) return String(num || '');
+    return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+}
+
 function syncCardBox(){
     const opt = cardSelect.options[cardSelect.selectedIndex];
     const card = cardSelect.value;
     const name = opt ? (opt.getAttribute('data-name') || opt.textContent || '') : '';
-    if(!card){ payCardBox.hidden = true; return; }
+    if(!card){ payCardBox.hidden = true; payCardNumber.setAttribute('data-raw', ''); return; }
     payCardBox.hidden = false;
     payCardOwner.textContent = name || 'کارت انتخاب‌شده';
-    payCardNumber.textContent = card;
+    payCardNumber.setAttribute('data-raw', card);
+    payCardNumber.textContent = formatCardNumber(card);
 }
 cardSelect.addEventListener('change', syncCardBox);
 syncCardBox();
@@ -611,8 +623,12 @@ startPayBtn.addEventListener('click', function(){
 });
 
 function copyText(t, msg){ if(!t) return; navigator.clipboard.writeText(String(t)).then(function(){ alert(msg||'کپی شد'); }); }
-document.getElementById('copyCardBtn').addEventListener('click', function(){ copyText(payCardNumber.textContent.trim(), 'شماره کارت کپی شد'); });
-document.getElementById('copyCardBtn2').addEventListener('click', function(){ copyText(payCardNumber.textContent.trim(), 'شماره کارت کپی شد'); });
+document.getElementById('copyCardBtn').addEventListener('click', function(){
+    copyText(payCardNumber.getAttribute('data-raw') || payCardNumber.textContent.replace(/\s+/g, ''), 'شماره کارت کپی شد');
+});
+document.getElementById('copyCardBtn2').addEventListener('click', function(){
+    copyText(payCardNumber.getAttribute('data-raw') || payCardNumber.textContent.replace(/\s+/g, ''), 'شماره کارت کپی شد');
+});
 document.getElementById('copyAmountBtn').addEventListener('click', function(){ if(currentPay) copyText(currentPay.amount, 'مبلغ کپی شد'); });
 document.getElementById('copyLinkBtn').addEventListener('click', function(){ copyText(resultLink.textContent.trim(), 'لینک کپی شد'); });
 </script>
