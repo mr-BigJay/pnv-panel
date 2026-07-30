@@ -95,13 +95,29 @@
         root.id = 'supportUiOverlay';
         root.innerHTML =
             '<div class="supportSheet" id="supportActionSheet" hidden></div>' +
+            '<div class="supportMediaComposer" id="supportMediaComposer" hidden>' +
+            '<div class="supportMediaStage"><img id="supportMediaImg" alt=""></div>' +
+            '<div class="supportMediaFooter">' +
+            '<input type="text" class="supportMediaCaption" id="supportMediaCaption" placeholder="نوشتن کپشن..." maxlength="2000" enterkeyhint="send">' +
+            '<div class="supportMediaActions">' +
+            '<button type="button" class="supportMediaBtn" id="supportMediaBack" aria-label="بازگشت">' +
+            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</button>' +
+            '<button type="button" class="supportMediaBtn" id="supportMediaCrop" aria-label="برش">' +
+            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">' +
+            '<path d="M6 2v4H2"/><path d="M18 22v-4h4"/><path d="M6 6h12v12H6z"/><path d="M2 6h4"/><path d="M18 18h4"/></svg>' +
+            '</button>' +
+            '<button type="button" class="supportMediaBtn supportMediaBtn--send" id="supportMediaSend" aria-label="ارسال">' +
+            '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>' +
+            '</button>' +
+            '</div></div></div>' +
             '<div class="supportCrop" id="supportCropModal" hidden>' +
             '<div class="supportCropCard">' +
             '<div class="supportCropTitle">برش تصویر</div>' +
             '<div class="supportCropStage"><canvas id="supportCropCanvas"></canvas></div>' +
             '<div class="supportCropActions">' +
             '<button type="button" class="supportCropBtn ghost" id="supportCropCancel">انصراف</button>' +
-            '<button type="button" class="supportCropBtn" id="supportCropOk">تایید و پیوست</button>' +
+            '<button type="button" class="supportCropBtn" id="supportCropOk">تایید برش</button>' +
             '</div></div></div>';
         document.body.appendChild(root);
         return root;
@@ -113,31 +129,56 @@
         if(!input){ return; }
 
         ensureOverlay();
+        const mediaComposer = document.getElementById('supportMediaComposer');
+        const mediaImg = document.getElementById('supportMediaImg');
+        const mediaCaption = document.getElementById('supportMediaCaption');
+        const mediaBack = document.getElementById('supportMediaBack');
+        const mediaCropBtn = document.getElementById('supportMediaCrop');
+        const mediaSend = document.getElementById('supportMediaSend');
         const cropModal = document.getElementById('supportCropModal');
         const canvas = document.getElementById('supportCropCanvas');
-        if(!cropModal || !canvas){ return; }
+        if(!mediaComposer || !mediaImg || !cropModal || !canvas){ return; }
+
         const ctx = canvas.getContext('2d');
         let sourceImg = null;
         let crop = {x:0,y:0,w:0,h:0};
         let drag = null;
         let pendingBlob = null;
-        let pendingName = 'support-crop.jpg';
+        let pendingName = 'support-image.jpg';
+        let pendingUrl = '';
         let submitting = false;
+        const mainTextarea = form.querySelector('textarea');
 
-        let preview = form.querySelector('.supportAttachPreview');
-        if(!preview){
-            preview = document.createElement('div');
-            preview.className = 'supportAttachPreview';
-            preview.hidden = true;
-            form.insertBefore(preview, form.firstChild);
+        function revokeUrl(){
+            if(pendingUrl){
+                try{ URL.revokeObjectURL(pendingUrl); }catch(e){}
+                pendingUrl = '';
+            }
         }
 
-        function clearPreview(){
-            preview.hidden = true;
-            preview.innerHTML = '';
+        function closeMediaComposer(){
+            mediaComposer.hidden = true;
+            document.body.classList.remove('supportMediaOpen');
+            revokeUrl();
             pendingBlob = null;
-            pendingName = 'support-crop.jpg';
+            pendingName = 'support-image.jpg';
+            sourceImg = null;
+            if(mediaCaption){ mediaCaption.value = ''; }
+            mediaImg.removeAttribute('src');
             try{ input.value = ''; }catch(e){}
+        }
+
+        function openMediaComposer(file){
+            revokeUrl();
+            pendingBlob = file;
+            pendingName = file.name || 'support-image.jpg';
+            pendingUrl = URL.createObjectURL(file);
+            mediaImg.src = pendingUrl;
+            if(mediaCaption){
+                mediaCaption.value = (mainTextarea && mainTextarea.value) ? mainTextarea.value : '';
+            }
+            mediaComposer.hidden = false;
+            document.body.classList.add('supportMediaOpen');
         }
 
         function assignInputFile(file){
@@ -151,20 +192,9 @@
             }
         }
 
-        function showPreview(file){
-            const url = URL.createObjectURL(file);
-            preview.hidden = false;
-            preview.innerHTML =
-                '<img src="'+url+'" alt="">' +
-                '<button type="button" class="supportAttachClear" title="حذف">×</button>';
-            preview.querySelector('.supportAttachClear').onclick = function(){
-                clearPreview();
-            };
-        }
-
         function draw(){
             if(!sourceImg){ return; }
-            const maxW = Math.min(320, window.innerWidth - 48);
+            const maxW = Math.min(360, window.innerWidth - 32);
             const scale = Math.min(1, maxW / sourceImg.width);
             canvas.width = Math.round(sourceImg.width * scale);
             canvas.height = Math.round(sourceImg.height * scale);
@@ -183,14 +213,15 @@
             ctx.strokeRect(crop.x, crop.y, crop.w, crop.h);
         }
 
-        function openCrop(file){
+        function openCropEditor(){
+            if(!pendingBlob){ return; }
             const reader = new FileReader();
             reader.onload = function(){
                 const img = new Image();
                 img.onload = function(){
                     sourceImg = img;
                     const side = Math.min(img.width, img.height);
-                    const maxW = Math.min(320, window.innerWidth - 48);
+                    const maxW = Math.min(360, window.innerWidth - 32);
                     const scale = Math.min(1, maxW / img.width);
                     const cw = Math.round(img.width * scale);
                     const ch = Math.round(img.height * scale);
@@ -205,12 +236,11 @@
                     draw();
                 };
                 img.onerror = function(){
-                    alert('این تصویر قابل نمایش نیست. JPG/PNG/WebP بفرستید.');
-                    clearPreview();
+                    alert('این تصویر قابل برش نیست.');
                 };
                 img.src = reader.result;
             };
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(pendingBlob);
         }
 
         function pointerPos(e){
@@ -243,13 +273,12 @@
 
         document.getElementById('supportCropCancel').onclick = function(){
             cropModal.hidden = true;
-            clearPreview();
             sourceImg = null;
         };
 
         document.getElementById('supportCropOk').onclick = function(){
             if(!sourceImg){ return; }
-            const maxW = Math.min(320, window.innerWidth - 48);
+            const maxW = Math.min(360, window.innerWidth - 32);
             const scale = Math.min(1, maxW / sourceImg.width);
             const out = document.createElement('canvas');
             const size = Math.max(32, Math.round(crop.w / scale));
@@ -265,15 +294,81 @@
                     alert('برش تصویر ناموفق بود');
                     return;
                 }
-                pendingBlob = blob;
+                const file = new File([blob], 'support-crop.jpg', {type: 'image/jpeg'});
+                pendingBlob = file;
                 pendingName = 'support-crop.jpg';
-                const file = new File([blob], pendingName, {type: 'image/jpeg'});
                 assignInputFile(file);
-                showPreview(file);
+                revokeUrl();
+                pendingUrl = URL.createObjectURL(file);
+                mediaImg.src = pendingUrl;
                 cropModal.hidden = true;
                 sourceImg = null;
             }, 'image/jpeg', 0.88);
         };
+
+        function submitMedia(){
+            if(submitting || !pendingBlob){ return; }
+            submitting = true;
+            mediaSend.disabled = true;
+
+            const caption = (mediaCaption ? mediaCaption.value : '').trim();
+            if(mainTextarea){
+                mainTextarea.value = caption;
+            }
+
+            const file = (pendingBlob instanceof File)
+                ? pendingBlob
+                : new File([pendingBlob], pendingName, {type: pendingBlob.type || 'image/jpeg'});
+            assignInputFile(file);
+
+            const fd = new FormData(form);
+            fd.set('image', file, pendingName);
+            fd.set('message', caption);
+
+            const action = form.getAttribute('action') || window.location.href;
+            fetch(action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                redirect: 'follow'
+            }).then(function(res){
+                if(res.redirected && res.url){
+                    window.location.href = res.url;
+                    return;
+                }
+                window.location.reload();
+            }).catch(function(){
+                submitting = false;
+                mediaSend.disabled = false;
+                alert('ارسال تصویر ناموفق بود');
+            });
+        }
+
+        mediaBack.addEventListener('click', function(){
+            if(!cropModal.hidden){
+                cropModal.hidden = true;
+                sourceImg = null;
+                return;
+            }
+            closeMediaComposer();
+        });
+
+        mediaCropBtn.addEventListener('click', function(){
+            openCropEditor();
+        });
+
+        mediaSend.addEventListener('click', function(){
+            submitMedia();
+        });
+
+        if(mediaCaption){
+            mediaCaption.addEventListener('keydown', function(e){
+                if(e.key === 'Enter'){
+                    e.preventDefault();
+                    submitMedia();
+                }
+            });
+        }
 
         const attachBtn = (attachBtnId && document.getElementById(attachBtnId))
             || form.querySelector('.msgIconBtn--attach');
@@ -290,56 +385,16 @@
             if(!file){ return; }
             if(!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name || '')){
                 alert('فقط JPG، PNG یا WebP مجاز است');
-                clearPreview();
+                try{ input.value = ''; }catch(err){}
                 return;
             }
-            pendingBlob = null;
-            openCrop(file);
+            openMediaComposer(file);
         });
 
+        // Normal text-only submit still works; block if media composer open
         form.addEventListener('submit', function(e){
-            if(submitting){
+            if(!mediaComposer.hidden || (cropModal && !cropModal.hidden)){
                 e.preventDefault();
-                return;
-            }
-            if(cropModal && !cropModal.hidden){
-                e.preventDefault();
-                alert('ابتدا برش تصویر را تایید یا لغو کنید');
-                return;
-            }
-
-            const text = (form.querySelector('textarea')?.value || '').trim();
-            const hasInputFile = input.files && input.files.length > 0;
-            const hasPending = !!pendingBlob;
-
-            if(text === '' && !hasInputFile && !hasPending){
-                return;
-            }
-
-            // Always post images via FormData for reliable mobile upload
-            if(hasPending || hasInputFile){
-                e.preventDefault();
-                submitting = true;
-                const fd = new FormData(form);
-                if(hasPending){
-                    fd.set('image', pendingBlob, pendingName);
-                }
-                const action = form.getAttribute('action') || window.location.href;
-                fetch(action, {
-                    method: 'POST',
-                    body: fd,
-                    credentials: 'same-origin',
-                    redirect: 'follow'
-                }).then(function(res){
-                    if(res.redirected && res.url){
-                        window.location.href = res.url;
-                        return;
-                    }
-                    window.location.reload();
-                }).catch(function(){
-                    submitting = false;
-                    alert('ارسال تصویر ناموفق بود');
-                });
             }
         });
     }
