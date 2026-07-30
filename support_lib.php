@@ -213,7 +213,8 @@ if(!function_exists('supportLoad')){
             'date' => $display['date'],
             'time' => $display['time'],
             'timestamp' => intval($message['timestamp'] ?? 0),
-            'edited' => !empty($message['edited'])
+            'edited' => !empty($message['edited']),
+            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null
         ];
 
     }
@@ -437,43 +438,155 @@ if(!function_exists('supportLoad')){
 
     function supportHandleUpload($fileInput, $uploadDir, $urlPrefix){
 
-        if(
-            !isset($fileInput['size'])
-            || $fileInput['size'] <= 0
-        ){
-            return '';
+        if(!is_array($fileInput) || !isset($fileInput['error'])){
+            return ['ok' => false, 'path' => '', 'error' => ''];
         }
 
-        if($fileInput['size'] > 5 * 1024 * 1024){
-            return '';
+        if(intval($fileInput['error']) === UPLOAD_ERR_NO_FILE || intval($fileInput['size'] ?? 0) <= 0){
+            return ['ok' => false, 'path' => '', 'error' => ''];
         }
 
-        $ext = strtolower(pathinfo($fileInput['name'], PATHINFO_EXTENSION));
+        if(intval($fileInput['error']) !== UPLOAD_ERR_OK){
+            return ['ok' => false, 'path' => '', 'error' => 'آپلود تصویر ناموفق بود (خطای سرور)'];
+        }
 
+        $maxBytes = 5 * 1024 * 1024;
+        $phpMax = supportParseIniBytes(ini_get('upload_max_filesize'));
+
+        if($phpMax > 0 && $phpMax < $maxBytes){
+            $maxBytes = $phpMax;
+        }
+
+        if(intval($fileInput['size']) > $maxBytes){
+            return ['ok' => false, 'path' => '', 'error' => 'حجم تصویر نباید بیشتر از ' . round($maxBytes / 1024 / 1024, 1) . 'MB باشد'];
+        }
+
+        $ext = strtolower(pathinfo((string)($fileInput['name'] ?? ''), PATHINFO_EXTENSION));
         $allowed = ['jpg', 'jpeg', 'png', 'webp'];
 
-        if(!in_array($ext, $allowed, true)){
-            return '';
-        }
-
-        $imageInfo = @getimagesize($fileInput['tmp_name']);
+        $tmp = (string)($fileInput['tmp_name'] ?? '');
+        $imageInfo = ($tmp !== '') ? @getimagesize($tmp) : false;
 
         if($imageInfo === false){
-            return '';
+            return ['ok' => false, 'path' => '', 'error' => 'فایل تصویر معتبر نیست'];
+        }
+
+        $typeMap = [
+            IMAGETYPE_JPEG => 'jpg',
+            IMAGETYPE_PNG => 'png',
+            IMAGETYPE_WEBP => 'webp'
+        ];
+        $detected = $typeMap[$imageInfo[2] ?? 0] ?? '';
+
+        if($detected === ''){
+            return ['ok' => false, 'path' => '', 'error' => 'فقط JPG، PNG یا WebP مجاز است'];
+        }
+
+        if(!in_array($ext, $allowed, true)){
+            $ext = $detected;
+        } elseif($ext === 'jpeg'){
+            $ext = 'jpg';
         }
 
         if(!is_dir($uploadDir)){
-            mkdir($uploadDir, 0755, true);
+            if(!@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)){
+                return ['ok' => false, 'path' => '', 'error' => 'پوشه آپلود قابل ایجاد نیست'];
+            }
+        }
+
+        if(!is_writable($uploadDir)){
+            @chmod($uploadDir, 0755);
+            if(!is_writable($uploadDir)){
+                return ['ok' => false, 'path' => '', 'error' => 'پوشه آپلود قابل نوشتن نیست'];
+            }
         }
 
         $filename = time() . rand(1000, 9999) . '.' . $ext;
         $savePath = rtrim($uploadDir, '/') . '/' . $filename;
 
-        if(!move_uploaded_file($fileInput['tmp_name'], $savePath)){
-            return '';
+        if(!move_uploaded_file($tmp, $savePath)){
+            return ['ok' => false, 'path' => '', 'error' => 'ذخیره تصویر روی سرور ناموفق بود'];
         }
 
-        return rtrim($urlPrefix, '/') . '/' . $filename;
+        return [
+            'ok' => true,
+            'path' => rtrim($urlPrefix, '/') . '/' . $filename,
+            'error' => ''
+        ];
+
+    }
+
+    function supportParseIniBytes($value){
+
+        $value = trim((string)$value);
+
+        if($value === ''){
+            return 0;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        $num = floatval($value);
+
+        if($unit === 'g'){
+            return (int)($num * 1024 * 1024 * 1024);
+        }
+
+        if($unit === 'm'){
+            return (int)($num * 1024 * 1024);
+        }
+
+        if($unit === 'k'){
+            return (int)($num * 1024);
+        }
+
+        return (int)$num;
+
+    }
+
+    function supportUserCanEditMessage($message){
+        $timestamp = intval($message['timestamp'] ?? 0);
+        return $timestamp > 0 && (time() - $timestamp) <= 900;
+    }
+
+    function supportUserCanDeleteMessage($message){
+        $timestamp = intval($message['timestamp'] ?? 0);
+        return $timestamp > 0 && (time() - $timestamp) <= 300;
+    }
+
+    function supportBuildReplyPreview($data, $replyId){
+
+        $replyId = trim((string)$replyId);
+
+        if($replyId === ''){
+            return null;
+        }
+
+        foreach((array)$data as $ticket){
+            foreach(($ticket['messages'] ?? []) as $msg){
+                if(($msg['id'] ?? '') === $replyId){
+                    $text = trim((string)($msg['text'] ?? ''));
+
+                    if($text === '' && !empty($msg['image'])){
+                        $text = '📷 تصویر';
+                    }
+
+                    if(function_exists('mb_substr')){
+                        $text = mb_substr($text, 0, 80, 'UTF-8');
+                    }
+                    else{
+                        $text = substr($text, 0, 80);
+                    }
+
+                    return [
+                        'id' => $replyId,
+                        'sender' => $msg['sender'] ?? '',
+                        'text' => $text
+                    ];
+                }
+            }
+        }
+
+        return null;
 
     }
 
@@ -703,21 +816,23 @@ if(!function_exists('supportLoad')){
         if($isAdmin){
             $canEdit = true;
             $canDelete = true;
+            $canReply = ($sender !== 'admin');
+            $isOwn = ($sender === 'admin');
         }
         elseif(
             $sender === 'user'
             && !empty($options['ownUsername'])
         ){
-            $timestamp = $m['timestamp'] ?? 0;
-
-            if(time() - $timestamp <= 3600){
-                $canEdit = true;
-            }
-
-            if(time() - $timestamp <= 60){
-                $canDelete = true;
-            }
-
+            $isOwn = true;
+            $canEdit = supportUserCanEditMessage($m);
+            $canDelete = supportUserCanDeleteMessage($m);
+            $canReply = false;
+        }
+        else{
+            $isOwn = false;
+            $canEdit = false;
+            $canDelete = false;
+            $canReply = !empty($options['ownUsername']);
         }
 
         $image = $m['image'] ?? '';
@@ -727,64 +842,49 @@ if(!function_exists('supportLoad')){
         }
 
         $display = supportMessageDisplayTime($m);
+        $replyTo = is_array($m['reply_to'] ?? null) ? $m['reply_to'] : null;
+        $plainText = (string)($m['text'] ?? '');
 
         ob_start();
         ?>
 
-        <div class="msgBubble msg <?php echo $class; ?>" data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-timestamp="<?php echo intval($m['timestamp'] ?? 0); ?>">
+        <div
+            class="msgBubble msg <?php echo $class; ?>"
+            data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+            data-timestamp="<?php echo intval($m['timestamp'] ?? 0); ?>"
+            data-sender="<?php echo htmlspecialchars($sender, ENT_QUOTES, 'UTF-8'); ?>"
+            data-own="<?php echo $isOwn ? '1' : '0'; ?>"
+            data-can-edit="<?php echo $canEdit ? '1' : '0'; ?>"
+            data-can-delete="<?php echo $canDelete ? '1' : '0'; ?>"
+            data-can-reply="<?php echo $canReply ? '1' : '0'; ?>"
+            data-text="<?php echo htmlspecialchars($plainText, ENT_QUOTES, 'UTF-8'); ?>"
+        >
 
-            <?php echo nl2br(htmlspecialchars($m['text'] ?? '', ENT_QUOTES, 'UTF-8')); ?>
+            <?php if($replyTo){ ?>
+            <div class="msgQuote">
+                <strong><?php echo (($replyTo['sender'] ?? '') === 'admin') ? 'پشتیبانی' : 'کاربر'; ?></strong>
+                <span><?php echo htmlspecialchars($replyTo['text'] ?? '', ENT_QUOTES, 'UTF-8'); ?></span>
+            </div>
+            <?php } ?>
+
+            <?php if($plainText !== ''){ ?>
+            <div class="msgText"><?php echo nl2br(htmlspecialchars($plainText, ENT_QUOTES, 'UTF-8')); ?></div>
+            <?php } ?>
 
             <?php if(!empty($m['edited'])){ ?>
-
-            <br><small>(ویرایش شد)</small>
-
+            <small class="msgEdited">(ویرایش شد)</small>
             <?php } ?>
 
             <?php if($image !== ''){ ?>
-
-            <br>
-            <img src="<?php echo htmlspecialchars($image, ENT_QUOTES, 'UTF-8'); ?>" alt="">
-
+            <a class="msgImageLink" href="<?php echo htmlspecialchars($image, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo htmlspecialchars($image, ENT_QUOTES, 'UTF-8'); ?>" alt="">
+            </a>
             <?php } ?>
 
             <div class="msgMeta">
-
-                <?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
-                -
                 <?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?>
-
-                <?php if($canEdit){ ?>
-
-                <a
-                    href="<?php echo htmlspecialchars($baseUrl . (strpos($baseUrl, '?') !== false ? '&' : '?') . 'edit=' . urlencode($m['id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-                    class="action">
-
-                    ✏️
-
-                </a>
-
-                <?php } ?>
-
-                <?php if($canDelete){ ?>
-
-                <form
-                    method="POST"
-                    class="deleteForm"
-                    onsubmit="return confirm('پیام حذف شود؟');">
-
-                    <?php echo $csrfField; ?>
-
-                    <input type="hidden" name="delete_message" value="1">
-                    <input type="hidden" name="delete_id" value="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-                    <input type="hidden" name="user" value="<?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?>">
-
-                    <button type="submit" class="action deleteBtn">🗑</button>
-
-                </form>
-
-                <?php } ?>
-
+                -
+                <?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
             </div>
 
             <?php if(
@@ -797,12 +897,12 @@ if(!function_exists('supportLoad')){
 
                 <?php echo $csrfField; ?>
 
-                <textarea name="edit_text" required><?php echo htmlspecialchars($m['text'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                <textarea name="edit_text" required><?php echo htmlspecialchars($plainText, ENT_QUOTES, 'UTF-8'); ?></textarea>
 
                 <input type="hidden" name="edit_id" value="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="user" value="<?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?>">
 
-                <button type="submit" class="editbtn">✓</button>
+                <button type="submit" class="editbtn">✓ ذخیره</button>
 
             </form>
 
@@ -890,13 +990,17 @@ if(!function_exists('supportLoad')){
             else{
                 $user = $_POST['user'] ?? '';
                 $text = trim($_POST['message'] ?? '');
-                $image = supportHandleUpload(
+                $upload = supportHandleUpload(
                     $_FILES['image'] ?? [],
                     dirname($file) . '/../uploads/support',
                     '/uploads/support'
                 );
+                $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
 
-                if($text === '' && $image === ''){
+                if($image === '' && !empty($upload['error'])){
+                    $error = $upload['error'];
+                }
+                elseif($text === '' && $image === ''){
                     $error = 'متن یا تصویر وارد کنید';
                 }
                 else{
@@ -909,8 +1013,9 @@ if(!function_exists('supportLoad')){
                         }
 
                         $meta = supportMessageMeta();
+                        $replyTo = supportBuildReplyPreview($data, $_POST['reply_to'] ?? '');
 
-                        $data[$ticketIndex]['messages'][] = [
+                        $row = [
                             'id' => uniqid(),
                             'sender' => 'admin',
                             'text' => $text,
@@ -920,6 +1025,12 @@ if(!function_exists('supportLoad')){
                             'timestamp' => $meta['timestamp'],
                             'seen_by_user' => false
                         ];
+
+                        if($replyTo){
+                            $row['reply_to'] = $replyTo;
+                        }
+
+                        $data[$ticketIndex]['messages'][] = $row;
 
                         $data[$ticketIndex]['status'] = 'answered';
 
@@ -982,7 +1093,7 @@ if(!function_exists('supportLoad')){
                         if(
                             ($msg['id'] ?? '') === $msgId
                             && ($msg['sender'] ?? '') === 'user'
-                            && time() - ($msg['timestamp'] ?? 0) <= 60
+                            && supportUserCanDeleteMessage($msg)
                         ){
                             unset($data[$i]['messages'][$j]);
                             $data[$i]['messages'] = array_values($data[$i]['messages']);
@@ -1020,7 +1131,7 @@ if(!function_exists('supportLoad')){
                         if(
                             ($msg['id'] ?? '') === $editId
                             && ($msg['sender'] ?? '') === 'user'
-                            && time() - ($msg['timestamp'] ?? 0) <= 3600
+                            && supportUserCanEditMessage($msg)
                         ){
                             $data[$i]['messages'][$j]['text'] = $newText;
                             $data[$i]['messages'][$j]['edited'] = true;
@@ -1051,17 +1162,22 @@ if(!function_exists('supportLoad')){
             }
             else{
                 $text = trim($_POST['message'] ?? '');
-                $image = supportHandleUpload(
+                $upload = supportHandleUpload(
                     $_FILES['image'] ?? [],
                     __DIR__ . '/uploads/support',
-                    'uploads/support'
+                    '/uploads/support'
                 );
+                $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
 
-                if($text === '' && $image === ''){
+                if($image === '' && !empty($upload['error'])){
+                    $error = $upload['error'];
+                }
+                elseif($text === '' && $image === ''){
                     $error = 'متن یا تصویر وارد کنید';
                 }
                 else{
                     $meta = supportMessageMeta();
+                    $replyTo = supportBuildReplyPreview($data, $_POST['reply_to'] ?? '');
 
                     $newmsg = [
                         'id' => uniqid(),
@@ -1073,6 +1189,10 @@ if(!function_exists('supportLoad')){
                         'timestamp' => $meta['timestamp'],
                         'seen_by_admin' => false
                     ];
+
+                    if($replyTo){
+                        $newmsg['reply_to'] = $replyTo;
+                    }
 
                     $ticketIndex = supportFindTicketIndex($data, $username);
 
