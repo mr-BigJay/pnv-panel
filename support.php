@@ -39,6 +39,7 @@ foreach($data as $ticket){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
+<link rel="stylesheet" href="user_nav.css?v=1">
 <link rel="stylesheet" href="support_ui.css?v=33">
 <link rel="stylesheet" href="fonts.css">
 <style>
@@ -50,7 +51,7 @@ html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overfl
 <div class="msgApp msgApp--user">
 
 <header class="msgHeader">
-<a href="dashboard.php" class="msgBack" title="بازگشت">بازگشت</a>
+<a href="dashboard.php" class="userBack" title="بازگشت">بازگشت</a>
 <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($user), ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="msgHeaderInfo">
 <h1>پشتیبانی</h1>

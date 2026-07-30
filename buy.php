@@ -189,6 +189,7 @@ content="width=device-width, initial-scale=1.0">
 </title>
 
 <link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="user_nav.css?v=1">
 <link rel="stylesheet" href="plan_step_ui.css">
 
 </head>
@@ -198,9 +199,9 @@ content="width=device-width, initial-scale=1.0">
 <div class="box">
 
 <div class="topBar">
-<a class="backIcon" href="dashboard.php" aria-label="بازگشت">→</a>
+<a class="userBack" href="dashboard.php">بازگشت</a>
 <div class="brand">خرید اشتراک جدید</div>
-<div style="width:40px"></div>
+<span class="userBackSpacer" aria-hidden="true"></span>
 </div>
 
 <h2>خرید اشتراک جدید</h2>

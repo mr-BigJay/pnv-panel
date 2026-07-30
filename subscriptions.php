@@ -241,6 +241,8 @@ font-size:15px;
 }
 
 </style>
+<link rel="stylesheet" href="user_nav.css?v=1">
+<link rel="stylesheet" href="fonts.css">
 
 </head>
 
@@ -248,7 +250,12 @@ font-size:15px;
 
 <div class="container">
 
-<h2>
+<?php
+require_once __DIR__ . '/user_nav.php';
+userBackBar('dashboard.php', 'لیست اشتراک ها');
+?>
+
+<h2 style="display:none">
 
 لیست اشتراک ها
 
@@ -424,13 +431,6 @@ $i++;
 }
 
 ?>
-
-<a href="dashboard.php"
-class="back">
-
-بازگشت
-
-</a>
 
 </div>
 

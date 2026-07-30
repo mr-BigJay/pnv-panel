@@ -252,6 +252,8 @@ font-size:15px;
 }
 
 </style>
+<link rel="stylesheet" href="user_nav.css?v=1">
+<link rel="stylesheet" href="fonts.css">
 
 </head>
 
@@ -259,7 +261,12 @@ font-size:15px;
 
 <div class="box">
 
-<h2>
+<?php
+require_once __DIR__ . '/user_nav.php';
+userBackBar('dashboard.php', 'لیست تمدید ها');
+?>
+
+<h2 style="display:none">
 
 لیست تمدید ها
 
@@ -435,13 +442,6 @@ style="background:<?php echo statusColor($status); ?>">
 </div>
 
 <?php } ?>
-
-<a href="dashboard.php"
-class="back">
-
-بازگشت
-
-</a>
 
 </div>
 

@@ -138,6 +138,8 @@ text-align:center;
 }
 
 </style>
+<link rel="stylesheet" href="user_nav.css?v=1">
+<link rel="stylesheet" href="fonts.css">
 
 </head>
 
@@ -145,7 +147,12 @@ text-align:center;
 
 <div class="box">
 
-<h2>
+<?php
+require_once __DIR__ . '/user_nav.php';
+userBackBar('dashboard.php', 'دانلود نرم افزارها');
+?>
+
+<h2 style="display:none">
 
 دانلود نرم افزارهای مورد نیاز
 
@@ -183,14 +190,6 @@ download>
 </div>
 
 <?php } ?>
-
-<a
-href="dashboard.php"
-class="back">
-
-بازگشت
-
-</a>
 
 </div>
 
