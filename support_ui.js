@@ -112,12 +112,19 @@
             '</button>' +
             '</div></div></div>' +
             '<div class="supportCrop" id="supportCropModal" hidden>' +
-            '<div class="supportCropCard">' +
-            '<div class="supportCropTitle">برش تصویر</div>' +
+            '<div class="supportCropShell">' +
             '<div class="supportCropStage"><canvas id="supportCropCanvas"></canvas></div>' +
-            '<div class="supportCropActions">' +
-            '<button type="button" class="supportCropBtn ghost" id="supportCropCancel">انصراف</button>' +
-            '<button type="button" class="supportCropBtn" id="supportCropOk">تایید برش</button>' +
+            '<div class="supportCropBar">' +
+            '<button type="button" class="supportCropIconBtn" id="supportCropCancel" aria-label="رد">' +
+            '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+            '</button>' +
+            '<button type="button" class="supportCropIconBtn supportCropIconBtn--rotate" id="supportCropRotate" aria-label="چرخش">' +
+            '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">' +
+            '<path d="M4 7h7V4"/><path d="M20 17h-7v3"/><path d="M11 4a8 8 0 0 1 8 8"/><path d="M13 20a8 8 0 0 1-8-8"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>' +
+            '</button>' +
+            '<button type="button" class="supportCropIconBtn supportCropIconBtn--ok" id="supportCropOk" aria-label="تایید">' +
+            '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M20 6L9 17l-5-5"/></svg>' +
+            '</button>' +
             '</div></div></div>';
         document.body.appendChild(root);
         return root;
@@ -143,11 +150,14 @@
         let sourceImg = null;
         let crop = {x:0,y:0,w:0,h:0};
         let drag = null;
+        let displayScale = 1;
         let pendingBlob = null;
         let pendingName = 'support-image.jpg';
         let pendingUrl = '';
         let submitting = false;
         const mainTextarea = form.querySelector('textarea');
+        const HANDLE = 16;
+        const MIN_CROP = 40;
 
         function revokeUrl(){
             if(pendingUrl){
@@ -192,25 +202,107 @@
             }
         }
 
+        function stageSize(){
+            const stage = canvas.parentElement;
+            const w = Math.max(200, (stage ? stage.clientWidth : window.innerWidth) - 8);
+            const h = Math.max(200, (stage ? stage.clientHeight : window.innerHeight * 0.65) - 8);
+            return {w: w, h: h};
+        }
+
+        function fitCanvas(){
+            if(!sourceImg){ return; }
+            const box = stageSize();
+            displayScale = Math.min(box.w / sourceImg.width, box.h / sourceImg.height, 1);
+            canvas.width = Math.max(1, Math.round(sourceImg.width * displayScale));
+            canvas.height = Math.max(1, Math.round(sourceImg.height * displayScale));
+        }
+
+        function clampCrop(){
+            crop.w = Math.max(MIN_CROP, Math.min(crop.w, canvas.width));
+            crop.h = Math.max(MIN_CROP, Math.min(crop.h, canvas.height));
+            crop.x = Math.max(0, Math.min(crop.x, canvas.width - crop.w));
+            crop.y = Math.max(0, Math.min(crop.y, canvas.height - crop.h));
+        }
+
+        function initCropRect(){
+            fitCanvas();
+            const w = Math.round(canvas.width * 0.82);
+            const h = Math.round(canvas.height * 0.62);
+            crop = {
+                x: Math.round((canvas.width - w) / 2),
+                y: Math.round((canvas.height - h) / 2),
+                w: w,
+                h: h
+            };
+            clampCrop();
+        }
+
+        function drawHandle(x, y){
+            ctx.fillStyle = '#22c55e';
+            ctx.strokeStyle = '#052e16';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.rect(x - 6, y - 6, 12, 12);
+            ctx.fill();
+            ctx.stroke();
+        }
+
         function draw(){
             if(!sourceImg){ return; }
-            const maxW = Math.min(360, window.innerWidth - 32);
-            const scale = Math.min(1, maxW / sourceImg.width);
-            canvas.width = Math.round(sourceImg.width * scale);
-            canvas.height = Math.round(sourceImg.height * scale);
+            fitCanvas();
+            clampCrop();
             ctx.clearRect(0,0,canvas.width,canvas.height);
             ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(0,0,0,.45)';
+            ctx.fillStyle = 'rgba(0,0,0,.5)';
             ctx.fillRect(0,0,canvas.width,canvas.height);
             ctx.clearRect(crop.x, crop.y, crop.w, crop.h);
             ctx.drawImage(
                 sourceImg,
-                crop.x / scale, crop.y / scale, crop.w / scale, crop.h / scale,
+                crop.x / displayScale, crop.y / displayScale, crop.w / displayScale, crop.h / displayScale,
                 crop.x, crop.y, crop.w, crop.h
             );
             ctx.strokeStyle = '#22c55e';
             ctx.lineWidth = 2;
-            ctx.strokeRect(crop.x, crop.y, crop.w, crop.h);
+            ctx.strokeRect(crop.x + 1, crop.y + 1, crop.w - 2, crop.h - 2);
+
+            // corner + edge handles
+            drawHandle(crop.x, crop.y);
+            drawHandle(crop.x + crop.w, crop.y);
+            drawHandle(crop.x, crop.y + crop.h);
+            drawHandle(crop.x + crop.w, crop.y + crop.h);
+            drawHandle(crop.x + crop.w / 2, crop.y);
+            drawHandle(crop.x + crop.w / 2, crop.y + crop.h);
+            drawHandle(crop.x, crop.y + crop.h / 2);
+            drawHandle(crop.x + crop.w, crop.y + crop.h / 2);
+        }
+
+        function hitTest(p){
+            const near = function(a, b){ return Math.abs(a - b) <= HANDLE; };
+            const inside =
+                p.x >= crop.x - HANDLE && p.x <= crop.x + crop.w + HANDLE &&
+                p.y >= crop.y - HANDLE && p.y <= crop.y + crop.h + HANDLE;
+            if(!inside){ return null; }
+
+            const onL = near(p.x, crop.x);
+            const onR = near(p.x, crop.x + crop.w);
+            const onT = near(p.y, crop.y);
+            const onB = near(p.y, crop.y + crop.h);
+
+            if(onT && onL){ return 'nw'; }
+            if(onT && onR){ return 'ne'; }
+            if(onB && onL){ return 'sw'; }
+            if(onB && onR){ return 'se'; }
+            if(onT){ return 'n'; }
+            if(onB){ return 's'; }
+            if(onL){ return 'w'; }
+            if(onR){ return 'e'; }
+            if(
+                p.x >= crop.x && p.x <= crop.x + crop.w &&
+                p.y >= crop.y && p.y <= crop.y + crop.h
+            ){
+                return 'move';
+            }
+            return null;
         }
 
         function openCropEditor(){
@@ -220,20 +312,11 @@
                 const img = new Image();
                 img.onload = function(){
                     sourceImg = img;
-                    const side = Math.min(img.width, img.height);
-                    const maxW = Math.min(360, window.innerWidth - 32);
-                    const scale = Math.min(1, maxW / img.width);
-                    const cw = Math.round(img.width * scale);
-                    const ch = Math.round(img.height * scale);
-                    const sw = Math.round(side * scale);
-                    crop = {
-                        x: Math.round((cw - sw) / 2),
-                        y: Math.round((ch - sw) / 2),
-                        w: sw,
-                        h: sw
-                    };
                     cropModal.hidden = false;
-                    draw();
+                    requestAnimationFrame(function(){
+                        initCropRect();
+                        draw();
+                    });
                 };
                 img.onerror = function(){
                     alert('این تصویر قابل برش نیست.');
@@ -243,25 +326,95 @@
             reader.readAsDataURL(pendingBlob);
         }
 
+        function rotateSource90(){
+            if(!sourceImg){ return; }
+            const srcW = sourceImg.width;
+            const srcH = sourceImg.height;
+            const c = document.createElement('canvas');
+            c.width = srcH;
+            c.height = srcW;
+            const x = c.getContext('2d');
+            x.translate(srcH, 0);
+            x.rotate(Math.PI / 2);
+            x.drawImage(sourceImg, 0, 0);
+            const img = new Image();
+            img.onload = function(){
+                sourceImg = img;
+                initCropRect();
+                draw();
+            };
+            img.src = c.toDataURL('image/jpeg', 0.92);
+        }
+
         function pointerPos(e){
             const rect = canvas.getBoundingClientRect();
             const pt = e.touches ? e.touches[0] : e;
-            return {x: pt.clientX - rect.left, y: pt.clientY - rect.top};
+            const scaleX = canvas.width / Math.max(1, rect.width);
+            const scaleY = canvas.height / Math.max(1, rect.height);
+            return {
+                x: (pt.clientX - rect.left) * scaleX,
+                y: (pt.clientY - rect.top) * scaleY
+            };
         }
 
         function onDown(e){
             e.preventDefault();
             const p = pointerPos(e);
-            drag = {x: p.x, y: p.y, cx: crop.x, cy: crop.y};
+            const mode = hitTest(p);
+            if(!mode){ return; }
+            drag = {
+                mode: mode,
+                x: p.x,
+                y: p.y,
+                cx: crop.x,
+                cy: crop.y,
+                cw: crop.w,
+                ch: crop.h
+            };
         }
+
         function onMove(e){
             if(!drag){ return; }
             e.preventDefault();
             const p = pointerPos(e);
-            crop.x = Math.max(0, Math.min(canvas.width - crop.w, drag.cx + (p.x - drag.x)));
-            crop.y = Math.max(0, Math.min(canvas.height - crop.h, drag.cy + (p.y - drag.y)));
+            const dx = p.x - drag.x;
+            const dy = p.y - drag.y;
+            let x = drag.cx;
+            let y = drag.cy;
+            let w = drag.cw;
+            let h = drag.ch;
+            const mode = drag.mode;
+
+            if(mode === 'move'){
+                x = drag.cx + dx;
+                y = drag.cy + dy;
+            }else{
+                if(mode.indexOf('e') >= 0){ w = drag.cw + dx; }
+                if(mode.indexOf('s') >= 0){ h = drag.ch + dy; }
+                if(mode.indexOf('w') >= 0){
+                    x = drag.cx + dx;
+                    w = drag.cw - dx;
+                }
+                if(mode.indexOf('n') >= 0){
+                    y = drag.cy + dy;
+                    h = drag.ch - dy;
+                }
+            }
+
+            if(w < MIN_CROP){
+                if(mode.indexOf('w') >= 0){ x = drag.cx + drag.cw - MIN_CROP; }
+                w = MIN_CROP;
+            }
+            if(h < MIN_CROP){
+                if(mode.indexOf('n') >= 0){ y = drag.cy + drag.ch - MIN_CROP; }
+                h = MIN_CROP;
+            }
+
+            crop = {x: x, y: y, w: w, h: h};
+            clampCrop();
             draw();
         }
+
         function onUp(){ drag = null; }
 
         canvas.addEventListener('mousedown', onDown);
@@ -270,24 +423,34 @@
         canvas.addEventListener('touchstart', onDown, {passive:false});
         canvas.addEventListener('touchmove', onMove, {passive:false});
         canvas.addEventListener('touchend', onUp);
+        window.addEventListener('resize', function(){
+            if(cropModal.hidden || !sourceImg){ return; }
+            draw();
+        });
 
         document.getElementById('supportCropCancel').onclick = function(){
             cropModal.hidden = true;
             sourceImg = null;
+            drag = null;
+        };
+
+        document.getElementById('supportCropRotate').onclick = function(){
+            rotateSource90();
         };
 
         document.getElementById('supportCropOk').onclick = function(){
             if(!sourceImg){ return; }
-            const maxW = Math.min(360, window.innerWidth - 32);
-            const scale = Math.min(1, maxW / sourceImg.width);
+            fitCanvas();
+            clampCrop();
+            const outW = Math.max(32, Math.round(crop.w / displayScale));
+            const outH = Math.max(32, Math.round(crop.h / displayScale));
             const out = document.createElement('canvas');
-            const size = Math.max(32, Math.round(crop.w / scale));
-            out.width = size;
-            out.height = size;
+            out.width = outW;
+            out.height = outH;
             out.getContext('2d').drawImage(
                 sourceImg,
-                crop.x / scale, crop.y / scale, crop.w / scale, crop.h / scale,
-                0, 0, size, size
+                crop.x / displayScale, crop.y / displayScale, crop.w / displayScale, crop.h / displayScale,
+                0, 0, outW, outH
             );
             out.toBlob(function(blob){
                 if(!blob){
@@ -303,6 +466,7 @@
                 mediaImg.src = pendingUrl;
                 cropModal.hidden = true;
                 sourceImg = null;
+                drag = null;
             }, 'image/jpeg', 0.88);
         };
 
