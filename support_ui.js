@@ -212,9 +212,24 @@
         function fitCanvas(){
             if(!sourceImg){ return; }
             const box = stageSize();
-            displayScale = Math.min(box.w / sourceImg.width, box.h / sourceImg.height, 1);
-            canvas.width = Math.max(1, Math.round(sourceImg.width * displayScale));
-            canvas.height = Math.max(1, Math.round(sourceImg.height * displayScale));
+            const nextScale = Math.min(box.w / sourceImg.width, box.h / sourceImg.height, 1);
+            const nextW = Math.max(1, Math.round(sourceImg.width * nextScale));
+            const nextH = Math.max(1, Math.round(sourceImg.height * nextScale));
+            if(canvas.width === nextW && canvas.height === nextH){
+                displayScale = nextScale;
+                return;
+            }
+            const prevW = canvas.width || nextW;
+            const prevH = canvas.height || nextH;
+            displayScale = nextScale;
+            canvas.width = nextW;
+            canvas.height = nextH;
+            if(prevW > 0 && prevH > 0 && crop.w > 0 && crop.h > 0){
+                crop.x = Math.round(crop.x * nextW / prevW);
+                crop.y = Math.round(crop.y * nextH / prevH);
+                crop.w = Math.round(crop.w * nextW / prevW);
+                crop.h = Math.round(crop.h * nextH / prevH);
+            }
         }
 
         function clampCrop(){
