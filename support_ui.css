@@ -312,9 +312,9 @@ flex-shrink:0;
 .msgComposerInner,
 form.msgComposerInner{
 display:flex;
-flex-direction:row;
-align-items:flex-end;
-gap:10px;
+flex-direction:column;
+align-items:stretch;
+gap:8px;
 width:100%;
 box-sizing:border-box;
 background:var(--msg-card);
@@ -323,11 +323,20 @@ border-radius:var(--msg-radius);
 padding:10px;
 }
 
+.msgComposerRow{
+display:flex;
+flex-direction:row;
+align-items:flex-end;
+gap:10px;
+width:100%;
+}
+
 .msgComposerInner input[type="hidden"]{
 display:none !important;
 }
 
 .msgComposerInner textarea,
+.msgComposerRow textarea,
 .msgComposer textarea{
 flex:1 1 0;
 min-width:0;
@@ -364,6 +373,7 @@ color:var(--msg-muted);
 }
 
 .msgComposerInner .msgIconBtn,
+.msgComposerRow .msgIconBtn,
 .msgComposerInner button[type="submit"],
 .msgComposerInner button[name="reply"]{
 width:44px !important;
@@ -1306,17 +1316,10 @@ color:#cbd5e1;
 font-weight:500;
 }
 
-.supportAttachPreview{
-display:flex;
-align-items:center;
-gap:10px;
+.supportAttachPreview,
+.supportReplyChip{
 width:100%;
-padding:8px 10px;
-margin-bottom:8px;
-background:#0f172a;
-border:1px solid #1e293b;
-border-radius:14px;
-position:relative;
+flex:0 0 auto;
 }
 
 .supportAttachPreview[hidden]{

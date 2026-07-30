@@ -85,6 +85,7 @@ foreach($data as $ticket){
 <?php echo $csrfField; ?>
 <input type="hidden" name="send" value="1">
 
+<div class="msgComposerRow">
 <button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtn" title="پیوست تصویر" aria-label="پیوست تصویر">📎</button>
 <input type="file" name="image" id="userImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
 
@@ -95,6 +96,7 @@ foreach($data as $ticket){
     rows="1"></textarea>
 
 <button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
+</div>
 
 </form>
 </footer>
