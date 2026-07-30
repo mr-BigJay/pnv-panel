@@ -190,7 +190,7 @@ content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css">
+<link rel="stylesheet" href="plan_step_ui.css?v=2">
 
 </head>
 
@@ -251,7 +251,7 @@ required>
 <span class="catCheck">✓</span>
 <span class="catIcon">⏱</span>
 <span class="catTitle">محدود زمانی</span>
-<span class="catDesc">با مدت زمان مشخص</span>
+<span class="catDesc">مدت مشخص (روز / ماه)</span>
 </button>
 </div>
 
@@ -570,6 +570,13 @@ function renderPlans(){
 
     if(planBlock){ planBlock.classList.add('is-visible'); }
     const list = (plansData || []).filter(function(p){ return p.category === selectedCategory; });
+    const isLimited = selectedCategory === 'limited';
+
+    if(planListTitle){
+        planListTitle.textContent = isLimited
+            ? 'حجم و مدت را انتخاب کنید'
+            : 'حجم را انتخاب کنید';
+    }
 
     if(list.length === 0){
         planEmpty.classList.add('is-visible');
@@ -582,13 +589,22 @@ function renderPlans(){
     list.forEach(function(plan){
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'planChip' + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '');
+        btn.className = 'planChip'
+            + (isLimited ? ' planChip--limited' : '')
+            + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '');
         btn.innerHTML =
             '<span class="planCheck">✓</span>' +
             '<span class="planName"></span>' +
-            '<span class="planPrice"></span>';
+            '<span class="planPrice"></span>' +
+            (isLimited ? '<span class="planDays"></span>' : '');
         btn.querySelector('.planName').textContent = plan.name;
         btn.querySelector('.planPrice').textContent = plan.price_text;
+        if(isLimited){
+            const daysEl = btn.querySelector('.planDays');
+            if(daysEl){
+                daysEl.textContent = 'مدت: ' + (plan.days_label || '—');
+            }
+        }
         btn.addEventListener('click', function(){
             selectedPlan = plan;
             planSelect.value = plan.value;
@@ -626,8 +642,12 @@ function showStep(step){
 
     if(!isOne && selectedPlan){
         planSummary.classList.add('is-visible');
-        planSummary.innerHTML = 'پلن انتخابی: <b>' + selectedPlan.name + '</b> — ' + selectedPlan.price_text +
+        let summaryHtml = 'پلن انتخابی: <b>' + selectedPlan.name + '</b> — ' + selectedPlan.price_text +
             '<br>نوع: ' + (selectedCategory === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی');
+        if(selectedCategory === 'limited'){
+            summaryHtml += '<br>مدت: <b>' + (selectedPlan.days_label || '—') + '</b>';
+        }
+        planSummary.innerHTML = summaryHtml;
         validateCoupon();
     }
 }

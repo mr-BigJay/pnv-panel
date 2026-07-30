@@ -40,7 +40,7 @@ if(!function_exists('pnvFormatPlanPrice')){
 
     function pnvPlanDaysLabel($plan){
         if(pnvPlanIsUnlimited($plan)){
-            return 'نامحدود';
+            return 'نامحدود زمانی';
         }
 
         $days = trim((string)($plan['days'] ?? ''));
@@ -50,7 +50,19 @@ if(!function_exists('pnvFormatPlanPrice')){
         }
 
         if(preg_match('/^\d+$/', $days)){
-            return $days . ' روز';
+            $n = intval($days);
+
+            if($n <= 0){
+                return 'نامحدود زمانی';
+            }
+
+            // Exact month multiples (30-day months) → e.g. «۱ ماهه»
+            if($n >= 30 && ($n % 30) === 0){
+                $months = intdiv($n, 30);
+                return $months . ' ماهه';
+            }
+
+            return $n . ' روزه';
         }
 
         return $days;
