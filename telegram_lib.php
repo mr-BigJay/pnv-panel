@@ -647,9 +647,11 @@ if(!function_exists('telegramConfigPath')){
     function telegramHomeKeyboard(){
         $buyCount = count(telegramLoadPendingPayments('خرید', 50));
         $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
+        $msgCount = count(telegramUnreadTickets(50));
 
         $buys = '🛒 خریدهای جدید' . ($buyCount ? ' (' . $buyCount . ')' : '');
         $renews = '♻️ تمدیدهای جدید' . ($renewCount ? ' (' . $renewCount . ')' : '');
+        $messages = '📨 پیام کاربران' . ($msgCount ? ' (' . $msgCount . ')' : '');
 
         return telegramInline([
             [
@@ -661,6 +663,7 @@ if(!function_exists('telegramConfigPath')){
                 ['text' => '📈 گزارش تمدیدها', 'callback_data' => 'menu:renewreport']
             ],
             [
+                ['text' => telegramLimitText($messages, 32), 'callback_data' => 'menu:messages'],
                 ['text' => '⚙️ تنظیمات', 'callback_data' => 'menu:settings']
             ]
         ]);
