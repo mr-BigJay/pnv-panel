@@ -54,6 +54,11 @@ if(!function_exists('instantPayPath')){
         return intval($planPriceThousands) * 1000;
     }
 
+    function instantPayBaseRial($planPriceThousands){
+        // قیمت پلن در UI تومان است؛ مبلغ واریز بانکی به ریال است (×۱۰)
+        return instantPayBaseToman($planPriceThousands) * 10;
+    }
+
     function instantPayActiveCodes($items = null){
         if($items === null){
             $items = instantPayLoad();
@@ -92,29 +97,36 @@ if(!function_exists('instantPayPath')){
         return null;
     }
 
-    function instantPayBuildAmount($baseToman, $code){
-        $baseToman = intval($baseToman);
+    /**
+     * مبلغ واریز به ریال، همیشه کمتر از مبلغ اعلامی پلن.
+     * بازه: [baseRial-9000 .. baseRial-1] و ۴ رقم آخر = کد
+     * مثال: پلن ۱۵۰ هزار تومان = ۱٬۵۰۰٬۰۰۰ ریال → کد ۹۲۸۵ ⇒ ۱٬۴۹۹٬۲۸۵ ریال
+     */
+    function instantPayBuildAmountRial($baseRial, $code){
+        $baseRial = intval($baseRial);
         $code = intval($code);
 
-        // همیشه کمتر از مبلغ اعلامی پلن:
-        // بازه: [base-9000 .. base-1] و ۴ رقم آخر = کد
-        // مثال: ۱۵۰٬۰۰۰ + کد ۹۲۸۵ → ۱۴۹٬۲۸۵ تومان
-        if($baseToman < 10000){
-            $amount = max(1000, $baseToman - ($code % 1000));
-            return $amount < $baseToman ? $amount : max(1, $baseToman - 1);
+        if($baseRial < 10000){
+            $amount = max(1000, $baseRial - ($code % 1000));
+            return $amount < $baseRial ? $amount : max(1, $baseRial - 1);
         }
 
-        $amount = ($baseToman - 10000) + $code;
+        $amount = ($baseRial - 10000) + $code;
 
-        if($amount >= $baseToman){
-            $amount = $baseToman - 1;
+        if($amount >= $baseRial){
+            $amount = $baseRial - 1;
         }
 
         if($amount <= 0){
-            $amount = max(1, $baseToman - 1);
+            $amount = max(1, $baseRial - 1);
         }
 
         return $amount;
+    }
+
+    // سازگاری با نام قدیمی
+    function instantPayBuildAmount($baseToman, $code){
+        return instantPayBuildAmountRial(intval($baseToman) * 10, $code);
     }
 
     function instantPayFindPlan($planValue, $plans){
@@ -140,7 +152,8 @@ if(!function_exists('instantPayPath')){
         $changed = false;
 
         foreach($items as $i => $item){
-            if(($item['status'] ?? '') !== 'waiting'){
+            $st = $item['status'] ?? '';
+            if($st !== 'waiting'){
                 continue;
             }
 
@@ -173,29 +186,49 @@ if(!function_exists('instantPayPath')){
         $expires = intval($item['expires_at'] ?? 0);
         $now = time();
         $remaining = max(0, $expires - $now);
-        $amount = intval($item['amount'] ?? 0);
-        $base = intval($item['base_amount'] ?? 0);
+        $amount = intval($item['amount'] ?? 0); // ریال
+        $baseRial = intval($item['base_amount'] ?? 0); // ریال
+        $planToman = intval($item['plan_toman'] ?? 0);
 
-        if($base <= 0){
-            // سازگاری با سفارش‌های قدیمی
-            $base = $amount > 0 ? (intdiv($amount, 10000) * 10000 + 10000) : 0;
+        // سازگاری با سفارش‌های قدیمی تومان‌محور
+        $currency = strtolower(trim((string)($item['currency'] ?? 'rial')));
+        if($currency !== 'rial' && $amount > 0 && $amount < 1000000){
+            $amount = $amount * 10;
+            if($baseRial > 0 && $baseRial < 1000000){
+                $baseRial = $baseRial * 10;
+            }
         }
 
-        $saved = max(0, $base - $amount);
+        if($baseRial <= 0){
+            $baseRial = $amount > 0 ? (intdiv($amount, 10000) * 10000 + 10000) : 0;
+        }
+
+        if($planToman <= 0 && $baseRial > 0){
+            $planToman = intdiv($baseRial, 10);
+        }
+
+        $saved = max(0, $baseRial - $amount);
+        $ready = (($item['status'] ?? '') === 'paid');
 
         return [
             'id' => $item['id'] ?? '',
             'status' => $item['status'] ?? '',
+            'ready' => $ready,
+            'currency' => 'rial',
             'amount' => $amount,
-            'amount_text' => number_format($amount) . ' تومان',
-            'base_amount' => $base,
-            'base_text' => $base > 0 ? (number_format($base) . ' تومان') : '',
+            'amount_text' => number_format($amount) . ' ریال',
+            'base_amount' => $baseRial,
+            'base_text' => $baseRial > 0 ? (number_format($baseRial) . ' ریال') : '',
+            'plan_toman' => $planToman,
+            'plan_toman_text' => $planToman > 0 ? (number_format($planToman) . ' تومان') : '',
             'saved' => $saved,
-            'saved_text' => $saved > 0 ? (number_format($saved) . ' تومان') : '',
+            'saved_text' => $saved > 0 ? (number_format($saved) . ' ریال') : '',
             'code' => str_pad((string)intval($item['code'] ?? 0), 4, '0', STR_PAD_LEFT),
             'card' => $item['card'] ?? '',
             'card_name' => $item['card_name'] ?? '',
             'plan' => $item['plan'] ?? '',
+            'subname' => $item['subname'] ?? '',
+            'sub' => $item['sub'] ?? '',
             'type' => $item['type'] ?? 'خرید',
             'expires_at' => $expires,
             'remaining' => $remaining,
@@ -305,7 +338,8 @@ if(!function_exists('instantPayPath')){
         }
 
         $baseToman = instantPayBaseToman($priceThousands);
-        $amount = instantPayBuildAmount($baseToman, $code);
+        $baseRial = instantPayBaseRial($priceThousands);
+        $amount = instantPayBuildAmountRial($baseRial, $code);
         $now = time();
         $expires = $now + instantPayWindowSeconds();
 
@@ -350,7 +384,9 @@ if(!function_exists('instantPayPath')){
             'card' => $card,
             'card_name' => $cardName,
             'amount' => $amount,
-            'base_amount' => $baseToman,
+            'base_amount' => $baseRial,
+            'plan_toman' => $baseToman,
+            'currency' => 'rial',
             'code' => $code,
             'status' => 'waiting',
             'created_at' => $now,
@@ -420,7 +456,25 @@ if(!function_exists('instantPayPath')){
             xuiSavePayments($payments);
         }
 
+        // اول وضعیت را روی processing بگذار تا UI هنوز «تأیید شد» نگوید
+        $items[$idx]['status'] = 'processing';
+        $items[$idx]['message'] = 'در حال صدور اشتراک…';
+        instantPaySave($items);
+
         $result = xuiApprovePaymentIndex($csvIndex, $found['type'] ?? 'خرید');
+
+        // دوباره بخوان (ممکن است همزمان تغییر کرده باشد)
+        $items = instantPayLoad();
+        $idx = -1;
+        foreach($items as $i => $item){
+            if(($item['id'] ?? '') === $id){
+                $idx = $i;
+                break;
+            }
+        }
+        if($idx < 0){
+            return ['ok' => false, 'error' => 'سفارش بعد از پردازش پیدا نشد'];
+        }
 
         if(empty($result['ok'])){
             $items[$idx]['status'] = 'failed';
@@ -429,9 +483,10 @@ if(!function_exists('instantPayPath')){
             return $result;
         }
 
+        // فقط وقتی کانفیگ آماده است «paid» می‌شود
         $items[$idx]['status'] = 'paid';
         $items[$idx]['paid_at'] = time();
-        $items[$idx]['link'] = $result['link'] ?? '';
+        $items[$idx]['link'] = $result['link'] ?? ($found['sub'] ?? '');
         $items[$idx]['message'] = 'پرداخت تأیید شد';
         $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
         $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
@@ -448,10 +503,10 @@ if(!function_exists('instantPayPath')){
         ];
     }
 
-    function instantPayMatchAmount($amountToman){
-        $amountToman = intval($amountToman);
+    function instantPayMatchAmount($amountRial){
+        $amountRial = intval($amountRial);
         $items = instantPayExpireDue();
-        $code = str_pad((string)($amountToman % 10000), 4, '0', STR_PAD_LEFT);
+        $code = str_pad((string)($amountRial % 10000), 4, '0', STR_PAD_LEFT);
         $now = time();
         $candidates = [];
 
@@ -464,7 +519,15 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if(intval($item['amount'] ?? 0) === $amountToman){
+            $itemAmount = intval($item['amount'] ?? 0);
+            $currency = strtolower(trim((string)($item['currency'] ?? 'rial')));
+
+            // سفارش‌های قدیمی تومان‌محور
+            if($currency !== 'rial' && $itemAmount > 0 && $itemAmount < 1000000){
+                $itemAmount *= 10;
+            }
+
+            if($itemAmount === $amountRial){
                 return $item;
             }
 
@@ -491,7 +554,7 @@ if(!function_exists('instantPayPath')){
             return ['ok' => false, 'error' => 'شبیه پیام واریز نیست', 'ignored' => true];
         }
 
-        $amounts = baleExtractTomanAmounts($text);
+        $amounts = baleExtractRialAmounts($text);
 
         if(count($amounts) === 0){
             return ['ok' => false, 'error' => 'مبلغی در پیام پیدا نشد'];

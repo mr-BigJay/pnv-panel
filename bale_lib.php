@@ -153,27 +153,25 @@ if(!function_exists('baleConfigPath')){
     }
 
     /**
-     * مبالغ تومان را از متن واریز پست‌بانک/بانک استخراج می‌کند.
-     * خروجی: آرایه اعداد تومان (بزرگ‌تر از ۱۰۰۰).
+     * مبالغ را از متن واریز استخراج می‌کند و همه را به ریال برمی‌گرداند.
      */
-    function baleExtractTomanAmounts($text){
+    function baleExtractRialAmounts($text){
         $text = trim((string)$text);
 
         if($text === ''){
             return [];
         }
 
-        // ارقام فارسی/عربی → لاتین
         $text = strtr($text, [
             '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
             '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
             '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
             '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '٬' => ',', '٫' => ',',
         ]);
 
         $amounts = [];
 
-        // الگوهای رایج: 1,574,230 ریال | 157,423 تومان | مبلغ: 157423
         if(preg_match_all('/(\d{1,3}(?:,\d{3})+|\d{4,12})\s*(ریال|تومان|تومن)?/u', $text, $matches, PREG_SET_ORDER)){
             foreach($matches as $m){
                 $raw = str_replace(',', '', $m[1]);
@@ -185,18 +183,32 @@ if(!function_exists('baleConfigPath')){
 
                 $unit = $m[2] ?? '';
 
-                if($unit === 'ریال'){
-                    // ریال → تومان
-                    $n = intdiv($n, 10);
+                if($unit === 'تومان' || $unit === 'تومن'){
+                    $n = $n * 10;
+                }
+                elseif($unit === ''){
+                    // بدون واحد: اگر شبیه تومان کوچک است، به ریال تبدیل نکن مگر واضح باشد
+                    // مبالغ کارت‌به‌کارت بانکی معمولاً ریال و >= 100000 هستند
                 }
 
-                if($n >= 1000){
+                if($n >= 10000){
                     $amounts[] = $n;
                 }
             }
         }
 
         return array_values(array_unique($amounts));
+    }
+
+    function baleExtractTomanAmounts($text){
+        $rials = baleExtractRialAmounts($text);
+        $tomans = [];
+
+        foreach($rials as $rial){
+            $tomans[] = intdiv(intval($rial), 10);
+        }
+
+        return array_values(array_unique(array_filter($tomans)));
     }
 
     function baleLooksLikeDeposit($text){
@@ -214,8 +226,7 @@ if(!function_exists('baleConfigPath')){
             }
         }
 
-        // اگر مبلغ واضح باشد هم قبول می‌کنیم
-        return count(baleExtractTomanAmounts($text)) > 0;
+        return count(baleExtractRialAmounts($text)) > 0;
     }
 
     function baleWebhookPublicUrl(){
