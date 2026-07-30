@@ -265,7 +265,7 @@ content="width=device-width, initial-scale=1.0">
 
 <div class="topBar">
 <a class="backIcon" href="dashboard.php" aria-label="بازگشت">→</a>
-<div class="brand">Ticketin <span>VPN</span></div>
+<div class="brand">تمدید اشتراک</div>
 <div style="width:40px"></div>
 </div>
 
