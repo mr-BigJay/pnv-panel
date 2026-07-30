@@ -39,8 +39,11 @@ foreach($data as $ticket){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>پیام به پشتیبانی</title>
-<link rel="stylesheet" href="support_ui.css?v=31">
+<link rel="stylesheet" href="support_ui.css?v=32">
 <link rel="stylesheet" href="fonts.css">
+<style>
+html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overflow:hidden;}
+</style>
 </head>
 <body>
 
@@ -103,7 +106,7 @@ foreach($data as $ticket){
 
 </div>
 
-<script src="support_ui.js?v=31"></script>
+<script src="support_ui.js?v=32"></script>
 <script>
 (function(){
     const userChat = document.getElementById('userChat');

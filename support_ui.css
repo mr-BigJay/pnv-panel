@@ -16,16 +16,31 @@
 --msg-bubble:16px;
 }
 
+html,body{
+margin:0;
+padding:0;
+background:var(--msg-bg);
+color:var(--msg-text);
+height:100%;
+overflow:hidden;
+}
+
 .msgApp{
 display:flex;
 flex-direction:column;
 height:100vh;
+height:100dvh;
 max-height:100vh;
+max-height:100dvh;
+width:100%;
 background:var(--msg-bg);
 color:var(--msg-text);
 font-family:tahoma,system-ui,sans-serif;
 direction:rtl;
 overflow:hidden;
+border:none;
+outline:none;
+box-shadow:none;
 }
 
 .msgApp--embedded{
@@ -38,8 +53,12 @@ border-radius:0;
 .msgApp--user{
 max-width:920px;
 margin:0 auto;
+width:100%;
 height:100vh;
-box-shadow:0 0 0 1px var(--msg-border);
+height:100dvh;
+border:none;
+outline:none;
+box-shadow:none;
 }
 
 .msgHeader{
@@ -304,6 +323,7 @@ margin:0;
 
 .msgComposer{
 padding:12px 14px 16px;
+padding-bottom:max(16px, env(safe-area-inset-bottom));
 background:var(--msg-panel);
 border-top:1px solid var(--msg-border);
 flex-shrink:0;
@@ -321,6 +341,8 @@ background:var(--msg-card);
 border:1px solid var(--msg-border);
 border-radius:var(--msg-radius);
 padding:10px;
+box-shadow:none;
+outline:none;
 }
 
 .msgComposerRow{

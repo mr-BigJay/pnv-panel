@@ -411,7 +411,7 @@
                 if(isOwn && role !== 'admin'){
                     actions.push({
                         key:'info',
-                        label:'مهلت ویرایش (۱۵ دقیقه) / حذف (۵ دقیقه) گذشته',
+                        label:'امکان حذف و ویرایش پیام های قدیمی وجود ندارد',
                         disabled:true
                     });
                 }else{
