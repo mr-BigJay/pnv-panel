@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "bot_token": "",
+  "admin_chat_ids": "",
+  "bot_username": "Jay24x7Pusbank_bot",
+  "pay_window_seconds": 600,
+  "webhook_secret": "",
+  "forward_hint": "پیام واریز @postbank_bot را به این بازو فوروارد کنید"
+}

@@ -921,6 +921,12 @@ class="supportMenu">
 
 </a>
 
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('bale.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+بله — پرداخت آنی
+
+</a>
+
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('xui-servers.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 سرورهای 3x-ui

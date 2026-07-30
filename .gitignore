@@ -1,0 +1,8 @@
+# Local/runtime secrets & data (do not commit)
+db/bale.json
+db/telegram.json
+db/instant_payments.json
+db/xui_servers.json
+db/xui_state.json
+db/telegram_sessions.json
+db/telegram_reminders.json

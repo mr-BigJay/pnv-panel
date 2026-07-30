@@ -14,6 +14,7 @@ if(!function_exists('adminQuickNav')){
             ['key' => 'renews', 'label' => 'تمدیدها', 'href' => pnvAdminUrl('index.php?page=renews')],
             ['key' => 'users', 'label' => 'کاربران', 'href' => pnvAdminUrl('users.php')],
             ['key' => 'telegram', 'label' => 'تلگرام', 'href' => pnvAdminUrl('telegram.php')],
+            ['key' => 'bale', 'label' => 'بله', 'href' => pnvAdminUrl('bale.php')],
             ['key' => 'xui', 'label' => '3x-ui', 'href' => pnvAdminUrl('xui-servers.php')],
         ];
 

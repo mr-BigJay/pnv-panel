@@ -146,96 +146,7 @@ $userSubscriptions = renewLoadUserSubscriptions($_SESSION['user']);
 $message = "";
 $error = "";
 
-if($_SERVER['REQUEST_METHOD'] == "POST"){
-
-    $sub = renewNormalizeSubLink($_POST['sub'] ?? '');
-    $plan = trim($_POST['plan']);
-    $tracking = trim($_POST['tracking']);
-    $time = trim($_POST['time']);
-    $date = trim($_POST['date']);
-    $hasCoupon = isset($_POST['has_coupon']);
-    $couponCode = trim($_POST['coupon_code'] ?? '');
-    $discountPercent = 0;
-
-    if(!renewIsValidSubLink($sub)){
-        $error = "لینک اشتراک صحیح نیست";
-    }
-
-    elseif(!preg_match('/^(0[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$/',$time)){
-        $error = "ساعت وارد شده صحیح نیست";
-    }
-
-    elseif(!preg_match('/^140[5-7]\/(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])$/',$date)){
-        $error = "تاریخ وارد شده صحیح نیست";
-    }
-
-    else{
-
-        if($hasCoupon){
-
-            if($couponCode === ''){
-                $error = 'کد تخفیف را وارد کنید';
-            }
-            else{
-                $couponResult = couponCalculateForPlan(
-                    $_SESSION['user'],
-                    $couponCode,
-                    $plan,
-                    $plans
-                );
-
-                if(empty($couponResult['ok'])){
-                    $error = $couponResult['error'] ?? 'کد تخفیف معتبر نیست';
-                }
-                else{
-                    $plan = $couponResult['plan_label'];
-                    $discountPercent = intval($couponResult['percent']);
-                }
-            }
-
-        }
-
-    }
-
-    if($error == ""){
-
-        $status = "درحال بررسی";
-        $link = "";
-        $created = time();
-
-        $row = [
-            $_SESSION['user'],
-            $sub,
-            $plan,
-            $tracking,
-            $date,
-            $time,
-            $status,
-            $link,
-            $created,
-            "تمدید",
-            $hasCoupon ? strtoupper($couponCode) : '',
-            $discountPercent
-        ];
-
-        $file = fopen("invoices/payments.csv","a");
-        fputcsv($file,$row);
-        fclose($file);
-
-        try{
-            telegramNotifyNewPayment('تمدید', $row);
-        }
-        catch(Throwable $e){
-            error_log('Telegram renew notification failed: ' . $e->getMessage());
-        }
-
-        if($hasCoupon && $couponCode !== ''){
-            couponMarkUsed($couponCode, $_SESSION['user']);
-        }
-
-        $message = "درخواست تمدید ثبت شد و حداکثر تا یک ساعت آینده بررسی خواهد شد";
-    }
-}
+// ثبت تمدید از طریق instant-pay-api.php انجام می‌شود (پرداخت آنی بله)
 
 ?>
 
@@ -257,7 +168,7 @@ content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=2">
+<link rel="stylesheet" href="plan_step_ui.css?v=3">
 
 </head>
 
@@ -294,7 +205,7 @@ content="width=device-width, initial-scale=1.0">
 </div>
 </div>
 
-<form method="POST" id="renewForm">
+<form method="POST" id="renewForm" onsubmit="return false;">
 
 <div class="formStep is-active" id="step1">
 
@@ -367,84 +278,47 @@ required>
 </div>
 </div>
 
-<div class="infoText">
+<div class="infoText">انتخاب شماره کارت جهت پرداخت</div>
 
-انتخاب شماره کارت جهت پرداخت
-
-</div>
-
-<select id="cardSelect"
-onchange="showCard()">
-
-<option value="">
-انتخاب کارت
-</option>
-
+<select id="cardSelect" onchange="showCard()">
+<option value="">انتخاب کارت</option>
 <?php foreach($cards as $card){ ?>
-
-<option value="<?php echo htmlspecialchars($card['card'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-
+<option
+    value="<?php echo htmlspecialchars($card['card'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+    data-name="<?php echo htmlspecialchars($card['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+>
 <?php echo htmlspecialchars($card['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-
 </option>
-
 <?php } ?>
-
 </select>
 
-<div id="cardBox"
-class="cardbox">
-
+<div id="cardBox" class="cardbox">
 <div id="cardNumber"></div>
-
-<button type="button"
-onclick="copyCard()"
-class="copybtn">
-
-کپی شماره کارت
-
-</button>
-
+<button type="button" onclick="copyCard()" class="copybtn">کپی شماره کارت</button>
 </div>
 
-<div class="infoText">
-
-لطفا پس از پرداخت، اطلاعات پرداخت خود را ثبت کنيد
-
-</div>
-
-<input type="text"
-name="tracking"
-placeholder="شماره پیگیری"
-required>
-
-<input type="text"
-id="time"
-name="time"
-placeholder="ساعت"
-maxlength="5"
-required>
-
-<input type="text"
-id="date"
-name="date"
-placeholder="1405/01/01"
-maxlength="10"
-required>
-
-<div class="helper">
-
-لطفا در ثبت اطلاعات پرداخت خود دقت فرمایید
-
-</div>
+<div class="helper">پس از زدن دکمه زیر، مبلغ یکتا با ۴ رقم پایانی مخصوص شما ساخته می‌شود. همین مبلغ را کارت‌به‌کارت کنید.</div>
 
 <button type="button" class="btnGhost" id="backStep1">بازگشت به انتخاب پلن</button>
+<button type="button" id="startPayBtn">دریافت مبلغ و شروع پرداخت</button>
 
-<button type="submit">
-
-ثبت درخواست تمدید
-
-</button>
+<div class="instantPay" id="instantPay" hidden>
+<div class="instantPayHead">مهلت پرداخت</div>
+<div class="instantTimer" id="instantTimer">۱۰:۰۰</div>
+<div class="instantAmountLabel">مبلغ قابل پرداخت</div>
+<div class="instantAmount" id="instantAmount">—</div>
+<div class="instantCodeHint">۴ رقم آخر مبلغ، کد شناسایی سفارش شماست: <b id="instantCode">----</b></div>
+<div class="instantActions">
+<button type="button" class="copybtn" id="copyAmountBtn">کپی مبلغ</button>
+<button type="button" class="copybtn" id="copyCardBtn2">کپی کارت</button>
+</div>
+<div class="instantStatus" id="instantStatus">در انتظار واریز… بعد از پرداخت معمولاً کمتر از یک دقیقه طول می‌کشد.</div>
+<div class="instantDone" id="instantDone" hidden>
+<div class="instantDoneTitle">پرداخت تأیید شد ✅</div>
+<a class="instantLink" id="instantLink" href="#" target="_blank" rel="noopener">مشاهده لینک اشتراک</a>
+<a class="btnGhost" href="renew-list.php">لیست تمدیدها</a>
+</div>
+</div>
 
 </div>
 
@@ -512,134 +386,6 @@ alert("شماره کارت کپی شد");
 
 }
 
-document.getElementById("time").addEventListener("input", function(e){
-
-let v = e.target.value.replace(/\D/g,'');
-
-if(v.length >= 1){
-
-let h1 = parseInt(v.charAt(0));
-
-if(h1 > 2){
-v = "2";
-}
-
-}
-
-if(v.length >= 2){
-
-let hh = parseInt(v.substring(0,2));
-
-if(hh > 23){
-v = "23";
-}
-
-}
-
-if(v.length >= 3){
-
-let m1 = parseInt(v.charAt(2));
-
-if(m1 > 5){
-
-v = v.substring(0,2) + "5";
-
-}
-
-}
-
-if(v.length >= 4){
-
-let mm = parseInt(v.substring(2,4));
-
-if(mm > 59){
-
-v = v.substring(0,2) + "59";
-
-}
-
-}
-
-if(v.length >= 3){
-
-v = v.substring(0,2) + ":" + v.substring(2,4);
-
-}
-
-e.target.value = v.substring(0,5);
-
-});
-
-function setTehranTime(){
-
-const now = new Date();
-
-const tehran = new Date(
-now.toLocaleString(
-"en-US",
-{
-timeZone: "Asia/Tehran"
-}
-)
-);
-
-let hh = tehran.getHours()
-.toString()
-.padStart(2,'0');
-
-let mm = tehran.getMinutes()
-.toString()
-.padStart(2,'0');
-
-document.getElementById("time").value =
-hh + ":" + mm;
-
-}
-
-setTehranTime();
-
-function setPersianDate(){
-
-const now = new Date();
-
-const formatter =
-new Intl.DateTimeFormat(
-'en-CA-u-ca-persian',
-{
-year:'numeric',
-month:'2-digit',
-day:'2-digit'
-}
-);
-
-const parts = formatter.formatToParts(now);
-
-let year = '';
-let month = '';
-let day = '';
-
-parts.forEach(p => {
-
-if(p.type === 'year'){
-year = p.value;
-}
-
-if(p.type === 'month'){
-month = p.value;
-}
-
-if(p.type === 'day'){
-day = p.value;
-}
-
-});
-
-document.getElementById("date").value =
-year + "/" + month + "/" + day;
-
-}
-
-setPersianDate();
 
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const planSelect = document.getElementById('planSelect');
@@ -657,9 +403,20 @@ const couponBox = document.getElementById('couponBox');
 const couponResult = document.getElementById('couponResult');
 const couponCodeInput = document.getElementById('couponCode');
 const hasCouponCheck = document.getElementById('hasCouponCheck');
+const startPayBtn = document.getElementById('startPayBtn');
+const instantPay = document.getElementById('instantPay');
+const instantTimer = document.getElementById('instantTimer');
+const instantAmount = document.getElementById('instantAmount');
+const instantCode = document.getElementById('instantCode');
+const instantStatus = document.getElementById('instantStatus');
+const instantDone = document.getElementById('instantDone');
+const instantLink = document.getElementById('instantLink');
 let couponTimer = null;
 let selectedCategory = '';
 let selectedPlan = null;
+let payPollTimer = null;
+let payTickTimer = null;
+let currentPay = null;
 
 function updateContinueState(){
     toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
@@ -846,9 +603,153 @@ couponCodeInput.addEventListener('input', function(){
 
 planSelect.addEventListener('change', validateCoupon);
 
-<?php if($error != ''){ ?>
-showStep(2);
-<?php } ?>
+function formatRemain(sec){
+    sec = Math.max(0, parseInt(sec, 10) || 0);
+    const m = String(Math.floor(sec / 60)).padStart(2, '0');
+    const s = String(sec % 60).padStart(2, '0');
+    return m + ':' + s;
+}
+
+function stopPayWatchers(){
+    if(payPollTimer){ clearInterval(payPollTimer); payPollTimer = null; }
+    if(payTickTimer){ clearInterval(payTickTimer); payTickTimer = null; }
+}
+
+function renderPay(item){
+    currentPay = item;
+    instantPay.hidden = false;
+    instantAmount.textContent = item.amount_text || (Number(item.amount||0).toLocaleString('en-US') + ' تومان');
+    instantCode.textContent = item.code || '----';
+    instantTimer.textContent = formatRemain(item.remaining);
+
+    if(item.status === 'paid'){
+        stopPayWatchers();
+        instantStatus.textContent = 'پرداخت تأیید شد';
+        instantDone.hidden = false;
+        if(item.link){
+            instantLink.href = item.link;
+            instantLink.style.display = '';
+        } else {
+            instantLink.style.display = 'none';
+        }
+        startPayBtn.disabled = true;
+        return;
+    }
+
+    if(item.status === 'expired'){
+        stopPayWatchers();
+        instantStatus.textContent = 'مهلت پرداخت تمام شد. دوباره مبلغ بگیرید.';
+        startPayBtn.disabled = false;
+        startPayBtn.textContent = 'دریافت مبلغ جدید';
+        return;
+    }
+
+    if(item.status === 'failed'){
+        stopPayWatchers();
+        instantStatus.textContent = item.message || 'تأیید خودکار ناموفق بود. با پشتیبانی تماس بگیرید.';
+        return;
+    }
+
+    instantStatus.textContent = 'در انتظار واریز… مبلغ را دقیق کارت‌به‌کارت کنید.';
+}
+
+function startPayWatchers(id){
+    stopPayWatchers();
+
+    payTickTimer = setInterval(function(){
+        if(!currentPay || currentPay.status !== 'waiting'){ return; }
+        currentPay.remaining = Math.max(0, (currentPay.remaining || 0) - 1);
+        instantTimer.textContent = formatRemain(currentPay.remaining);
+        if(currentPay.remaining <= 0){
+            instantStatus.textContent = 'مهلت در حال انقضا…';
+        }
+    }, 1000);
+
+    payPollTimer = setInterval(function(){
+        fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials: 'same-origin' })
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                if(data && data.ok && data.item){
+                    renderPay(data.item);
+                }
+            })
+            .catch(function(){});
+    }, 4000);
+}
+
+startPayBtn.addEventListener('click', function(){
+    const cardSelect = document.getElementById('cardSelect');
+    const card = cardSelect.value;
+    const opt = cardSelect.options[cardSelect.selectedIndex];
+    const cardName = opt ? (opt.getAttribute('data-name') || opt.textContent || '') : '';
+    const sub = document.getElementById('subInput').value.trim();
+
+    if(!planSelect.value){
+        alert('پلن را انتخاب کنید');
+        return;
+    }
+    if(!card){
+        alert('کارت را انتخاب کنید');
+        return;
+    }
+    if(!sub){
+        alert('لینک اشتراک را وارد کنید');
+        return;
+    }
+
+    startPayBtn.disabled = true;
+    startPayBtn.textContent = 'در حال ساخت مبلغ…';
+
+    const body = new URLSearchParams();
+    body.set('action', 'create');
+    body.set('type', 'تمدید');
+    body.set('plan', planSelect.value);
+    body.set('sub', sub);
+    body.set('card', card);
+    body.set('card_name', cardName);
+    if(hasCouponCheck.checked){
+        body.set('has_coupon', '1');
+        body.set('coupon_code', couponCodeInput.value.trim());
+    }
+
+    fetch('instant-pay-api.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: body.toString()
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if(!data || !data.ok || !data.item){
+            startPayBtn.disabled = false;
+            startPayBtn.textContent = 'دریافت مبلغ و شروع پرداخت';
+            alert((data && data.error) ? data.error : 'ساخت سفارش ناموفق بود');
+            return;
+        }
+        startPayBtn.textContent = 'پرداخت در جریان…';
+        renderPay(data.item);
+        startPayWatchers(data.item.id);
+        instantPay.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    })
+    .catch(function(){
+        startPayBtn.disabled = false;
+        startPayBtn.textContent = 'دریافت مبلغ و شروع پرداخت';
+        alert('خطا در ارتباط با سرور');
+    });
+});
+
+document.getElementById('copyAmountBtn').addEventListener('click', function(){
+    if(!currentPay){ return; }
+    navigator.clipboard.writeText(String(currentPay.amount || '')).then(function(){
+        alert('مبلغ کپی شد');
+    });
+});
+
+document.getElementById('copyCardBtn2').addEventListener('click', function(){
+    const t = document.getElementById('cardNumber').innerText.trim();
+    if(!t){ alert('ابتدا کارت را انتخاب کنید'); return; }
+    navigator.clipboard.writeText(t).then(function(){ alert('شماره کارت کپی شد'); });
+});
 
 </script>
 
