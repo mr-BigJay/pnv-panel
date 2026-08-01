@@ -53,10 +53,10 @@ if(!function_exists('pnvBanksCatalog')){
             return '';
         }
 
-        // اولویت با /banks/ روی سرور (لوگوهای nima-ca/logo-bank)
+        // مسیر اصلی: /assets/bank-logos/ (لوگوهای nima-ca/logo-bank)
         $candidates = [
-            ['fs' => __DIR__ . '/banks/' . $bankId . '.svg', 'url' => '/banks/' . rawurlencode($bankId) . '.svg'],
             ['fs' => __DIR__ . '/assets/bank-logos/' . $bankId . '.svg', 'url' => '/assets/bank-logos/' . rawurlencode($bankId) . '.svg'],
+            ['fs' => __DIR__ . '/banks/' . $bankId . '.svg', 'url' => '/banks/' . rawurlencode($bankId) . '.svg'],
         ];
 
         foreach($candidates as $c){
@@ -65,8 +65,7 @@ if(!function_exists('pnvBanksCatalog')){
             }
         }
 
-        // اگر فایل لوکال نبود ولی روی سرور در /banks/ گذاشته شده، همان URL را برگردان
-        return '/banks/' . rawurlencode($bankId) . '.svg';
+        return '/assets/bank-logos/' . rawurlencode($bankId) . '.svg';
     }
 
     function pnvBankLabel($bankId){
