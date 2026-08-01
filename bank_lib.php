@@ -52,11 +52,21 @@ if(!function_exists('pnvBanksCatalog')){
         if($bankId === ''){
             return '';
         }
-        $path = __DIR__ . '/assets/bank-logos/' . $bankId . '.svg';
-        if(!is_file($path)){
-            return '';
+
+        // اولویت با /banks/ روی سرور (لوگوهای nima-ca/logo-bank)
+        $candidates = [
+            ['fs' => __DIR__ . '/banks/' . $bankId . '.svg', 'url' => '/banks/' . rawurlencode($bankId) . '.svg'],
+            ['fs' => __DIR__ . '/assets/bank-logos/' . $bankId . '.svg', 'url' => '/assets/bank-logos/' . rawurlencode($bankId) . '.svg'],
+        ];
+
+        foreach($candidates as $c){
+            if(is_file($c['fs'])){
+                return $c['url'];
+            }
         }
-        return '/assets/bank-logos/' . rawurlencode($bankId) . '.svg';
+
+        // اگر فایل لوکال نبود ولی روی سرور در /banks/ گذاشته شده، همان URL را برگردان
+        return '/banks/' . rawurlencode($bankId) . '.svg';
     }
 
     function pnvBankLabel($bankId){
