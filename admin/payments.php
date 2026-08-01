@@ -1485,12 +1485,14 @@ function confirmDelete(id){
 
     if(confirm('مطمئن هستید؟')){
 
-        location.href =
-        paymentsListBase
-        + '&deletepayment='
-        + id
-        + '&per='
-        + paymentsPerPage;
+        // replace تا با Back دوباره delete صدا زده نشود
+        location.replace(
+            paymentsListBase
+            + '&deletepayment='
+            + encodeURIComponent(id)
+            + '&per='
+            + encodeURIComponent(paymentsPerPage)
+        );
 
     }
 
