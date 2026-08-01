@@ -187,6 +187,264 @@ if(!function_exists('instantPayPath')){
         return null;
     }
 
+    function instantPayTrackingCode($itemOrCode){
+        if(is_array($itemOrCode)){
+            $code = $itemOrCode['code'] ?? '';
+        } else {
+            $code = $itemOrCode;
+        }
+        return 'AUTO-' . str_pad((string)intval($code), 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * ایندکس‌های csv_index را بعد از حذف/جابه‌جایی از روی AUTO-code دوباره بساز.
+     */
+    function instantPayRebuildCsvIndexes($items = null){
+        if($items === null){
+            $items = instantPayLoad();
+        }
+
+        if(!function_exists('xuiLoadPayments')){
+            return $items;
+        }
+
+        $payments = xuiLoadPayments();
+        $map = [];
+
+        foreach($payments as $i => $row){
+            if(!is_array($row)){
+                continue;
+            }
+            $tracking = trim((string)($row[3] ?? ''));
+            if(strpos($tracking, 'AUTO-') !== 0){
+                continue;
+            }
+            $user = strtolower(trim((string)($row[0] ?? '')));
+            $map[$user . '|' . $tracking] = $i;
+        }
+
+        $changed = false;
+        foreach($items as $i => $item){
+            $tracking = instantPayTrackingCode($item);
+            $key = strtolower(trim((string)($item['user'] ?? ''))) . '|' . $tracking;
+            $newIndex = array_key_exists($key, $map) ? intval($map[$key]) : -1;
+            if(intval($item['csv_index'] ?? -1) !== $newIndex){
+                $items[$i]['csv_index'] = $newIndex;
+                $changed = true;
+            }
+        }
+
+        if($changed){
+            instantPaySave($items);
+        }
+
+        return $items;
+    }
+
+    /**
+     * ردیف(های) unpaid مرتبط با سفارش آنی را از لیست ادمین حذف کن.
+     */
+    function instantPayDeleteAbandonedCsv($item){
+        if(!is_array($item) || !function_exists('xuiLoadPayments') || !function_exists('xuiDeletePaymentIndexes')){
+            return 0;
+        }
+
+        $tracking = instantPayTrackingCode($item);
+        $user = trim((string)($item['user'] ?? ''));
+        $payments = xuiLoadPayments();
+        $toDelete = [];
+
+        foreach($payments as $i => $row){
+            if(!is_array($row)){
+                continue;
+            }
+            if(trim((string)($row[3] ?? '')) !== $tracking){
+                continue;
+            }
+            if($user !== '' && strcasecmp(trim((string)($row[0] ?? '')), $user) !== 0){
+                continue;
+            }
+
+            $st = trim((string)($row[6] ?? ''));
+            // فقط ردیف‌های پرداخت‌نشده / رد‌شدهٔ موقت
+            if(in_array($st, ['', 'درحال بررسی', 'در حال بررسی', 'رد شد'], true)){
+                $toDelete[] = $i;
+            }
+        }
+
+        if(!$toDelete){
+            return 0;
+        }
+
+        $result = xuiDeletePaymentIndexes($toDelete);
+        instantPayRebuildCsvIndexes();
+        return intval($result['deleted'] ?? 0);
+    }
+
+    /**
+     * سفارش‌های paid را با CSV همگام کن (رفع گیر کردن روی «درحال بررسی»).
+     */
+    function instantPaySyncPaidCsvRows($items = null){
+        if($items === null){
+            $items = instantPayLoad();
+        }
+        if(!function_exists('xuiLoadPayments') || !function_exists('xuiSavePayments')){
+            return $items;
+        }
+
+        $payments = xuiLoadPayments();
+        $changed = false;
+
+        foreach($items as $item){
+            if(($item['status'] ?? '') !== 'paid'){
+                continue;
+            }
+
+            $tracking = instantPayTrackingCode($item);
+            $user = trim((string)($item['user'] ?? ''));
+            $link = trim((string)($item['link'] ?? ''));
+
+            foreach($payments as $pi => $row){
+                if(!is_array($row)){
+                    continue;
+                }
+                if(trim((string)($row[3] ?? '')) !== $tracking){
+                    continue;
+                }
+                if($user !== '' && strcasecmp(trim((string)($row[0] ?? '')), $user) !== 0){
+                    continue;
+                }
+
+                if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
+                    $payments[$pi][6] = 'تایید شد';
+                    $changed = true;
+                }
+                if($link !== '' && trim((string)($row[7] ?? '')) === ''){
+                    $payments[$pi][7] = $link;
+                    $changed = true;
+                }
+            }
+        }
+
+        if($changed){
+            xuiSavePayments($payments);
+            $items = instantPayRebuildCsvIndexes($items);
+        }
+
+        return $items;
+    }
+
+    /**
+     * بعد از ۳۰+۱۰ دقیقه بدون پرداخت، ردیف ادمین را پاک کن.
+     */
+    function instantPayPurgeStaleAdminRows($items = null){
+        if($items === null){
+            $items = instantPayLoad();
+        }
+
+        $now = time();
+        $grace = instantPayGraceSeconds();
+        $changed = false;
+
+        foreach($items as $i => $item){
+            $status = (string)($item['status'] ?? '');
+            $expires = intval($item['expires_at'] ?? 0);
+            $cancelledAt = intval($item['cancelled_at'] ?? 0);
+
+            $shouldDelete = false;
+
+            // بازگشت کاربر یا جایگزینی مبلغ — فوراً از لیست ادمین حذف
+            if(in_array($status, ['cancelled', 'failed'], true)){
+                $shouldDelete = true;
+            }
+
+            // بعد از ۳۰ دقیقه نمایش + ۱۰ دقیقه grace
+            if($status === 'expired' && $expires > 0 && ($now - $expires) >= $grace){
+                $shouldDelete = true;
+            }
+
+            // waiting که از مهلت + grace گذشته (اگر ExpireDue جا مانده)
+            if($status === 'waiting' && $expires > 0 && ($now - $expires) >= $grace){
+                $items[$i]['status'] = 'expired';
+                $items[$i]['match_closed'] = true;
+                $changed = true;
+                $shouldDelete = true;
+            }
+
+            if($shouldDelete && empty($items[$i]['csv_purged'])){
+                instantPayDeleteAbandonedCsv($items[$i]);
+                $items[$i]['csv_purged'] = true;
+                $items[$i]['match_closed'] = true;
+                $changed = true;
+            }
+        }
+
+        // یتیم‌های AUTO قدیمی در CSV (بدون سفارش فعال)
+        if(function_exists('xuiLoadPayments') && function_exists('xuiDeletePaymentIndexes')){
+            $payments = xuiLoadPayments();
+            $activeKeys = [];
+            foreach($items as $item){
+                $st = (string)($item['status'] ?? '');
+                if(in_array($st, ['waiting', 'processing', 'paid', 'expired'], true) && empty($item['csv_purged'])){
+                    // expired داخل grace هنوز نگه دار
+                    if($st === 'expired'){
+                        $expires = intval($item['expires_at'] ?? 0);
+                        if($expires > 0 && ($now - $expires) <= $grace){
+                            $activeKeys[strtolower(trim((string)($item['user'] ?? ''))) . '|' . instantPayTrackingCode($item)] = true;
+                        }
+                    } else {
+                        $activeKeys[strtolower(trim((string)($item['user'] ?? ''))) . '|' . instantPayTrackingCode($item)] = true;
+                    }
+                }
+            }
+
+            $orphanDelete = [];
+            $window = instantPayWindowSeconds() + $grace;
+
+            foreach($payments as $pi => $row){
+                if(!is_array($row)){
+                    continue;
+                }
+                $tracking = trim((string)($row[3] ?? ''));
+                if(strpos($tracking, 'AUTO-') !== 0){
+                    continue;
+                }
+                $st = trim((string)($row[6] ?? ''));
+                if(!in_array($st, ['', 'درحال بررسی', 'در حال بررسی', 'رد شد'], true)){
+                    continue;
+                }
+                $created = intval($row[8] ?? 0);
+                if($created > 0 && ($now - $created) < $window){
+                    // هنوز داخل سقف ۴۰ دقیقه — اگر سفارش فعال دارد نگه دار
+                    $key = strtolower(trim((string)($row[0] ?? ''))) . '|' . $tracking;
+                    if(isset($activeKeys[$key])){
+                        continue;
+                    }
+                    // اگر سفارش فعالی نیست ولی هنوز داخل پنجره است، فعلاً نگه دار
+                    // (ممکن است JSON هنوز نخوانده شده) — فقط بعد از پنجره پاک کن
+                    continue;
+                }
+                if($created > 0 && ($now - $created) >= $window){
+                    $key = strtolower(trim((string)($row[0] ?? ''))) . '|' . $tracking;
+                    if(!isset($activeKeys[$key])){
+                        $orphanDelete[] = $pi;
+                    }
+                }
+            }
+
+            if($orphanDelete){
+                xuiDeletePaymentIndexes($orphanDelete);
+                $items = instantPayRebuildCsvIndexes($items);
+            }
+        }
+
+        if($changed){
+            instantPaySave($items);
+        }
+
+        return $items;
+    }
+
     function instantPayExpireDue($items = null){
         if($items === null){
             $items = instantPayLoad();
@@ -205,26 +463,27 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
+            // فقط وضعیت را expired کن — CSV را رد نکن (تا پایان grace برای مچ بماند)
             $items[$i]['status'] = 'expired';
             $changed = true;
-
-            $csvIndex = intval($item['csv_index'] ?? -1);
-
-            if($csvIndex >= 0 && function_exists('xuiRejectPaymentIndex')){
-                xuiRejectPaymentIndex($csvIndex, 'منقضی شد');
-            }
         }
 
         if($changed){
             instantPaySave($items);
         }
 
+        // همگام‌سازی سفارش‌های paid که CSVشان هنوز «درحال بررسی» است
+        $items = instantPaySyncPaidCsvRows($items);
+
+        // پاک‌سازی ردیف‌های ادمین بعد از بازگشت یا ۳۰+۱۰
+        $items = instantPayPurgeStaleAdminRows($items);
+
         return $items;
     }
 
     /**
      * لغو سفارش‌های waiting کاربر (انصراف / بازگشت).
-     * مبلغ بلافاصله از مچ خارج می‌شود (بدون grace).
+     * مبلغ بلافاصله از مچ خارج می‌شود و ردیف از لیست ادمین حذف می‌شود.
      */
     function instantPayCancelUserWaiting($username, $id = null, $items = null){
         $username = trim((string)$username);
@@ -255,16 +514,14 @@ if(!function_exists('instantPayPath')){
             $items[$i]['match_closed'] = true;
             $changed = true;
 
-            $csvIndex = intval($item['csv_index'] ?? -1);
-
-            if($csvIndex >= 0 && function_exists('xuiRejectPaymentIndex')){
-                xuiRejectPaymentIndex($csvIndex, 'لغو شد');
-            }
+            instantPayDeleteAbandonedCsv($items[$i]);
+            $items[$i]['csv_purged'] = true;
+            $items[$i]['csv_index'] = -1;
         }
 
         if($changed){
             instantPaySave($items);
-            $items = instantPayLoad();
+            $items = instantPayRebuildCsvIndexes(instantPayLoad());
         }
 
         return $items;
@@ -299,15 +556,16 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if($status === 'waiting'){
-                $items[$i]['status'] = 'cancelled';
-                $items[$i]['message'] = 'لغو به‌خاطر مبلغ جدید';
-                $items[$i]['cancelled_at'] = $now;
-
-                $csvIndex = intval($item['csv_index'] ?? -1);
-                if($csvIndex >= 0 && function_exists('xuiRejectPaymentIndex')){
-                    xuiRejectPaymentIndex($csvIndex, 'لغو شد');
+            if($status === 'waiting' || $status === 'expired' || $status === 'failed'){
+                if($status === 'waiting'){
+                    $items[$i]['status'] = 'cancelled';
+                    $items[$i]['message'] = 'لغو به‌خاطر مبلغ جدید';
+                    $items[$i]['cancelled_at'] = $now;
                 }
+
+                instantPayDeleteAbandonedCsv($items[$i]);
+                $items[$i]['csv_purged'] = true;
+                $items[$i]['csv_index'] = -1;
             }
 
             $items[$i]['match_closed'] = true;
@@ -316,7 +574,7 @@ if(!function_exists('instantPayPath')){
 
         if($changed){
             instantPaySave($items);
-            $items = instantPayLoad();
+            $items = instantPayRebuildCsvIndexes(instantPayLoad());
         }
 
         return $items;
@@ -841,45 +1099,84 @@ if(!function_exists('instantPayPath')){
         }
 
         // فقط وقتی کانفیگ آماده است «paid» می‌شود
-        $link = $result['link'] ?? ($found['sub'] ?? '');
+        $link = trim((string)($result['link'] ?? ($found['sub'] ?? '')));
         $items[$idx]['status'] = 'paid';
         $items[$idx]['paid_at'] = time();
         $items[$idx]['link'] = $link;
         $items[$idx]['message'] = 'پرداخت تأیید شد';
         $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
         $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
+        $items[$idx]['csv_purged'] = false;
         instantPaySave($items);
 
-        // همه ردیف‌های هم‌کد AUTO در CSV را هم تایید کن (جلوگیری از «درحال بررسی» باقی‌مانده)
+        // همه ردیف‌های هم‌کد AUTO در CSV را حتماً «تایید شد» کن
+        // (رفع باگ: کانفیگ صادر شده ولی لیست ادمین روی نارنجی/درحال بررسی می‌ماند)
         if(function_exists('xuiLoadPayments') && function_exists('xuiSavePayments')){
-            $tracking = 'AUTO-' . str_pad((string)intval($found['code'] ?? 0), 4, '0', STR_PAD_LEFT);
-            $userName = trim((string)($found['user'] ?? ''));
+            $tracking = instantPayTrackingCode($items[$idx]);
+            $userName = trim((string)($items[$idx]['user'] ?? $found['user'] ?? ''));
             $payments = xuiLoadPayments();
             $changedCsv = false;
+            $matchedIndexes = [];
 
             foreach($payments as $pi => $prow){
                 if(!is_array($prow)){
                     continue;
                 }
 
-                if(trim((string)($prow[3] ?? '')) !== $tracking){
+                $rowTrack = trim((string)($prow[3] ?? ''));
+                $rowUser = trim((string)($prow[0] ?? ''));
+                $rowCode = str_pad((string)intval($prow[13] ?? 0), 4, '0', STR_PAD_LEFT);
+                $trackCode = str_pad((string)intval($items[$idx]['code'] ?? 0), 4, '0', STR_PAD_LEFT);
+
+                $isSame =
+                    ($rowTrack === $tracking)
+                    || ($rowTrack === '' && $rowCode === $trackCode && $rowCode !== '0000');
+
+                if(!$isSame){
                     continue;
                 }
 
-                if($userName !== '' && strcasecmp(trim((string)($prow[0] ?? '')), $userName) !== 0){
+                if($userName !== '' && strcasecmp($rowUser, $userName) !== 0){
                     continue;
                 }
 
-                $payments[$pi][6] = 'تایید شد';
+                $matchedIndexes[] = $pi;
+                if(trim((string)($payments[$pi][6] ?? '')) !== 'تایید شد'){
+                    $payments[$pi][6] = 'تایید شد';
+                    $changedCsv = true;
+                }
                 if($link !== ''){
                     $payments[$pi][7] = $link;
+                    $changedCsv = true;
                 }
+                if(trim((string)($payments[$pi][3] ?? '')) === ''){
+                    $payments[$pi][3] = $tracking;
+                    $changedCsv = true;
+                }
+            }
+
+            // اگر هیچ ردیفی پیدا نشد، با ایندکس resolve‌شده اجباراً آپدیت کن
+            if(!$matchedIndexes && $csvIndex >= 0 && isset($payments[$csvIndex])){
+                $payments[$csvIndex][6] = 'تایید شد';
+                if($link !== ''){
+                    $payments[$csvIndex][7] = $link;
+                }
+                $payments[$csvIndex][3] = $tracking;
                 $changedCsv = true;
+                $matchedIndexes[] = $csvIndex;
             }
 
             if($changedCsv){
                 xuiSavePayments($payments);
             }
+
+            if($matchedIndexes){
+                $items[$idx]['csv_index'] = intval($matchedIndexes[0]);
+                instantPaySave($items);
+            }
+
+            // یک‌بار دیگر همگام‌سازی ایمنی
+            instantPaySyncPaidCsvRows();
         }
 
         if(!empty($found['coupon_code']) && function_exists('couponMarkUsed')){

@@ -1447,4 +1447,35 @@ if(!function_exists('xuiConfigPath')){
 
         return ['ok' => true];
     }
+
+    /**
+     * حذف ردیف(ها) از payments.csv و برگرداندن آرایهٔ نهایی.
+     * @param int[] $indexes
+     */
+    function xuiDeletePaymentIndexes($indexes){
+        $payments = xuiLoadPayments();
+        $indexes = array_values(array_unique(array_map('intval', (array)$indexes)));
+
+        if(!$indexes){
+            return ['ok' => true, 'deleted' => 0, 'payments' => $payments];
+        }
+
+        rsort($indexes);
+        $deleted = 0;
+
+        foreach($indexes as $index){
+            if(!isset($payments[$index])){
+                continue;
+            }
+            unset($payments[$index]);
+            $deleted++;
+        }
+
+        if($deleted > 0){
+            $payments = array_values($payments);
+            xuiSavePayments($payments);
+        }
+
+        return ['ok' => true, 'deleted' => $deleted, 'payments' => $payments];
+    }
 }
