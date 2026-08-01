@@ -97,6 +97,14 @@ elseif(is_file(dirname(__DIR__) . '/xui_lib.php')){
     require_once dirname(__DIR__) . '/xui_lib.php';
 }
 
+// پاک‌سازی ردیف‌های پرداخت‌نشدهٔ منقضی + همگام وضعیت paid
+if(is_file(dirname(__DIR__) . '/instant_pay_lib.php')){
+    require_once dirname(__DIR__) . '/instant_pay_lib.php';
+    if(function_exists('instantPayExpireDue')){
+        instantPayExpireDue();
+    }
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 
