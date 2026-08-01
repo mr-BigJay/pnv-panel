@@ -1,12 +1,31 @@
 <?php
 
-// Live panel includes this from /bigjay_controller/ where auth.php & functions.php
-// are often missing (HTTP 404). Hard require_once fatals → blank content area.
-foreach ([__DIR__ . '/auth.php', __DIR__ . '/functions.php'] as $renewsBootFile) {
-    if (is_file($renewsBootFile)) {
-        require_once $renewsBootFile;
+if(!defined('PNV_ADMIN_EMBEDDED')){
+    define('PNV_ADMIN_EMBEDDED', true);
+}
+
+// Soft-load auth/functions from bigjay_controller or admin (hard require → blank page).
+$__renewsBootAuth = [
+    __DIR__ . '/auth.php',
+    __DIR__ . '/../admin/auth.php',
+];
+foreach($__renewsBootAuth as $__renewsBootFile){
+    if(is_file($__renewsBootFile)){
+        require_once $__renewsBootFile;
+        break;
     }
 }
+$__renewsBootFunc = [
+    __DIR__ . '/functions.php',
+    __DIR__ . '/../admin/functions.php',
+];
+foreach($__renewsBootFunc as $__renewsBootFile){
+    if(is_file($__renewsBootFile)){
+        require_once $__renewsBootFile;
+        break;
+    }
+}
+unset($__renewsBootAuth, $__renewsBootFunc, $__renewsBootFile);
 
 if (!function_exists('pnvAdminUrl')) {
     function pnvAdminUrl($path = 'index.php') {
@@ -22,25 +41,27 @@ if (!function_exists('pnvAdminUrl')) {
     }
 }
 
+/**
+ * داخل لایه‌اوت ادمین: منو را نگه می‌دارد، فقط URL را تمیز می‌کند / لیست را نشان می‌دهد.
+ * (header+exit یا پاک‌کردن buffer باعث بسته شدن محیط منو می‌شد)
+ */
 if (!function_exists('pnvAdminRedirect')) {
     function pnvAdminRedirect($url) {
-        $url = (string)$url;
+        pnvAdminSoftRedirect($url);
+    }
+}
 
-        if (!headers_sent()) {
+if (!function_exists('pnvAdminSoftRedirect')) {
+    function pnvAdminSoftRedirect($url) {
+        $url = (string)$url;
+        $GLOBALS['pnv_admin_soft_redirect'] = $url;
+
+        // فقط وقتی واقعاً مستقل اجرا می‌شویم (نه داخل index) هدر بفرست
+        $embedded = (defined('PNV_ADMIN_EMBEDDED') && PNV_ADMIN_EMBEDDED) || headers_sent();
+        if(!$embedded){
             header('Location: ' . $url);
             exit;
         }
-
-        $json = json_encode($url, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $html = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
-
-        echo '<div style="padding:18px;color:#bbf7d0;background:#052e16;border-radius:12px;margin:12px 0;font-family:tahoma,sans-serif;line-height:1.8;">'
-            . 'در حال انتقال… اگر خودکار نرفت، '
-            . '<a href="' . $html . '" style="color:#86efac;font-weight:700;">اینجا کلیک کنید</a>.'
-            . '</div>';
-        echo '<script>window.location.replace(' . $json . ');</script>';
-        echo '<noscript><meta http-equiv="refresh" content="0;url=' . $html . '"></noscript>';
-        exit;
     }
 }
 
@@ -123,6 +144,8 @@ $paymentError = $_SESSION['payment_error'];
 unset($_SESSION['payment_error']);
 }
 
+$renewsCleanUrl = pnvAdminUrl('index.php?page=renews');
+
 if(isset($_POST['approve_payment'])){
 
 $index=intval($_POST['approve_index']);
@@ -138,16 +161,19 @@ $result = xuiApprovePaymentIndex($index, 'تمدید');
 
 if(empty($result['ok'])){
 $_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
-exit;
-}
-
+$paymentError = $_SESSION['payment_error'];
+unset($_SESSION['payment_error']);
+pnvAdminSoftRedirect($renewsCleanUrl);
+} else {
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
 $_SESSION['payment_message_detail'] = (string)($result['link'] ?? '');
-pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
-exit;
-
+$paymentMessage = $_SESSION['payment_message'];
+$paymentMessageDetail = $_SESSION['payment_message_detail'];
+unset($_SESSION['payment_message'], $_SESSION['payment_message_detail']);
+pnvAdminSoftRedirect($renewsCleanUrl);
 }
+
+} else {
 
 if(isset($payments[$index])){
 
@@ -166,8 +192,12 @@ fclose($fp);
 
 $_SESSION['payment_message'] = 'تمدید تایید شد';
 $_SESSION['payment_message_detail'] = $link;
-pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
-exit;
+$paymentMessage = $_SESSION['payment_message'];
+$paymentMessageDetail = $_SESSION['payment_message_detail'];
+unset($_SESSION['payment_message'], $_SESSION['payment_message_detail']);
+pnvAdminSoftRedirect($renewsCleanUrl);
+
+}
 
 }
 
@@ -193,22 +223,24 @@ fclose($fp);
 
 $_SESSION['payment_message'] = 'تمدید رد شد';
 $_SESSION['payment_message_detail'] = $reason;
-pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
-exit;
+$paymentMessage = $_SESSION['payment_message'];
+$paymentMessageDetail = $_SESSION['payment_message_detail'];
+unset($_SESSION['payment_message'], $_SESSION['payment_message_detail']);
+pnvAdminSoftRedirect($renewsCleanUrl);
 
 }
 
-if(isset($_GET['deletepayment'])){
+if(isset($_POST['delete_payment']) || isset($_GET['deletepayment'])){
 
-$id=intval($_GET['deletepayment']);
+$id = isset($_POST['delete_index'])
+    ? intval($_POST['delete_index'])
+    : intval($_GET['deletepayment'] ?? -1);
 
-if(isset($payments[$id])){
+if($id >= 0 && isset($payments[$id])){
 
 unset($payments[$id]);
 
 $payments=array_values($payments);
-
-}
 
 $fp=fopen($paymentsFile,'w');
 
@@ -218,8 +250,13 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
-exit;
+$_SESSION['payment_message'] = 'تمدید حذف شد';
+$paymentMessage = $_SESSION['payment_message'];
+unset($_SESSION['payment_message']);
+}
+
+// بدون exit: لیست همان‌جا با منوی ادمین می‌ماند؛ URL تمیز می‌شود
+pnvAdminSoftRedirect($renewsCleanUrl);
 
 }
 
@@ -724,8 +761,14 @@ flex:0 0 20px;
 
 </style>
 
-<div class="box renewsPage">
-
+<div class="box renewsPage" data-renews-ui="v2">
+<?php
+$softUrl = (string)($GLOBALS['pnv_admin_soft_redirect'] ?? '');
+if($softUrl !== ''){
+    $softJson = json_encode($softUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo '<script>try{history.replaceState({},"",' . $softJson . ');}catch(e){}</script>';
+}
+?>
 <h2>لیست تمدید ها</h2>
 
 <div class="renewList">
@@ -1008,9 +1051,22 @@ openModal(
 }
 
 function deleteItem(id){
-if(confirm('حذف شود؟')){
-location.href = renewsPageUrl + (renewsPageUrl.indexOf('?') >= 0 ? '&' : '?') + 'deletepayment=' + encodeURIComponent(id);
+if(!confirm('حذف شود؟')){
+return;
 }
+// POST تا منوی ادمین بسته نشود و URL به deletepayment گیر نکند
+var form = document.createElement('form');
+form.method = 'POST';
+form.action = renewsPageUrl;
+form.style.display = 'none';
+var a = document.createElement('input');
+a.type = 'hidden'; a.name = 'delete_payment'; a.value = '1';
+var b = document.createElement('input');
+b.type = 'hidden'; b.name = 'delete_index'; b.value = String(id);
+form.appendChild(a);
+form.appendChild(b);
+document.body.appendChild(form);
+form.submit();
 }
 
 if(renewResultError){

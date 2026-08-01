@@ -55,41 +55,24 @@ if(!function_exists('pnvAdminEntryUrl')){
     }
 }
 
-if(!function_exists('pnvAdminRedirect')){
+if(!function_exists('pnvAdminSoftRedirect')){
     /**
-     * Safe redirect when this file is included inside a layout
-     * that already sent HTML (headers_sent → header Location fails / blank hang).
-     * Inside bigjay_controller always prefer JS replace.
+     * داخل لایه‌اوت ادمین منو را نگه می‌دارد (بدون پاک‌کردن buffer / بدون سند HTML جدید).
      */
-    function pnvAdminRedirect($url){
+    function pnvAdminSoftRedirect($url){
         $url = (string)$url;
-        $embedded = defined('PNV_ADMIN_EMBEDDED') && PNV_ADMIN_EMBEDDED;
-
-        if(!$embedded && !headers_sent()){
+        $GLOBALS['pnv_admin_soft_redirect'] = $url;
+        $embedded = (defined('PNV_ADMIN_EMBEDDED') && PNV_ADMIN_EMBEDDED) || headers_sent();
+        if(!$embedded){
             header('Location: ' . $url);
             exit;
         }
+    }
+}
 
-        while(ob_get_level() > 0){
-            @ob_end_clean();
-        }
-
-        if(!headers_sent()){
-            header('Content-Type: text/html; charset=UTF-8');
-        }
-
-        $json = json_encode($url, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $html = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
-
-        echo '<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">'
-            . '<meta http-equiv="refresh" content="0;url=' . $html . '">'
-            . '<title>انتقال…</title></head><body style="background:#0f172a;color:#bbf7d0;font-family:tahoma,sans-serif;padding:24px;line-height:1.9;">'
-            . '<div>در حال بازگشت به لیست پرداخت‌ها… '
-            . '<a href="' . $html . '" style="color:#86efac;font-weight:700;">اگر خودکار نرفت اینجا کلیک کنید</a>.'
-            . '</div>'
-            . '<script>window.location.replace(' . $json . ');</script>'
-            . '</body></html>';
-        exit;
+if(!function_exists('pnvAdminRedirect')){
+    function pnvAdminRedirect($url){
+        pnvAdminSoftRedirect($url);
     }
 }
 
@@ -230,7 +213,9 @@ if(isset($_POST['approve_payment'])){
         $redirectPer = 20;
     }
 
-    $xuiConfig = xuiLoadConfig();
+    $paymentsCleanUrl = pnvAdminUrl('index.php?page=payments&per=' . $redirectPer);
+    $xuiConfig = function_exists('xuiLoadConfig') ? xuiLoadConfig() : [];
+    $handled = false;
 
     if(function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])){
 
@@ -238,18 +223,26 @@ if(isset($_POST['approve_payment'])){
 
         if(empty($result['ok'])){
             $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-            pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+            $paymentError = $_SESSION['payment_error'];
+            unset($_SESSION['payment_error']);
+        } else {
+            $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
+            $paymentMessage = $_SESSION['payment_message'];
+            unset($_SESSION['payment_message']);
         }
-
-        $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-        pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        pnvAdminSoftRedirect($paymentsCleanUrl);
+        $handled = true;
 
     }
+
+    if(!$handled){
 
     if(!isValidSubscriptionLink($link)){
         $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
-        pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-    }
+        $paymentError = $_SESSION['payment_error'];
+        unset($_SESSION['payment_error']);
+        pnvAdminSoftRedirect($paymentsCleanUrl);
+    } else {
 
     if(isset($payments[$index])){
 
@@ -270,7 +263,13 @@ if(isset($_POST['approve_payment'])){
     fclose($fp);
 
     $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
-    pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+    $paymentMessage = $_SESSION['payment_message'];
+    unset($_SESSION['payment_message']);
+    pnvAdminSoftRedirect($paymentsCleanUrl);
+
+    }
+
+    }
 
 }
 
@@ -306,7 +305,10 @@ if(isset($_POST['reject_payment'])){
         fclose($fp);
     }
 
-    pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+    $_SESSION['payment_message'] = 'پرداخت رد شد';
+    $paymentMessage = $_SESSION['payment_message'];
+    unset($_SESSION['payment_message']);
+    pnvAdminSoftRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
 }
 
@@ -341,10 +343,12 @@ if(isset($_POST['delete_payment']) || isset($_GET['deletepayment'])){
         }
 
         $_SESSION['payment_message'] = 'پرداخت حذف شد';
+        $paymentMessage = $_SESSION['payment_message'];
+        unset($_SESSION['payment_message']);
     }
 
-    // همیشه به URL تمیز برگرد (بدون deletepayment) تا رفرش دوباره حذف نزند
-    pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+    // لیست همان‌جا می‌ماند؛ فقط URL از deletepayment پاک می‌شود
+    pnvAdminSoftRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
 }
 
@@ -838,9 +842,16 @@ width:180px;
 
 </style>
 
-<div class="paymentsPage" data-payments-ui="v4">
+<div class="paymentsPage" data-payments-ui="v5">
 
 <div class="box">
+<?php
+$softUrl = (string)($GLOBALS['pnv_admin_soft_redirect'] ?? '');
+if($softUrl !== ''){
+    $softJson = json_encode($softUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo '<script>try{history.replaceState({},"",' . $softJson . ');}catch(e){}</script>';
+}
+?>
 
     <h2>
 
