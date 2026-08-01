@@ -1,10 +1,33 @@
 <?php
 
-// Live panel includes this from /bigjay_controller/ where auth.php & functions.php
-// are often missing. Hard require_once fatals → blank content area.
-foreach([__DIR__ . '/auth.php', __DIR__ . '/functions.php'] as $paymentsBootFile){
-    if(is_file($paymentsBootFile)){
-        require_once $paymentsBootFile;
+// Live panel may run from /bigjay_controller/ or /admin/.
+// Soft-load auth/functions from either location (hard require_once fatals → blank page).
+$__paymentsBootAuth = [
+    __DIR__ . '/auth.php',
+    __DIR__ . '/../admin/auth.php',
+];
+foreach($__paymentsBootAuth as $__paymentsBootFile){
+    if(is_file($__paymentsBootFile)){
+        require_once $__paymentsBootFile;
+        break;
+    }
+}
+$__paymentsBootFunc = [
+    __DIR__ . '/functions.php',
+    __DIR__ . '/../admin/functions.php',
+];
+foreach($__paymentsBootFunc as $__paymentsBootFile){
+    if(is_file($__paymentsBootFile)){
+        require_once $__paymentsBootFile;
+        break;
+    }
+}
+unset($__paymentsBootAuth, $__paymentsBootFunc, $__paymentsBootFile);
+
+if(!defined('PNV_ADMIN_EMBEDDED')){
+    // If this file itself lives in bigjay_controller, treat as embedded.
+    if(substr(str_replace('\\', '/', __DIR__), -18) === '/bigjay_controller'){
+        define('PNV_ADMIN_EMBEDDED', true);
     }
 }
 
@@ -811,7 +834,7 @@ width:180px;
 
 </style>
 
-<div class="paymentsPage" data-payments-ui="v3">
+<div class="paymentsPage" data-payments-ui="v4">
 
 <div class="box">
 
