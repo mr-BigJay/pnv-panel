@@ -169,7 +169,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=11">
+<link rel="stylesheet" href="plan_step_ui.css?v=12">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -1066,11 +1066,29 @@ function startPayWatchers(id){
     });
 }
 
+function showPayCreateError(msg){
+    if(payCreating){
+        payCreating.classList.add('is-visible', 'is-error');
+        payCreating.textContent = msg || 'ساخت مبلغ ناموفق بود';
+    }
+    if(instantPay) instantPay.hidden = true;
+}
+
 function ensureInstantPay(forceRestart){
     const card = selectedCardInput ? selectedCardInput.value.trim() : '';
     const cardName = selectedCardNameInput ? selectedCardNameInput.value.trim() : '';
     const sub = document.getElementById('subInput').value.trim();
-    if(!planSelect.value || !card || !sub){
+
+    if(!planSelect.value){
+        showPayCreateError('ابتدا پلن را انتخاب کنید');
+        return;
+    }
+    if(!card){
+        showPayCreateError('کارت مقصد را از تب بانک‌ها انتخاب کنید');
+        return;
+    }
+    if(!sub){
+        showPayCreateError('لینک اشتراک را وارد کنید');
         return;
     }
     if(!forceRestart && currentPay && (currentPay.status === 'waiting' || currentPay.status === 'processing')){
@@ -1080,8 +1098,22 @@ function ensureInstantPay(forceRestart){
     }
     if(payCreateInFlight) return;
     payCreateInFlight = true;
-    if(payCreating) payCreating.classList.add('is-visible');
-    if(instantPay) instantPay.hidden = true;
+
+    if(payCreating){
+        payCreating.classList.add('is-visible');
+        payCreating.classList.remove('is-error');
+        payCreating.textContent = 'در حال ایجاد مبلغ پرداخت…';
+    }
+    if(instantPay){
+        instantPay.hidden = false;
+        if(instantAmount) instantAmount.textContent = '…';
+        if(instantTimer) instantTimer.textContent = '۳۰:۰۰';
+        if(instantPayHead) instantPayHead.textContent = 'مهلت پرداخت';
+        const amountTomanEl = document.getElementById('instantAmountToman');
+        if(amountTomanEl) amountTomanEl.textContent = '';
+        if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
+        if(instantApproved) instantApproved.hidden = true;
+    }
 
     const prevId = currentPay && currentPay.id ? currentPay.id : '';
     stopPayWatchers();
@@ -1105,35 +1137,45 @@ function ensureInstantPay(forceRestart){
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
             body: body.toString()
         })
-        .then(function(r){ return r.json(); })
+        .then(function(r){
+            return r.text().then(function(t){
+                var data = null;
+                try{ data = JSON.parse(t); }catch(e){ data = null; }
+                if(!r.ok){
+                    throw new Error((data && data.error) || ('خطای سرور ' + r.status));
+                }
+                return data;
+            });
+        })
         .then(function(data){
             payCreateInFlight = false;
             if(!data || !data.ok || !data.item){
-                if(payCreating){
-                    payCreating.classList.add('is-visible');
-                    payCreating.textContent = (data && data.error) || 'ساخت مبلغ ناموفق بود';
-                }
+                showPayCreateError((data && data.error) || 'ساخت مبلغ ناموفق بود');
                 return;
             }
             if(payCreating){
-                payCreating.classList.remove('is-visible');
+                payCreating.classList.remove('is-visible', 'is-error');
                 payCreating.textContent = 'در حال ایجاد مبلغ پرداخت…';
             }
             renderPay(data.item);
             startPayWatchers(data.item.id);
         })
-        .catch(function(){
+        .catch(function(err){
             payCreateInFlight = false;
-            if(payCreating){
-                payCreating.classList.add('is-visible');
-                payCreating.textContent = 'خطا در ارتباط با سرور';
-            }
+            showPayCreateError((err && err.message) || 'خطا در ارتباط با سرور');
         });
     };
 
     if(prevId){
-        cancelPayBeacon(prevId);
-        startCreate();
+        const body = new URLSearchParams();
+        body.set('action', 'cancel');
+        body.set('id', prevId);
+        fetch('instant-pay-api.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: body.toString()
+        }).finally(startCreate);
     } else {
         startCreate();
     }
