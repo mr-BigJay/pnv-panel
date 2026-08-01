@@ -97,7 +97,7 @@ $firstOkOpen = true;
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>لیست اشتراک‌ها</title>
+<title>اشتراک‌های من</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
 <link rel="stylesheet" href="subscriptions_ui.css?v=3">
 </head>
@@ -106,14 +106,14 @@ $firstOkOpen = true;
 
 <div class="topBar">
 <a class="userBack" href="dashboard.php">بازگشت</a>
-<div class="brand">لیست اشتراک‌ها</div>
+<div class="brand">اشتراک‌های من</div>
 <span class="userBackSpacer" aria-hidden="true"></span>
 </div>
 
 <div class="pageHead">
 <div class="pageHeadText">
-<h1 class="pageTitle">اشتراک‌ها</h1>
-<p class="pageSub">لیست کانفیگ‌های خریداری شده</p>
+<h1 class="pageTitle">اشتراک‌های من</h1>
+<p class="pageSub">کانفیگ‌های فعال و منقضی‌شده</p>
 </div>
 <div class="pageIcon" aria-hidden="true">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

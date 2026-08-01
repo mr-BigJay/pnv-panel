@@ -161,7 +161,7 @@ $h = static function($v){
 <div class="resultLink" id="resultLink">—</div>
 <button type="button" class="copybtn" id="copyLinkBtn">کپی لینک</button>
 </div>
-<a class="btnGhost" href="subscriptions.php">رفتن به لیست اشتراک‌ها</a>
+<a class="btnGhost" href="subscriptions.php">اشتراک‌های من</a>
 </div>
 </div>
 

@@ -159,19 +159,21 @@ line-height:1.4;
 .dashPrimaryGrid{
 display:grid;
 grid-template-columns:1fr 1fr;
-gap:8px;
+gap:10px;
 margin-bottom:10px;
-flex:0 0 auto;
+flex:1.35 1 0;
+min-height:168px;
 }
 .dashPrimary{
 display:flex;
 flex-direction:column;
 align-items:center;
 justify-content:center;
-gap:8px;
-height:136px;
-padding:12px 10px;
-border-radius:16px;
+gap:12px;
+height:100%;
+min-height:168px;
+padding:18px 12px;
+border-radius:18px;
 text-decoration:none;
 color:#fff;
 text-align:center;
@@ -184,15 +186,15 @@ background:linear-gradient(180deg,#1e3a5f 0%,#172554 100%);
 border-color:#1d4ed8;
 }
 .dashPrimaryIcon{
-width:36px;
-height:36px;
-border-radius:10px;
+width:48px;
+height:48px;
+border-radius:14px;
 display:flex;
 align-items:center;
 justify-content:center;
 background:rgba(34,197,94,.18);
 color:#86efac;
-font-size:22px;
+font-size:28px;
 font-weight:700;
 flex:0 0 auto;
 line-height:1;
@@ -202,16 +204,16 @@ background:rgba(59,130,246,.18);
 color:#93c5fd;
 }
 .dashPrimaryLabel{
-font-size:13px;
+font-size:15px;
 font-weight:700;
-line-height:1.35;
+line-height:1.4;
 }
 .dashList{
 background:#0f172a;
 border:1px solid #334155;
 border-radius:14px;
 overflow:hidden;
-flex:1;
+flex:1 1 0;
 min-height:0;
 display:flex;
 flex-direction:column;
@@ -223,7 +225,7 @@ justify-content:space-between;
 gap:8px;
 padding:0 12px;
 flex:1;
-min-height:34px;
+min-height:40px;
 text-decoration:none;
 color:#fff;
 border-bottom:1px solid #1e293b;
@@ -285,8 +287,10 @@ background:#ef4444;
 box-shadow:0 0 8px rgba(239,68,68,.7);
 }
 @media(max-width:360px){
-.dashPrimary{height:108px}
-.dashPrimaryLabel{font-size:12px}
+.dashPrimaryGrid{min-height:150px}
+.dashPrimary{min-height:150px;gap:10px;padding:14px 10px}
+.dashPrimaryIcon{width:42px;height:42px;font-size:24px}
+.dashPrimaryLabel{font-size:13px}
 .dashItemText{font-size:12px}
 .dashStatLabel{font-size:9px}
 }
@@ -333,16 +337,9 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 <a class="dashItem" href="subscriptions.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">≡</span>
-<span class="dashItemText">لیست اشتراک‌ها</span>
+<span class="dashItemText">اشتراک‌های من</span>
 </span>
 <span class="dashItemMeta">مشاهده</span>
-</a>
-<a class="dashItem" href="renew-list.php">
-<span class="dashItemMain">
-<span class="dashItemIcon">↻</span>
-<span class="dashItemText">لیست تمدیدها</span>
-</span>
-<span class="dashItemMeta">پیگیری</span>
 </a>
 <a class="dashItem" href="downloads.php">
 <span class="dashItemMain">

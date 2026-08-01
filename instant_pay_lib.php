@@ -313,6 +313,107 @@ if(!function_exists('instantPayPath')){
         return null;
     }
 
+    /**
+     * نوع زمانی اشتراک از روی فاکتورهای تاییدشده:
+     * unlimited | limited | unknown
+     */
+    function instantPayNormalizeSubKey($value){
+        $value = trim((string)$value);
+
+        if($value === ''){
+            return '';
+        }
+
+        if(function_exists('xuiParseSubLink')){
+            $parsed = xuiParseSubLink($value);
+
+            if(is_array($parsed) && !empty($parsed['sub_id'])){
+                return strtolower(($parsed['host'] ?? '') . '|' . $parsed['sub_id']);
+            }
+        }
+
+        if(preg_match('/^[A-Za-z0-9]{8,32}$/', $value)){
+            return strtolower('id|' . $value);
+        }
+
+        return strtolower($value);
+    }
+
+    function instantPaySubTimeCategory($username, $subLink){
+        $username = trim((string)$username);
+        $subKey = instantPayNormalizeSubKey($subLink);
+
+        if($username === '' || $subKey === ''){
+            return 'unknown';
+        }
+
+        $file = __DIR__ . '/invoices/payments.csv';
+
+        if(!file_exists($file)){
+            return 'unknown';
+        }
+
+        $buyDays = null;
+        $anyDays = null;
+        $handle = fopen($file, 'r');
+
+        while(($data = fgetcsv($handle)) !== false){
+            if(($data[0] ?? '') !== $username){
+                continue;
+            }
+
+            if(trim((string)($data[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            $type = trim((string)($data[9] ?? ''));
+            $planText = trim((string)($data[2] ?? ''));
+            $col1 = trim((string)($data[1] ?? ''));
+            $link = trim((string)($data[7] ?? ''));
+            $days = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
+
+            $candidates = [];
+
+            if($type === 'خرید' && $link !== ''){
+                $candidates[] = $link;
+            }
+
+            if($type === 'تمدید' && $col1 !== ''){
+                $candidates[] = $col1;
+            }
+
+            $matched = false;
+
+            foreach($candidates as $cand){
+                if(instantPayNormalizeSubKey($cand) === $subKey){
+                    $matched = true;
+                    break;
+                }
+            }
+
+            if(!$matched){
+                continue;
+            }
+
+            if($type === 'خرید'){
+                $buyDays = $days;
+            }
+            elseif($anyDays === null){
+                $anyDays = $days;
+            }
+        }
+
+        fclose($handle);
+
+        $resolved = $buyDays !== null ? $buyDays : $anyDays;
+
+        if($resolved === null){
+            return 'unknown';
+        }
+
+        return intval($resolved) > 0 ? 'limited' : 'unlimited';
+    }
+
     function instantPayCreate($opts){
         $username = trim((string)($opts['user'] ?? ''));
         $type = trim((string)($opts['type'] ?? 'خرید'));
@@ -367,6 +468,29 @@ if(!function_exists('instantPayPath')){
 
         if(!$plan){
             return ['ok' => false, 'error' => 'پلن انتخاب‌شده معتبر نیست'];
+        }
+
+        // تمدید: نوع زمانی پلن باید با نوع اشتراک یکی باشد
+        if($type === 'تمدید' || $type === 'renew'){
+            $subCategory = instantPaySubTimeCategory($username, $sub);
+            $planUnlimited = function_exists('pnvPlanIsUnlimited')
+                ? pnvPlanIsUnlimited($plan)
+                : (intval($plan['days'] ?? 0) <= 0 && !preg_match('/^\d+$/', trim((string)($plan['days'] ?? ''))));
+            $planCategory = $planUnlimited ? 'unlimited' : 'limited';
+
+            if($subCategory === 'unlimited' && $planCategory === 'limited'){
+                return [
+                    'ok' => false,
+                    'error' => 'این اشتراک نامحدود زمانی است و با پلن زمان‌دار تمدید نمی‌شود. در صورت نیاز خرید اشتراک جدید را بزنید.'
+                ];
+            }
+
+            if($subCategory === 'limited' && $planCategory === 'unlimited'){
+                return [
+                    'ok' => false,
+                    'error' => 'این اشتراک زمان‌دار است و با پلن نامحدود زمانی تمدید نمی‌شود. در صورت نیاز خرید اشتراک جدید را بزنید.'
+                ];
+            }
         }
 
         $items = instantPayExpireDue();

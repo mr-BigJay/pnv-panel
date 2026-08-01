@@ -11,6 +11,7 @@ require_once __DIR__ . '/coupon_lib.php';
 require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/telegram_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
+require_once __DIR__ . '/instant_pay_lib.php';
 
 $plans = [];
 
@@ -107,13 +108,17 @@ function renewLoadUserSubscriptions($username){
         $col1 = trim($data[1] ?? '');
         $link = trim($data[7] ?? '');
         $type = trim($data[9] ?? '');
+        $planText = trim((string)($data[2] ?? ''));
+        $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
+        $timeCategory = $planDays > 0 ? 'limited' : 'unlimited';
 
         if($type === 'خرید' && renewIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
             $link = renewNormalizeSubLink($link);
             $key = strtolower($link);
             $linkIndex[$key] = [
                 'name' => $col1,
-                'link' => $link
+                'link' => $link,
+                'time_category' => $timeCategory
             ];
         }
 
@@ -130,7 +135,8 @@ function renewLoadUserSubscriptions($username){
 
                 $linkIndex[$key] = [
                     'name' => $name,
-                    'link' => $col1
+                    'link' => $col1,
+                    'time_category' => $timeCategory
                 ];
             }
         }
@@ -161,7 +167,48 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=6">
+<link rel="stylesheet" href="plan_step_ui.css?v=7">
+<style>
+.catCard.is-locked{
+opacity:.45;
+filter:grayscale(.85);
+cursor:not-allowed;
+background:#1e293b;
+border-color:#475569;
+box-shadow:none;
+}
+.catCard.is-locked.is-active{
+border-color:#475569;
+background:#1e293b;
+box-shadow:none;
+}
+.catCard.is-locked .catCheck{display:none !important}
+.catLockHint{
+display:none;
+margin:10px 0 14px;
+padding:12px 14px;
+border-radius:14px;
+background:#0f172a;
+border:1px solid #475569;
+color:#cbd5e1;
+font-size:13px;
+line-height:1.8;
+}
+.catLockHint.is-visible{display:block}
+.catLockHint a{color:#86efac;font-weight:700}
+.planChip.is-locked{
+opacity:.4;
+filter:grayscale(.9);
+cursor:not-allowed;
+background:#1e293b;
+border-color:#475569;
+}
+.planChip.is-locked.is-active{
+border-color:#475569;
+background:#1e293b;
+}
+.planChip.is-locked .planCheck{display:none !important}
+</style>
 </head>
 <body>
 <div class="box">
@@ -191,7 +238,7 @@ $h = static function($v){
 <select id="subSelect" onchange="pickSubscription()">
 <option value="">انتخاب از اشتراک‌های من</option>
 <?php foreach($userSubscriptions as $item){ ?>
-<option value="<?php echo $h($item['link']); ?>"><?php echo $h($item['name']); ?></option>
+<option value="<?php echo $h($item['link']); ?>" data-time-category="<?php echo $h($item['time_category'] ?? 'unknown'); ?>"><?php echo $h($item['name']); ?></option>
 <?php } ?>
 <option value="__other__">لینک دیگر</option>
 </select>
@@ -212,6 +259,7 @@ $h = static function($v){
 <span class="catDesc">مدت مشخص (روز / ماه)</span>
 </button>
 </div>
+<div class="catLockHint" id="catLockHint" role="status"></div>
 
 <div class="planBlock" id="planBlock">
 <div class="sectionTitle" id="planListTitle">حجم را انتخاب کنید</div>
@@ -286,8 +334,8 @@ $h = static function($v){
 <div class="resultLink" id="resultLink">—</div>
 <button type="button" class="copybtn" id="copyLinkBtn">کپی لینک</button>
 </div>
-<a class="btnGhost" href="renew-list.php">لیست تمدیدها</a>
-<a class="btnGhost" href="subscriptions.php">لیست اشتراک‌ها</a>
+<a class="btnGhost" href="subscriptions.php">اشتراک‌های من</a>
+<a class="btnGhost" href="buy.php">خرید اشتراک جدید</a>
 </div>
 </div>
 
@@ -336,6 +384,100 @@ let selectedPlan = null;
 let payPollTimer = null;
 let payTickTimer = null;
 let currentPay = null;
+let subTimeCategory = 'unknown'; // unlimited | limited | unknown
+const catLockHint = document.getElementById('catLockHint');
+const subMetaByLink = <?php
+$metaMap = [];
+foreach($userSubscriptions as $item){
+    $metaMap[strtolower((string)($item['link'] ?? ''))] = [
+        'time_category' => $item['time_category'] ?? 'unknown',
+        'name' => $item['name'] ?? ''
+    ];
+}
+echo json_encode($metaMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+?>;
+
+function lockMessageFor(cat){
+    if(subTimeCategory === 'unlimited' && cat === 'limited'){
+        return 'این اشتراک <b>نامحدود زمانی</b> است و نمی‌توان آن را با پلن <b>زمان‌دار</b> تمدید کرد. در صورت نیاز <a href="buy.php">خرید اشتراک جدید</a> را بزنید.';
+    }
+    if(subTimeCategory === 'limited' && cat === 'unlimited'){
+        return 'این اشتراک <b>زمان‌دار</b> است و نمی‌توان آن را با پلن <b>نامحدود زمانی</b> تمدید کرد. در صورت نیاز <a href="buy.php">خرید اشتراک جدید</a> را بزنید.';
+    }
+    return 'این نوع پلن برای تمدید این اشتراک قابل انتخاب نیست. در صورت نیاز <a href="buy.php">خرید اشتراک جدید</a> را بزنید.';
+}
+
+function showCatLockHint(cat){
+    if(!catLockHint) return;
+    catLockHint.innerHTML = lockMessageFor(cat);
+    catLockHint.classList.add('is-visible');
+}
+
+function hideCatLockHint(){
+    if(!catLockHint) return;
+    catLockHint.classList.remove('is-visible');
+    catLockHint.innerHTML = '';
+}
+
+function resolveSubTimeCategory(link){
+    link = String(link || '').trim().toLowerCase();
+    if(!link) return 'unknown';
+    if(subMetaByLink[link] && subMetaByLink[link].time_category){
+        return subMetaByLink[link].time_category;
+    }
+    // match by sub id suffix
+    var keys = Object.keys(subMetaByLink || {});
+    for(var i = 0; i < keys.length; i++){
+        var k = keys[i];
+        if(k && (link.indexOf(k) !== -1 || k.indexOf(link) !== -1)){
+            return subMetaByLink[k].time_category || 'unknown';
+        }
+        try{
+            var a = new URL(k);
+            var b = new URL(link, window.location.origin);
+            var pa = (a.pathname || '').split('/').pop();
+            var pb = (b.pathname || '').split('/').pop();
+            if(pa && pb && pa === pb) return subMetaByLink[k].time_category || 'unknown';
+        }catch(err){}
+    }
+    return 'unknown';
+}
+
+function syncCategoryLocks(){
+    document.querySelectorAll('.catCard').forEach(function(card){
+        var cat = card.getAttribute('data-cat');
+        var locked = false;
+        if(subTimeCategory === 'unlimited' && cat === 'limited') locked = true;
+        if(subTimeCategory === 'limited' && cat === 'unlimited') locked = true;
+        card.classList.toggle('is-locked', locked);
+        if(locked && card.classList.contains('is-active')){
+            card.classList.remove('is-active');
+            if(selectedCategory === cat){
+                selectedCategory = '';
+                selectedPlan = null;
+                planSelect.value = '';
+            }
+        }
+    });
+    if(selectedCategory){
+        var activeCard = document.querySelector('.catCard[data-cat="' + selectedCategory + '"]');
+        if(activeCard && activeCard.classList.contains('is-locked')){
+            selectedCategory = '';
+            selectedPlan = null;
+            planSelect.value = '';
+            hideCatLockHint();
+        }
+    }
+    // اگر نوع مشخص است، دسته سازگار را خودکار باز کن
+    if((subTimeCategory === 'unlimited' || subTimeCategory === 'limited') && !selectedCategory){
+        selectedCategory = subTimeCategory;
+        document.querySelectorAll('.catCard').forEach(function(el){
+            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+        });
+    }
+    renderPlans();
+    updateContinueState();
+}
 
 function pickSubscription(){
     const select = document.getElementById('subSelect');
@@ -344,13 +486,26 @@ function pickSubscription(){
     const value = select.value;
     if(value === '' || value === '__other__'){
         if(value === '__other__'){ input.value = ''; input.focus(); }
+        subTimeCategory = 'unknown';
+        hideCatLockHint();
+        syncCategoryLocks();
         return;
     }
     input.value = value;
+    const opt = select.options[select.selectedIndex];
+    subTimeCategory = (opt && opt.getAttribute('data-time-category')) || resolveSubTimeCategory(value) || 'unknown';
+    hideCatLockHint();
+    selectedPlan = null;
+    planSelect.value = '';
+    syncCategoryLocks();
 }
 
 function updateContinueState(){
-    toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
+    const locked = selectedCategory && (
+        (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
+        (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
+    );
+    toStep2Btn.disabled = !!(locked || !(selectedCategory && selectedPlan && planSelect.value));
 }
 
 function renderPlans(){
@@ -362,6 +517,10 @@ function renderPlans(){
         updateContinueState();
         return;
     }
+    const categoryLocked = (
+        (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
+        (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
+    );
     if(planBlock) planBlock.classList.add('is-visible');
     const list = (plansData || []).filter(function(p){ return p.category === selectedCategory; });
     const isLimited = selectedCategory === 'limited';
@@ -374,7 +533,9 @@ function renderPlans(){
     list.forEach(function(plan){
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'planChip' + (isLimited ? ' planChip--limited' : '') + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '');
+        btn.className = 'planChip' + (isLimited ? ' planChip--limited' : '')
+            + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '')
+            + (categoryLocked ? ' is-locked' : '');
         btn.innerHTML = '<span class="planCheck">✓</span><span class="planName"></span><span class="planPrice"></span>' + (isLimited ? '<span class="planDays"></span>' : '');
         btn.querySelector('.planName').textContent = plan.name;
         btn.querySelector('.planPrice').textContent = plan.price_text;
@@ -383,6 +544,11 @@ function renderPlans(){
             if(d) d.textContent = 'مدت: ' + (plan.days_label || '—');
         }
         btn.addEventListener('click', function(){
+            if(categoryLocked){
+                showCatLockHint(selectedCategory);
+                return;
+            }
+            hideCatLockHint();
             selectedPlan = plan;
             planSelect.value = plan.value;
             planSelect.dispatchEvent(new Event('change'));
@@ -396,7 +562,17 @@ function renderPlans(){
 
 document.querySelectorAll('.catCard').forEach(function(card){
     card.addEventListener('click', function(){
-        selectedCategory = card.getAttribute('data-cat');
+        const cat = card.getAttribute('data-cat');
+        const locked = (
+            (subTimeCategory === 'unlimited' && cat === 'limited') ||
+            (subTimeCategory === 'limited' && cat === 'unlimited')
+        );
+        if(locked){
+            showCatLockHint(cat);
+            return;
+        }
+        hideCatLockHint();
+        selectedCategory = cat;
         document.querySelectorAll('.catCard').forEach(function(el){ el.classList.remove('is-active'); });
         card.classList.add('is-active');
         selectedPlan = null; planSelect.value = '';
@@ -404,6 +580,19 @@ document.querySelectorAll('.catCard').forEach(function(card){
         renderPlans();
     });
 });
+
+const subInputEl = document.getElementById('subInput');
+if(subInputEl){
+    subInputEl.addEventListener('change', function(){
+        subTimeCategory = resolveSubTimeCategory(subInputEl.value);
+        hideCatLockHint();
+        syncCategoryLocks();
+    });
+    subInputEl.addEventListener('blur', function(){
+        subTimeCategory = resolveSubTimeCategory(subInputEl.value);
+        syncCategoryLocks();
+    });
+}
 
 function showStep(step){
     step1.classList.toggle('is-active', step === 1);
@@ -644,7 +833,10 @@ document.getElementById('copyLinkBtn').addEventListener('click', function(){ cop
     var params = new URLSearchParams(window.location.search || '');
     var sub = (params.get('sub') || params.get('link') || '').trim();
     var name = (params.get('name') || '').trim();
-    if(!sub && !name) return;
+    if(!sub && !name){
+        syncCategoryLocks();
+        return;
+    }
 
     var select = document.getElementById('subSelect');
     var input = document.getElementById('subInput');
@@ -675,6 +867,8 @@ document.getElementById('copyLinkBtn').addEventListener('click', function(){ cop
             }
             if(!other) select.selectedIndex = 0;
         }
+        subTimeCategory = resolveSubTimeCategory(sub);
+        syncCategoryLocks();
     }
 })();
 </script>
