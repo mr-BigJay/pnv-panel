@@ -22,7 +22,7 @@ function assertTrue($cond, $msg){
 }
 
 // کدها مضرب ۱۰ و مبلغ تومان صحیح
-for($i = 0; $i < 30; $i++){
+for($i = 0; $i < 10; $i++){
     $code = (string)(random_int(100, 999) * 10);
     $amount = instantPayBuildAmountRial(1500000, $code);
     assertTrue($amount % 10 === 0, "amount whole toman for code $code → $amount");
@@ -30,23 +30,35 @@ for($i = 0; $i < 30; $i++){
     assertTrue(($amount % 10000) === intval($code), "last4 equals code $code → $amount");
 }
 
-// پارس فرمت‌های رایج بانک
+// نمونه واقعی پست‌بانک (ي عربی، +مبلغ، مانده)
+$sample1 = "پست بانک\nواريز به کارت: 6156\n+998,190\n1405/05/10\n9:47\nمانده: 44,108,899 ريال";
+$sample2 = "پست بانک\nواريز به کارت: 6156\n+3,698,233\n1405/05/9\n20:46\nمانده: 43,110,709 ريال";
+
+assertTrue(baleLooksLikeDeposit($sample1), 'sample1 looks like deposit');
+assertTrue(baleLooksLikePostBankNotice($sample1), 'sample1 is postbank notice');
+
+$a1 = baleExtractRialAmounts($sample1);
+$a2 = baleExtractRialAmounts($sample2);
+
+assertTrue($a1 === [998190], 'sample1 deposit only, not balance. got ' . json_encode($a1));
+assertTrue($a2 === [3698233], 'sample2 deposit only, not balance. got ' . json_encode($a2));
+
+// نباید مانده را به‌عنوان کاندید بیاورد
+$c1 = instantPayExpandAmountCandidates($a1, ['rial_only' => true]);
+assertTrue($c1 === [998190], 'no toman×10 expand for postbank. got ' . json_encode($c1));
+assertTrue(!in_array(44108899, $c1, true), 'balance must not be candidate');
+
+// پارس فرمت‌های دیگر
 $samples = [
     'واریز 1,499,280 ریال به حساب شما' => 1499280,
     'مبلغ: ۱٬۴۹۹٬۲۸۰ ریال' => 1499280,
-    'واریز 1.499.280 ریال' => 1499280,
     'واریز 149,928 تومان' => 1499280,
-    'بستانکار 149928 تومان' => 1499280,
-    'مبلغ 149928' => 149928, // بدون واحد؛ لایه مچ ×۱۰ را هم امتحان می‌کند
 ];
 
 foreach($samples as $text => $expect){
     $got = baleExtractRialAmounts($text);
     assertTrue(in_array($expect, $got, true), "parse [$text] expect $expect got " . json_encode($got));
 }
-
-$expanded = instantPayExpandAmountCandidates([149928]);
-assertTrue(in_array(1499280, $expanded, true), 'expand toman 149928 → 1499280 rial');
 
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

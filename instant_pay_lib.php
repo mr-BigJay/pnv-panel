@@ -636,8 +636,10 @@ if(!function_exists('instantPayPath')){
     /**
      * مبالغ استخراج‌شده را به کاندیدهای ریالی گسترش می‌دهد
      * (عدد بدون واحد ممکن است تومان باشد).
+     * برای پیام پست‌بانک گسترش ×۱۰ انجام نمی‌شود.
      */
-    function instantPayExpandAmountCandidates($amounts){
+    function instantPayExpandAmountCandidates($amounts, $opts = []){
+        $allowTomanGuess = empty($opts['rial_only']);
         $out = [];
 
         foreach($amounts as $amount){
@@ -649,8 +651,7 @@ if(!function_exists('instantPayPath')){
 
             $out[$amount] = true;
 
-            // تفسیر به‌عنوان تومان → ریال
-            if($amount <= 50000000){
+            if($allowTomanGuess && $amount <= 50000000){
                 $asRial = $amount * 10;
 
                 if($asRial > $amount){
@@ -681,7 +682,29 @@ if(!function_exists('instantPayPath')){
             return ['ok' => false, 'error' => 'مبلغی در پیام پیدا نشد'];
         }
 
-        $candidates = instantPayExpandAmountCandidates($amounts);
+        // پیام پست‌بانک: مبالغ ریال‌اند؛ «مانده» را از قبل حذف کرده‌ایم
+        $rialOnly = function_exists('baleLooksLikePostBankNotice') && baleLooksLikePostBankNotice($text);
+        $candidates = instantPayExpandAmountCandidates($amounts, ['rial_only' => $rialOnly]);
+
+        // اول exact match — کد ۴رقمی فقط اگر exact نبود
+        foreach($candidates as $amount){
+            $item = instantPayMatchAmountExact($amount);
+
+            if(!$item){
+                continue;
+            }
+
+            $result = instantPayMarkPaid($item['id'], [
+                'amount' => $amount,
+                'text' => $text,
+                'date' => $meta['date'] ?? '',
+                'time' => $meta['time'] ?? ''
+            ]);
+
+            $result['matched_amount'] = $amount;
+            $result['parsed_amounts'] = $amounts;
+            return $result;
+        }
 
         foreach($candidates as $amount){
             $item = instantPayMatchAmount($amount);
@@ -708,5 +731,38 @@ if(!function_exists('instantPayPath')){
             'amounts' => $amounts,
             'candidates' => $candidates
         ];
+    }
+
+    function instantPayMatchAmountExact($amountRial){
+        $amountRial = intval($amountRial);
+
+        if($amountRial <= 0){
+            return null;
+        }
+
+        $items = instantPayExpireDue();
+        $now = time();
+
+        foreach($items as $item){
+            if(($item['status'] ?? '') !== 'waiting'){
+                continue;
+            }
+
+            if(intval($item['expires_at'] ?? 0) < $now){
+                continue;
+            }
+
+            $itemAmount = instantPayNormalizeItemAmountRial($item);
+
+            if($itemAmount === $amountRial){
+                return $item;
+            }
+
+            if($itemAmount > 0 && intdiv($itemAmount, 10) === $amountRial){
+                return $item;
+            }
+        }
+
+        return null;
     }
 }

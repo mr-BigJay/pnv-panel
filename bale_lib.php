@@ -153,16 +153,15 @@ if(!function_exists('baleConfigPath')){
     }
 
     /**
-     * مبالغ را از متن واریز استخراج می‌کند و همه را به ریال برمی‌گرداند.
+     * نرمال‌سازی متن پیام بانک (ارقام، ي عربی، واحدها).
      */
-    function baleExtractRialAmounts($text){
+    function baleNormalizeBankText($text){
         $text = trim((string)$text);
 
         if($text === ''){
-            return [];
+            return '';
         }
 
-        // یکسان‌سازی حروف/ارقام فارسی و عربی
         $text = strtr($text, [
             '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
             '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
@@ -173,22 +172,90 @@ if(!function_exists('baleConfigPath')){
             'ك' => 'ک',
         ]);
 
-        // حذف نیم‌فاصله و یکسان‌سازی واحدها
         $text = str_replace(["\xE2\x80\x8C", "\xC2\xA0"], '', $text); // ZWNJ, NBSP
         $text = str_replace(['ريال', '﷼', 'Rial', 'rial', 'IRR'], 'ریال', $text);
         $text = str_replace(['تومان', 'تومن', 'Toman', 'toman'], 'تومان', $text);
 
-        // جداکننده هزارگان با نقطه یا فاصله: 1.499.280 / 1 499 280 → 1,499,280
+        // جداکننده هزارگان با نقطه یا فاصله
         $text = preg_replace('/(?<=\d)[.\s](?=\d{3}(?:\D|$))/u', ',', $text);
 
+        return $text;
+    }
+
+    /**
+     * پارس یک عدد بانکی (با ویرگول) به int.
+     */
+    function baleParseAmountToken($raw){
+        $raw = str_replace([',', ' '], '', (string)$raw);
+        return intval($raw);
+    }
+
+    /**
+     * مبالغ واریز را از پیام پست‌بانک/بانک استخراج می‌کند (ریال).
+     * اولویت: مبلغ با + بعد از «واریز» — مانده حساب نادیده گرفته می‌شود.
+     *
+     * نمونه واقعی:
+     * پست بانک
+     * واريز به کارت: 6156
+     * +998,190
+     * 1405/05/10
+     * 9:47
+     * مانده: 44,108,899 ريال
+     */
+    function baleExtractRialAmounts($text){
+        $text = baleNormalizeBankText($text);
+
+        if($text === ''){
+            return [];
+        }
+
+        // خط مانده را حذف کن تا موجودی به‌اشتباه مچ نشود
+        $withoutBalance = preg_replace('/^\s*مانده\s*:.*$/umi', '', $text);
+        if(!is_string($withoutBalance) || trim($withoutBalance) === ''){
+            $withoutBalance = $text;
+        }
+
+        $preferred = [];
+
+        // ۱) مبلغ با علامت + (فرمت پست‌بانک)
+        if(preg_match_all('/\+\s*(\d{1,3}(?:,\d{3})+|\d{4,12})/u', $withoutBalance, $plusMatches)){
+            foreach($plusMatches[1] as $token){
+                $n = baleParseAmountToken($token);
+                if($n >= 1000){
+                    $preferred[] = $n;
+                }
+            }
+        }
+
+        // ۲) مبلغ بلافاصله بعد از «واریز...» (با واحد اختیاری)
+        if(preg_match_all('/واریز[^0-9+]{0,40}\+?\s*(\d{1,3}(?:,\d{3})+|\d{4,12})\s*(ریال|تومان)?/u', $withoutBalance, $depMatches, PREG_SET_ORDER)){
+            foreach($depMatches as $m){
+                $n = baleParseAmountToken($m[1]);
+                $unit = $m[2] ?? '';
+
+                if($unit === 'تومان'){
+                    $n = $n * 10;
+                }
+
+                // کارت مقصد مثل 6156 را رد کن
+                if($n >= 10000){
+                    $preferred[] = $n;
+                }
+            }
+        }
+
+        if(count($preferred) > 0){
+            return array_values(array_unique($preferred));
+        }
+
+        // ۳) fallback عمومی (بدون خطوط مانده)
         $amounts = [];
 
-        if(preg_match_all('/(\d{1,3}(?:,\d{3})+|\d{4,12})(?:\.(\d+))?\s*(ریال|تومان)?/u', $text, $matches, PREG_SET_ORDER)){
+        if(preg_match_all('/(\d{1,3}(?:,\d{3})+|\d{4,12})(?:\.(\d+))?\s*(ریال|تومان)?/u', $withoutBalance, $matches, PREG_SET_ORDER)){
             foreach($matches as $m){
-                $raw = str_replace(',', '', $m[1]);
-                $n = intval($raw);
+                $n = baleParseAmountToken($m[1]);
 
-                if($n < 1000){
+                if($n < 10000){
                     continue;
                 }
 
@@ -197,14 +264,8 @@ if(!function_exists('baleConfigPath')){
                 if($unit === 'تومان'){
                     $n = $n * 10;
                 }
-                elseif($unit === ''){
-                    // بدون واحد: همان عدد را به عنوان ریال نگه می‌داریم؛
-                    // در لایه مچ، نسخه ×۱۰ (تومان→ریال) هم امتحان می‌شود.
-                }
 
-                if($n >= 10000){
-                    $amounts[] = $n;
-                }
+                $amounts[] = $n;
             }
         }
 
@@ -223,13 +284,13 @@ if(!function_exists('baleConfigPath')){
     }
 
     function baleLooksLikeDeposit($text){
-        $text = trim((string)$text);
+        $text = baleNormalizeBankText($text);
 
         if($text === ''){
             return false;
         }
 
-        $needles = ['واریز', 'واریزی', 'بستانکار', 'deposit', 'مبلغ', 'حساب شما'];
+        $needles = ['واریز', 'واریزی', 'بستانکار', 'deposit', 'مبلغ', 'حساب شما', 'پست بانک', 'پست‌بانک'];
 
         foreach($needles as $n){
             if(mb_stripos($text, $n) !== false){
@@ -237,7 +298,37 @@ if(!function_exists('baleConfigPath')){
             }
         }
 
+        // فرمت +مبلغ
+        if(preg_match('/\+\s*\d{1,3}(?:,\d{3})+/u', $text)){
+            return true;
+        }
+
         return count(baleExtractRialAmounts($text)) > 0;
+    }
+
+    /**
+     * آیا پیام شبیه اعلامیه پست‌بانک است؟ (مبالغ آن ریال‌اند، نه تومان)
+     */
+    function baleLooksLikePostBankNotice($text){
+        $text = baleNormalizeBankText($text);
+
+        if($text === ''){
+            return false;
+        }
+
+        if(mb_stripos($text, 'پست بانک') !== false || mb_stripos($text, 'پست‌بانک') !== false){
+            return true;
+        }
+
+        if(mb_stripos($text, 'واریز به کارت') !== false){
+            return true;
+        }
+
+        if(preg_match('/\+\s*\d{1,3}(?:,\d{3})+/u', $text) && mb_stripos($text, 'مانده') !== false){
+            return true;
+        }
+
+        return false;
     }
 
     function baleWebhookPublicUrl(){
