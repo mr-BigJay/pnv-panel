@@ -634,13 +634,46 @@ if(!function_exists('instantPayPath')){
         }
 
         // فقط وقتی کانفیگ آماده است «paid» می‌شود
+        $link = $result['link'] ?? ($found['sub'] ?? '');
         $items[$idx]['status'] = 'paid';
         $items[$idx]['paid_at'] = time();
-        $items[$idx]['link'] = $result['link'] ?? ($found['sub'] ?? '');
+        $items[$idx]['link'] = $link;
         $items[$idx]['message'] = 'پرداخت تأیید شد';
         $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
         $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
         instantPaySave($items);
+
+        // همه ردیف‌های هم‌کد AUTO در CSV را هم تایید کن (جلوگیری از «درحال بررسی» باقی‌مانده)
+        if(function_exists('xuiLoadPayments') && function_exists('xuiSavePayments')){
+            $tracking = 'AUTO-' . str_pad((string)intval($found['code'] ?? 0), 4, '0', STR_PAD_LEFT);
+            $userName = trim((string)($found['user'] ?? ''));
+            $payments = xuiLoadPayments();
+            $changedCsv = false;
+
+            foreach($payments as $pi => $prow){
+                if(!is_array($prow)){
+                    continue;
+                }
+
+                if(trim((string)($prow[3] ?? '')) !== $tracking){
+                    continue;
+                }
+
+                if($userName !== '' && strcasecmp(trim((string)($prow[0] ?? '')), $userName) !== 0){
+                    continue;
+                }
+
+                $payments[$pi][6] = 'تایید شد';
+                if($link !== ''){
+                    $payments[$pi][7] = $link;
+                }
+                $changedCsv = true;
+            }
+
+            if($changedCsv){
+                xuiSavePayments($payments);
+            }
+        }
 
         if(!empty($found['coupon_code']) && function_exists('couponMarkUsed')){
             couponMarkUsed($found['coupon_code'], $found['user']);

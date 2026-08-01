@@ -437,6 +437,11 @@ function renderPay(item){
         instantStatus.hidden = true;
         instantApproved.hidden = false;
         startPayBtn.disabled = true;
+        startPayBtn.textContent = 'پرداخت تأیید شد';
+        fillResult(item);
+        // برو صفحه بعد (دریافت اشتراک)
+        showStep(3);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
     }
 
@@ -465,6 +470,13 @@ function renderPay(item){
     instantApproved.hidden = true;
 }
 
+function pollPayStatus(id){
+    fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials: 'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(data){ if(data && data.ok && data.item) renderPay(data.item); })
+    .catch(function(){});
+}
+
 function startPayWatchers(id){
     stopPayWatchers();
     payTickTimer = setInterval(function(){
@@ -472,12 +484,14 @@ function startPayWatchers(id){
         currentPay.remaining = Math.max(0, (currentPay.remaining || 0) - 1);
         instantTimer.textContent = formatRemain(currentPay.remaining);
     }, 1000);
-    payPollTimer = setInterval(function(){
-        fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials: 'same-origin' })
-        .then(function(r){ return r.json(); })
-        .then(function(data){ if(data && data.ok && data.item) renderPay(data.item); })
-        .catch(function(){});
-    }, 3500);
+    payPollTimer = setInterval(function(){ pollPayStatus(id); }, 2000);
+    // بلافاصله یک‌بار هم چک کن
+    pollPayStatus(id);
+    document.addEventListener('visibilitychange', function onVis(){
+        if(!document.hidden && currentPay && currentPay.id === id && currentPay.status !== 'paid'){
+            pollPayStatus(id);
+        }
+    });
 }
 
 startPayBtn.addEventListener('click', function(){
