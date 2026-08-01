@@ -169,7 +169,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=10">
+<link rel="stylesheet" href="plan_step_ui.css?v=11">
 <style>
 .topBar .brand{
 font-size:24px;
