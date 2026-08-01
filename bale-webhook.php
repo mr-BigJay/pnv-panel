@@ -9,6 +9,16 @@ require_once __DIR__ . '/instant_pay_lib.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+// health / version check (GET)
+if(($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'){
+    echo json_encode([
+        'ok' => true,
+        'service' => 'bale-webhook',
+        'parser' => function_exists('baleParserVersion') ? baleParserVersion() : 'unknown'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $raw = file_get_contents('php://input');
 $update = json_decode($raw ?: '[]', true);
 
@@ -25,7 +35,7 @@ if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === '
     exit;
 }
 
-$message = $update['message'] ?? ($update['edited_message'] ?? null);
+$message = $update['message'] ?? ($update['edited_message'] ?? ($update['channel_post'] ?? null));
 
 if(!is_array($message)){
     echo json_encode(['ok' => true, 'ignored' => 'no message']);
@@ -45,16 +55,17 @@ if(count($adminIds) === 0 && $chatId !== ''){
     $adminIds = baleAdminChatIds($config);
     $bootstrapped = true;
     baleSendMessage($chatId, "✅ شناسه چت شما ذخیره شد: {$chatId}\nاز این به بعد پیام‌های واریز پست‌بانک را به همین بازو فوروارد کنید.", [], $config);
-    // ادامه بده تا اگر همین پیام واریز بود، مچ شود
 }
 
 if(!baleIsAdminChat($chatId, $config)){
+    if(function_exists('baleWebhookLog')){
+        baleWebhookLog('unauthorized chat=' . $chatId . ' text=' . mb_substr($text, 0, 80));
+    }
     echo json_encode(['ok' => false, 'error' => 'unauthorized chat']);
     exit;
 }
 
 if($text === '/start' || $text === 'start'){
-    // همیشه chat_id را نشان بده تا ادمین بتواند در پنل ذخیره کند
     if($chatId !== '' && !in_array($chatId, $adminIds, true)){
         $ids = $adminIds;
         $ids[] = $chatId;
@@ -66,7 +77,8 @@ if($text === '/start' || $text === 'start'){
     baleSendMessage(
         $chatId,
         "ربات پرداخت آنی فعال است.\n"
-        . "شناسه چت شما: {$chatId}\n\n"
+        . "شناسه چت شما: {$chatId}\n"
+        . 'parser: ' . (function_exists('baleParserVersion') ? baleParserVersion() : '?') . "\n\n"
         . "همین عدد را در پنل ادمین → بله → «شناسه چت مدیر» ذخیره کنید.\n"
         . "بعد پیام‌های واریز @postbank_bot را به همین بازو فوروارد کنید.",
         [],
@@ -77,8 +89,21 @@ if($text === '/start' || $text === 'start'){
 }
 
 if($text === ''){
+    if(function_exists('baleWebhookLog')){
+        baleWebhookLog('empty text chat=' . $chatId . ' keys=' . implode(',', array_keys($message)));
+    }
+    baleSendMessage(
+        $chatId,
+        "⚠️ پیام بدون متن دریافت شد.\nاگر پست‌بانک عکس فرستاده، متن/کپشن را کپی کرده و برای بازو بفرستید.",
+        [],
+        $config
+    );
     echo json_encode(['ok' => true, 'ignored' => 'empty text', 'bootstrapped' => $bootstrapped]);
     exit;
+}
+
+if(function_exists('baleWebhookLog')){
+    baleWebhookLog('recv chat=' . $chatId . ' text=' . str_replace("\n", ' | ', mb_substr($text, 0, 200)));
 }
 
 $result = instantPayHandleDepositText($text, [
@@ -89,8 +114,8 @@ $result = instantPayHandleDepositText($text, [
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];
     $paidId = $item['id'] ?? '';
-    $raw = $paidId !== '' ? instantPayGet($paidId) : null;
-    $userLabel = is_array($raw) ? ($raw['user'] ?? '-') : '-';
+    $rawItem = $paidId !== '' ? instantPayGet($paidId) : null;
+    $userLabel = is_array($rawItem) ? ($rawItem['user'] ?? '-') : '-';
 
     $msg = "✅ پرداخت تأیید شد\n"
         . 'کاربر: ' . $userLabel . "\n"
@@ -102,12 +127,19 @@ if(!empty($result['ok'])){
         $msg .= "\nلینک:\n" . $item['link'];
     }
 
+    if(function_exists('baleWebhookLog')){
+        baleWebhookLog('PAID id=' . $paidId . ' amount=' . ($result['matched_amount'] ?? '') . ' user=' . $userLabel);
+    }
+
     baleSendMessage($chatId, $msg, [], $config);
-    echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId]);
+    echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId, 'parser' => baleParserVersion()]);
     exit;
 }
 
 if(!empty($result['ignored'])){
+    if(function_exists('baleWebhookLog')){
+        baleWebhookLog('ignored: ' . ($result['error'] ?? ''));
+    }
     echo json_encode(['ok' => true, 'ignored' => true]);
     exit;
 }
@@ -117,6 +149,10 @@ $parsed = $result['amounts'] ?? [];
 $parsedText = is_array($parsed) && count($parsed) ? implode('، ', array_map(static function($n){
     return number_format(intval($n)) . ' ریال';
 }, $parsed)) : '—';
+
+if(function_exists('baleWebhookLog')){
+    baleWebhookLog('NO_MATCH err=' . $err . ' amounts=' . json_encode($parsed, JSON_UNESCAPED_UNICODE));
+}
 
 // اگر مچ شده ولی صدور اشتراک شکست خورده، واضح بگو (نه «مچ نشد»)
 if(!empty($result['matched_amount']) && empty($result['ok'])){
@@ -136,6 +172,7 @@ else{
         "⚠️ پیام دریافت شد ولی سفارش مچ نشد.\n"
         . $err . "\n"
         . 'مبالغ خوانده‌شده: ' . $parsedText . "\n"
+        . 'parser: ' . baleParserVersion() . "\n"
         . "نکته: کاربر باید دقیقاً همان مبلغ صفحه را کارت‌به‌کارت کند و پیام @postbank_bot را فوروارد کنید.",
         [],
         $config
@@ -147,5 +184,6 @@ echo json_encode([
     'error' => $err,
     'amounts' => $result['amounts'] ?? [],
     'candidates' => $result['candidates'] ?? [],
-    'bootstrapped' => $bootstrapped
-]);
+    'bootstrapped' => $bootstrapped,
+    'parser' => baleParserVersion()
+], JSON_UNESCAPED_UNICODE);

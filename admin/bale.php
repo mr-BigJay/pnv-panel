@@ -15,11 +15,14 @@ else{
 
 require_once __DIR__ . '/admin_nav.php';
 require_once __DIR__ . '/../bale_lib.php';
+require_once __DIR__ . '/../instant_pay_lib.php';
 
 $config = baleLoadConfig();
 $message = '';
 $error = '';
+$depositTestResult = null;
 $webhookUrl = 'https://panel.ticketin.ir/bale-webhook.php';
+$parserVersion = function_exists('baleParserVersion') ? baleParserVersion() : 'unknown';
 
 if(isset($_POST['save'])){
     $token = trim((string)($_POST['bot_token'] ?? ''));
@@ -101,7 +104,7 @@ if(isset($_POST['test'])){
         else{
             $failed = false;
             foreach($ids as $chatId){
-                $sent = baleSendMessage($chatId, "✅ تست بازوی پرداخت آنی\nربات آنلاین است.", [], $config);
+                $sent = baleSendMessage($chatId, "✅ تست بازوی پرداخت آنی\nربات آنلاین است.\nparser: {$parserVersion}", [], $config);
                 if(empty($sent['ok'])){
                     $failed = true;
                     $error = $sent['description'] ?? 'ارسال پیام آزمایشی ناموفق';
@@ -110,8 +113,78 @@ if(isset($_POST['test'])){
 
             if(!$failed){
                 $uname = $me['result']['username'] ?? '';
-                $message = 'ارتباط برقرار شد' . ($uname !== '' ? (' (@' . $uname . ')') : '') . ' و پیام آزمایشی ارسال شد.';
+                $message = 'ارتباط برقرار شد' . ($uname !== '' ? (' (@' . $uname . ')') : '') . ' و پیام آزمایشی ارسال شد. parser=' . $parserVersion;
             }
+        }
+    }
+}
+
+if(isset($_POST['test_deposit'])){
+    $depositText = trim((string)($_POST['deposit_text'] ?? ''));
+    $doConfirm = !empty($_POST['do_confirm']);
+
+    if($depositText === ''){
+        $error = 'متن پیام پست‌بانک را وارد کنید.';
+    }
+    else{
+        $parsed = baleExtractRialAmounts($depositText);
+        $waiting = [];
+        if(function_exists('instantPayLoad')){
+            foreach(instantPayExpireDue() as $it){
+                if(($it['status'] ?? '') === 'waiting'){
+                    $waiting[] = [
+                        'user' => $it['user'] ?? '',
+                        'amount' => intval($it['amount'] ?? 0),
+                        'code' => $it['code'] ?? '',
+                        'plan' => $it['plan'] ?? '',
+                        'remaining' => max(0, intval($it['expires_at'] ?? 0) - time())
+                    ];
+                }
+            }
+        }
+
+        if($doConfirm){
+            $run = instantPayHandleDepositText($depositText, [
+                'date' => date('Y/m/d'),
+                'time' => date('H:i')
+            ]);
+            $depositTestResult = [
+                'mode' => 'confirm',
+                'parsed' => $parsed,
+                'waiting' => $waiting,
+                'result' => $run
+            ];
+            if(!empty($run['ok'])){
+                $message = 'پرداخت مچ و تأیید شد.';
+            }
+            else{
+                $error = $run['error'] ?? 'مچ نشد';
+            }
+        }
+        else{
+            $exactHits = [];
+            foreach($parsed as $amt){
+                if(function_exists('instantPayMatchAmountExact')){
+                    $hit = instantPayMatchAmountExact($amt);
+                    if($hit){
+                        $exactHits[] = [
+                            'parsed' => $amt,
+                            'user' => $hit['user'] ?? '',
+                            'amount' => intval($hit['amount'] ?? 0),
+                            'code' => $hit['code'] ?? ''
+                        ];
+                    }
+                }
+            }
+            $depositTestResult = [
+                'mode' => 'dry',
+                'parsed' => $parsed,
+                'waiting' => $waiting,
+                'exact_hits' => $exactHits,
+                'is_postbank' => baleLooksLikePostBankNotice($depositText),
+                'looks_deposit' => baleLooksLikeDeposit($depositText)
+            ];
+            $message = 'تست خواندن مبلغ انجام شد (تأیید واقعی زده نشد).';
         }
     }
 }
@@ -146,6 +219,9 @@ input.ltr{direction:ltr;text-align:left}
 button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;background:#22c55e;color:#fff;font:inherit;font-size:17px;cursor:pointer;text-align:center;text-decoration:none;margin-top:14px}
 .test{background:#2563eb}.hook{background:#7c3aed}.back{background:#334155;margin-top:20px}
 .steps{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:16px;line-height:2;color:#cbd5e1;font-size:14px;margin-bottom:18px}
+textarea{width:100%;min-height:140px;border:0;border-radius:12px;padding:14px;background:#0f172a;color:#fff;font:inherit;font-size:14px;line-height:1.8;resize:vertical}
+.pre{background:#0f172a;border:1px solid #334155;border-radius:12px;padding:12px;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.7;color:#cbd5e1;margin-top:12px}
+.ver{color:#86efac;font-size:13px;margin:0 0 16px;text-align:center}
 @media(max-width:600px){body{padding:10px}.box{padding:22px 16px}}
 </style>
 </head>
@@ -155,6 +231,7 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <div class="box">
 <h2>بله — پرداخت آنی</h2>
 <p class="sub">کارت‌به‌کارت با کد ۴ رقمی + فوروارد پیام پست‌بانک</p>
+<p class="ver">parser: <?php echo htmlspecialchars($parserVersion, ENT_QUOTES, 'UTF-8'); ?></p>
 
 <?php if($message !== ''){ ?><div class="msg"><?php echo htmlspecialchars($message, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
 <?php if($error !== ''){ ?><div class="err"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
@@ -193,6 +270,26 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <button type="submit" name="set_webhook" class="hook">ثبت Webhook در بله</button>
 <button type="submit" name="test" class="test">تست ارتباط و ارسال پیام</button>
 </form>
+
+<form method="post" style="margin-top:28px;padding-top:18px;border-top:1px solid #334155">
+<h2 style="font-size:20px;margin-bottom:8px">تست متن واریز پست‌بانک</h2>
+<p class="sub" style="margin-bottom:14px">همان پیام را کپی کنید و ببینید مبلغ درست خوانده می‌شود یا نه</p>
+<label for="deposit_text">متن پیام</label>
+<textarea id="deposit_text" name="deposit_text" placeholder="پست بانک
+واريز به کارت: 6156
++998,190
+...
+مانده: ... ريال"><?php echo htmlspecialchars((string)($_POST['deposit_text'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
+<label class="toggle" style="margin-top:12px">
+<input type="checkbox" name="do_confirm" value="1">
+<span>اگر مچ شد، واقعاً تأیید کن (اشتراک بساز)</span>
+</label>
+<button type="submit" name="test_deposit" class="test">بررسی مبلغ / مچ</button>
+</form>
+
+<?php if(is_array($depositTestResult)){ ?>
+<div class="pre"><?php echo htmlspecialchars(json_encode($depositTestResult, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } ?>
 
 <a class="back" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php', ENT_QUOTES, 'UTF-8'); ?>">بازگشت به مدیریت</a>
 </div>

@@ -2,6 +2,11 @@
 
 if(!function_exists('baleConfigPath')){
 
+    function baleParserVersion(){
+        return 'postbank-plus-v2';
+    }
+
+
     function baleConfigPath(){
         return __DIR__ . '/db/bale.json';
     }
@@ -149,7 +154,37 @@ if(!function_exists('baleConfigPath')){
             }
         }
 
+        // بعضی فورواردها متن را فقط در reply/forward نگه می‌دارند
+        foreach(['reply_to_message', 'pinned_message'] as $nestedKey){
+            if(!empty($message[$nestedKey]) && is_array($message[$nestedKey])){
+                $nested = baleExtractMessageText($message[$nestedKey]);
+                if($nested !== ''){
+                    return $nested;
+                }
+            }
+        }
+
         return '';
+    }
+
+    function baleWebhookLog($line){
+        $dir = __DIR__ . '/db';
+        if(!is_dir($dir)){
+            @mkdir($dir, 0755, true);
+        }
+
+        $path = $dir . '/bale_webhook.log';
+        $row = date('c') . ' ' . trim((string)$line) . "\n";
+        @file_put_contents($path, $row, FILE_APPEND | LOCK_EX);
+
+        // نگه داشتن حجم لاگ در حد معقول
+        if(@filesize($path) > 500000){
+            $lines = @file($path, FILE_IGNORE_NEW_LINES);
+            if(is_array($lines) && count($lines) > 200){
+                $keep = array_slice($lines, -200);
+                @file_put_contents($path, implode("\n", $keep) . "\n", LOCK_EX);
+            }
+        }
     }
 
     /**
