@@ -524,9 +524,23 @@ exit;
 
 if(isset($_POST['add_card'])){
 
-$cards[]=[
-'name'=>trim($_POST['card_name']),
-'card'=>trim($_POST['card_number'])
+require_once dirname(__DIR__) . '/bank_lib.php';
+
+$bank = strtolower(trim((string)($_POST['card_bank'] ?? '')));
+$holder = trim((string)($_POST['card_name'] ?? ''));
+$number = preg_replace('/\D+/', '', (string)($_POST['card_number'] ?? ''));
+$bankLabel = function_exists('pnvBankLabel') ? pnvBankLabel($bank) : $bank;
+
+if($bank === '' || $holder === '' || strlen($number) < 16){
+    header('Location: ' . pnvAdminUrl('index.php?page=cards&err=1'));
+    exit;
+}
+
+$cards[] = [
+    'bank' => $bank,
+    'holder' => $holder,
+    'name' => ($bankLabel !== '' ? $bankLabel : 'بانک') . ' - ' . $holder,
+    'card' => $number
 ];
 
 file_put_contents(
@@ -1039,7 +1053,11 @@ include "support.php";
 
 <?php } ?>
 
-<?php if($page=='cards'){ ?>
+<?php if($page=='cards'){
+require_once dirname(__DIR__) . '/bank_lib.php';
+$bankCatalog = pnvBanksCatalog();
+$cardsUi = pnvCardsForUi($cards);
+?>
 
 <div class="box">
 
@@ -1049,18 +1067,42 @@ include "support.php";
 
 </h2>
 
-<form method="POST">
+<?php if(!empty($_GET['err'])){ ?>
+<div style="margin-bottom:12px;padding:10px 12px;border-radius:10px;background:#7f1d1d;color:#fecaca;font-size:13px;">
+بانک، نام صاحب کارت و شماره ۱۶ رقمی را کامل وارد کنید.
+</div>
+<?php } ?>
+
+<form method="POST" class="cardAdminForm">
+
+<label style="display:block;margin:0 0 6px;color:#94a3b8;font-size:13px;">بانک</label>
+<select name="card_bank" id="cardBankSelect" required style="width:100%;margin-bottom:12px;padding:12px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#fff;">
+<option value="">انتخاب بانک</option>
+<?php foreach($bankCatalog as $bankId => $bankLabel){
+    $icon = pnvBankIconUrl($bankId);
+?>
+<option value="<?php echo htmlspecialchars($bankId, ENT_QUOTES, 'UTF-8'); ?>" data-icon="<?php echo htmlspecialchars($icon, ENT_QUOTES, 'UTF-8'); ?>">
+<?php echo htmlspecialchars($bankLabel, ENT_QUOTES, 'UTF-8'); ?>
+</option>
+<?php } ?>
+</select>
+
+<div id="cardBankPreview" style="display:none;align-items:center;gap:10px;margin:0 0 14px;padding:10px 12px;border-radius:12px;background:#0f172a;border:1px solid #334155;">
+<img id="cardBankPreviewImg" src="" alt="" style="width:32px;height:32px;object-fit:contain;background:#fff;border-radius:8px;padding:2px;">
+<span id="cardBankPreviewLabel" style="color:#e2e8f0;font-size:14px;"></span>
+</div>
 
 <input
 type="text"
 name="card_name"
-placeholder="به نام"
+placeholder="به نام (صاحب کارت)"
 required>
 
 <input
 type="text"
 name="card_number"
 placeholder="شماره کارت"
+inputmode="numeric"
 required>
 
 <button
@@ -1073,6 +1115,30 @@ name="add_card">
 
 </form>
 
+<script>
+(function(){
+    var sel = document.getElementById('cardBankSelect');
+    var box = document.getElementById('cardBankPreview');
+    var img = document.getElementById('cardBankPreviewImg');
+    var lab = document.getElementById('cardBankPreviewLabel');
+    if(!sel) return;
+    function sync(){
+        var opt = sel.options[sel.selectedIndex];
+        var icon = opt ? (opt.getAttribute('data-icon') || '') : '';
+        var label = opt && opt.value ? opt.textContent.trim() : '';
+        if(!opt || !opt.value || !icon){
+            box.style.display = 'none';
+            return;
+        }
+        img.src = icon;
+        lab.textContent = label;
+        box.style.display = 'flex';
+    }
+    sel.addEventListener('change', sync);
+    sync();
+})();
+</script>
+
 </div>
 
 <div class="box">
@@ -1081,25 +1147,33 @@ name="add_card">
 
 <tr>
 
+<th>بانک</th>
 <th>به نام</th>
 <th>شماره کارت</th>
 <th>حذف</th>
 
 </tr>
 
-<?php foreach($cards as $i=>$card){ ?>
+<?php foreach($cardsUi as $i=>$card){ ?>
 
 <tr>
 
-<td>
-
-<?php echo $card['name']; ?>
-
+<td style="text-align:center;">
+<?php if(!empty($card['icon'])){ ?>
+<img src="<?php echo htmlspecialchars($card['icon'], ENT_QUOTES, 'UTF-8'); ?>" alt="" style="width:28px;height:28px;object-fit:contain;background:#fff;border-radius:8px;padding:2px;vertical-align:middle;">
+<?php } ?>
+<span style="margin-right:6px;"><?php echo htmlspecialchars($card['bank_label'], ENT_QUOTES, 'UTF-8'); ?></span>
 </td>
 
 <td>
 
-<?php echo $card['card']; ?>
+<?php echo htmlspecialchars($card['holder'] !== '' ? $card['holder'] : $card['name'], ENT_QUOTES, 'UTF-8'); ?>
+
+</td>
+
+<td dir="ltr">
+
+<?php echo htmlspecialchars($card['card'], ENT_QUOTES, 'UTF-8'); ?>
 
 </td>
 

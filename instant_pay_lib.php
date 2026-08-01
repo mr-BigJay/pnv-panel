@@ -38,8 +38,9 @@ if(!function_exists('instantPayPath')){
             $config = baleLoadConfig();
         }
 
-        $n = intval($config['pay_window_seconds'] ?? 600);
-        return $n > 60 ? $n : 600;
+        // پیش‌فرض ۳۰ دقیقه
+        $n = intval($config['pay_window_seconds'] ?? 1800);
+        return $n > 60 ? $n : 1800;
     }
 
     function instantPayNewId(){
