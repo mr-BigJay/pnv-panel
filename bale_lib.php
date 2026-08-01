@@ -3,7 +3,7 @@
 if(!function_exists('baleConfigPath')){
 
     function baleParserVersion(){
-        return 'postbank-plus-v3';
+        return 'postbank-plus-v4';
     }
 
 

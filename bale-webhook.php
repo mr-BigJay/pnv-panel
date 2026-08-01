@@ -145,7 +145,10 @@ if(!empty($result['ignored'])){
 }
 
 $err = (string)($result['error'] ?? 'no match');
-$parsed = $result['amounts'] ?? [];
+$parsed = $result['amounts'] ?? ($result['parsed_amounts'] ?? []);
+if((!is_array($parsed) || count($parsed) === 0) && !empty($result['matched_amount'])){
+    $parsed = [intval($result['matched_amount'])];
+}
 $parsedText = is_array($parsed) && count($parsed) ? implode('، ', array_map(static function($n){
     return number_format(intval($n)) . ' ریال';
 }, $parsed)) : '—';

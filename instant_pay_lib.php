@@ -458,6 +458,105 @@ if(!function_exists('instantPayPath')){
         ];
     }
 
+    /**
+     * ایندکس CSV را پیدا کن؛ اگر به‌خاطر حذف/جابه‌جایی لیست خراب شده، ردیف را از نو بساز.
+     */
+    function instantPayResolveOrCreateCsvIndex($item, $meta = []){
+        $payments = xuiLoadPayments();
+        $code = str_pad((string)intval($item['code'] ?? 0), 4, '0', STR_PAD_LEFT);
+        $tracking = 'AUTO-' . $code;
+        $user = trim((string)($item['user'] ?? ''));
+        $type = trim((string)($item['type'] ?? 'خرید'));
+        $created = intval($item['created_at'] ?? 0);
+        $csvIndex = intval($item['csv_index'] ?? -1);
+
+        $matchesRow = static function($row) use ($tracking, $user, $type, $created){
+            if(!is_array($row)){
+                return false;
+            }
+
+            $rowUser = trim((string)($row[0] ?? ''));
+            $rowTrack = trim((string)($row[3] ?? ''));
+            $rowType = trim((string)($row[9] ?? ''));
+            $rowCreated = intval($row[8] ?? 0);
+
+            if($rowTrack !== $tracking){
+                return false;
+            }
+
+            if($user !== '' && strcasecmp($rowUser, $user) !== 0){
+                return false;
+            }
+
+            if($type !== '' && $rowType !== '' && $rowType !== $type){
+                return false;
+            }
+
+            // اگر created ذخیره شده، نزدیک بودن را ترجیح بده (اختیاری)
+            if($created > 0 && $rowCreated > 0 && abs($rowCreated - $created) > 86400){
+                return false;
+            }
+
+            return true;
+        };
+
+        // ۱) ایندکس ذخیره‌شده اگر هنوز همان ردیف AUTO باشد
+        if($csvIndex >= 0 && isset($payments[$csvIndex]) && $matchesRow($payments[$csvIndex])){
+            $payments[$csvIndex][4] = $meta['date'] ?? ($payments[$csvIndex][4] ?: date('Y/m/d'));
+            $payments[$csvIndex][5] = $meta['time'] ?? ($payments[$csvIndex][5] ?: date('H:i'));
+            if(trim((string)($payments[$csvIndex][6] ?? '')) === 'رد شد'){
+                $payments[$csvIndex][6] = 'درحال بررسی';
+                $payments[$csvIndex][7] = '';
+            }
+            xuiSavePayments($payments);
+            return ['ok' => true, 'index' => $csvIndex, 'rebuilt' => false];
+        }
+
+        // ۲) جستجو با AUTO-code
+        foreach($payments as $i => $row){
+            if(!$matchesRow($row)){
+                continue;
+            }
+
+            $payments[$i][4] = $meta['date'] ?? ($payments[$i][4] ?: date('Y/m/d'));
+            $payments[$i][5] = $meta['time'] ?? ($payments[$i][5] ?: date('H:i'));
+            if(trim((string)($payments[$i][6] ?? '')) === 'رد شد'){
+                $payments[$i][6] = 'درحال بررسی';
+                $payments[$i][7] = '';
+            }
+            xuiSavePayments($payments);
+            return ['ok' => true, 'index' => $i, 'rebuilt' => false];
+        }
+
+        // ۳) ردیف نیست — از روی سفارش آنی دوباره بساز
+        $target = ($type === 'تمدید')
+            ? trim((string)($item['sub'] ?? ''))
+            : trim((string)($item['subname'] ?? ''));
+
+        $row = [
+            $user,
+            $target,
+            $item['plan'] ?? '',
+            $tracking,
+            $meta['date'] ?? date('Y/m/d'),
+            $meta['time'] ?? date('H:i'),
+            'درحال بررسی',
+            '',
+            $created > 0 ? $created : time(),
+            $type !== '' ? $type : 'خرید',
+            !empty($item['coupon_code']) ? strtoupper((string)$item['coupon_code']) : '',
+            intval($item['discount_percent'] ?? 0),
+            intval($item['amount'] ?? 0),
+            $code
+        ];
+
+        $payments[] = $row;
+        $newIndex = count($payments) - 1;
+        xuiSavePayments($payments);
+
+        return ['ok' => true, 'index' => $newIndex, 'rebuilt' => true];
+    }
+
     function instantPayMarkPaid($id, $meta = []){
         $items = instantPayExpireDue();
         $id = trim((string)$id);
@@ -481,34 +580,31 @@ if(!function_exists('instantPayPath')){
         }
 
         $st = (string)($found['status'] ?? '');
-        $allowed = ['waiting', 'expired', 'cancelled'];
+        // failed هم قابل تلاش دوباره است (مثلاً csv_index خراب بوده)
+        $allowed = ['waiting', 'expired', 'cancelled', 'failed', 'processing'];
 
         if(!in_array($st, $allowed, true)){
             return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . $st . ')'];
         }
 
-        // اگر منقضی/لغو شده ولی مبلغ دقیقاً مچ شده، برای صدور دوباره waiting کن
+        // اگر منقضی/لغو/ناموفق شده ولی مبلغ دقیقاً مچ شده، برای صدور دوباره waiting کن
         if($st !== 'waiting'){
             $items[$idx]['status'] = 'waiting';
-            $items[$idx]['message'] = 'مچ با تأخیر پس از ' . $st;
+            $items[$idx]['message'] = 'مچ مجدد پس از ' . $st;
             instantPaySave($items);
             $found = $items[$idx];
         }
 
-        $csvIndex = intval($found['csv_index'] ?? -1);
+        $resolved = instantPayResolveOrCreateCsvIndex($found, $meta);
 
-        if($csvIndex < 0){
-            return ['ok' => false, 'error' => 'ایندکس پرداخت نامعتبر است'];
+        if(empty($resolved['ok'])){
+            return ['ok' => false, 'error' => $resolved['error'] ?? 'ایندکس پرداخت نامعتبر است'];
         }
 
-        // تاریخ/ساعت را برای لاگ پر می‌کنیم
-        $payments = xuiLoadPayments();
-
-        if(isset($payments[$csvIndex])){
-            $payments[$csvIndex][4] = $meta['date'] ?? date('Y/m/d');
-            $payments[$csvIndex][5] = $meta['time'] ?? date('H:i');
-            xuiSavePayments($payments);
-        }
+        $csvIndex = intval($resolved['index']);
+        $items[$idx]['csv_index'] = $csvIndex;
+        instantPaySave($items);
+        $found = $items[$idx];
 
         // اول وضعیت را روی processing بگذار تا UI هنوز «تأیید شد» نگوید
         $items[$idx]['status'] = 'processing';
@@ -770,15 +866,16 @@ if(!function_exists('instantPayPath')){
         foreach($items as $item){
             $status = (string)($item['status'] ?? '');
 
-            if($status === 'paid' || $status === 'processing' || $status === 'failed'){
+            // failed را هم برای تلاش دوباره بعد از خطای صدور نگه دار
+            if($status === 'paid' || $status === 'processing'){
                 continue;
             }
 
             $expires = intval($item['expires_at'] ?? 0);
             $cancelledAt = intval($item['cancelled_at'] ?? 0);
 
-            if($status === 'waiting'){
-                // ok even if just about to expire; expireDue already flipped past ones
+            if($status === 'waiting' || $status === 'failed'){
+                // waiting یا تلاش مجدد بعد از خطای صدور
             }
             elseif($status === 'expired'){
                 if($expires <= 0 || ($now - $expires) > $grace){
@@ -829,7 +926,7 @@ if(!function_exists('instantPayPath')){
             $cancelledAt = intval($item['cancelled_at'] ?? 0);
             $ok = false;
 
-            if($status === 'waiting'){
+            if($status === 'waiting' || $status === 'failed'){
                 $ok = true;
             }
             elseif($status === 'expired' && $expires > 0 && ($now - $expires) <= $grace){
