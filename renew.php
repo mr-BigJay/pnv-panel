@@ -208,6 +208,20 @@ border-color:#475569;
 background:#1e293b;
 }
 .planChip.is-locked .planCheck{display:none !important}
+.subPickedLink{
+margin:8px 0 0;
+padding:10px 12px;
+border-radius:12px;
+background:#052e16;
+border:1px solid rgba(34,197,94,.35);
+color:#bbf7d0;
+font-size:12px;
+line-height:1.7;
+word-break:break-all;
+direction:ltr;
+text-align:left;
+}
+.subPickedLink[hidden]{display:none !important}
 </style>
 </head>
 <body>
@@ -235,13 +249,20 @@ background:#1e293b;
 <div class="subSection">
 <div class="fieldLabel">لینک اشتراک</div>
 <?php if(count($userSubscriptions) > 0){ ?>
-<select id="subSelect" onchange="pickSubscription()">
+<select id="subSelect">
 <option value="">انتخاب از اشتراک‌های من</option>
-<?php foreach($userSubscriptions as $item){ ?>
-<option value="<?php echo $h($item['link']); ?>" data-time-category="<?php echo $h($item['time_category'] ?? 'unknown'); ?>"><?php echo $h($item['name']); ?></option>
+<?php foreach($userSubscriptions as $item){
+    $linkVal = trim((string)($item['link'] ?? ''));
+?>
+<option
+    value="<?php echo $h($linkVal); ?>"
+    data-link="<?php echo $h($linkVal); ?>"
+    data-time-category="<?php echo $h($item['time_category'] ?? 'unknown'); ?>"
+><?php echo $h($item['name']); ?></option>
 <?php } ?>
 <option value="__other__">لینک دیگر</option>
 </select>
+<div class="subPickedLink" id="subPickedLink" hidden></div>
 <?php } ?>
 <input type="text" id="subInput" name="sub" placeholder="لینک اشتراک را وارد کنید" required>
 </div>
@@ -476,7 +497,7 @@ function syncCategoryLocks(){
             if(selectedCategory === cat){
                 selectedCategory = '';
                 selectedPlan = null;
-                planSelect.value = '';
+                if(planSelect) planSelect.value = '';
             }
         }
     });
@@ -485,7 +506,7 @@ function syncCategoryLocks(){
         if(activeCard && activeCard.classList.contains('is-locked')){
             selectedCategory = '';
             selectedPlan = null;
-            planSelect.value = '';
+            if(planSelect) planSelect.value = '';
             hideCatLockHint();
         }
     }
@@ -496,37 +517,64 @@ function syncCategoryLocks(){
             el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
         });
     }
-    renderPlans();
-    updateContinueState();
+    try{ renderPlans(); }catch(err){ console && console.warn && console.warn(err); }
+    try{ updateContinueState(); }catch(err){}
+}
+
+function setPickedLinkPreview(link){
+    const box = document.getElementById('subPickedLink');
+    if(!box) return;
+    link = String(link || '').trim();
+    if(!link || link === '__other__'){
+        box.hidden = true;
+        box.textContent = '';
+        return;
+    }
+    box.hidden = false;
+    box.textContent = link;
 }
 
 function pickSubscription(){
     const select = document.getElementById('subSelect');
     const input = document.getElementById('subInput');
-    if(!select) return;
-    const value = select.value;
+    if(!select || !input) return;
+
+    const opt = select.options[select.selectedIndex];
+    const value = String((opt && (opt.getAttribute('data-link') || opt.value)) || select.value || '').trim();
+
     if(value === '' || value === '__other__'){
-        if(value === '__other__'){ input.value = ''; input.focus(); }
-        subTimeCategory = 'unknown';
+        if(value === '__other__'){
+            input.value = '';
+            setPickedLinkPreview('');
+            input.focus();
+        } else {
+            // فقط ریست انتخاب؛ اگر لینک دستی نوشته شده نگه دار
+            setPickedLinkPreview('');
+        }
+        subTimeCategory = value === '__other__' ? 'unknown' : resolveSubTimeCategory(input.value);
         hideCatLockHint();
         syncCategoryLocks();
         return;
     }
+
     input.value = value;
-    const opt = select.options[select.selectedIndex];
+    setPickedLinkPreview(value);
     subTimeCategory = (opt && opt.getAttribute('data-time-category')) || resolveSubTimeCategory(value) || 'unknown';
     hideCatLockHint();
     selectedPlan = null;
-    planSelect.value = '';
+    if(planSelect) planSelect.value = '';
     syncCategoryLocks();
 }
+window.pickSubscription = pickSubscription;
 
 function updateContinueState(){
+    if(!toStep2Btn) return;
     const locked = selectedCategory && (
         (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
         (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
     );
-    toStep2Btn.disabled = !!(locked || !(selectedCategory && selectedPlan && planSelect.value));
+    const hasPlan = !!(selectedCategory && selectedPlan && planSelect && planSelect.value);
+    toStep2Btn.disabled = !!(locked || !hasPlan);
 }
 
 function renderPlans(){
@@ -602,14 +650,22 @@ document.querySelectorAll('.catCard').forEach(function(card){
     });
 });
 
+const subSelectEl = document.getElementById('subSelect');
+if(subSelectEl){
+    subSelectEl.addEventListener('change', pickSubscription);
+    subSelectEl.addEventListener('input', pickSubscription);
+}
+
 const subInputEl = document.getElementById('subInput');
 if(subInputEl){
     subInputEl.addEventListener('change', function(){
+        setPickedLinkPreview(subInputEl.value);
         subTimeCategory = resolveSubTimeCategory(subInputEl.value);
         hideCatLockHint();
         syncCategoryLocks();
     });
     subInputEl.addEventListener('blur', function(){
+        setPickedLinkPreview(subInputEl.value);
         subTimeCategory = resolveSubTimeCategory(subInputEl.value);
         syncCategoryLocks();
     });
@@ -885,6 +941,7 @@ document.getElementById('copyLinkBtn').addEventListener('click', function(){ cop
 
     if(sub){
         input.value = sub;
+        setPickedLinkPreview(sub);
         if(select){
             var other = false;
             for(var j = 0; j < select.options.length; j++){
