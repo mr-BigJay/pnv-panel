@@ -1,5 +1,6 @@
 <?php
 
+require_once __DIR__ . '/time_lib.php';
 require_once __DIR__ . '/bale_lib.php';
 require_once __DIR__ . '/xui_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
@@ -967,8 +968,8 @@ if(!function_exists('instantPayPath')){
 
         // ۱) ایندکس ذخیره‌شده اگر هنوز همان ردیف AUTO باشد
         if($csvIndex >= 0 && isset($payments[$csvIndex]) && $matchesRow($payments[$csvIndex])){
-            $payments[$csvIndex][4] = $meta['date'] ?? ($payments[$csvIndex][4] ?: date('Y/m/d'));
-            $payments[$csvIndex][5] = $meta['time'] ?? ($payments[$csvIndex][5] ?: date('H:i'));
+            $payments[$csvIndex][4] = $meta['date'] ?? ($payments[$csvIndex][4] ?: pnvJalaliToday('/'));
+            $payments[$csvIndex][5] = $meta['time'] ?? ($payments[$csvIndex][5] ?: pnvTehranTime(null, 'H:i'));
             if(trim((string)($payments[$csvIndex][6] ?? '')) === 'رد شد'){
                 $payments[$csvIndex][6] = 'درحال بررسی';
                 $payments[$csvIndex][7] = '';
@@ -983,8 +984,8 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            $payments[$i][4] = $meta['date'] ?? ($payments[$i][4] ?: date('Y/m/d'));
-            $payments[$i][5] = $meta['time'] ?? ($payments[$i][5] ?: date('H:i'));
+            $payments[$i][4] = $meta['date'] ?? ($payments[$i][4] ?: pnvJalaliToday('/'));
+            $payments[$i][5] = $meta['time'] ?? ($payments[$i][5] ?: pnvTehranTime(null, 'H:i'));
             if(trim((string)($payments[$i][6] ?? '')) === 'رد شد'){
                 $payments[$i][6] = 'درحال بررسی';
                 $payments[$i][7] = '';
@@ -1003,8 +1004,8 @@ if(!function_exists('instantPayPath')){
             $target,
             $item['plan'] ?? '',
             $tracking,
-            $meta['date'] ?? date('Y/m/d'),
-            $meta['time'] ?? date('H:i'),
+            $meta['date'] ?? pnvJalaliToday('/'),
+            $meta['time'] ?? pnvTehranTime(null, 'H:i'),
             'درحال بررسی',
             '',
             $created > 0 ? $created : time(),
@@ -1195,8 +1196,8 @@ if(!function_exists('instantPayPath')){
                         ($found['type'] ?? '') === 'تمدید' ? ($found['sub'] ?? '') : ($found['subname'] ?? ''),
                         $found['plan'] ?? '',
                         'AUTO-' . ($found['code'] ?? ''),
-                        $meta['date'] ?? date('Y/m/d'),
-                        $meta['time'] ?? date('H:i'),
+                        $meta['date'] ?? pnvJalaliToday('/'),
+                        $meta['time'] ?? pnvTehranTime(null, 'H:i'),
                         'تایید شد',
                         $items[$idx]['link'] ?? '',
                         intval($found['created_at'] ?? time()),

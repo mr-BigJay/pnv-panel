@@ -231,59 +231,6 @@ border:0 !important;
 opacity:0 !important;
 pointer-events:none !important;
 }
-.catLockModal{
-position:fixed;
-inset:0;
-z-index:120;
-display:none;
-align-items:center;
-justify-content:center;
-padding:22px;
-}
-.catLockModal.is-open{display:flex}
-.catLockBackdrop{
-position:absolute;
-inset:0;
-background:rgba(2,6,23,.55);
-backdrop-filter:blur(7px);
--webkit-backdrop-filter:blur(7px);
-}
-.catLockCard{
-position:relative;
-z-index:1;
-width:min(100%,340px);
-background:#1e293b;
-border:1px solid rgba(148,163,184,.22);
-border-radius:18px;
-padding:18px 16px 16px;
-box-shadow:0 22px 50px rgba(0,0,0,.45);
-text-align:center;
-animation:catLockPop .16s ease-out;
-}
-@keyframes catLockPop{
-from{opacity:0;transform:scale(.96)}
-to{opacity:1;transform:scale(1)}
-}
-.catLockCard p{
-margin:0 0 14px;
-font-size:13px;
-line-height:1.9;
-color:#e2e8f0;
-}
-.catLockCard a{color:#86efac;font-weight:700}
-.catLockClose{
-width:100%;
-margin:0;
-background:#334155;
-border:0;
-color:#fff;
-border-radius:12px;
-padding:12px;
-font-size:14px;
-font-family:tahoma,sans-serif;
-font-weight:700;
-cursor:pointer;
-}
 @media(max-width:768px){
 .topBar .brand{font-size:20px !important}
 }

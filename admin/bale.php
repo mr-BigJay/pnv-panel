@@ -148,9 +148,10 @@ if(isset($_POST['test_deposit'])){
         }
 
         if($doConfirm){
+            $nowMeta = pnvNowJalaliMeta();
             $run = instantPayHandleDepositText($depositText, [
-                'date' => date('Y/m/d'),
-                'time' => date('H:i')
+                'date' => $nowMeta['date'],
+                'time' => $nowMeta['time']
             ]);
             $depositTestResult = [
                 'mode' => 'confirm',

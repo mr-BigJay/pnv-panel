@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/time_lib.php';
+
 if(file_exists(__DIR__ . '/telegram_xui.php')){
     require_once __DIR__ . '/telegram_xui.php';
 }
@@ -1599,8 +1601,8 @@ if(!function_exists('telegramConfigPath')){
             'sender' => 'admin',
             'text' => $text,
             'image' => '',
-            'date' => date('Y/m/d', $now),
-            'time' => date('H:i', $now),
+            'date' => pnvJalaliFromTimestamp($now, '/'),
+            'time' => pnvTehranTime($now, 'H:i'),
             'timestamp' => $now,
             'seen_by_user' => false
         ];

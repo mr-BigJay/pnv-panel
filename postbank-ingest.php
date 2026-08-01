@@ -64,9 +64,10 @@ if(function_exists('baleWebhookLog')){
     baleWebhookLog('INGEST source=' . $source . ' text=' . str_replace("\n", ' | ', mb_substr($text, 0, 220)));
 }
 
+$nowMeta = pnvNowJalaliMeta();
 $result = instantPayHandleDepositText($text, [
-    'date' => date('Y/m/d'),
-    'time' => date('H:i')
+    'date' => $nowMeta['date'],
+    'time' => $nowMeta['time']
 ]);
 
 $adminIds = baleAdminChatIds($config);

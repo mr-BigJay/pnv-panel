@@ -106,9 +106,10 @@ if(function_exists('baleWebhookLog')){
     baleWebhookLog('recv chat=' . $chatId . ' text=' . str_replace("\n", ' | ', mb_substr($text, 0, 200)));
 }
 
+$nowMeta = pnvNowJalaliMeta();
 $result = instantPayHandleDepositText($text, [
-    'date' => date('Y/m/d'),
-    'time' => date('H:i')
+    'date' => $nowMeta['date'],
+    'time' => $nowMeta['time']
 ]);
 
 if(!empty($result['ok'])){
