@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-COMMIT="${1:-dad01b7}"
+COMMIT="${1:-2ce6812}"
 ROOT="${2:-/var/www/html}"
 BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/${COMMIT}"
 
