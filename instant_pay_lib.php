@@ -480,8 +480,19 @@ if(!function_exists('instantPayPath')){
             return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
         }
 
-        if(($found['status'] ?? '') !== 'waiting'){
-            return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . ($found['status'] ?? '') . ')'];
+        $st = (string)($found['status'] ?? '');
+        $allowed = ['waiting', 'expired', 'cancelled'];
+
+        if(!in_array($st, $allowed, true)){
+            return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . $st . ')'];
+        }
+
+        // اگر منقضی/لغو شده ولی مبلغ دقیقاً مچ شده، برای صدور دوباره waiting کن
+        if($st !== 'waiting'){
+            $items[$idx]['status'] = 'waiting';
+            $items[$idx]['message'] = 'مچ با تأخیر پس از ' . $st;
+            instantPaySave($items);
+            $found = $items[$idx];
         }
 
         $csvIndex = intval($found['csv_index'] ?? -1);
@@ -725,12 +736,23 @@ if(!function_exists('instantPayPath')){
             return $result;
         }
 
+        $open = function_exists('instantPayListMatchableOrders') ? instantPayListMatchableOrders(15) : [];
+
         return [
             'ok' => false,
             'error' => 'سفارش بازی با این مبلغ پیدا نشد',
             'amounts' => $amounts,
-            'candidates' => $candidates
+            'candidates' => $candidates,
+            'open_orders' => $open
         ];
+    }
+
+    /**
+     * مهلت اضافه برای مچ دقیق مبلغ بعد از پایان تایمر ۱۰ دقیقه‌ای.
+     * (کاربر واریز کرده ولی فوروارد پیام دیرتر رسیده)
+     */
+    function instantPayGraceSeconds(){
+        return 48 * 3600;
     }
 
     function instantPayMatchAmountExact($amountRial){
@@ -742,27 +764,112 @@ if(!function_exists('instantPayPath')){
 
         $items = instantPayExpireDue();
         $now = time();
+        $grace = instantPayGraceSeconds();
+        $hits = [];
 
         foreach($items as $item){
-            if(($item['status'] ?? '') !== 'waiting'){
+            $status = (string)($item['status'] ?? '');
+
+            if($status === 'paid' || $status === 'processing' || $status === 'failed'){
                 continue;
             }
 
-            if(intval($item['expires_at'] ?? 0) < $now){
+            $expires = intval($item['expires_at'] ?? 0);
+            $cancelledAt = intval($item['cancelled_at'] ?? 0);
+
+            if($status === 'waiting'){
+                // ok even if just about to expire; expireDue already flipped past ones
+            }
+            elseif($status === 'expired'){
+                if($expires <= 0 || ($now - $expires) > $grace){
+                    continue;
+                }
+            }
+            elseif($status === 'cancelled'){
+                $ref = $cancelledAt > 0 ? $cancelledAt : $expires;
+                if($ref <= 0 || ($now - $ref) > $grace){
+                    continue;
+                }
+            }
+            else{
                 continue;
             }
 
             $itemAmount = instantPayNormalizeItemAmountRial($item);
 
-            if($itemAmount === $amountRial){
-                return $item;
-            }
-
-            if($itemAmount > 0 && intdiv($itemAmount, 10) === $amountRial){
-                return $item;
+            if($itemAmount === $amountRial || ($itemAmount > 0 && intdiv($itemAmount, 10) === $amountRial)){
+                $hits[] = $item;
             }
         }
 
+        if(count($hits) === 1){
+            return $hits[0];
+        }
+
+        // اگر چندتا بود، جدیدترین را بگیر
+        if(count($hits) > 1){
+            usort($hits, static function($a, $b){
+                return intval($b['created_at'] ?? 0) <=> intval($a['created_at'] ?? 0);
+            });
+            return $hits[0];
+        }
+
         return null;
+    }
+
+    function instantPayListMatchableOrders($limit = 20){
+        $items = instantPayExpireDue();
+        $now = time();
+        $grace = instantPayGraceSeconds();
+        $out = [];
+
+        foreach($items as $item){
+            $status = (string)($item['status'] ?? '');
+            $expires = intval($item['expires_at'] ?? 0);
+            $cancelledAt = intval($item['cancelled_at'] ?? 0);
+            $ok = false;
+
+            if($status === 'waiting'){
+                $ok = true;
+            }
+            elseif($status === 'expired' && $expires > 0 && ($now - $expires) <= $grace){
+                $ok = true;
+            }
+            elseif($status === 'cancelled'){
+                $ref = $cancelledAt > 0 ? $cancelledAt : $expires;
+                if($ref > 0 && ($now - $ref) <= $grace){
+                    $ok = true;
+                }
+            }
+
+            if(!$ok){
+                continue;
+            }
+
+            $amount = instantPayNormalizeItemAmountRial($item);
+            $out[] = [
+                'id' => $item['id'] ?? '',
+                'user' => $item['user'] ?? '',
+                'status' => $status,
+                'amount' => $amount,
+                'amount_text' => number_format($amount) . ' ریال',
+                'code' => str_pad((string)intval($item['code'] ?? 0), 4, '0', STR_PAD_LEFT),
+                'plan' => $item['plan'] ?? '',
+                'type' => $item['type'] ?? '',
+                'expires_at' => $expires,
+                'remaining' => max(0, $expires - $now),
+                'created_at' => intval($item['created_at'] ?? 0)
+            ];
+        }
+
+        usort($out, static function($a, $b){
+            return intval($b['created_at'] ?? 0) <=> intval($a['created_at'] ?? 0);
+        });
+
+        if($limit > 0){
+            $out = array_slice($out, 0, $limit);
+        }
+
+        return $out;
     }
 }

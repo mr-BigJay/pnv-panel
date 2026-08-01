@@ -194,6 +194,16 @@ if($tokenMasked !== ''){
     $tokenMasked = substr($tokenMasked, 0, 6) . str_repeat('•', max(8, strlen($tokenMasked) - 10)) . substr($tokenMasked, -4);
 }
 
+$openOrders = function_exists('instantPayListMatchableOrders') ? instantPayListMatchableOrders(30) : [];
+$webhookLogTail = '';
+$logPath = dirname(__DIR__) . '/db/bale_webhook.log';
+if(is_file($logPath)){
+    $lines = @file($logPath, FILE_IGNORE_NEW_LINES);
+    if(is_array($lines) && count($lines) > 0){
+        $webhookLogTail = implode("\n", array_slice($lines, -40));
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="fa">
@@ -239,8 +249,19 @@ textarea{width:100%;min-height:140px;border:0;border-radius:12px;padding:14px;ba
 <div class="steps">
 ۱. در بله به بازو بروید و <b>/start</b> بزنید<br>
 ۲. تنظیمات را ذخیره و Webhook را ثبت کنید<br>
-۳. هر پیام واریز <b>@postbank_bot</b> را به بازو <b>فوروارد</b> کنید<br>
-۴. اگر ۴ رقم آخر مبلغ با سفارش باز یکی باشد، پرداخت خودکار تأیید می‌شود
+۳. کاربر مهلت پرداخت را در سایت شروع کند و <b>دقیقاً همان مبلغ</b> را کارت‌به‌کارت کند<br>
+۴. همان پیام واریز <b>@postbank_bot</b> را به این بازو <b>فوروارد</b> کنید<br>
+۵. فقط دیدن پیام در کانال پست‌بانک کافی نیست — باید به بازو فوروارد شود<br>
+۶. اگر فوروارد دیر شد، تا ۴۸ ساعت بعد هم با مبلغ دقیق مچ می‌شود
+</div>
+
+<div class="steps">
+<b>سفارش‌های قابل مچ الان:</b><br>
+<?php if(count($openOrders) === 0){ ?>
+هیچ سفارش waiting / recently-expired نیست. اگر کاربر قبلاً پرداخت کرده، اول «شروع مهلت پرداخت» جدید بزند یا متن واریز را پایین تست کن.
+<?php } else { foreach($openOrders as $o){ ?>
+• <?php echo htmlspecialchars(($o['amount_text'] ?? '') . ' | ' . ($o['user'] ?? '-') . ' | ' . ($o['status'] ?? '-') . ' | کد ' . ($o['code'] ?? '-') . ' | ' . ($o['plan'] ?? ''), ENT_QUOTES, 'UTF-8'); ?><br>
+<?php } } ?>
 </div>
 
 <form method="post">
@@ -289,6 +310,13 @@ textarea{width:100%;min-height:140px;border:0;border-radius:12px;padding:14px;ba
 
 <?php if(is_array($depositTestResult)){ ?>
 <div class="pre"><?php echo htmlspecialchars(json_encode($depositTestResult, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } ?>
+
+<?php if($webhookLogTail !== ''){ ?>
+<div class="steps" style="margin-top:18px">
+<b>آخرین لاگ وب‌هوک</b>
+<div class="pre"><?php echo htmlspecialchars($webhookLogTail, ENT_QUOTES, 'UTF-8'); ?></div>
+</div>
 <?php } ?>
 
 <a class="back" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php', ENT_QUOTES, 'UTF-8'); ?>">بازگشت به مدیریت</a>

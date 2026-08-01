@@ -167,13 +167,30 @@ if(!empty($result['matched_amount']) && empty($result['ok'])){
     );
 }
 else{
+    $open = $result['open_orders'] ?? [];
+    $openLines = '';
+
+    if(is_array($open) && count($open) > 0){
+        $openLines = "\nسفارش‌های قابل مچ:\n";
+        foreach(array_slice($open, 0, 8) as $o){
+            $openLines .= '• ' . ($o['amount_text'] ?? '')
+                . ' | ' . ($o['user'] ?? '-')
+                . ' | ' . ($o['status'] ?? '-')
+                . ' | کد ' . ($o['code'] ?? '-') . "\n";
+        }
+    }
+    else{
+        $openLines = "\nالان هیچ سفارش waiting/قابل‌مچی نیست.\n";
+    }
+
     baleSendMessage(
         $chatId,
         "⚠️ پیام دریافت شد ولی سفارش مچ نشد.\n"
         . $err . "\n"
         . 'مبالغ خوانده‌شده: ' . $parsedText . "\n"
         . 'parser: ' . baleParserVersion() . "\n"
-        . "نکته: کاربر باید دقیقاً همان مبلغ صفحه را کارت‌به‌کارت کند و پیام @postbank_bot را فوروارد کنید.",
+        . $openLines
+        . "نکته: پیام باید به همین بازو فوروارد شود؛ دیدن در کانال پست‌بانک کافی نیست.",
         [],
         $config
     );
