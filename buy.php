@@ -39,7 +39,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=12">
+<link rel="stylesheet" href="plan_step_ui.css?v=13">
 </head>
 <body>
 <div class="box">
@@ -106,18 +106,29 @@ $h = static function($v){
 </div>
 </div>
 
-<div class="sectionTitle">کارت مقصد</div>
+<div class="destCardSection">
+<div class="destCardTitle">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg>
+<span>کارت مقصد</span>
+</div>
 <div class="cardTabs" id="cardTabs" role="tablist" aria-label="انتخاب کارت"></div>
 <input type="hidden" id="selectedCard" value="">
 <input type="hidden" id="selectedCardName" value="">
 
 <div class="payCardBox" id="payCardBox" hidden>
+<div class="payCardHead">
+<img class="payCardIcon" id="payCardIcon" src="" alt="" hidden>
+<div class="payCardMeta">
+<div class="payCardBank" id="payCardBank">—</div>
 <div class="payCardOwner" id="payCardOwner">—</div>
+</div>
+</div>
 <div class="payCardNumberRow">
 <div class="payCardNumber" id="payCardNumber">—</div>
 <button type="button" class="iconCopyBtn" id="copyCardBtn" title="کپی شماره کارت" aria-label="کپی شماره کارت">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
 </button>
+</div>
 </div>
 </div>
 
@@ -201,8 +212,11 @@ const cardTabs = document.getElementById('cardTabs');
 const selectedCardInput = document.getElementById('selectedCard');
 const selectedCardNameInput = document.getElementById('selectedCardName');
 const payCardBox = document.getElementById('payCardBox');
+const payCardIcon = document.getElementById('payCardIcon');
+const payCardBank = document.getElementById('payCardBank');
 const payCardOwner = document.getElementById('payCardOwner');
 const payCardNumber = document.getElementById('payCardNumber');
+let selectedCardMeta = null;
 const payCreating = document.getElementById('payCreating');
 const instantPay = document.getElementById('instantPay');
 const instantPayHead = document.getElementById('instantPayHead');
@@ -313,12 +327,19 @@ function formatCardDisplay(num){
     return num.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
 }
 
+function selectCardMeta(card){
+    selectedCardMeta = card || null;
+    selectedCardInput.value = (card && card.card) || '';
+    selectedCardNameInput.value = (card && card.name) || '';
+    syncCardBox();
+}
+
 function renderCardTabs(){
     if(!cardTabs) return;
     cardTabs.innerHTML = '';
     const list = Array.isArray(cardsData) ? cardsData : [];
     if(list.length === 0){
-        cardTabs.innerHTML = '<div style="color:#fca5a5;font-size:13px;line-height:1.8;">کارتی تعریف نشده است. از پنل ادمین کارت اضافه کنید.</div>';
+        cardTabs.innerHTML = '<div class="cardTabsEmpty">کارتی تعریف نشده است. از پنل ادمین کارت اضافه کنید.</div>';
         return;
     }
     let preferred = 0;
@@ -330,45 +351,44 @@ function renderCardTabs(){
         btn.type = 'button';
         btn.className = 'cardTab' + (idx === preferred ? ' is-active' : '');
         btn.setAttribute('role', 'tab');
-        btn.setAttribute('data-card', card.card || '');
-        btn.setAttribute('data-name', card.name || '');
-        if(card.icon){
-            const img = document.createElement('img');
-            img.src = card.icon;
-            img.alt = card.bank_label || '';
-            btn.appendChild(img);
-        }
-        const lab = document.createElement('span');
-        lab.className = 'cardTabLabel';
-        lab.textContent = card.bank_label || card.name || 'کارت';
-        btn.appendChild(lab);
+        btn.setAttribute('data-idx', String(idx));
+        btn.textContent = card.bank_label || card.name || 'کارت';
         btn.addEventListener('click', function(){
             cardTabs.querySelectorAll('.cardTab').forEach(function(el){ el.classList.remove('is-active'); });
             btn.classList.add('is-active');
-            selectedCardInput.value = card.card || '';
-            selectedCardNameInput.value = card.name || '';
-            syncCardBox();
+            selectCardMeta(card);
             ensureInstantPay(true);
         });
         cardTabs.appendChild(btn);
     });
-    const active = cardTabs.querySelector('.cardTab.is-active') || cardTabs.querySelector('.cardTab');
-    if(active){
-        selectedCardInput.value = active.getAttribute('data-card') || '';
-        selectedCardNameInput.value = active.getAttribute('data-name') || '';
-    }
+    selectCardMeta(list[preferred] || list[0]);
 }
 
 function syncCardBox(){
-    const card = (selectedCardInput && selectedCardInput.value) || '';
-    const name = (selectedCardNameInput && selectedCardNameInput.value) || '';
-    if(!card){
+    const card = selectedCardMeta;
+    const number = (card && card.card) || (selectedCardInput && selectedCardInput.value) || '';
+    if(!number){
         payCardBox.hidden = true;
         return;
     }
     payCardBox.hidden = false;
-    payCardOwner.textContent = name || 'کارت انتخاب‌شده';
-    payCardNumber.textContent = formatCardDisplay(card);
+    if(payCardBank){
+        payCardBank.textContent = (card && (card.bank_label || card.name)) || 'بانک';
+    }
+    if(payCardOwner){
+        payCardOwner.textContent = (card && (card.holder || card.name)) || '—';
+    }
+    if(payCardIcon){
+        if(card && card.icon){
+            payCardIcon.src = card.icon;
+            payCardIcon.alt = (card.bank_label || '') + '';
+            payCardIcon.hidden = false;
+        } else {
+            payCardIcon.removeAttribute('src');
+            payCardIcon.hidden = true;
+        }
+    }
+    payCardNumber.textContent = formatCardDisplay(number);
 }
 
 renderCardTabs();
