@@ -167,8 +167,15 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=8">
+<link rel="stylesheet" href="plan_step_ui.css?v=9">
 <style>
+.topBar .brand{
+font-size:24px;
+letter-spacing:.2px;
+}
+.sectionTitle{
+text-align:center;
+}
 .catCard.is-locked{
 opacity:.45;
 filter:grayscale(.85);
@@ -183,19 +190,6 @@ background:#1e293b;
 box-shadow:none;
 }
 .catCard.is-locked .catCheck{display:none !important}
-.catLockHint{
-display:none;
-margin:10px 0 14px;
-padding:12px 14px;
-border-radius:14px;
-background:#0f172a;
-border:1px solid #475569;
-color:#cbd5e1;
-font-size:13px;
-line-height:1.8;
-}
-.catLockHint.is-visible{display:block}
-.catLockHint a{color:#86efac;font-weight:700}
 .planChip.is-locked{
 opacity:.4;
 filter:grayscale(.9);
@@ -209,7 +203,7 @@ background:#1e293b;
 }
 .planChip.is-locked .planCheck{display:none !important}
 .subPickedLink{
-margin:8px 0 0;
+margin:0 0 18px;
 padding:10px 12px;
 border-radius:12px;
 background:#052e16;
@@ -222,6 +216,75 @@ direction:ltr;
 text-align:left;
 }
 .subPickedLink[hidden]{display:none !important}
+#subSelect.has-picked{margin-bottom:8px}
+#subInput.is-hidden-input{
+position:absolute !important;
+width:1px !important;
+height:1px !important;
+padding:0 !important;
+margin:-1px !important;
+overflow:hidden !important;
+clip:rect(0,0,0,0) !important;
+border:0 !important;
+opacity:0 !important;
+pointer-events:none !important;
+}
+.catLockModal{
+position:fixed;
+inset:0;
+z-index:120;
+display:none;
+align-items:center;
+justify-content:center;
+padding:22px;
+}
+.catLockModal.is-open{display:flex}
+.catLockBackdrop{
+position:absolute;
+inset:0;
+background:rgba(2,6,23,.55);
+backdrop-filter:blur(7px);
+-webkit-backdrop-filter:blur(7px);
+}
+.catLockCard{
+position:relative;
+z-index:1;
+width:min(100%,340px);
+background:#1e293b;
+border:1px solid rgba(148,163,184,.22);
+border-radius:18px;
+padding:18px 16px 16px;
+box-shadow:0 22px 50px rgba(0,0,0,.45);
+text-align:center;
+animation:catLockPop .16s ease-out;
+}
+@keyframes catLockPop{
+from{opacity:0;transform:scale(.96)}
+to{opacity:1;transform:scale(1)}
+}
+.catLockCard p{
+margin:0 0 14px;
+font-size:13px;
+line-height:1.9;
+color:#e2e8f0;
+}
+.catLockCard a{color:#86efac;font-weight:700}
+.catLockClose{
+width:100%;
+margin:0;
+background:#334155;
+border:0;
+color:#fff;
+border-radius:12px;
+padding:12px;
+font-size:14px;
+font-family:tahoma,sans-serif;
+font-weight:700;
+cursor:pointer;
+}
+@media(max-width:768px){
+.topBar .brand{font-size:20px !important}
+}
 </style>
 </head>
 <body>
@@ -280,7 +343,6 @@ text-align:left;
 <span class="catDesc">مدت مشخص (روز / ماه)</span>
 </button>
 </div>
-<div class="catLockHint" id="catLockHint" role="status"></div>
 
 <div class="planBlock" id="planBlock">
 <div class="sectionTitle" id="planListTitle">حجم را انتخاب کنید</div>
@@ -370,6 +432,14 @@ text-align:left;
 </form>
 </div>
 
+<div class="catLockModal" id="catLockModal" aria-hidden="true">
+<div class="catLockBackdrop" data-close="1"></div>
+<div class="catLockCard" role="dialog" aria-modal="true" aria-labelledby="catLockText">
+<p id="catLockText"></p>
+<button type="button" class="catLockClose" data-close="1">متوجه شدم</button>
+</div>
+</div>
+
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const planSelect = document.getElementById('planSelect');
@@ -427,7 +497,8 @@ let payPollTimer = null;
 let payTickTimer = null;
 let currentPay = null;
 let subTimeCategory = 'unknown'; // unlimited | limited | unknown
-const catLockHint = document.getElementById('catLockHint');
+const catLockModal = document.getElementById('catLockModal');
+const catLockText = document.getElementById('catLockText');
 const subMetaByLink = <?php
 $metaMap = [];
 foreach($userSubscriptions as $item){
@@ -450,16 +521,30 @@ function lockMessageFor(cat){
 }
 
 function showCatLockHint(cat){
-    if(!catLockHint) return;
-    catLockHint.innerHTML = lockMessageFor(cat);
-    catLockHint.classList.add('is-visible');
+    if(!catLockModal || !catLockText) return;
+    catLockText.innerHTML = lockMessageFor(cat);
+    catLockModal.classList.add('is-open');
+    catLockModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
 }
 
 function hideCatLockHint(){
-    if(!catLockHint) return;
-    catLockHint.classList.remove('is-visible');
-    catLockHint.innerHTML = '';
+    if(!catLockModal) return;
+    catLockModal.classList.remove('is-open');
+    catLockModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
 }
+
+if(catLockModal){
+    catLockModal.addEventListener('click', function(e){
+        if(e.target && e.target.getAttribute('data-close') === '1'){
+            hideCatLockHint();
+        }
+    });
+}
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') hideCatLockHint();
+});
 
 function resolveSubTimeCategory(link){
     link = String(link || '').trim().toLowerCase();
@@ -521,17 +606,36 @@ function syncCategoryLocks(){
     try{ updateContinueState(); }catch(err){}
 }
 
-function setPickedLinkPreview(link){
+function setSubInputMode(mode, link){
+    // mode: 'picked' | 'manual' | 'empty'
     const box = document.getElementById('subPickedLink');
-    if(!box) return;
+    const select = document.getElementById('subSelect');
+    const input = document.getElementById('subInput');
     link = String(link || '').trim();
-    if(!link || link === '__other__'){
-        box.hidden = true;
-        box.textContent = '';
-        return;
+
+    if(box){
+        if(mode === 'picked' && link){
+            box.hidden = false;
+            box.textContent = link;
+        } else {
+            box.hidden = true;
+            box.textContent = '';
+        }
     }
-    box.hidden = false;
-    box.textContent = link;
+
+    if(select){
+        select.classList.toggle('has-picked', mode === 'picked');
+    }
+
+    if(input){
+        // وقتی از لیست انتخاب شده فقط یک نمایشگر لینک کافی است
+        input.classList.toggle('is-hidden-input', mode === 'picked');
+        if(mode === 'picked'){
+            input.value = link;
+        } else if(mode === 'manual' && link === ''){
+            // لینک دیگر: فیلد خالی برای ورود دستی
+        }
+    }
 }
 
 function pickSubscription(){
@@ -545,20 +649,21 @@ function pickSubscription(){
     if(value === '' || value === '__other__'){
         if(value === '__other__'){
             input.value = '';
-            setPickedLinkPreview('');
+            setSubInputMode('manual', '');
             input.focus();
+            subTimeCategory = 'unknown';
         } else {
-            // فقط ریست انتخاب؛ اگر لینک دستی نوشته شده نگه دار
-            setPickedLinkPreview('');
+            // ریست انتخاب از لیست — اگر قبلاً دستی بوده همان بماند
+            const current = String(input.value || '').trim();
+            setSubInputMode(current ? 'manual' : 'empty', current);
+            subTimeCategory = resolveSubTimeCategory(current);
         }
-        subTimeCategory = value === '__other__' ? 'unknown' : resolveSubTimeCategory(input.value);
         hideCatLockHint();
         syncCategoryLocks();
         return;
     }
 
-    input.value = value;
-    setPickedLinkPreview(value);
+    setSubInputMode('picked', value);
     subTimeCategory = (opt && opt.getAttribute('data-time-category')) || resolveSubTimeCategory(value) || 'unknown';
     hideCatLockHint();
     selectedPlan = null;
@@ -659,13 +764,13 @@ if(subSelectEl){
 const subInputEl = document.getElementById('subInput');
 if(subInputEl){
     subInputEl.addEventListener('change', function(){
-        setPickedLinkPreview(subInputEl.value);
+        if(subInputEl.classList.contains('is-hidden-input')) return;
         subTimeCategory = resolveSubTimeCategory(subInputEl.value);
         hideCatLockHint();
         syncCategoryLocks();
     });
     subInputEl.addEventListener('blur', function(){
-        setPickedLinkPreview(subInputEl.value);
+        if(subInputEl.classList.contains('is-hidden-input')) return;
         subTimeCategory = resolveSubTimeCategory(subInputEl.value);
         syncCategoryLocks();
     });
@@ -941,14 +1046,23 @@ document.getElementById('copyLinkBtn').addEventListener('click', function(){ cop
 
     if(sub){
         input.value = sub;
-        setPickedLinkPreview(sub);
+        var matched = false;
         if(select){
-            var other = false;
             for(var j = 0; j < select.options.length; j++){
-                if(select.options[j].value === '__other__'){ select.selectedIndex = j; other = true; break; }
+                var ov = (select.options[j].getAttribute('data-link') || select.options[j].value || '').trim();
+                if(ov && ov.toLowerCase() === sub.toLowerCase()){
+                    select.selectedIndex = j;
+                    matched = true;
+                    break;
+                }
             }
-            if(!other) select.selectedIndex = 0;
+            if(!matched){
+                for(var k = 0; k < select.options.length; k++){
+                    if(select.options[k].value === '__other__'){ select.selectedIndex = k; break; }
+                }
+            }
         }
+        setSubInputMode(matched ? 'picked' : 'manual', sub);
         subTimeCategory = resolveSubTimeCategory(sub);
         syncCategoryLocks();
     }
