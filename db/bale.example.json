@@ -5,5 +5,7 @@
   "bot_username": "Jay24x7Pusbank_bot",
   "pay_window_seconds": 600,
   "webhook_secret": "",
+  "ingest_secret": "",
+  "auto_listener_enabled": false,
   "forward_hint": "پیام واریز @postbank_bot را به این بازو فوروارد کنید"
 }

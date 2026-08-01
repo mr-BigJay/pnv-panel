@@ -39,10 +39,14 @@ if(isset($_POST['save'])){
         'bot_username' => trim((string)($_POST['bot_username'] ?? 'Jay24x7Pusbank_bot')),
         'pay_window_seconds' => max(60, intval($_POST['pay_window_seconds'] ?? 600)),
         'webhook_secret' => $config['webhook_secret'] ?? '',
+        'ingest_secret' => $config['ingest_secret'] ?? '',
+        'auto_listener_enabled' => isset($_POST['auto_listener_enabled']),
         'forward_hint' => $config['forward_hint'] ?? ''
     ];
 
     baleSaveConfig($config);
+    baleEnsureIngestSecret();
+    $config = baleLoadConfig();
     $message = 'تنظیمات بله ذخیره شد.';
 }
 
@@ -194,6 +198,9 @@ if($tokenMasked !== ''){
     $tokenMasked = substr($tokenMasked, 0, 6) . str_repeat('•', max(8, strlen($tokenMasked) - 10)) . substr($tokenMasked, -4);
 }
 
+$ingestSecret = function_exists('baleEnsureIngestSecret') ? baleEnsureIngestSecret($config) : '';
+$config = baleLoadConfig();
+
 $openOrders = function_exists('instantPayListMatchableOrders') ? instantPayListMatchableOrders(30) : [];
 $webhookLogTail = '';
 $logPath = dirname(__DIR__) . '/db/bale_webhook.log';
@@ -203,6 +210,8 @@ if(is_file($logPath)){
         $webhookLogTail = implode("\n", array_slice($lines, -40));
     }
 }
+$sessionPath = dirname(__DIR__) . '/db/bale_user_session.bale';
+$sessionReady = is_file($sessionPath) && filesize($sessionPath) > 8;
 
 ?>
 <!DOCTYPE html>
@@ -247,12 +256,14 @@ textarea{width:100%;min-height:140px;border:0;border-radius:12px;padding:14px;ba
 <?php if($error !== ''){ ?><div class="err"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
 
 <div class="steps">
-۱. در بله به بازو بروید و <b>/start</b> بزنید<br>
-۲. تنظیمات را ذخیره و Webhook را ثبت کنید<br>
-۳. کاربر مهلت پرداخت را در سایت شروع کند و <b>دقیقاً همان مبلغ</b> را کارت‌به‌کارت کند<br>
-۴. همان پیام واریز <b>@postbank_bot</b> را به این بازو <b>فوروارد</b> کنید<br>
-۵. فقط دیدن پیام در کانال پست‌بانک کافی نیست — باید به بازو فوروارد شود<br>
-۶. اگر فوروارد دیر شد، تا ۴۸ ساعت بعد هم با مبلغ دقیق مچ می‌شود
+<b>حالت عادی (فوروارد):</b><br>
+۱. در بله به بازو `/start` بزنید و Webhook را ثبت کنید<br>
+۲. کاربر مهلت پرداخت را شروع کند و دقیقاً همان مبلغ را واریز کند<br>
+۳. پیام `@postbank_bot` را به بازو فوروارد کنید<br><br>
+<b>حالت تمام‌اتوماتیک (بدون فوروارد):</b><br>
+ربات رسمی بله نمی‌تواند چت خصوصی پست‌بانک را بخواند. برای صفر شدن کار دستی،
+یک Listener روی <b>همان اکانت بله صاحب کارت</b> اجرا می‌شود و پیام واریز را خودش به پنل می‌فرستد.<br>
+سشن Listener: <?php echo $sessionReady ? '✅ آماده' : '⛔ هنوز لاگین نشده'; ?>
 </div>
 
 <div class="steps">
@@ -268,6 +279,10 @@ textarea{width:100%;min-height:140px;border:0;border-radius:12px;padding:14px;ba
 <label class="toggle">
 <input type="checkbox" name="enabled" <?php echo !empty($config['enabled']) ? 'checked' : ''; ?>>
 <span>فعال‌سازی پرداخت آنی بله</span>
+</label>
+<label class="toggle">
+<input type="checkbox" name="auto_listener_enabled" <?php echo !empty($config['auto_listener_enabled']) ? 'checked' : ''; ?>>
+<span>حالت تمام‌اتوماتیک Listener (بدون فوروارد دستی)</span>
 </label>
 
 <label for="bot_username">یوزرنیم بازو</label>
@@ -285,6 +300,16 @@ textarea{width:100%;min-height:140px;border:0;border-radius:12px;padding:14px;ba
 <input class="ltr" type="number" id="pay_window_seconds" name="pay_window_seconds" min="60" value="<?php echo intval($config['pay_window_seconds'] ?? 600); ?>">
 
 <div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></div>
+<div class="hint">
+آدرس Ingest اتوماتیک:<br><code>https://panel.ticketin.ir/postbank-ingest.php</code><br>
+کلید Ingest (برای Listener):<br><code><?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?></code><br><br>
+راه‌اندازی یک‌بار روی سرور:<br>
+<code>cd /var/www/html && pip3 install -r tools/requirements-postbank.txt</code><br>
+<code>python3 tools/postbank_bale_listener.py --login --session /var/www/html/db/bale_user_session.bale</code><br>
+<code>printf 'POSTBANK_INGEST_SECRET=%s\n' '<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>' &gt; db/postbank-listener.env && chmod 600 db/postbank-listener.env</code><br>
+<code>cp tools/postbank-listener.service /etc/systemd/system/ && systemctl enable --now postbank-listener</code><br>
+لاگین باید با <b>همان شماره بله‌ای</b> باشد که پیام‌های `@postbank_bot` را می‌گیرد.
+</div>
 
 <button type="submit" name="save">ذخیره تنظیمات</button>
 <button type="submit" name="fetch_chat" class="test">خواندن شناسه چت از بله</button>

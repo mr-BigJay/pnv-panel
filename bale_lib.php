@@ -3,7 +3,7 @@
 if(!function_exists('baleConfigPath')){
 
     function baleParserVersion(){
-        return 'postbank-plus-v4';
+        return 'postbank-plus-v5';
     }
 
 
@@ -17,10 +17,33 @@ if(!function_exists('baleConfigPath')){
             'bot_token' => '',
             'admin_chat_ids' => '',
             'webhook_secret' => '',
+            'ingest_secret' => '',
             'bot_username' => 'Jay24x7Pusbank_bot',
             'forward_hint' => 'پیام واریز @postbank_bot را به این بازو فوروارد کنید',
-            'pay_window_seconds' => 600
+            'pay_window_seconds' => 600,
+            'auto_listener_enabled' => false
         ];
+    }
+
+    function baleEnsureIngestSecret($config = null){
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        $secret = trim((string)($config['ingest_secret'] ?? ''));
+
+        if($secret === ''){
+            try{
+                $secret = bin2hex(random_bytes(24));
+            }catch(Throwable $e){
+                $secret = sha1(uniqid('bale', true));
+            }
+
+            $config['ingest_secret'] = $secret;
+            baleSaveConfig($config);
+        }
+
+        return $secret;
     }
 
     function baleLoadConfig(){
