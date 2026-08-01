@@ -6,449 +6,335 @@ require_once "phpqrcode/qrlib.php";
 require_once __DIR__ . '/subscription_lib.php';
 
 if(!isset($_SESSION['user'])){
-header("Location: index.php");
-exit;
+    header("Location: index.php");
+    exit;
 }
 
 $rows = [];
-
 $file = "invoices/payments.csv";
 
 if(file_exists($file)){
-
-$handle = fopen($file,"r");
-
-while(($data = fgetcsv($handle)) !== FALSE){
-
-if(
-isset($data[0])
-&&
-$data[0] == $_SESSION['user']
-){
-
-$rows[] = $data;
-
-}
-
-}
-
-fclose($handle);
-
+    $handle = fopen($file, "r");
+    while(($data = fgetcsv($handle)) !== false){
+        if(isset($data[0]) && $data[0] == $_SESSION['user']){
+            $rows[] = $data;
+        }
+    }
+    fclose($handle);
 }
 
 if(!file_exists("temp")){
-mkdir("temp");
+    mkdir("temp");
 }
 
-?>
+$h = static function($v){
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+};
 
-<!DOCTYPE html>
-
-<html lang="fa">
-
-<head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
-
-<title>
-
-لیست اشتراک ها
-
-</title>
-
-<style>
-
-*{
-box-sizing:border-box;
-}
-
-body{
-background:#0f172a;
-font-family:tahoma;
-direction:rtl;
-color:white;
-padding:10px;
-margin:0;
-}
-
-.container{
-width:100%;
-max-width:760px;
-margin:auto;
-}
-
-h2{
-text-align:center;
-font-size:24px;
-margin-bottom:18px;
-}
-
-.card{
-background:#1e293b;
-border-radius:16px;
-padding:16px;
-margin-bottom:14px;
-}
-
-.row{
-display:grid;
-grid-template-columns:1fr 1fr;
-gap:8px;
-font-size:14px;
-}
-
-.item{
-background:#0f172a;
-padding:10px;
-border-radius:8px;
-}
-
-.label{
-font-size:11px;
-color:#94a3b8;
-margin-bottom:4px;
-}
-
-.linkbox{
-margin-top:12px;
-background:#0f172a;
-padding:12px;
-border-radius:10px;
-word-break:break-all;
-font-size:13px;
-line-height:24px;
-}
-
-.copybtn{
-margin-top:10px;
-background:#22c55e;
-border:none;
-padding:10px;
-border-radius:8px;
-color:white;
-cursor:pointer;
-font-size:13px;
-width:100%;
-}
-
-.back{
-display:block;
-background:#334155;
-padding:12px;
-border-radius:10px;
-color:white;
-text-decoration:none;
-margin-top:18px;
-text-align:center;
-font-size:15px;
-}
-
-.pending{
-color:#facc15;
-font-weight:bold;
-}
-
-.success{
-color:#22c55e;
-font-weight:bold;
-}
-
-.reject{
-color:#ef4444;
-font-weight:bold;
-}
-
-.empty{
-background:#1e293b;
-padding:20px;
-border-radius:16px;
-text-align:center;
-font-size:15px;
-line-height:28px;
-}
-
-.qrbox{
-margin-top:18px;
-text-align:center;
-}
-
-.qrbox img{
-width:190px;
-background:white;
-padding:12px;
-border-radius:16px;
-}
-
-.qrtitle{
-margin-bottom:10px;
-font-size:14px;
-color:#cbd5e1;
-}
-
-@media(min-width:768px){
-
-body{
-padding:18px;
-}
-
-.container{
-max-width:920px;
-}
-
-h2{
-font-size:28px;
-margin-bottom:22px;
-}
-
-.card{
-padding:20px;
-}
-
-.row{
-grid-template-columns:repeat(2,1fr);
-gap:10px;
-font-size:15px;
-}
-
-.item{
-padding:12px;
-}
-
-.label{
-font-size:12px;
-}
-
-.linkbox{
-font-size:14px;
-line-height:26px;
-}
-
-.copybtn{
-width:auto;
-padding:10px 18px;
-font-size:13px;
-}
-
-.back{
-display:inline-block;
-padding:12px 20px;
-font-size:15px;
-}
-
-}
-
-</style>
-<link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="fonts.css">
-
-</head>
-
-<body>
-
-<div class="container">
-
-<?php
-require_once __DIR__ . '/user_nav.php';
-userBackBar('dashboard.php', 'لیست اشتراک ها');
-?>
-
-<h2 style="display:none">
-
-لیست اشتراک ها
-
-</h2>
-
-<?php if(count($rows) == 0){ ?>
-
-<div class="empty">
-
-هنوز اشتراکی ثبت نشده است
-
-</div>
-
-<?php } ?>
-
-<?php
-
-$i = 1;
+$items = [];
+$i = 0;
 
 foreach(array_reverse($rows) as $row){
+    $configName = trim((string)($row[1] ?? ''));
 
-$configName = $row[1] ?? '';
+    if(
+        strpos($configName, 'https://vip.') !== false
+        || strpos($configName, 'https://vip2.') !== false
+        || strpos($configName, 'https://vip3.') !== false
+        || strpos($configName, 'https://vip4.') !== false
+    ){
+        continue;
+    }
 
-if(
-strpos($configName,'https://vip.') !== false
-||
-strpos($configName,'https://vip2.') !== false
-||
-strpos($configName,'https://vip3.') !== false
-){
-continue;
+    $i++;
+    $plan = trim((string)($row[2] ?? ''));
+    $tracking = trim((string)($row[3] ?? ''));
+    $date = trim((string)($row[4] ?? ''));
+    $time = trim((string)($row[5] ?? ''));
+    $status = trim((string)($row[6] ?? 'درحال بررسی'));
+    $link = trim((string)($row[7] ?? ''));
+
+    $state = 'pending';
+    if($status === 'تایید شد'){
+        $state = 'ok';
+    } elseif($status === 'رد شد'){
+        $state = 'reject';
+    }
+
+    $linkOk = (
+        $state === 'ok'
+        && $link !== ''
+        && !pnvIsSubLinkCleared($_SESSION['user'], $link)
+    );
+
+    $qrfile = '';
+    if($linkOk){
+        $qrfile = 'temp/qr' . $i . '.png';
+        QRcode::png($link, $qrfile, QR_ECLEVEL_L, 8);
+    }
+
+    $items[] = [
+        'i' => $i,
+        'name' => $configName !== '' ? $configName : ('اشتراک ' . $i),
+        'plan' => $plan,
+        'tracking' => $tracking,
+        'date' => $date,
+        'time' => $time,
+        'status' => $status,
+        'state' => $state,
+        'link' => $link,
+        'link_ok' => $linkOk,
+        'link_cleared' => ($state === 'ok' && $link !== '' && !$linkOk),
+        'qr' => $qrfile,
+    ];
 }
 
-$plan = $row[2] ?? "";
-$tracking = $row[3] ?? "";
-$date = $row[4] ?? "";
-$time = $row[5] ?? "";
-$status = $row[6] ?? "درحال بررسی";
-$link = $row[7] ?? "";
-
-$statusClass = "pending";
-
-if($status == "تایید شد"){
-$statusClass = "success";
-}
-
-if($status == "رد شد"){
-$statusClass = "reject";
-}
+$firstOkOpen = true;
 
 ?>
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لیست اشتراک‌ها</title>
+<link rel="stylesheet" href="user_nav.css?v=1">
+<link rel="stylesheet" href="subscriptions_ui.css?v=1">
+</head>
+<body>
+<div class="box">
 
-<div class="card">
-
-<div class="row">
-
-<div class="item">
-<div class="label">ردیف</div>
-<?php echo $i; ?>
+<div class="topBar">
+<a class="userBack" href="dashboard.php">بازگشت</a>
+<div class="brand">لیست اشتراک‌ها</div>
+<span class="userBackSpacer" aria-hidden="true"></span>
 </div>
 
-<div class="item">
-<div class="label">وضعیت</div>
+<div class="pageHead">
+<div class="pageHeadText">
+<h1 class="pageTitle">اشتراک‌ها</h1>
+<p class="pageSub">لیست کانفیگ‌های خریداری شده</p>
+</div>
+<div class="pageIcon" aria-hidden="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z"/>
+<path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+<path d="M9 12h6"/>
+</svg>
+</div>
+</div>
 
-<span class="<?php echo $statusClass; ?>">
+<div class="filters" role="tablist" aria-label="فیلتر وضعیت">
+<button type="button" class="filterChip is-active" data-filter="all">همه</button>
+<button type="button" class="filterChip" data-filter="ok">فعال</button>
+<button type="button" class="filterChip" data-filter="reject">رد شده</button>
+</div>
 
-<?php echo htmlspecialchars($status); ?>
-
+<?php if(count($items) === 0){ ?>
+<div class="empty">هنوز اشتراکی ثبت نشده است</div>
+<?php } else { ?>
+<div class="subList" id="subList">
+<?php foreach($items as $item){
+    $open = ($item['state'] === 'ok' && $item['link_ok'] && $firstOkOpen);
+    if($open){
+        $firstOkOpen = false;
+    }
+    $chipClass = 'subChip is-' . $item['state'];
+    if($open){
+        $chipClass .= ' is-open';
+    }
+    $badge = $item['state'] === 'ok' ? '✓' : ($item['state'] === 'reject' ? '×' : '…');
+    $planLine = $item['plan'] !== '' ? $item['plan'] : $item['status'];
+    if($item['date'] !== ''){
+        $planLine .= ($planLine !== '' ? ' • ' : '') . $item['date'];
+    }
+?>
+<article class="<?php echo $h($chipClass); ?>" data-state="<?php echo $h($item['state']); ?>" data-id="<?php echo (int)$item['i']; ?>">
+<button type="button" class="subHead" aria-expanded="<?php echo $open ? 'true' : 'false'; ?>">
+<span class="subBadge" aria-hidden="true"><?php echo $badge; ?></span>
+<span class="subMeta">
+<span class="subName"><?php echo $h($item['name']); ?></span>
+<span class="subPlan"><?php echo $h($planLine); ?></span>
 </span>
-
-</div>
-
-<div class="item">
-<div class="label">نام کانفیگ</div>
-<?php echo htmlspecialchars($configName); ?>
-</div>
-
-<div class="item">
-<div class="label">پلن</div>
-<?php echo htmlspecialchars($plan); ?>
-</div>
-
-<div class="item">
-<div class="label">پیگیری</div>
-<?php echo htmlspecialchars($tracking); ?>
-</div>
-
-<div class="item">
-<div class="label">تاریخ</div>
-<?php echo htmlspecialchars($date); ?>
-</div>
-
-<div class="item">
-<div class="label">ساعت</div>
-<?php echo htmlspecialchars($time); ?>
-</div>
-
-</div>
-
-<div class="linkbox">
-
-<?php if($status == "درحال بررسی"){ ?>
-
-بعد از تایید لینک اشتراک در این قسمت نمایش داده خواهد شد
-
-<?php } ?>
-
-<?php if($status == "تایید شد"){ ?>
-
-<?php if(trim((string)$link) !== '' && !pnvIsSubLinkCleared($_SESSION['user'], $link)){ ?>
-
-<div id="sub<?php echo $i; ?>">
-
-<?php echo htmlspecialchars($link); ?>
-
-</div>
-
-<button class="copybtn"
-onclick="copyLink('sub<?php echo $i; ?>')">
-
-کپی لینک اشتراک
-
+<svg class="subChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 9l6 6 6-6"/>
+</svg>
 </button>
 
+<div class="subBody">
+<?php if($item['state'] === 'ok' && $item['link_ok']){ ?>
+<div class="subBodyInner">
+<div class="subQrCol">
+<button type="button" class="subQrBtn" data-qr="<?php echo $h($item['qr']); ?>" data-name="<?php echo $h($item['name']); ?>" aria-label="نمایش QR Code بزرگ">
+<img src="<?php echo $h($item['qr']); ?>" alt="QR Code">
+</button>
+<div class="subQrHint">برای بزرگ‌نمایی بزنید</div>
+</div>
+<div class="subLinkCol">
+<div class="subLinkTitle">لینک اشتراک</div>
+<div class="subLinkHint">برای استفاده، لینک را کپی کنید</div>
+<div class="subLinkHidden" id="sub<?php echo (int)$item['i']; ?>"><?php echo $h($item['link']); ?></div>
+<button type="button" class="btnPrimary copyBtn" data-copy="sub<?php echo (int)$item['i']; ?>">
+<svg class="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+کپی لینک
+</button>
+</div>
+</div>
+<a class="btnRenew" href="renew.php?sub=<?php echo rawurlencode($item['link']); ?>&amp;name=<?php echo rawurlencode($item['name']); ?>">
+تمدید این اشتراک
+</a>
+<div class="subFoot">
 <?php
-
-$qrfile =
-"temp/qr".$i.".png";
-
-QRcode::png(
-$link,
-$qrfile,
-QR_ECLEVEL_L,
-6
-);
-
+$foot = [];
+if($item['tracking'] !== '') $foot[] = 'پیگیری: ' . $item['tracking'];
+if($item['time'] !== '') $foot[] = $item['time'];
+echo $h(implode(' • ', $foot));
 ?>
-
-<div class="qrbox">
-
-<div class="qrtitle">
-
-اسکن QR Code
-
 </div>
-
-<img src="<?php echo $qrfile; ?>">
-
+<?php } elseif($item['link_cleared']){ ?>
+<div class="subBodyInner subBodyInner--single">
+<div class="subNote">لینک این اشتراک توسط پشتیبانی حذف شده است</div>
 </div>
-
+<?php } elseif($item['state'] === 'pending'){ ?>
+<div class="subBodyInner subBodyInner--single">
+<div class="subNote">بعد از تأیید، لینک اشتراک و QR در اینجا نمایش داده می‌شود.</div>
+</div>
 <?php } else { ?>
-
-<div class="empty">لینک این اشتراک توسط پشتیبانی حذف شده است</div>
-
+<div class="subBodyInner subBodyInner--single">
+<div class="subNote">این درخواست رد شده است<?php echo $item['link'] !== '' ? ' — ' . $h($item['link']) : ''; ?></div>
+</div>
 <?php } ?>
-
+</div>
+</article>
 <?php } ?>
-
-<?php if($status == "رد شد"){ ?>
-
-<?php echo htmlspecialchars($link); ?>
-
+</div>
 <?php } ?>
 
 </div>
 
+<div class="toast" id="toast" role="status" aria-live="polite">لینک اشتراک کپی شد</div>
+
+<div class="qrModal" id="qrModal" aria-hidden="true">
+<div class="qrModalBackdrop" data-close="1"></div>
+<div class="qrModalPanel" role="dialog" aria-modal="true" aria-labelledby="qrModalTitle">
+<div class="qrModalTitle" id="qrModalTitle">اسکن QR Code</div>
+<p class="qrModalName" id="qrModalName"></p>
+<div class="qrModalFrame">
+<img id="qrModalImg" src="" alt="QR Code بزرگ">
 </div>
-
-<?php
-
-$i++;
-
-}
-
-?>
-
+<button type="button" class="btnGhost qrModalClose" data-close="1">بستن</button>
+</div>
 </div>
 
 <script>
+(function(){
+    var list = document.getElementById('subList');
+    var toast = document.getElementById('toast');
+    var modal = document.getElementById('qrModal');
+    var modalImg = document.getElementById('qrModalImg');
+    var modalName = document.getElementById('qrModalName');
+    var toastTimer = null;
 
-function copyLink(id){
+    function showToast(msg){
+        if(!toast) return;
+        toast.textContent = msg || 'لینک اشتراک کپی شد';
+        toast.classList.add('is-show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function(){ toast.classList.remove('is-show'); }, 1800);
+    }
 
-const text =
-document.getElementById(id).innerText;
+    function openModal(src, name){
+        if(!modal || !modalImg) return;
+        modalImg.src = src;
+        if(modalName) modalName.textContent = name || '';
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
 
-navigator.clipboard.writeText(text);
+    function closeModal(){
+        if(!modal) return;
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
 
-alert("لینک اشتراک کپی شد");
+    document.querySelectorAll('.filterChip').forEach(function(chip){
+        chip.addEventListener('click', function(){
+            document.querySelectorAll('.filterChip').forEach(function(c){ c.classList.remove('is-active'); });
+            chip.classList.add('is-active');
+            var f = chip.getAttribute('data-filter') || 'all';
+            document.querySelectorAll('.subChip').forEach(function(item){
+                var st = item.getAttribute('data-state') || '';
+                var show = (f === 'all') || (f === st);
+                item.hidden = !show;
+            });
+        });
+    });
 
-}
+    if(list){
+        list.addEventListener('click', function(e){
+            var head = e.target.closest('.subHead');
+            if(head && list.contains(head)){
+                var chip = head.closest('.subChip');
+                if(!chip) return;
+                var willOpen = !chip.classList.contains('is-open');
+                list.querySelectorAll('.subChip.is-open').forEach(function(other){
+                    other.classList.remove('is-open');
+                    var h2 = other.querySelector('.subHead');
+                    if(h2) h2.setAttribute('aria-expanded', 'false');
+                });
+                if(willOpen){
+                    chip.classList.add('is-open');
+                    head.setAttribute('aria-expanded', 'true');
+                }
+                return;
+            }
 
+            var qrBtn = e.target.closest('.subQrBtn');
+            if(qrBtn && list.contains(qrBtn)){
+                openModal(qrBtn.getAttribute('data-qr') || '', qrBtn.getAttribute('data-name') || '');
+                return;
+            }
+
+            var copyBtn = e.target.closest('.copyBtn');
+            if(copyBtn && list.contains(copyBtn)){
+                var id = copyBtn.getAttribute('data-copy');
+                var el = id ? document.getElementById(id) : null;
+                var text = el ? (el.textContent || '').trim() : '';
+                if(!text) return;
+                if(navigator.clipboard && navigator.clipboard.writeText){
+                    navigator.clipboard.writeText(text).then(function(){ showToast('لینک اشتراک کپی شد'); })
+                        .catch(function(){ fallbackCopy(text); });
+                } else {
+                    fallbackCopy(text);
+                }
+            }
+        });
+    }
+
+    function fallbackCopy(text){
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try{ document.execCommand('copy'); showToast('لینک اشتراک کپی شد'); }
+        catch(err){ showToast('کپی نشد؛ لینک را دستی بردارید'); }
+        document.body.removeChild(ta);
+    }
+
+    if(modal){
+        modal.addEventListener('click', function(e){
+            if(e.target && e.target.getAttribute('data-close') === '1') closeModal();
+        });
+    }
+    document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape') closeModal();
+    });
+})();
 </script>
-
 </body>
-
 </html>

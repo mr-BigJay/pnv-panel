@@ -638,6 +638,45 @@ document.getElementById('copyCardBtn').addEventListener('click', function(){ cop
 document.getElementById('copyCardBtn2').addEventListener('click', function(){ copyText(payCardNumber.textContent.trim(), 'شماره کارت کپی شد'); });
 document.getElementById('copyAmountBtn').addEventListener('click', function(){ if(currentPay) copyText(currentPay.amount, 'مبلغ کپی شد'); });
 document.getElementById('copyLinkBtn').addEventListener('click', function(){ copyText(resultLink.textContent.trim(), 'لینک کپی شد'); });
+
+// Prefill from subscriptions list: renew.php?sub=LINK&name=CONFIG
+(function prefillSubFromQuery(){
+    var params = new URLSearchParams(window.location.search || '');
+    var sub = (params.get('sub') || params.get('link') || '').trim();
+    var name = (params.get('name') || '').trim();
+    if(!sub && !name) return;
+
+    var select = document.getElementById('subSelect');
+    var input = document.getElementById('subInput');
+    if(!input) return;
+
+    if(select && select.options && select.options.length){
+        var found = -1;
+        for(var i = 0; i < select.options.length; i++){
+            var opt = select.options[i];
+            var val = (opt.value || '').trim();
+            var label = (opt.textContent || '').trim();
+            if(sub && val && val.toLowerCase() === sub.toLowerCase()){ found = i; break; }
+            if(name && label && label === name){ found = i; break; }
+        }
+        if(found >= 0){
+            select.selectedIndex = found;
+            pickSubscription();
+            return;
+        }
+    }
+
+    if(sub){
+        input.value = sub;
+        if(select){
+            var other = false;
+            for(var j = 0; j < select.options.length; j++){
+                if(select.options[j].value === '__other__'){ select.selectedIndex = j; other = true; break; }
+            }
+            if(!other) select.selectedIndex = 0;
+        }
+    }
+})();
 </script>
 </body>
 </html>
