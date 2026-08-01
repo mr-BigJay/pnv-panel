@@ -22,6 +22,28 @@ if (!function_exists('pnvAdminUrl')) {
     }
 }
 
+if (!function_exists('pnvAdminRedirect')) {
+    function pnvAdminRedirect($url) {
+        $url = (string)$url;
+
+        if (!headers_sent()) {
+            header('Location: ' . $url);
+            exit;
+        }
+
+        $json = json_encode($url, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $html = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+
+        echo '<div style="padding:18px;color:#bbf7d0;background:#052e16;border-radius:12px;margin:12px 0;font-family:tahoma,sans-serif;line-height:1.8;">'
+            . 'در حال انتقال… اگر خودکار نرفت، '
+            . '<a href="' . $html . '" style="color:#86efac;font-weight:700;">اینجا کلیک کنید</a>.'
+            . '</div>';
+        echo '<script>window.location.replace(' . $json . ');</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . $html . '"></noscript>';
+        exit;
+    }
+}
+
 // Accept new pnv_admin session OR legacy $_SESSION['admin'].
 // Do NOT call pnvAdminIsLoggedIn() — it unsets legacy admin and blanks the page.
 $renewsLoggedIn = (
@@ -116,13 +138,13 @@ $result = xuiApprovePaymentIndex($index, 'تمدید');
 
 if(empty($result['ok'])){
 $_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
+pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
 exit;
 }
 
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
 $_SESSION['payment_message_detail'] = (string)($result['link'] ?? '');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
+pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -144,7 +166,7 @@ fclose($fp);
 
 $_SESSION['payment_message'] = 'تمدید تایید شد';
 $_SESSION['payment_message_detail'] = $link;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
+pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -171,7 +193,7 @@ fclose($fp);
 
 $_SESSION['payment_message'] = 'تمدید رد شد';
 $_SESSION['payment_message_detail'] = $reason;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
+pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
@@ -196,7 +218,7 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
+pnvAdminRedirect(pnvAdminUrl('index.php?page=renews'));
 exit;
 
 }
