@@ -5,6 +5,10 @@
  * Prefer shared admin/payments.php; if missing, stop with a clear error
  * instead of a blank content area.
  */
+if(!defined('PNV_ADMIN_EMBEDDED')){
+    define('PNV_ADMIN_EMBEDDED', true);
+}
+
 $adminPayments = dirname(__DIR__) . '/admin/payments.php';
 
 if(is_file($adminPayments)){

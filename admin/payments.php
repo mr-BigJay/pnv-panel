@@ -31,25 +31,37 @@ if(!function_exists('pnvAdminEntryUrl')){
 if(!function_exists('pnvAdminRedirect')){
     /**
      * Safe redirect when this file is included inside a layout
-     * that already sent HTML (headers_sent → header Location fails).
+     * that already sent HTML (headers_sent → header Location fails / blank hang).
+     * Inside bigjay_controller always prefer JS replace.
      */
     function pnvAdminRedirect($url){
         $url = (string)$url;
+        $embedded = defined('PNV_ADMIN_EMBEDDED') && PNV_ADMIN_EMBEDDED;
 
-        if(!headers_sent()){
+        if(!$embedded && !headers_sent()){
             header('Location: ' . $url);
             exit;
+        }
+
+        while(ob_get_level() > 0){
+            @ob_end_clean();
+        }
+
+        if(!headers_sent()){
+            header('Content-Type: text/html; charset=UTF-8');
         }
 
         $json = json_encode($url, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $html = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
 
-        echo '<div style="padding:18px;color:#bbf7d0;background:#052e16;border-radius:12px;margin:12px 0;font-family:tahoma,sans-serif;line-height:1.8;">'
-            . 'در حال انتقال… اگر خودکار نرفت، '
-            . '<a href="' . $html . '" style="color:#86efac;font-weight:700;">اینجا کلیک کنید</a>.'
-            . '</div>';
-        echo '<script>window.location.replace(' . $json . ');</script>';
-        echo '<noscript><meta http-equiv="refresh" content="0;url=' . $html . '"></noscript>';
+        echo '<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">'
+            . '<meta http-equiv="refresh" content="0;url=' . $html . '">'
+            . '<title>انتقال…</title></head><body style="background:#0f172a;color:#bbf7d0;font-family:tahoma,sans-serif;padding:24px;line-height:1.9;">'
+            . '<div>در حال بازگشت به لیست پرداخت‌ها… '
+            . '<a href="' . $html . '" style="color:#86efac;font-weight:700;">اگر خودکار نرفت اینجا کلیک کنید</a>.'
+            . '</div>'
+            . '<script>window.location.replace(' . $json . ');</script>'
+            . '</body></html>';
         exit;
     }
 }
@@ -271,16 +283,18 @@ if(isset($_POST['reject_payment'])){
 
 }
 
-if(isset($_GET['deletepayment'])){
+if(isset($_POST['delete_payment']) || isset($_GET['deletepayment'])){
 
-    $id = intval($_GET['deletepayment']);
-    $redirectPer = intval($_GET['per'] ?? 20);
+    $id = isset($_POST['delete_index'])
+        ? intval($_POST['delete_index'])
+        : intval($_GET['deletepayment'] ?? -1);
+    $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
     if(!in_array($redirectPer, $allowedPerPage, true)){
         $redirectPer = 20;
     }
 
-    if(isset($payments[$id])){
+    if($id >= 0 && isset($payments[$id])){
 
         unset($payments[$id]);
 
@@ -1483,18 +1497,32 @@ function showDelete(
 
 function confirmDelete(id){
 
-    if(confirm('مطمئن هستید؟')){
-
-        // replace تا با Back دوباره delete صدا زده نشود
-        location.replace(
-            paymentsListBase
-            + '&deletepayment='
-            + encodeURIComponent(id)
-            + '&per='
-            + encodeURIComponent(paymentsPerPage)
-        );
-
+    if(!confirm('مطمئن هستید؟')){
+        return;
     }
+
+    // POST تا بعد از حذف URL تمیز بماند و صفحه هنگ نکند
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = paymentsListBase;
+    form.style.display = 'none';
+
+    const fields = {
+        delete_payment: '1',
+        delete_index: String(id),
+        per: String(paymentsPerPage)
+    };
+
+    Object.keys(fields).forEach(function(name){
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = fields[name];
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
 
 }
 
