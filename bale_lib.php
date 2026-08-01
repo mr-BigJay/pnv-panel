@@ -20,7 +20,8 @@ if(!function_exists('baleConfigPath')){
             'ingest_secret' => '',
             'bot_username' => 'Jay24x7Pusbank_bot',
             'forward_hint' => 'پیام واریز @postbank_bot را به این بازو فوروارد کنید',
-            'pay_window_seconds' => 600,
+            'pay_window_seconds' => 1800,
+            'pay_grace_seconds' => 600,
             'auto_listener_enabled' => false
         ];
     }
