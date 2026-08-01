@@ -99,7 +99,7 @@ $firstOkOpen = true;
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لیست اشتراک‌ها</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=1">
+<link rel="stylesheet" href="subscriptions_ui.css?v=2">
 </head>
 <body>
 <div class="box">
@@ -149,7 +149,11 @@ $firstOkOpen = true;
         $planLine .= ($planLine !== '' ? ' • ' : '') . $item['date'];
     }
 ?>
-<article class="<?php echo $h($chipClass); ?>" data-state="<?php echo $h($item['state']); ?>" data-id="<?php echo (int)$item['i']; ?>">
+<article class="<?php echo $h($chipClass); ?>" data-state="<?php echo $h($item['state']); ?>" data-id="<?php echo (int)$item['i']; ?>"<?php
+if($item['state'] === 'ok' && $item['link_ok']){
+    echo ' data-link="' . $h($item['link']) . '"';
+}
+?>>
 <button type="button" class="subHead" aria-expanded="<?php echo $open ? 'true' : 'false'; ?>">
 <span class="subBadge" aria-hidden="true"><?php echo $badge; ?></span>
 <span class="subMeta">
@@ -160,6 +164,29 @@ $firstOkOpen = true;
 <path d="M6 9l6 6 6-6"/>
 </svg>
 </button>
+
+<?php if($item['state'] === 'ok' && $item['link_ok']){ ?>
+<div class="subUsage is-loading" data-usage-link="<?php echo $h($item['link']); ?>">
+<div class="usageRow">
+<div class="usageLabels">
+<span class="usageKind usageKind--vol">حجم باقی‌مانده</span>
+<span class="usageVal" data-usage-vol-label>در حال دریافت…</span>
+</div>
+<div class="usageTrack" aria-hidden="true">
+<div class="usageFill usageFill--vol" data-usage-vol-fill style="width:0%"></div>
+</div>
+</div>
+<div class="usageRow">
+<div class="usageLabels">
+<span class="usageKind usageKind--time">زمان باقی‌مانده</span>
+<span class="usageVal" data-usage-time-label>در حال دریافت…</span>
+</div>
+<div class="usageTrack" aria-hidden="true">
+<div class="usageFill usageFill--time" data-usage-time-fill style="width:0%"></div>
+</div>
+</div>
+</div>
+<?php } ?>
 
 <div class="subBody">
 <?php if($item['state'] === 'ok' && $item['link_ok']){ ?>
@@ -334,6 +361,105 @@ echo $h(implode(' • ', $foot));
     document.addEventListener('keydown', function(e){
         if(e.key === 'Escape') closeModal();
     });
+
+    function usageKeyFromLink(link){
+        try{
+            var u = new URL(link, window.location.origin);
+            var host = (u.hostname || '').toLowerCase();
+            var parts = (u.pathname || '').split('/');
+            var subId = parts[parts.length - 1] || '';
+            if(host && subId) return host + '|' + subId;
+        }catch(err){}
+        return '';
+    }
+
+    function applyUsage(box, row){
+        if(!box) return;
+        box.classList.remove('is-loading');
+
+        var volFill = box.querySelector('[data-usage-vol-fill]');
+        var volLabel = box.querySelector('[data-usage-vol-label]');
+        var timeFill = box.querySelector('[data-usage-time-fill]');
+        var timeLabel = box.querySelector('[data-usage-time-label]');
+
+        if(!row || !row.ok){
+            box.classList.add('is-error');
+            if(volLabel) volLabel.textContent = 'نامشخص';
+            if(timeLabel) timeLabel.textContent = 'نامشخص';
+            if(volFill) volFill.style.width = '0%';
+            if(timeFill) timeFill.style.width = '0%';
+            return;
+        }
+
+        box.classList.remove('is-error');
+        var vol = row.volume || {};
+        var time = row.time || {};
+        var volPct = vol.unlimited ? 100 : Math.max(0, Math.min(100, Number(vol.remain_pct || 0)));
+        var timePct = time.unlimited ? 100 : Math.max(0, Math.min(100, Number(time.remain_pct || 0)));
+
+        if(volFill){
+            volFill.style.width = volPct + '%';
+            volFill.classList.toggle('is-low', !vol.unlimited && volPct <= 15);
+        }
+        if(timeFill){
+            timeFill.style.width = timePct + '%';
+            timeFill.classList.toggle('is-low', !time.unlimited && timePct <= 15);
+        }
+        if(volLabel) volLabel.textContent = vol.label || '—';
+        if(timeLabel) timeLabel.textContent = time.label || '—';
+        box.classList.toggle('is-unlimited-time', !!time.unlimited);
+        box.classList.toggle('is-unlimited-vol', !!vol.unlimited);
+    }
+
+    function loadUsage(attempt){
+        attempt = attempt || 0;
+        var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-usage-link]'));
+        if(!boxes.length) return;
+
+        var links = boxes.map(function(b){ return b.getAttribute('data-usage-link'); }).filter(Boolean);
+
+        fetch('sub-usage-api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            body: JSON.stringify({ links: links, max_fresh: 4 })
+        }).then(function(r){ return r.json(); }).then(function(data){
+            if(!data || !data.ok){
+                boxes.forEach(function(b){ applyUsage(b, null); });
+                return;
+            }
+            var map = data.items || {};
+            boxes.forEach(function(box){
+                var link = box.getAttribute('data-usage-link') || '';
+                var key = usageKeyFromLink(link);
+                var row = (key && map[key]) ? map[key] : null;
+                if(!row){
+                    // fallback: scan values
+                    Object.keys(map).forEach(function(k){
+                        if(map[k] && map[k].link === link) row = map[k];
+                    });
+                }
+                if(row && row.pending){
+                    return; // keep loading
+                }
+                applyUsage(box, row);
+            });
+
+            if((data.pending || 0) > 0 && attempt < 6){
+                setTimeout(function(){ loadUsage(attempt + 1); }, 900);
+            }
+        }).catch(function(){
+            if(attempt < 2){
+                setTimeout(function(){ loadUsage(attempt + 1); }, 1200);
+                return;
+            }
+            boxes.forEach(function(b){ applyUsage(b, null); });
+        });
+    }
+
+    if(document.querySelector('[data-usage-link]')){
+        loadUsage(0);
+    }
 })();
 </script>
 </body>

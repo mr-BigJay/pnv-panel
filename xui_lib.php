@@ -179,6 +179,104 @@ if(!function_exists('xuiConfigPath')){
         return 0;
     }
 
+    function xuiLoadPlansCatalog(){
+        $file = __DIR__ . '/db/plans.json';
+
+        if(!file_exists($file)){
+            return [];
+        }
+
+        $plans = json_decode((string)file_get_contents($file), true);
+        return is_array($plans) ? $plans : [];
+    }
+
+    /**
+     * تعداد روز پلن از متن فاکتور / کاتالوگ.
+     * 0 = نامحدود زمانی
+     */
+    function xuiParsePlanDays($planText){
+        $planText = trim((string)$planText);
+
+        if($planText === ''){
+            return 0;
+        }
+
+        if(preg_match('/نامحدود/u', $planText)){
+            // ممکن است فقط «نامحدود زمانی» باشد؛ اگر روز مشخص هم باشد پایین‌تر override می‌شود
+        }
+
+        $catalog = xuiLoadPlansCatalog();
+        usort($catalog, static function($a, $b){
+            return mb_strlen((string)($b['name'] ?? '')) <=> mb_strlen((string)($a['name'] ?? ''));
+        });
+
+        foreach($catalog as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $name = trim((string)($plan['name'] ?? ''));
+
+            if($name === '' || mb_stripos($planText, $name) === false){
+                continue;
+            }
+
+            $days = trim((string)($plan['days'] ?? ''));
+
+            if($days === '' || $days === 'نامحدود' || strcasecmp($days, 'unlimited') === 0){
+                return 0;
+            }
+
+            if(preg_match('/^\d+$/', $days)){
+                return max(0, intval($days));
+            }
+        }
+
+        if(preg_match('/(\d+)\s*ماه/u', $planText, $m)){
+            return max(0, intval($m[1]) * 30);
+        }
+
+        if(preg_match('/(\d+)\s*روز/u', $planText, $m)){
+            return max(0, intval($m[1]));
+        }
+
+        return 0;
+    }
+
+    function xuiClientUsedBytes($client){
+        if(!is_array($client)){
+            return 0;
+        }
+
+        $up = intval($client['up'] ?? $client['upload'] ?? 0);
+        $down = intval($client['down'] ?? $client['download'] ?? 0);
+
+        if($up > 0 || $down > 0){
+            return max(0, $up + $down);
+        }
+
+        if(isset($client['allTime'])){
+            return max(0, intval($client['allTime']));
+        }
+
+        return 0;
+    }
+
+    function xuiClientExpiryMs($client){
+        if(!is_array($client)){
+            return 0;
+        }
+
+        $expiry = intval($client['expiryTime'] ?? $client['expire'] ?? 0);
+
+        // بعضی نسخه‌ها ثانیه می‌دهند
+        if($expiry > 0 && $expiry < 100000000000){
+            $expiry *= 1000;
+        }
+
+        return max(0, $expiry);
+    }
+
     function xuiGbToBytes($gb){
         return intval($gb) * 1024 * 1024 * 1024;
     }
@@ -293,7 +391,7 @@ if(!function_exists('xuiConfigPath')){
         return '';
     }
 
-    function xuiApiRequest($server, $method, $path, $body = null){
+    function xuiApiRequest($server, $method, $path, $body = null, $timeouts = null){
         $base = rtrim((string)($server['base_url'] ?? ''), '/');
         $token = trim((string)($server['api_token'] ?? ''));
 
@@ -311,10 +409,23 @@ if(!function_exists('xuiConfigPath')){
             return ['success' => false, 'msg' => 'افزونه cURL فعال نیست'];
         }
 
+        $connectTimeout = 15;
+        $timeout = 45;
+
+        if(is_array($timeouts)){
+            if(isset($timeouts['connect'])){
+                $connectTimeout = max(1, intval($timeouts['connect']));
+            }
+
+            if(isset($timeouts['timeout'])){
+                $timeout = max(1, intval($timeouts['timeout']));
+            }
+        }
+
         $curl = curl_init($url);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 15);
-        curl_setopt($curl, CURLOPT_TIMEOUT, 45);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, $connectTimeout);
+        curl_setopt($curl, CURLOPT_TIMEOUT, $timeout);
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($curl, CURLOPT_CUSTOMREQUEST, strtoupper($method));
@@ -641,21 +752,44 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
-    function xuiHydrateClientByEmail($server, $client){
+    function xuiHydrateClientByEmail($server, $client, $timeouts = null){
         $email = trim((string)($client['email'] ?? ''));
 
         if($email === ''){
             return $client;
         }
 
-        $full = xuiApiRequest($server, 'GET', '/panel/api/clients/get/' . rawurlencode($email));
+        $full = xuiApiRequest(
+            $server,
+            'GET',
+            '/panel/api/clients/get/' . rawurlencode($email),
+            null,
+            $timeouts
+        );
 
         if(!empty($full['success']) && is_array($full['obj'] ?? null)){
-            $fullClient = xuiNormalizeClientRecord($full['obj']['client'] ?? $full['obj']);
+            $obj = $full['obj'];
+            $fullClient = xuiNormalizeClientRecord($obj['client'] ?? $obj);
 
             if($fullClient !== null){
                 if(empty($fullClient['_inbound_id']) && !empty($client['_inbound_id'])){
                     $fullClient['_inbound_id'] = $client['_inbound_id'];
+                }
+
+                // ترافیک معمولاً در clientStats است؛ اگر get خالی بود از رکورد قبلی نگه دار
+                foreach(['up', 'down', 'total', 'totalGB', 'expiryTime', 'enable', 'allTime'] as $field){
+                    if((!isset($fullClient[$field]) || $fullClient[$field] === '' || $fullClient[$field] === null)
+                        && isset($client[$field])){
+                        $fullClient[$field] = $client[$field];
+                    }
+                }
+
+                if(isset($obj['up']) && empty($fullClient['up'])){
+                    $fullClient['up'] = $obj['up'];
+                }
+
+                if(isset($obj['down']) && empty($fullClient['down'])){
+                    $fullClient['down'] = $obj['down'];
                 }
 
                 return $fullClient;
@@ -925,7 +1059,7 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
-    function xuiCreateClient($server, $email, $gb, $subId = ''){
+    function xuiCreateClient($server, $email, $gb, $subId = '', $days = 0){
         $email = xuiSanitizeClientEmail($email);
 
         if($email === ''){
@@ -939,12 +1073,14 @@ if(!function_exists('xuiConfigPath')){
         $inboundId = intval($server['inbound_id'] ?? 1);
         $bytes = xuiGbToBytes($gb);
         $uuid = xuiGenerateUuid();
+        $days = max(0, intval($days));
+        $expiryTime = $days > 0 ? ((time() + ($days * 86400)) * 1000) : 0;
 
         $client = [
             'id' => $uuid,
             'email' => $email,
             'enable' => true,
-            'expiryTime' => 0,
+            'expiryTime' => $expiryTime,
             'totalGB' => $bytes,
             'limitIp' => 0,
             'subId' => $subId,
@@ -1071,15 +1207,16 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
-    function xuiAdjustClientTraffic($server, $email, $addGb, $client = null){
+    function xuiAdjustClientTraffic($server, $email, $addGb, $client = null, $addDays = 0){
         $bytes = xuiGbToBytes($addGb);
         $email = trim((string)$email);
+        $addDays = max(0, intval($addDays));
         $errors = [];
 
         if($email !== ''){
             $result = xuiApiRequest($server, 'POST', '/panel/api/clients/bulkAdjust', [
                 'emails' => [$email],
-                'addDays' => 0,
+                'addDays' => $addDays,
                 'addBytes' => $bytes
             ]);
 
@@ -1135,6 +1272,7 @@ if(!function_exists('xuiConfigPath')){
         $mobile = xuiGetUserMobile($username);
         $email = xuiBuildClientEmail($configName, $mobile);
         $server = xuiPickBuyServer($config);
+        $days = xuiParsePlanDays($planText);
 
         if(!$server){
             return ['ok' => false, 'error' => 'سرور خرید پیدا نشد'];
@@ -1147,7 +1285,7 @@ if(!function_exists('xuiConfigPath')){
             $email .= '_' . substr(xuiGenerateSubId(6), 0, 4);
         }
 
-        $created = xuiCreateClient($server, $email, $gb);
+        $created = xuiCreateClient($server, $email, $gb, '', $days);
 
         if(empty($created['ok'])){
             return $created;
@@ -1159,7 +1297,8 @@ if(!function_exists('xuiConfigPath')){
             'email' => $created['email'],
             'sub_id' => $created['sub_id'],
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'days' => $days
         ];
     }
 
@@ -1173,6 +1312,7 @@ if(!function_exists('xuiConfigPath')){
         $subLink = trim((string)($paymentRow[1] ?? ''));
         $planText = trim((string)($paymentRow[2] ?? ''));
         $gb = xuiParsePlanGb($planText);
+        $days = xuiParsePlanDays($planText);
 
         if($gb <= 0){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
@@ -1208,7 +1348,7 @@ if(!function_exists('xuiConfigPath')){
             return ['ok' => false, 'error' => 'ایمیل کلاینت خالی است'];
         }
 
-        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client);
+        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
 
         if(empty($adjusted['ok'])){
             return $adjusted;
@@ -1220,7 +1360,8 @@ if(!function_exists('xuiConfigPath')){
             'email' => $email,
             'sub_id' => $parsed['sub_id'],
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'days' => $days
         ];
     }
 
