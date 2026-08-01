@@ -20,22 +20,17 @@ Bot API نمی‌تواند چت @postbank_bot را بخواند؛ این سرو
     --ingest-secret "$POSTBANK_INGEST_SECRET"
 """
 
-from __future__ import annotations
-
 import argparse
-import asyncio
 import json
 import logging
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Optional, Set
 
 try:
     import aiohttp
     from aiobale import Client, Dispatcher
-    from aiobale.types import Message
 except ImportError as exc:
     print("Missing dependency. Run: pip3 install -r tools/requirements-postbank.txt", file=sys.stderr)
     raise SystemExit(1) from exc
@@ -53,7 +48,7 @@ DEPOSIT_HINTS = (
 )
 
 
-def looks_like_deposit(text: str) -> bool:
+def looks_like_deposit(text):
     t = (text or "").strip()
     if not t:
         return False
@@ -62,7 +57,7 @@ def looks_like_deposit(text: str) -> bool:
     return any(h in t for h in DEPOSIT_HINTS)
 
 
-async def post_ingest(url: str, secret: str, text: str, source: str = "aiobale-userbot") -> dict:
+async def post_ingest(url, secret, text, source="aiobale-userbot"):
     headers = {
         "Content-Type": "application/json; charset=utf-8",
         "X-Postbank-Ingest-Secret": secret,
@@ -84,7 +79,7 @@ async def post_ingest(url: str, secret: str, text: str, source: str = "aiobale-u
             return data
 
 
-def run_login(session_file: Path) -> None:
+def run_login(session_file):
     session_file.parent.mkdir(parents=True, exist_ok=True)
     dp = Dispatcher()
     client = Client(dp, session_file=str(session_file))
@@ -93,17 +88,18 @@ def run_login(session_file: Path) -> None:
     client.run()
 
 
-def run_listener(session_file: Path, ingest_url: str, ingest_secret: str) -> None:
+def run_listener(session_file, ingest_url, ingest_secret):
     if not session_file.exists() or session_file.stat().st_size < 8:
         LOG.error("Session missing. Run with --login first: %s", session_file)
         raise SystemExit(2)
 
     dp = Dispatcher()
     client = Client(dp, session_file=str(session_file))
-    recent: Set[str] = set()
+    recent = set()
 
+    # نکته: روی پارامتر type hint نگذار — aiobale با annotation رشته‌ای می‌ترکد
     @dp.message()
-    async def on_message(msg: Message):
+    async def on_message(msg):
         text = ""
         if getattr(msg, "text", None):
             text = str(msg.text or "").strip()
@@ -137,7 +133,7 @@ def run_listener(session_file: Path, ingest_url: str, ingest_secret: str) -> Non
     client.run()
 
 
-def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+def parse_args(argv=None):
     p = argparse.ArgumentParser(description="Auto-ingest PostBank Bale notices into pnv-panel")
     p.add_argument("--session", default=os.environ.get("POSTBANK_BALE_SESSION", "db/bale_user_session.bale"))
     p.add_argument(
@@ -150,7 +146,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv=None):
     args = parse_args(argv)
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper(), logging.INFO),
