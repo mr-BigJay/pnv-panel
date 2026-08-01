@@ -262,6 +262,8 @@ $h = static function($v){
 <div class="instantTimer" id="instantTimer">۱۰:۰۰</div>
 <div class="instantAmountLabel">مبلغ قابل پرداخت</div>
 <div class="instantAmount" id="instantAmount">—</div>
+<div class="instantAmountToman" id="instantAmountToman"></div>
+<div class="instantExactHint">دقیقاً همین مبلغ را واریز کنید</div>
 <div class="instantActions">
 <button type="button" class="copybtn" id="copyAmountBtn">کپی مبلغ</button>
 <button type="button" class="copybtn" id="copyCardBtn2">کپی کارت</button>
@@ -497,6 +499,8 @@ function resetPaySession(){
     if(instantApproved){ instantApproved.hidden = true; }
     if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
     if(instantAmount){ instantAmount.textContent = '—'; }
+    const amountTomanEl = document.getElementById('instantAmountToman');
+    if(amountTomanEl){ amountTomanEl.textContent = ''; }
     if(instantTimer){ instantTimer.textContent = '۱۰:۰۰'; }
     if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
     if(startPayBtn){
@@ -520,6 +524,10 @@ function renderPay(item){
     currentPay = item;
     instantPay.hidden = false;
     instantAmount.textContent = item.amount_text || '—';
+    const amountTomanEl = document.getElementById('instantAmountToman');
+    if(amountTomanEl){
+        amountTomanEl.textContent = item.amount_toman_text || '';
+    }
     instantTimer.textContent = formatRemain(item.remaining);
     if(item.status === 'processing'){
         instantPayHead.textContent = 'در حال آماده‌سازی';

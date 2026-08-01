@@ -37,13 +37,15 @@ $text = baleExtractMessageText($message);
 
 // bootstrap: اگر ادمین هنوز chat_id ندارد، از اولین پیام ذخیره کن
 $adminIds = baleAdminChatIds($config);
+$bootstrapped = false;
 
 if(count($adminIds) === 0 && $chatId !== ''){
     $config['admin_chat_ids'] = $chatId;
     baleSaveConfig($config);
+    $adminIds = baleAdminChatIds($config);
+    $bootstrapped = true;
     baleSendMessage($chatId, "✅ شناسه چت شما ذخیره شد: {$chatId}\nاز این به بعد پیام‌های واریز پست‌بانک را به همین بازو فوروارد کنید.", [], $config);
-    echo json_encode(['ok' => true, 'bootstrapped' => true]);
-    exit;
+    // ادامه بده تا اگر همین پیام واریز بود، مچ شود
 }
 
 if(!baleIsAdminChat($chatId, $config)){
@@ -70,12 +72,12 @@ if($text === '/start' || $text === 'start'){
         [],
         $config
     );
-    echo json_encode(['ok' => true, 'start' => true, 'chat_id' => $chatId]);
+    echo json_encode(['ok' => true, 'start' => true, 'chat_id' => $chatId, 'bootstrapped' => $bootstrapped]);
     exit;
 }
 
 if($text === ''){
-    echo json_encode(['ok' => true, 'ignored' => 'empty text']);
+    echo json_encode(['ok' => true, 'ignored' => 'empty text', 'bootstrapped' => $bootstrapped]);
     exit;
 }
 
@@ -110,11 +112,40 @@ if(!empty($result['ignored'])){
     exit;
 }
 
-baleSendMessage(
-    $chatId,
-    "⚠️ پیام دریافت شد ولی سفارش مچ نشد.\n" . ($result['error'] ?? ''),
-    [],
-    $config
-);
+$err = (string)($result['error'] ?? 'no match');
+$parsed = $result['amounts'] ?? [];
+$parsedText = is_array($parsed) && count($parsed) ? implode('، ', array_map(static function($n){
+    return number_format(intval($n)) . ' ریال';
+}, $parsed)) : '—';
 
-echo json_encode(['ok' => false, 'error' => $result['error'] ?? 'no match', 'amounts' => $result['amounts'] ?? []]);
+// اگر مچ شده ولی صدور اشتراک شکست خورده، واضح بگو (نه «مچ نشد»)
+if(!empty($result['matched_amount']) && empty($result['ok'])){
+    baleSendMessage(
+        $chatId,
+        "⚠️ واریز دیده شد ولی آماده‌سازی اشتراک ناموفق بود.\n"
+        . $err . "\n"
+        . 'مبلغ مچ‌شده: ' . number_format(intval($result['matched_amount'])) . " ریال\n"
+        . 'مبالغ خوانده‌شده: ' . $parsedText,
+        [],
+        $config
+    );
+}
+else{
+    baleSendMessage(
+        $chatId,
+        "⚠️ پیام دریافت شد ولی سفارش مچ نشد.\n"
+        . $err . "\n"
+        . 'مبالغ خوانده‌شده: ' . $parsedText . "\n"
+        . "نکته: کاربر باید دقیقاً همان مبلغ صفحه را کارت‌به‌کارت کند و پیام @postbank_bot را فوروارد کنید.",
+        [],
+        $config
+    );
+}
+
+echo json_encode([
+    'ok' => false,
+    'error' => $err,
+    'amounts' => $result['amounts'] ?? [],
+    'candidates' => $result['candidates'] ?? [],
+    'bootstrapped' => $bootstrapped
+]);

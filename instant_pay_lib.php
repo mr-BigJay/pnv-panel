@@ -86,8 +86,10 @@ if(!function_exists('instantPayPath')){
         $used = instantPayActiveCodes($items);
         $usedMap = array_fill_keys($used, true);
 
+        // فقط کدهای مضرب ۱۰ (۱۰۰۰، ۱۰۱۰، …، ۹۹۹۰)
+        // تا مبلغ ریالی همیشه تومان صحیح باشد و اپ بانک رند نکند.
         for($i = 0; $i < 4000; $i++){
-            $code = (string)random_int(1000, 9999);
+            $code = (string)(random_int(100, 999) * 10);
 
             if(!isset($usedMap[$code])){
                 return $code;
@@ -98,28 +100,41 @@ if(!function_exists('instantPayPath')){
     }
 
     /**
-     * مبلغ واریز به ریال، همیشه کمتر از مبلغ اعلامی پلن.
-     * بازه: [baseRial-9000 .. baseRial-1] و ۴ رقم آخر = کد
-     * مثال: پلن ۱۵۰ هزار تومان = ۱٬۵۰۰٬۰۰۰ ریال → کد ۹۲۸۵ ⇒ ۱٬۴۹۹٬۲۸۵ ریال
+     * مبلغ واریز به ریال، همیشه کمتر از مبلغ اعلامی پلن و مضرب ۱۰ (تومان صحیح).
+     * بازه: [baseRial-9000 .. baseRial-10] و ۴ رقم آخر = کد
+     * مثال: پلن ۱۵۰ هزار تومان = ۱٬۵۰۰٬۰۰۰ ریال → کد ۹۲۸۰ ⇒ ۱٬۴۹۹٬۲۸۰ ریال (= ۱۴۹٬۹۲۸ تومان)
      */
     function instantPayBuildAmountRial($baseRial, $code){
         $baseRial = intval($baseRial);
         $code = intval($code);
 
+        // تضمین تومان صحیح
+        if($code % 10 !== 0){
+            $code = $code - ($code % 10);
+        }
+
+        if($code < 1000){
+            $code = 1000;
+        }
+
         if($baseRial < 10000){
-            $amount = max(1000, $baseRial - ($code % 1000));
-            return $amount < $baseRial ? $amount : max(1, $baseRial - 1);
+            $amount = max(1000, $baseRial - max(10, $code % 1000));
+            $amount = $amount - ($amount % 10);
+            return ($amount > 0 && $amount < $baseRial) ? $amount : max(10, $baseRial - 10);
         }
 
         $amount = ($baseRial - 10000) + $code;
 
         if($amount >= $baseRial){
-            $amount = $baseRial - 1;
+            $amount = $baseRial - 10;
         }
 
         if($amount <= 0){
-            $amount = max(1, $baseRial - 1);
+            $amount = max(10, $baseRial - 10);
         }
+
+        // همیشه مضرب ۱۰
+        $amount = $amount - ($amount % 10);
 
         return $amount;
     }
@@ -262,7 +277,9 @@ if(!function_exists('instantPayPath')){
             'ready' => $ready,
             'currency' => 'rial',
             'amount' => $amount,
+            'amount_toman' => intdiv($amount, 10),
             'amount_text' => number_format($amount) . ' ریال',
+            'amount_toman_text' => number_format(intdiv($amount, 10)) . ' تومان',
             'base_amount' => $baseRial,
             'base_text' => $baseRial > 0 ? (number_format($baseRial) . ' ریال') : '',
             'plan_toman' => $planToman,
@@ -560,8 +577,25 @@ if(!function_exists('instantPayPath')){
         ];
     }
 
+    function instantPayNormalizeItemAmountRial($item){
+        $itemAmount = intval($item['amount'] ?? 0);
+        $currency = strtolower(trim((string)($item['currency'] ?? 'rial')));
+
+        // سفارش‌های قدیمی تومان‌محور
+        if($currency !== 'rial' && $itemAmount > 0 && $itemAmount < 1000000){
+            $itemAmount *= 10;
+        }
+
+        return $itemAmount;
+    }
+
     function instantPayMatchAmount($amountRial){
         $amountRial = intval($amountRial);
+
+        if($amountRial <= 0){
+            return null;
+        }
+
         $items = instantPayExpireDue();
         $code = str_pad((string)($amountRial % 10000), 4, '0', STR_PAD_LEFT);
         $now = time();
@@ -576,15 +610,14 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            $itemAmount = intval($item['amount'] ?? 0);
-            $currency = strtolower(trim((string)($item['currency'] ?? 'rial')));
-
-            // سفارش‌های قدیمی تومان‌محور
-            if($currency !== 'rial' && $itemAmount > 0 && $itemAmount < 1000000){
-                $itemAmount *= 10;
-            }
+            $itemAmount = instantPayNormalizeItemAmountRial($item);
 
             if($itemAmount === $amountRial){
+                return $item;
+            }
+
+            // اگر پیام مبلغ را به تومان آورده (بدون تبدیل)
+            if($itemAmount > 0 && intdiv($itemAmount, 10) === $amountRial){
                 return $item;
             }
 
@@ -598,6 +631,37 @@ if(!function_exists('instantPayPath')){
         }
 
         return null;
+    }
+
+    /**
+     * مبالغ استخراج‌شده را به کاندیدهای ریالی گسترش می‌دهد
+     * (عدد بدون واحد ممکن است تومان باشد).
+     */
+    function instantPayExpandAmountCandidates($amounts){
+        $out = [];
+
+        foreach($amounts as $amount){
+            $amount = intval($amount);
+
+            if($amount <= 0){
+                continue;
+            }
+
+            $out[$amount] = true;
+
+            // تفسیر به‌عنوان تومان → ریال
+            if($amount <= 50000000){
+                $asRial = $amount * 10;
+
+                if($asRial > $amount){
+                    $out[$asRial] = true;
+                }
+            }
+        }
+
+        $list = array_map('intval', array_keys($out));
+        rsort($list, SORT_NUMERIC);
+        return $list;
     }
 
     function instantPayHandleDepositText($text, $meta = []){
@@ -617,10 +681,9 @@ if(!function_exists('instantPayPath')){
             return ['ok' => false, 'error' => 'مبلغی در پیام پیدا نشد'];
         }
 
-        // بزرگ‌ترین مبلغ معمولاً مبلغ واریز است
-        rsort($amounts, SORT_NUMERIC);
+        $candidates = instantPayExpandAmountCandidates($amounts);
 
-        foreach($amounts as $amount){
+        foreach($candidates as $amount){
             $item = instantPayMatchAmount($amount);
 
             if(!$item){
@@ -635,13 +698,15 @@ if(!function_exists('instantPayPath')){
             ]);
 
             $result['matched_amount'] = $amount;
+            $result['parsed_amounts'] = $amounts;
             return $result;
         }
 
         return [
             'ok' => false,
             'error' => 'سفارش بازی با این مبلغ پیدا نشد',
-            'amounts' => $amounts
+            'amounts' => $amounts,
+            'candidates' => $candidates
         ];
     }
 }
