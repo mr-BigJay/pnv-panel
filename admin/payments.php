@@ -1,16 +1,64 @@
 <?php
 
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/functions.php';
-require_once __DIR__ . '/../xui_lib.php';
-
-if(!pnvAdminIsLoggedIn()){
-    header('Location: ' . pnvAdminEntryUrl());
-    exit;
+// Live panel includes this from /bigjay_controller/ where auth.php & functions.php
+// are often missing. Hard require_once fatals → blank content area.
+foreach([__DIR__ . '/auth.php', __DIR__ . '/functions.php'] as $paymentsBootFile){
+    if(is_file($paymentsBootFile)){
+        require_once $paymentsBootFile;
+    }
 }
 
-$paymentsFile = '../invoices/payments.csv';
-$usersFile = '../db/users.json';
+if(!function_exists('pnvAdminUrl')){
+    function pnvAdminUrl($path = 'index.php'){
+        $base = defined('PNV_ADMIN_BASE') ? rtrim(PNV_ADMIN_BASE, '/') : '/bigjay_controller';
+        if($path === '' || $path === 'index.php'){
+            return $base . '/';
+        }
+        if(strpos($path, '?') !== false){
+            [$file, $query] = explode('?', $path, 2);
+            return $base . '/' . ltrim($file, '/') . '?' . $query;
+        }
+        return $base . '/' . ltrim($path, '/');
+    }
+}
+
+if(!function_exists('pnvAdminEntryUrl')){
+    function pnvAdminEntryUrl(){
+        return rtrim(defined('PNV_ADMIN_BASE') ? PNV_ADMIN_BASE : '/bigjay_controller', '/') . '/';
+    }
+}
+
+// Accept new pnv_admin session OR legacy $_SESSION['admin'].
+// Do NOT call pnvAdminIsLoggedIn() — it unsets legacy admin and blanks the page.
+$paymentsLoggedIn = (
+    !empty($_SESSION['pnv_admin']['user'])
+    && !empty($_SESSION['pnv_admin']['token'])
+) || !empty($_SESSION['admin']);
+
+if(!$paymentsLoggedIn){
+    echo '<div style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">نشست مدیریت معتبر نیست. دوباره وارد شوید.</div>';
+    return;
+}
+
+$_SESSION['admin'] = true;
+
+if(is_file(__DIR__ . '/../xui_lib.php')){
+    require_once __DIR__ . '/../xui_lib.php';
+}
+elseif(is_file(dirname(__DIR__) . '/xui_lib.php')){
+    require_once dirname(__DIR__) . '/xui_lib.php';
+}
+
+$paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
+$usersFile = dirname(__DIR__) . '/db/users.json';
+
+if(!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')){
+    $paymentsFile = __DIR__ . '/../invoices/payments.csv';
+}
+
+if(!is_file($usersFile) && is_file(__DIR__ . '/../db/users.json')){
+    $usersFile = __DIR__ . '/../db/users.json';
+}
 
 $payments = [];
 $users = [];
