@@ -541,7 +541,14 @@ function renderPay(item){
         instantTimer.textContent = '✓';
         instantStatus.hidden = true;
         instantApproved.hidden = false;
-        startPayBtn.disabled = true; return;
+        startPayBtn.disabled = true;
+        startPayBtn.textContent = 'پرداخت تأیید شد';
+        const sub = document.getElementById('subInput').value.trim();
+        resultMeta.innerHTML = 'پلن: <b>' + (item.plan || '—') + '</b>';
+        resultLink.textContent = item.link || sub || '—';
+        showStep(3);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
     }
     if(item.status === 'expired'){
         stopPayWatchers();
@@ -564,6 +571,13 @@ function renderPay(item){
     instantApproved.hidden = true;
 }
 
+function pollPayStatus(id){
+    fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials:'same-origin' })
+    .then(function(r){return r.json();})
+    .then(function(data){ if(data && data.ok && data.item) renderPay(data.item); })
+    .catch(function(){});
+}
+
 function startPayWatchers(id){
     stopPayWatchers();
     payTickTimer = setInterval(function(){
@@ -571,12 +585,13 @@ function startPayWatchers(id){
         currentPay.remaining = Math.max(0, (currentPay.remaining||0)-1);
         instantTimer.textContent = formatRemain(currentPay.remaining);
     }, 1000);
-    payPollTimer = setInterval(function(){
-        fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials:'same-origin' })
-        .then(function(r){return r.json();})
-        .then(function(data){ if(data && data.ok && data.item) renderPay(data.item); })
-        .catch(function(){});
-    }, 3500);
+    payPollTimer = setInterval(function(){ pollPayStatus(id); }, 2000);
+    pollPayStatus(id);
+    document.addEventListener('visibilitychange', function(){
+        if(!document.hidden && currentPay && currentPay.id === id && currentPay.status !== 'paid'){
+            pollPayStatus(id);
+        }
+    });
 }
 
 startPayBtn.addEventListener('click', function(){
