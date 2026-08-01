@@ -99,7 +99,7 @@ $firstOkOpen = true;
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لیست اشتراک‌ها</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=2">
+<link rel="stylesheet" href="subscriptions_ui.css?v=3">
 </head>
 <body>
 <div class="box">
@@ -125,47 +125,48 @@ $firstOkOpen = true;
 </div>
 
 <div class="filters" role="tablist" aria-label="فیلتر وضعیت">
-<button type="button" class="filterChip is-active" data-filter="all">همه</button>
-<button type="button" class="filterChip" data-filter="ok">فعال</button>
-<button type="button" class="filterChip" data-filter="reject">رد شده</button>
+<button type="button" class="filterChip is-active" data-filter="main">همه</button>
+<button type="button" class="filterChip" data-filter="active">فعال</button>
+<button type="button" class="filterChip" data-filter="expired">منقضی</button>
 </div>
 
-<?php if(count($items) === 0){ ?>
-<div class="empty">هنوز اشتراکی ثبت نشده است</div>
+<?php
+$visibleItems = array_values(array_filter($items, static function($it){
+    return ($it['state'] ?? '') === 'ok' && !empty($it['link_ok']);
+}));
+?>
+
+<?php if(count($visibleItems) === 0){ ?>
+<div class="empty">اشتراک فعالی برای نمایش نیست</div>
 <?php } else { ?>
 <div class="subList" id="subList">
-<?php foreach($items as $item){
-    $open = ($item['state'] === 'ok' && $item['link_ok'] && $firstOkOpen);
+<?php foreach($visibleItems as $item){
+    $open = ($firstOkOpen);
     if($open){
         $firstOkOpen = false;
     }
-    $chipClass = 'subChip is-' . $item['state'];
+    $chipClass = 'subChip is-ok';
     if($open){
         $chipClass .= ' is-open';
     }
-    $badge = $item['state'] === 'ok' ? '✓' : ($item['state'] === 'reject' ? '×' : '…');
     $planLine = $item['plan'] !== '' ? $item['plan'] : $item['status'];
     if($item['date'] !== ''){
         $planLine .= ($planLine !== '' ? ' • ' : '') . $item['date'];
     }
 ?>
-<article class="<?php echo $h($chipClass); ?>" data-state="<?php echo $h($item['state']); ?>" data-id="<?php echo (int)$item['i']; ?>"<?php
-if($item['state'] === 'ok' && $item['link_ok']){
-    echo ' data-link="' . $h($item['link']) . '"';
-}
-?>>
+<article class="<?php echo $h($chipClass); ?>" data-state="ok" data-life="active" data-id="<?php echo (int)$item['i']; ?>" data-link="<?php echo $h($item['link']); ?>">
 <button type="button" class="subHead" aria-expanded="<?php echo $open ? 'true' : 'false'; ?>">
-<span class="subBadge" aria-hidden="true"><?php echo $badge; ?></span>
+<span class="subBadge" aria-hidden="true">✓</span>
 <span class="subMeta">
 <span class="subName"><?php echo $h($item['name']); ?></span>
 <span class="subPlan"><?php echo $h($planLine); ?></span>
+<span class="subLifeTag" data-life-tag hidden>منقضی شده</span>
 </span>
 <svg class="subChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M6 9l6 6 6-6"/>
 </svg>
 </button>
 
-<?php if($item['state'] === 'ok' && $item['link_ok']){ ?>
 <div class="subUsage is-loading" data-usage-link="<?php echo $h($item['link']); ?>">
 <div class="usageRow">
 <div class="usageLabels">
@@ -186,10 +187,8 @@ if($item['state'] === 'ok' && $item['link_ok']){
 </div>
 </div>
 </div>
-<?php } ?>
 
 <div class="subBody">
-<?php if($item['state'] === 'ok' && $item['link_ok']){ ?>
 <div class="subBodyInner">
 <div class="subQrCol">
 <button type="button" class="subQrBtn" data-qr="<?php echo $h($item['qr']); ?>" data-name="<?php echo $h($item['name']); ?>" aria-label="نمایش QR Code بزرگ">
@@ -218,19 +217,6 @@ if($item['time'] !== '') $foot[] = $item['time'];
 echo $h(implode(' • ', $foot));
 ?>
 </div>
-<?php } elseif($item['link_cleared']){ ?>
-<div class="subBodyInner subBodyInner--single">
-<div class="subNote">لینک این اشتراک توسط پشتیبانی حذف شده است</div>
-</div>
-<?php } elseif($item['state'] === 'pending'){ ?>
-<div class="subBodyInner subBodyInner--single">
-<div class="subNote">بعد از تأیید، لینک اشتراک و QR در اینجا نمایش داده می‌شود.</div>
-</div>
-<?php } else { ?>
-<div class="subBodyInner subBodyInner--single">
-<div class="subNote">این درخواست رد شده است<?php echo $item['link'] !== '' ? ' — ' . $h($item['link']) : ''; ?></div>
-</div>
-<?php } ?>
 </div>
 </article>
 <?php } ?>
@@ -286,18 +272,31 @@ echo $h(implode(' • ', $foot));
         document.body.style.overflow = '';
     }
 
+    function currentFilter(){
+        var active = document.querySelector('.filterChip.is-active');
+        return active ? (active.getAttribute('data-filter') || 'main') : 'main';
+    }
+
+    function applyListFilter(){
+        var f = currentFilter();
+        document.querySelectorAll('.subChip').forEach(function(item){
+            var life = item.getAttribute('data-life') || 'active';
+            var show = true;
+            if(f === 'active') show = life === 'active';
+            else if(f === 'expired') show = life === 'expired';
+            else show = (life === 'active' || life === 'expired'); // main: بدون ردشده
+            item.hidden = !show;
+        });
+    }
+
     document.querySelectorAll('.filterChip').forEach(function(chip){
         chip.addEventListener('click', function(){
             document.querySelectorAll('.filterChip').forEach(function(c){ c.classList.remove('is-active'); });
             chip.classList.add('is-active');
-            var f = chip.getAttribute('data-filter') || 'all';
-            document.querySelectorAll('.subChip').forEach(function(item){
-                var st = item.getAttribute('data-state') || '';
-                var show = (f === 'all') || (f === st);
-                item.hidden = !show;
-            });
+            applyListFilter();
         });
     });
+    applyListFilter();
 
     if(list){
         list.addEventListener('click', function(e){
@@ -373,10 +372,24 @@ echo $h(implode(' • ', $foot));
         return '';
     }
 
+    function setChipLife(chip, expired){
+        if(!chip) return;
+        chip.classList.toggle('is-expired', !!expired);
+        chip.setAttribute('data-life', expired ? 'expired' : 'active');
+        var tag = chip.querySelector('[data-life-tag]');
+        if(tag){
+            tag.hidden = !expired;
+            tag.textContent = expired ? 'منقضی شده — با تمدید فعال می‌شود' : '';
+        }
+        var badge = chip.querySelector('.subBadge');
+        if(badge) badge.textContent = expired ? '!' : '✓';
+    }
+
     function applyUsage(box, row){
         if(!box) return;
         box.classList.remove('is-loading');
 
+        var chip = box.closest('.subChip');
         var volFill = box.querySelector('[data-usage-vol-fill]');
         var volLabel = box.querySelector('[data-usage-vol-label]');
         var timeFill = box.querySelector('[data-usage-time-fill]');
@@ -388,6 +401,9 @@ echo $h(implode(' • ', $foot));
             if(timeLabel) timeLabel.textContent = 'نامشخص';
             if(volFill) volFill.style.width = '0%';
             if(timeFill) timeFill.style.width = '0%';
+            // بدون داده، فعال فرض می‌شود تا از لیست حذف نشود
+            setChipLife(chip, false);
+            applyListFilter();
             return;
         }
 
@@ -396,6 +412,9 @@ echo $h(implode(' • ', $foot));
         var time = row.time || {};
         var volPct = vol.unlimited ? 100 : Math.max(0, Math.min(100, Number(vol.remain_pct || 0)));
         var timePct = time.unlimited ? 100 : Math.max(0, Math.min(100, Number(time.remain_pct || 0)));
+        var volGone = !vol.unlimited && volPct <= 0.05;
+        var timeGone = !time.unlimited && timePct <= 0.05;
+        var expired = volGone || timeGone;
 
         if(volFill){
             volFill.style.width = volPct + '%';
@@ -406,9 +425,17 @@ echo $h(implode(' • ', $foot));
             timeFill.classList.toggle('is-low', !time.unlimited && timePct <= 15);
         }
         if(volLabel) volLabel.textContent = vol.label || '—';
-        if(timeLabel) timeLabel.textContent = time.label || '—';
+        if(timeLabel){
+            if(timeGone) timeLabel.textContent = 'زمان تمام شده';
+            else if(volGone && !time.unlimited) timeLabel.textContent = time.label || '—';
+            else timeLabel.textContent = time.label || '—';
+        }
+        if(volGone && volLabel) volLabel.textContent = 'حجم تمام شده';
+
         box.classList.toggle('is-unlimited-time', !!time.unlimited);
         box.classList.toggle('is-unlimited-vol', !!vol.unlimited);
+        setChipLife(chip, expired);
+        applyListFilter();
     }
 
     function loadUsage(attempt){

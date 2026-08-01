@@ -381,11 +381,67 @@ border:1px solid #334155;
 }
 .btnRenew{
 margin-top:12px;
-background:#0f172a;
-color:#86efac;
-border:1.5px solid rgba(34,197,94,.45);
+background:#22c55e;
+color:#fff;
+border:0;
 }
-.btnRenew:hover{background:#052e16}
+.btnRenew:hover{filter:brightness(.96)}
+.btnRenew:active{filter:brightness(.92)}
+
+/* منقضی: کارت خاکستری، دکمه تمدید سبز می‌ماند */
+.subChip.is-expired{
+border-color:#475569;
+background:#1e293b;
+opacity:1;
+filter:grayscale(.85);
+}
+.subChip.is-expired.is-open{
+border-color:#64748b;
+background:#1e293b;
+}
+.subChip.is-expired .subName,
+.subChip.is-expired .subPlan,
+.subChip.is-expired .subChevron,
+.subChip.is-expired .usageVal,
+.subChip.is-expired .usageKind,
+.subChip.is-expired .subLinkTitle,
+.subChip.is-expired .subLinkHint,
+.subChip.is-expired .subFoot,
+.subChip.is-expired .subQrHint{
+color:#94a3b8 !important;
+}
+.subChip.is-expired .subBadge{
+background:#64748b;
+color:#e2e8f0;
+}
+.subChip.is-expired .usageTrack{background:#475569}
+.subChip.is-expired .usageFill{filter:grayscale(1);opacity:.55}
+.subLifeTag{
+display:block;
+margin-top:5px;
+font-size:11px;
+font-weight:700;
+color:#cbd5e1;
+}
+.subChip.is-expired .subLifeTag{color:#e2e8f0}
+.subChip.is-expired .btnRenew,
+.subChip.is-expired .btnPrimary{
+filter:none !important;
+grayscale:0;
+opacity:1;
+}
+.subChip.is-expired .btnRenew{
+background:#22c55e !important;
+color:#fff !important;
+}
+.subChip.is-expired .btnPrimary{
+background:#22c55e !important;
+color:#fff !important;
+}
+.subChip.is-expired .subQrBtn{
+filter:grayscale(.7);
+opacity:.85;
+}
 .btnIcon{width:16px;height:16px;display:block;flex:0 0 auto}
 
 .subNote{
