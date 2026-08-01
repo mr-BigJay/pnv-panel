@@ -28,6 +28,32 @@ if(!function_exists('pnvAdminEntryUrl')){
     }
 }
 
+if(!function_exists('pnvAdminRedirect')){
+    /**
+     * Safe redirect when this file is included inside a layout
+     * that already sent HTML (headers_sent → header Location fails).
+     */
+    function pnvAdminRedirect($url){
+        $url = (string)$url;
+
+        if(!headers_sent()){
+            header('Location: ' . $url);
+            exit;
+        }
+
+        $json = json_encode($url, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $html = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+
+        echo '<div style="padding:18px;color:#bbf7d0;background:#052e16;border-radius:12px;margin:12px 0;font-family:tahoma,sans-serif;line-height:1.8;">'
+            . 'در حال انتقال… اگر خودکار نرفت، '
+            . '<a href="' . $html . '" style="color:#86efac;font-weight:700;">اینجا کلیک کنید</a>.'
+            . '</div>';
+        echo '<script>window.location.replace(' . $json . ');</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . $html . '"></noscript>';
+        exit;
+    }
+}
+
 // Accept new pnv_admin session OR legacy $_SESSION['admin'].
 // Do NOT call pnvAdminIsLoggedIn() — it unsets legacy admin and blanks the page.
 $paymentsLoggedIn = (
@@ -173,20 +199,17 @@ if(isset($_POST['approve_payment'])){
 
         if(empty($result['ok'])){
             $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-            header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-            exit;
+            pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
         }
 
         $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-        exit;
+        pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
     }
 
     if(!isValidSubscriptionLink($link)){
         $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-        exit;
+        pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
     }
 
     if(isset($payments[$index])){
@@ -208,9 +231,7 @@ if(isset($_POST['approve_payment'])){
     fclose($fp);
 
     $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-
-    exit;
+    pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
 }
 
@@ -235,23 +256,29 @@ if(isset($_POST['reject_payment'])){
 
     $fp = fopen($paymentsFile,'w');
 
-    foreach($payments as $p){
-
-        fputcsv($fp, $p);
-
+    if($fp){
+        if(flock($fp, LOCK_EX)){
+            foreach($payments as $p){
+                fputcsv($fp, $p);
+            }
+            fflush($fp);
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
     }
 
-    fclose($fp);
-
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-
-    exit;
+    pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
 }
 
 if(isset($_GET['deletepayment'])){
 
     $id = intval($_GET['deletepayment']);
+    $redirectPer = intval($_GET['per'] ?? 20);
+
+    if(!in_array($redirectPer, $allowedPerPage, true)){
+        $redirectPer = 20;
+    }
 
     if(isset($payments[$id])){
 
@@ -259,21 +286,24 @@ if(isset($_GET['deletepayment'])){
 
         $payments = array_values($payments);
 
+        $fp = fopen($paymentsFile,'w');
+
+        if($fp){
+            if(flock($fp, LOCK_EX)){
+                foreach($payments as $p){
+                    fputcsv($fp, $p);
+                }
+                fflush($fp);
+                flock($fp, LOCK_UN);
+            }
+            fclose($fp);
+        }
+
+        $_SESSION['payment_message'] = 'پرداخت حذف شد';
     }
 
-    $fp = fopen($paymentsFile,'w');
-
-    foreach($payments as $p){
-
-        fputcsv($fp, $p);
-
-    }
-
-    fclose($fp);
-
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . intval($_GET['per'] ?? 20)));
-
-    exit;
+    // همیشه به URL تمیز برگرد (بدون deletepayment) تا رفرش دوباره حذف نزند
+    pnvAdminRedirect(pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
 }
 
