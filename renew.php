@@ -169,7 +169,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=13">
+<link rel="stylesheet" href="plan_step_ui.css?v=14">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -451,6 +451,14 @@ cursor:pointer;
 <div class="catLockCard" role="dialog" aria-modal="true" aria-labelledby="catLockText">
 <p id="catLockText"></p>
 <button type="button" class="catLockClose" data-close="1">متوجه شدم</button>
+</div>
+</div>
+
+<div class="catLockModal" id="payGuideModal" aria-hidden="true">
+<div class="catLockBackdrop" id="payGuideBackdrop"></div>
+<div class="catLockCard" role="dialog" aria-modal="true" aria-labelledby="payGuideText">
+<p id="payGuideText"></p>
+<button type="button" class="catLockClose is-primary" id="payGuideBtn">ادامه</button>
 </div>
 </div>
 
@@ -1201,12 +1209,77 @@ function ensureInstantPay(forceRestart){
     }
 }
 
-function copyText(t, msg){ if(!t) return; navigator.clipboard.writeText(String(t)).then(function(){ alert(msg||'کپی شد'); }); }
+function copyText(t, msg, opts){
+    if(!t) return Promise.resolve(false);
+    opts = opts || {};
+    return navigator.clipboard.writeText(String(t)).then(function(){
+        if(msg && !opts.silent){ alert(msg); }
+        return true;
+    }).catch(function(){ return false; });
+}
+
+const PAY_GUIDE_KEY = 'pnv_pay_guide_seen_v1';
+const payGuideModal = document.getElementById('payGuideModal');
+const payGuideText = document.getElementById('payGuideText');
+const payGuideBtn = document.getElementById('payGuideBtn');
+let payGuideStep = 1;
+const payGuidePages = [
+    'روند خرید و تمدید را <b>خودکار</b> کردیم؛ شما کار خاصی لازم نیست انجام دهید. فقط مبلغ را <b>دقیقاً مطابق همین عدد</b> پرداخت کنید. چند ثانیه بعد پرداختتان تأیید می‌شود و اشتراک به‌صورت خودکار تمدید یا ایجاد می‌شود.',
+    'حتی اگر صفحه را ببندید مشکلی نیست؛ خرید یا تمدید تأیید می‌شود. می‌توانید از داشبورد، <b>اشتراک‌های من</b> را بزنید و نتیجه را ببینید.'
+];
+
+function openPayGuide(){
+    if(!payGuideModal || !payGuideText || !payGuideBtn) return;
+    payGuideStep = 1;
+    renderPayGuideStep();
+    payGuideModal.classList.add('is-open');
+    payGuideModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function renderPayGuideStep(){
+    if(!payGuideText || !payGuideBtn) return;
+    payGuideText.innerHTML = payGuidePages[payGuideStep - 1] || '';
+    if(payGuideStep === 1){
+        payGuideBtn.textContent = 'ادامه';
+        payGuideBtn.classList.add('is-primary');
+    } else {
+        payGuideBtn.textContent = 'متوجه شدم';
+        payGuideBtn.classList.remove('is-primary');
+    }
+}
+
+function closePayGuide(){
+    if(!payGuideModal) return;
+    payGuideModal.classList.remove('is-open');
+    payGuideModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    try{ localStorage.setItem(PAY_GUIDE_KEY, '1'); }catch(e){}
+}
+
+if(payGuideBtn){
+    payGuideBtn.addEventListener('click', function(){
+        if(payGuideStep === 1){
+            payGuideStep = 2;
+            renderPayGuideStep();
+            return;
+        }
+        closePayGuide();
+    });
+}
+
 document.getElementById('copyCardBtn').addEventListener('click', function(){
     const raw = (selectedCardInput && selectedCardInput.value) || payCardNumber.textContent.replace(/\s+/g, '');
     copyText(String(raw).replace(/\D+/g, ''), 'شماره کارت کپی شد');
 });
-document.getElementById('copyAmountBtn').addEventListener('click', function(){ if(currentPay) copyText(currentPay.amount, 'مبلغ کپی شد'); });
+document.getElementById('copyAmountBtn').addEventListener('click', function(){
+    if(!currentPay) return;
+    var seen = false;
+    try{ seen = localStorage.getItem(PAY_GUIDE_KEY) === '1'; }catch(e){}
+    copyText(currentPay.amount, seen ? 'مبلغ کپی شد' : '', { silent: !seen }).then(function(){
+        if(!seen) openPayGuide();
+    });
+});
 document.getElementById('copyLinkBtn').addEventListener('click', function(){ copyText(resultLink.textContent.trim(), 'لینک کپی شد'); });
 
 // Prefill from subscriptions list: renew.php?sub=LINK&name=CONFIG
