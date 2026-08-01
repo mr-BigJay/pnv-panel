@@ -37,7 +37,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=6">
+<link rel="stylesheet" href="plan_step_ui.css?v=8">
 </head>
 <body>
 <div class="box">
@@ -161,6 +161,13 @@ $h = static function($v){
 <div class="resultLink" id="resultLink">—</div>
 <button type="button" class="copybtn" id="copyLinkBtn">کپی لینک</button>
 </div>
+<div class="resultQrWrap" id="resultQrWrap">
+<div class="fieldLabel">اسکن QR Code</div>
+<div class="resultQrFrame">
+<img id="resultQrImg" src="" alt="QR Code لینک اشتراک">
+</div>
+<div class="resultQrHint">با اسکن این کد، لینک اشتراک وارد اپ می‌شود</div>
+</div>
 <a class="btnGhost" href="subscriptions.php">اشتراک‌های من</a>
 </div>
 </div>
@@ -205,6 +212,8 @@ const instantStatus = document.getElementById('instantStatus');
 const instantApproved = document.getElementById('instantApproved');
 const resultMeta = document.getElementById('resultMeta');
 const resultLink = document.getElementById('resultLink');
+const resultQrWrap = document.getElementById('resultQrWrap');
+const resultQrImg = document.getElementById('resultQrImg');
 
 let couponTimer = null;
 let selectedCategory = '';
@@ -340,10 +349,24 @@ toStep3Btn.addEventListener('click', function(){
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+function showResultQr(link){
+    link = String(link || '').trim();
+    if(!resultQrWrap || !resultQrImg) return;
+    if(!link || link === '—' || link.indexOf('/sub/') === -1){
+        resultQrWrap.classList.remove('is-visible');
+        resultQrImg.removeAttribute('src');
+        return;
+    }
+    resultQrImg.src = 'sub-qr.php?u=' + encodeURIComponent(link) + '&t=' + Date.now();
+    resultQrWrap.classList.add('is-visible');
+}
+
 function fillResult(item){
     const name = document.getElementById('subnameInput').value.trim();
     resultMeta.innerHTML = 'نام کانفیگ: <b>' + name + '</b><br>پلن: <b>' + (item.plan || '—') + '</b>';
-    resultLink.textContent = item.link || '—';
+    const link = item.link || '—';
+    resultLink.textContent = link;
+    showResultQr(link);
 }
 
 function resetCouponResult(){

@@ -167,7 +167,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=7">
+<link rel="stylesheet" href="plan_step_ui.css?v=8">
 <style>
 .catCard.is-locked{
 opacity:.45;
@@ -334,6 +334,13 @@ background:#1e293b;
 <div class="resultLink" id="resultLink">—</div>
 <button type="button" class="copybtn" id="copyLinkBtn">کپی لینک</button>
 </div>
+<div class="resultQrWrap" id="resultQrWrap">
+<div class="fieldLabel">اسکن QR Code</div>
+<div class="resultQrFrame">
+<img id="resultQrImg" src="" alt="QR Code لینک اشتراک">
+</div>
+<div class="resultQrHint">با اسکن این کد، لینک اشتراک وارد اپ می‌شود</div>
+</div>
 <a class="btnGhost" href="subscriptions.php">اشتراک‌های من</a>
 <a class="btnGhost" href="buy.php">خرید اشتراک جدید</a>
 </div>
@@ -377,6 +384,20 @@ const instantStatus = document.getElementById('instantStatus');
 const instantApproved = document.getElementById('instantApproved');
 const resultMeta = document.getElementById('resultMeta');
 const resultLink = document.getElementById('resultLink');
+const resultQrWrap = document.getElementById('resultQrWrap');
+const resultQrImg = document.getElementById('resultQrImg');
+
+function showResultQr(link){
+    link = String(link || '').trim();
+    if(!resultQrWrap || !resultQrImg) return;
+    if(!link || link === '—' || link.indexOf('/sub/') === -1){
+        resultQrWrap.classList.remove('is-visible');
+        resultQrImg.removeAttribute('src');
+        return;
+    }
+    resultQrImg.src = 'sub-qr.php?u=' + encodeURIComponent(link) + '&t=' + Date.now();
+    resultQrWrap.classList.add('is-visible');
+}
 
 let couponTimer = null;
 let selectedCategory = '';
@@ -650,7 +671,9 @@ toStep3Btn.addEventListener('click', function(){
     if(!currentPay || currentPay.status !== 'paid') return;
     const sub = document.getElementById('subInput').value.trim();
     resultMeta.innerHTML = 'پلن: <b>' + (currentPay.plan || '—') + '</b>';
-    resultLink.textContent = currentPay.link || sub || '—';
+    const link = currentPay.link || sub || '—';
+    resultLink.textContent = link;
+    showResultQr(link);
     showStep(3);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
@@ -734,7 +757,9 @@ function renderPay(item){
         startPayBtn.textContent = 'پرداخت تأیید شد';
         const sub = document.getElementById('subInput').value.trim();
         resultMeta.innerHTML = 'پلن: <b>' + (item.plan || '—') + '</b>';
-        resultLink.textContent = item.link || sub || '—';
+        const link = item.link || sub || '—';
+        resultLink.textContent = link;
+        showResultQr(link);
         showStep(3);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
