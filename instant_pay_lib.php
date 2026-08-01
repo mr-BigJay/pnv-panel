@@ -38,9 +38,22 @@ if(!function_exists('instantPayPath')){
             $config = baleLoadConfig();
         }
 
-        // پیش‌فرض ۳۰ دقیقه
+        // پیش‌فرض ۳۰ دقیقه (تایمر نمایش به کاربر)
         $n = intval($config['pay_window_seconds'] ?? 1800);
         return $n > 60 ? $n : 1800;
+    }
+
+    /**
+     * مهلت اضافه بعد از پایان تایمر برای مچ واریز دیررس.
+     * پیش‌فرض ۱۰ دقیقه → سقف اعتبار مبلغ = ۳۰ + ۱۰ = ۴۰ دقیقه.
+     */
+    function instantPayGraceSeconds($config = null){
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        $n = intval($config['pay_grace_seconds'] ?? 600);
+        return $n >= 0 ? $n : 600;
     }
 
     function instantPayNewId(){
@@ -66,14 +79,29 @@ if(!function_exists('instantPayPath')){
         }
 
         $now = time();
+        $grace = instantPayGraceSeconds();
         $codes = [];
 
         foreach($items as $item){
-            if(($item['status'] ?? '') !== 'waiting'){
+            if(!empty($item['match_closed'])){
                 continue;
             }
 
-            if(intval($item['expires_at'] ?? 0) < $now){
+            $status = (string)($item['status'] ?? '');
+            $expires = intval($item['expires_at'] ?? 0);
+
+            // کد تا پایان مهلت نمایش + ۱۰ دقیقهٔ grace رزرو بماند
+            if($status === 'waiting'){
+                if($expires < $now && ($now - $expires) > $grace){
+                    continue;
+                }
+            }
+            elseif($status === 'expired'){
+                if($expires <= 0 || ($now - $expires) > $grace){
+                    continue;
+                }
+            }
+            else{
                 continue;
             }
 
@@ -196,6 +224,7 @@ if(!function_exists('instantPayPath')){
 
     /**
      * لغو سفارش‌های waiting کاربر (انصراف / بازگشت).
+     * مبلغ بلافاصله از مچ خارج می‌شود (بدون grace).
      */
     function instantPayCancelUserWaiting($username, $id = null, $items = null){
         $username = trim((string)$username);
@@ -223,6 +252,7 @@ if(!function_exists('instantPayPath')){
             $items[$i]['status'] = 'cancelled';
             $items[$i]['message'] = 'لغو توسط کاربر';
             $items[$i]['cancelled_at'] = time();
+            $items[$i]['match_closed'] = true;
             $changed = true;
 
             $csvIndex = intval($item['csv_index'] ?? -1);
@@ -230,6 +260,58 @@ if(!function_exists('instantPayPath')){
             if($csvIndex >= 0 && function_exists('xuiRejectPaymentIndex')){
                 xuiRejectPaymentIndex($csvIndex, 'لغو شد');
             }
+        }
+
+        if($changed){
+            instantPaySave($items);
+            $items = instantPayLoad();
+        }
+
+        return $items;
+    }
+
+    /**
+     * بستن کامل مبلغ‌های قابل‌مچ کاربر (قبل از ساخت مبلغ جدید).
+     */
+    function instantPayCloseUserMatchable($username, $exceptId = null, $items = null){
+        $username = trim((string)$username);
+        $exceptId = $exceptId !== null ? trim((string)$exceptId) : null;
+
+        if($items === null){
+            $items = instantPayExpireDue();
+        }
+
+        $changed = false;
+        $now = time();
+
+        foreach($items as $i => $item){
+            if(($item['user'] ?? '') !== $username){
+                continue;
+            }
+
+            $id = (string)($item['id'] ?? '');
+            if($exceptId !== null && $exceptId !== '' && $id === $exceptId){
+                continue;
+            }
+
+            $status = (string)($item['status'] ?? '');
+            if(!in_array($status, ['waiting', 'expired', 'failed'], true)){
+                continue;
+            }
+
+            if($status === 'waiting'){
+                $items[$i]['status'] = 'cancelled';
+                $items[$i]['message'] = 'لغو به‌خاطر مبلغ جدید';
+                $items[$i]['cancelled_at'] = $now;
+
+                $csvIndex = intval($item['csv_index'] ?? -1);
+                if($csvIndex >= 0 && function_exists('xuiRejectPaymentIndex')){
+                    xuiRejectPaymentIndex($csvIndex, 'لغو شد');
+                }
+            }
+
+            $items[$i]['match_closed'] = true;
+            $changed = true;
         }
 
         if($changed){
@@ -496,8 +578,8 @@ if(!function_exists('instantPayPath')){
 
         $items = instantPayExpireDue();
 
-        // سفارش waiting قبلی را ببند تا مبلغ/تایمر تازه ساخته شود
-        $items = instantPayCancelUserWaiting($username, null, $items);
+        // مبلغ‌های قبلی (waiting / grace) را کامل ببند تا کد تکراری و مچ اشتباه نشود
+        $items = instantPayCloseUserMatchable($username, null, $items);
 
         $code = instantPayAllocateCode($items);
 
@@ -1001,12 +1083,38 @@ if(!function_exists('instantPayPath')){
         ];
     }
 
-    /**
-     * مهلت اضافه برای مچ دقیق مبلغ بعد از پایان تایمر ۱۰ دقیقه‌ای.
-     * (کاربر واریز کرده ولی فوروارد پیام دیرتر رسیده)
-     */
-    function instantPayGraceSeconds(){
-        return 48 * 3600;
+    function instantPayIsMatchableItem($item, $now = null){
+        if(!is_array($item) || !empty($item['match_closed'])){
+            return false;
+        }
+
+        if($now === null){
+            $now = time();
+        }
+
+        $status = (string)($item['status'] ?? '');
+        $expires = intval($item['expires_at'] ?? 0);
+        $grace = instantPayGraceSeconds();
+
+        // بازگشت/لغو کاربر → مبلغ فوراً نامعتبر
+        if($status === 'cancelled' || $status === 'paid' || $status === 'processing'){
+            return false;
+        }
+
+        if($status === 'waiting' || $status === 'failed'){
+            // waiting بعد از expires_at توسط ExpireDue به expired تبدیل می‌شود؛
+            // اگر هنوز waiting مانده باشد تا پایان grace قابل مچ است.
+            if($expires > 0 && $expires < $now && ($now - $expires) > $grace){
+                return false;
+            }
+            return true;
+        }
+
+        if($status === 'expired'){
+            return $expires > 0 && ($now - $expires) <= $grace;
+        }
+
+        return false;
     }
 
     function instantPayMatchAmountExact($amountRial){
@@ -1018,35 +1126,10 @@ if(!function_exists('instantPayPath')){
 
         $items = instantPayExpireDue();
         $now = time();
-        $grace = instantPayGraceSeconds();
         $hits = [];
 
         foreach($items as $item){
-            $status = (string)($item['status'] ?? '');
-
-            // failed را هم برای تلاش دوباره بعد از خطای صدور نگه دار
-            if($status === 'paid' || $status === 'processing'){
-                continue;
-            }
-
-            $expires = intval($item['expires_at'] ?? 0);
-            $cancelledAt = intval($item['cancelled_at'] ?? 0);
-
-            if($status === 'waiting' || $status === 'failed'){
-                // waiting یا تلاش مجدد بعد از خطای صدور
-            }
-            elseif($status === 'expired'){
-                if($expires <= 0 || ($now - $expires) > $grace){
-                    continue;
-                }
-            }
-            elseif($status === 'cancelled'){
-                $ref = $cancelledAt > 0 ? $cancelledAt : $expires;
-                if($ref <= 0 || ($now - $ref) > $grace){
-                    continue;
-                }
-            }
-            else{
+            if(!instantPayIsMatchableItem($item, $now)){
                 continue;
             }
 
@@ -1075,29 +1158,13 @@ if(!function_exists('instantPayPath')){
     function instantPayListMatchableOrders($limit = 20){
         $items = instantPayExpireDue();
         $now = time();
-        $grace = instantPayGraceSeconds();
         $out = [];
 
         foreach($items as $item){
             $status = (string)($item['status'] ?? '');
             $expires = intval($item['expires_at'] ?? 0);
-            $cancelledAt = intval($item['cancelled_at'] ?? 0);
-            $ok = false;
 
-            if($status === 'waiting' || $status === 'failed'){
-                $ok = true;
-            }
-            elseif($status === 'expired' && $expires > 0 && ($now - $expires) <= $grace){
-                $ok = true;
-            }
-            elseif($status === 'cancelled'){
-                $ref = $cancelledAt > 0 ? $cancelledAt : $expires;
-                if($ref > 0 && ($now - $ref) <= $grace){
-                    $ok = true;
-                }
-            }
-
-            if(!$ok){
+            if(!instantPayIsMatchableItem($item, $now)){
                 continue;
             }
 
@@ -1113,6 +1180,7 @@ if(!function_exists('instantPayPath')){
                 'type' => $item['type'] ?? '',
                 'expires_at' => $expires,
                 'remaining' => max(0, $expires - $now),
+                'match_remaining' => max(0, ($expires > 0 ? $expires + instantPayGraceSeconds() : 0) - $now),
                 'created_at' => intval($item['created_at'] ?? 0)
             ];
         }

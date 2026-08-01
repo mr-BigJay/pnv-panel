@@ -4,6 +4,7 @@
   "admin_chat_ids": "",
   "bot_username": "Jay24x7Pusbank_bot",
   "pay_window_seconds": 1800,
+  "pay_grace_seconds": 600,
   "webhook_secret": "",
   "ingest_secret": "",
   "auto_listener_enabled": false,

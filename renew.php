@@ -880,9 +880,34 @@ toStep2Btn.addEventListener('click', function(){
     showStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
+function cancelPayBeacon(id){
+    id = String(id || '').trim();
+    if(!id) return;
+    const body = new URLSearchParams();
+    body.set('action', 'cancel');
+    body.set('id', id);
+    const payload = body.toString();
+    try{
+        if(navigator.sendBeacon){
+            const blob = new Blob([payload], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
+            if(navigator.sendBeacon('instant-pay-api.php', blob)) return;
+        }
+    }catch(e){}
+    fetch('instant-pay-api.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: payload
+    }).catch(function(){});
+}
+
 const userBackLink = document.querySelector('.userBack');
 if(userBackLink){
-    userBackLink.addEventListener('click', function(){ resetPaySession(); });
+    userBackLink.addEventListener('click', function(){
+        // مبلغ کدگذاری‌شده بلافاصله منقضی/لغو شود
+        resetPaySession();
+    });
 }
 toStep3Btn.addEventListener('click', function(){
     if(!currentPay || currentPay.status !== 'paid') return;
@@ -941,16 +966,10 @@ function resetPaySession(){
     if(amountTomanEl){ amountTomanEl.textContent = ''; }
     if(instantTimer){ instantTimer.textContent = '۳۰:۰۰'; }
     if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
+    const restartBtn = document.getElementById('restartPayBtn');
+    if(restartBtn) restartBtn.hidden = true;
     if(cancelId){
-        const body = new URLSearchParams();
-        body.set('action', 'cancel');
-        body.set('id', cancelId);
-        fetch('instant-pay-api.php', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: body.toString()
-        }).catch(function(){});
+        cancelPayBeacon(cancelId);
     }
 }
 
@@ -986,12 +1005,28 @@ function renderPay(item){
         return;
     }
     if(item.status === 'expired'){
-        stopPayWatchers();
+        // تایمر UI تمام شده؛ تا ۱۰ دقیقهٔ grace هنوز مچ می‌شود
+        if(payTickTimer){ clearInterval(payTickTimer); payTickTimer = null; }
+        instantTimer.textContent = '۰۰:۰۰';
         instantPayHead.textContent = 'مهلت تمام شد';
         instantStatus.hidden = false;
-        instantStatus.textContent = 'مهلت پرداخت تمام شد. مبلغ جدید در حال ساخت است…';
+        instantStatus.textContent = 'مهلت ۳۰ دقیقه‌ای تمام شد. اگر همین الان واریز کرده‌اید تا ۱۰ دقیقه دیگر بررسی می‌شود؛ در غیر این صورت مبلغ جدید بسازید.';
         instantApproved.hidden = true;
-        ensureInstantPay(true);
+        let restartBtn = document.getElementById('restartPayBtn');
+        if(!restartBtn && instantPay){
+            restartBtn = document.createElement('button');
+            restartBtn.type = 'button';
+            restartBtn.id = 'restartPayBtn';
+            restartBtn.className = 'btnNext';
+            restartBtn.style.marginTop = '12px';
+            restartBtn.textContent = 'ساخت مبلغ جدید';
+            restartBtn.addEventListener('click', function(){ ensureInstantPay(true); });
+            instantPay.appendChild(restartBtn);
+        }
+        if(restartBtn) restartBtn.hidden = false;
+        if(!payPollTimer && item.id){
+            payPollTimer = setInterval(function(){ pollPayStatus(item.id); }, 2000);
+        }
         return;
     }
     if(item.status === 'failed'){
@@ -1004,6 +1039,8 @@ function renderPay(item){
     instantStatus.hidden = true;
     instantStatus.textContent = '';
     instantApproved.hidden = true;
+    const restartBtn = document.getElementById('restartPayBtn');
+    if(restartBtn) restartBtn.hidden = true;
 }
 
 function pollPayStatus(id){
@@ -1095,15 +1132,8 @@ function ensureInstantPay(forceRestart){
     };
 
     if(prevId){
-        const body = new URLSearchParams();
-        body.set('action', 'cancel');
-        body.set('id', prevId);
-        fetch('instant-pay-api.php', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: body.toString()
-        }).finally(startCreate);
+        cancelPayBeacon(prevId);
+        startCreate();
     } else {
         startCreate();
     }
