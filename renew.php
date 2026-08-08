@@ -169,7 +169,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=16">
+<link rel="stylesheet" href="plan_step_ui.css?v=17">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -1172,11 +1172,9 @@ const payGuideText = document.getElementById('payGuideText');
 const payGuideBtn = document.getElementById('payGuideBtn');
 let payGuideStep = 1;
 const payGuidePages = [
-    '<b>مبلغ کپی شد.</b> برای تکمیل تمدید این کارها را انجام دهید:<br><br>' +
-    '۱. وارد اپ بانک یا اینترنت‌بانک شوید.<br>' +
-    '۲. به <b>شماره کارت مقصد</b> (بالای این بخش) واریز کنید.<br>' +
-    '۳. مبلغ واریز باید <b>دقیقاً همین عدد ریالی</b> باشد — نه کمتر، نه بیشتر، و آن را گرد نکنید.<br>' +
-    '۴. بعد از واریز، معمولاً ظرف چند ثانیه پرداخت تأیید می‌شود و اشتراک شما خودکار تمدید می‌شود.',
+    '<b>مبلغ کپی شد</b><br><br>' +
+    'توجه کنید مبلغ واریزی دقیقاً همین عدد ریالی باشد. نه کمتر، نه بیشتر، و آن را گرد نکنید.<br><br>' +
+    'بعد از واریز، معمولاً ظرف چند ثانیه پرداخت تأیید می‌شود و اشتراک خودکار ساخته یا تمدید می‌شود.',
     'نیازی نیست تا پایان در این صفحه بمانید؛ اگر صفحه را ببندید هم مشکلی نیست.<br><br>' +
     'برای دیدن وضعیت تمدید، از داشبورد وارد بخش <b>اشتراک‌های من</b> شوید.'
 ];
