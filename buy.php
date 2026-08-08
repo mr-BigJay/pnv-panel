@@ -10,6 +10,7 @@ if(!isset($_SESSION['user'])){
 require_once __DIR__ . '/coupon_lib.php';
 require_once __DIR__ . '/telegram_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
+require_once __DIR__ . '/bank_lib.php';
 
 $plans = [];
 if(file_exists('db/plans.json')){
@@ -23,6 +24,7 @@ if(file_exists('db/cards.json')){
     $cards = json_decode(file_get_contents('db/cards.json'), true);
 }
 if(!is_array($cards)){ $cards = []; }
+$cardsUi = pnvCardsForUi($cards);
 
 $h = static function($v){
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
@@ -37,7 +39,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=6">
+<link rel="stylesheet" href="plan_step_ui.css?v=14">
 </head>
 <body>
 <div class="box">
@@ -63,7 +65,7 @@ $h = static function($v){
 <!-- STEP 1 -->
 <div class="formStep is-active" id="step1">
 <div class="fieldLabel">نام کانفیگ</div>
-<input type="text" id="subnameInput" placeholder="نام دلخواه برای کانفیگ" required>
+<input type="text" id="subnameInput" placeholder="مثلاً myconfig1" required minlength="5" maxlength="20" pattern="[A-Za-z0-9._-]+" title="فقط حروف لاتین، عدد و . _ - (۵ تا ۲۰ کاراکتر)">
 
 <div class="sectionTitle">نوع پلن را انتخاب کنید</div>
 <div class="catGrid">
@@ -104,42 +106,49 @@ $h = static function($v){
 </div>
 </div>
 
-<div class="sectionTitle">کارت مقصد</div>
-<select id="cardSelect">
-<option value="">انتخاب کارت</option>
-<?php foreach($cards as $i => $card){
-    $name = (string)($card['name'] ?? '');
-    $num = (string)($card['card'] ?? '');
-    $selected = (stripos($name, 'پست') !== false) ? ' selected' : '';
-?>
-<option value="<?php echo $h($num); ?>" data-name="<?php echo $h($name); ?>"<?php echo $selected; ?>>
-<?php echo $h($name); ?>
-</option>
-<?php } ?>
-</select>
+<div class="destCardSection">
+<div class="destCardTitle">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg>
+<span>کارت مقصد</span>
+</div>
+<div class="cardTabs" id="cardTabs" role="tablist" aria-label="انتخاب کارت"></div>
+<input type="hidden" id="selectedCard" value="">
+<input type="hidden" id="selectedCardName" value="">
 
 <div class="payCardBox" id="payCardBox" hidden>
+<div class="payCardHead">
+<img class="payCardIcon" id="payCardIcon" src="" alt="" hidden>
+<div class="payCardMeta">
+<div class="payCardBank" id="payCardBank">—</div>
 <div class="payCardOwner" id="payCardOwner">—</div>
+</div>
+</div>
+<div class="payCardNumberRow">
 <div class="payCardNumber" id="payCardNumber">—</div>
-<button type="button" class="copybtn" id="copyCardBtn">کپی شماره کارت</button>
+<button type="button" class="iconCopyBtn" id="copyCardBtn" title="کپی شماره کارت" aria-label="کپی شماره کارت">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+</button>
+</div>
+</div>
 </div>
 
-<button type="button" class="btnGhost" id="backStep1">بازگشت به انتخاب پلن</button>
-<button type="button" id="startPayBtn">شروع مهلت پرداخت (۱۰ دقیقه)</button>
+<div class="payCreating" id="payCreating">در حال ایجاد مبلغ پرداخت…</div>
 
 <div class="instantPay" id="instantPay" hidden>
+<div class="instantPayTop">
 <div class="instantPayHead" id="instantPayHead">مهلت پرداخت</div>
-<div class="instantTimer" id="instantTimer">۱۰:۰۰</div>
+<div class="instantTimer" id="instantTimer">۳۰:۰۰</div>
+</div>
 
 <div class="instantAmountLabel">مبلغ قابل پرداخت</div>
+<div class="instantAmountRow">
 <div class="instantAmount" id="instantAmount">—</div>
+<button type="button" class="iconCopyBtn" id="copyAmountBtn" title="کپی مبلغ" aria-label="کپی مبلغ">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+</button>
+</div>
 <div class="instantAmountToman" id="instantAmountToman"></div>
 <div class="instantExactHint">دقیقاً همین مبلغ را واریز کنید</div>
-
-<div class="instantActions">
-<button type="button" class="copybtn" id="copyAmountBtn">کپی مبلغ</button>
-<button type="button" class="copybtn" id="copyCardBtn2">کپی کارت</button>
-</div>
 
 <div class="instantStatus" id="instantStatus" hidden></div>
 
@@ -161,15 +170,31 @@ $h = static function($v){
 <div class="resultLink" id="resultLink">—</div>
 <button type="button" class="copybtn" id="copyLinkBtn">کپی لینک</button>
 </div>
-<a class="btnGhost" href="subscriptions.php">رفتن به لیست اشتراک‌ها</a>
+<div class="resultQrWrap" id="resultQrWrap">
+<div class="fieldLabel">اسکن QR Code</div>
+<div class="resultQrFrame">
+<img id="resultQrImg" src="" alt="QR Code لینک اشتراک">
+</div>
+<div class="resultQrHint">با اسکن این کد، لینک اشتراک وارد اپ می‌شود</div>
+</div>
+<a class="btnGhost" href="subscriptions.php">اشتراک‌های من</a>
 </div>
 </div>
 
 </form>
 </div>
 
+<div class="catLockModal" id="payGuideModal" aria-hidden="true">
+<div class="catLockBackdrop" id="payGuideBackdrop"></div>
+<div class="catLockCard" role="dialog" aria-modal="true" aria-labelledby="payGuideText">
+<p id="payGuideText"></p>
+<button type="button" class="catLockClose is-primary" id="payGuideBtn">ادامه</button>
+</div>
+</div>
+
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
+const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const mode = 'buy';
 
 const planSelect = document.getElementById('planSelect');
@@ -179,7 +204,6 @@ const planListTitle = document.getElementById('planListTitle');
 const planSummary = document.getElementById('planSummary');
 const toStep2Btn = document.getElementById('toStep2');
 const toStep3Btn = document.getElementById('toStep3');
-const backStep1Btn = document.getElementById('backStep1');
 const step1 = document.getElementById('step1');
 const step2 = document.getElementById('step2');
 const step3 = document.getElementById('step3');
@@ -192,11 +216,16 @@ const couponBox = document.getElementById('couponBox');
 const couponResult = document.getElementById('couponResult');
 const couponCodeInput = document.getElementById('couponCode');
 const hasCouponCheck = document.getElementById('hasCouponCheck');
-const cardSelect = document.getElementById('cardSelect');
+const cardTabs = document.getElementById('cardTabs');
+const selectedCardInput = document.getElementById('selectedCard');
+const selectedCardNameInput = document.getElementById('selectedCardName');
 const payCardBox = document.getElementById('payCardBox');
+const payCardIcon = document.getElementById('payCardIcon');
+const payCardBank = document.getElementById('payCardBank');
 const payCardOwner = document.getElementById('payCardOwner');
 const payCardNumber = document.getElementById('payCardNumber');
-const startPayBtn = document.getElementById('startPayBtn');
+let selectedCardMeta = null;
+const payCreating = document.getElementById('payCreating');
 const instantPay = document.getElementById('instantPay');
 const instantPayHead = document.getElementById('instantPayHead');
 const instantTimer = document.getElementById('instantTimer');
@@ -205,6 +234,8 @@ const instantStatus = document.getElementById('instantStatus');
 const instantApproved = document.getElementById('instantApproved');
 const resultMeta = document.getElementById('resultMeta');
 const resultLink = document.getElementById('resultLink');
+const resultQrWrap = document.getElementById('resultQrWrap');
+const resultQrImg = document.getElementById('resultQrImg');
 
 let couponTimer = null;
 let selectedCategory = '';
@@ -212,6 +243,7 @@ let selectedPlan = null;
 let payPollTimer = null;
 let payTickTimer = null;
 let currentPay = null;
+let payCreateInFlight = false;
 
 function updateContinueState(){
     toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
@@ -294,23 +326,80 @@ function showStep(step){
         planSummary.innerHTML = html;
         syncCardBox();
         validateCoupon();
+        ensureInstantPay();
     }
 }
 
+function formatCardDisplay(num){
+    num = String(num || '').replace(/\D+/g, '');
+    return num.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+}
+
+function selectCardMeta(card){
+    selectedCardMeta = card || null;
+    selectedCardInput.value = (card && card.card) || '';
+    selectedCardNameInput.value = (card && card.name) || '';
+    syncCardBox();
+}
+
+function renderCardTabs(){
+    if(!cardTabs) return;
+    cardTabs.innerHTML = '';
+    const list = Array.isArray(cardsData) ? cardsData : [];
+    if(list.length === 0){
+        cardTabs.innerHTML = '<div class="cardTabsEmpty">کارتی تعریف نشده است. از پنل ادمین کارت اضافه کنید.</div>';
+        return;
+    }
+    let preferred = 0;
+    list.forEach(function(c, idx){
+        if((c.bank || '') === 'post' || /پست/.test(c.bank_label || c.name || '')) preferred = idx;
+    });
+    list.forEach(function(card, idx){
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cardTab' + (idx === preferred ? ' is-active' : '');
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('data-idx', String(idx));
+        btn.textContent = card.bank_label || card.name || 'کارت';
+        btn.addEventListener('click', function(){
+            cardTabs.querySelectorAll('.cardTab').forEach(function(el){ el.classList.remove('is-active'); });
+            btn.classList.add('is-active');
+            selectCardMeta(card);
+            ensureInstantPay(true);
+        });
+        cardTabs.appendChild(btn);
+    });
+    selectCardMeta(list[preferred] || list[0]);
+}
+
 function syncCardBox(){
-    const opt = cardSelect.options[cardSelect.selectedIndex];
-    const card = cardSelect.value;
-    const name = opt ? (opt.getAttribute('data-name') || opt.textContent || '') : '';
-    if(!card){
+    const card = selectedCardMeta;
+    const number = (card && card.card) || (selectedCardInput && selectedCardInput.value) || '';
+    if(!number){
         payCardBox.hidden = true;
         return;
     }
     payCardBox.hidden = false;
-    payCardOwner.textContent = name || 'کارت انتخاب‌شده';
-    payCardNumber.textContent = card;
+    if(payCardBank){
+        payCardBank.textContent = (card && (card.bank_label || card.name)) || 'بانک';
+    }
+    if(payCardOwner){
+        payCardOwner.textContent = (card && (card.holder || card.name)) || '—';
+    }
+    if(payCardIcon){
+        if(card && card.icon){
+            payCardIcon.src = card.icon;
+            payCardIcon.alt = (card.bank_label || '') + '';
+            payCardIcon.hidden = false;
+        } else {
+            payCardIcon.removeAttribute('src');
+            payCardIcon.hidden = true;
+        }
+    }
+    payCardNumber.textContent = formatCardDisplay(number);
 }
 
-cardSelect.addEventListener('change', syncCardBox);
+renderCardTabs();
 syncCardBox();
 
 toStep2Btn.addEventListener('click', function(){
@@ -321,15 +410,32 @@ toStep2Btn.addEventListener('click', function(){
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-backStep1Btn.addEventListener('click', function(){
-    resetPaySession();
-    showStep(1);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-});
+function cancelPayBeacon(id){
+    id = String(id || '').trim();
+    if(!id) return;
+    const body = new URLSearchParams();
+    body.set('action', 'cancel');
+    body.set('id', id);
+    const payload = body.toString();
+    try{
+        if(navigator.sendBeacon){
+            const blob = new Blob([payload], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
+            if(navigator.sendBeacon('instant-pay-api.php', blob)) return;
+        }
+    }catch(e){}
+    fetch('instant-pay-api.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: payload
+    }).catch(function(){});
+}
 
 const userBackLink = document.querySelector('.userBack');
 if(userBackLink){
     userBackLink.addEventListener('click', function(){
+        // مبلغ کدگذاری‌شده بلافاصله منقضی/لغو شود
         resetPaySession();
     });
 }
@@ -340,10 +446,24 @@ toStep3Btn.addEventListener('click', function(){
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+function showResultQr(link){
+    link = String(link || '').trim();
+    if(!resultQrWrap || !resultQrImg) return;
+    if(!link || link === '—' || link.indexOf('/sub/') === -1){
+        resultQrWrap.classList.remove('is-visible');
+        resultQrImg.removeAttribute('src');
+        return;
+    }
+    resultQrImg.src = 'sub-qr.php?u=' + encodeURIComponent(link) + '&t=' + Date.now();
+    resultQrWrap.classList.add('is-visible');
+}
+
 function fillResult(item){
     const name = document.getElementById('subnameInput').value.trim();
     resultMeta.innerHTML = 'نام کانفیگ: <b>' + name + '</b><br>پلن: <b>' + (item.plan || '—') + '</b>';
-    resultLink.textContent = item.link || '—';
+    const link = item.link || '—';
+    resultLink.textContent = link;
+    showResultQr(link);
 }
 
 function resetCouponResult(){
@@ -370,8 +490,15 @@ function validateCoupon(){
 hasCouponCheck.addEventListener('change', function(){
     if(this.checked){ couponBox.classList.add('is-open'); couponCodeInput.focus(); validateCoupon(); }
     else { couponBox.classList.remove('is-open'); couponCodeInput.value = ''; resetCouponResult(); }
+    if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
 });
-couponCodeInput.addEventListener('input', function(){ clearTimeout(couponTimer); couponTimer = setTimeout(validateCoupon, 400); });
+couponCodeInput.addEventListener('input', function(){
+    clearTimeout(couponTimer);
+    couponTimer = setTimeout(function(){
+        validateCoupon();
+        if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
+    }, 450);
+});
 planSelect.addEventListener('change', validateCoupon);
 
 function formatRemain(sec){
@@ -387,33 +514,26 @@ function resetPaySession(){
     stopPayWatchers();
     const cancelId = currentPay && currentPay.id ? currentPay.id : '';
     currentPay = null;
+    payCreateInFlight = false;
+    if(payCreating) payCreating.classList.remove('is-visible');
     if(instantPay){ instantPay.hidden = true; }
     if(instantApproved){ instantApproved.hidden = true; }
     if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
     if(instantAmount){ instantAmount.textContent = '—'; }
     const amountTomanEl = document.getElementById('instantAmountToman');
     if(amountTomanEl){ amountTomanEl.textContent = ''; }
-    if(instantTimer){ instantTimer.textContent = '۱۰:۰۰'; }
+    if(instantTimer){ instantTimer.textContent = '۳۰:۰۰'; }
     if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
-    if(startPayBtn){
-        startPayBtn.disabled = false;
-        startPayBtn.textContent = 'شروع مهلت پرداخت (۱۰ دقیقه)';
-    }
+    const restartBtn = document.getElementById('restartPayBtn');
+    if(restartBtn) restartBtn.hidden = true;
     if(cancelId){
-        const body = new URLSearchParams();
-        body.set('action', 'cancel');
-        body.set('id', cancelId);
-        fetch('instant-pay-api.php', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: body.toString()
-        }).catch(function(){});
+        cancelPayBeacon(cancelId);
     }
 }
 
 function renderPay(item){
     currentPay = item;
+    if(payCreating) payCreating.classList.remove('is-visible');
     instantPay.hidden = false;
     instantAmount.textContent = item.amount_text || '—';
     const amountTomanEl = document.getElementById('instantAmountToman');
@@ -436,18 +556,35 @@ function renderPay(item){
         instantTimer.textContent = '✓';
         instantStatus.hidden = true;
         instantApproved.hidden = false;
-        startPayBtn.disabled = true;
+        fillResult(item);
+        showStep(3);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
     }
 
     if(item.status === 'expired'){
-        stopPayWatchers();
+        // تایمر UI تمام شده؛ تا ۱۰ دقیقهٔ grace هنوز مچ می‌شود
+        if(payTickTimer){ clearInterval(payTickTimer); payTickTimer = null; }
+        instantTimer.textContent = '۰۰:۰۰';
         instantPayHead.textContent = 'مهلت تمام شد';
         instantStatus.hidden = false;
-        instantStatus.textContent = 'مهلت پرداخت تمام شد. دوباره شروع کنید.';
+        instantStatus.textContent = 'مهلت ۳۰ دقیقه‌ای تمام شد. اگر همین الان واریز کرده‌اید تا ۱۰ دقیقه دیگر بررسی می‌شود؛ در غیر این صورت مبلغ جدید بسازید.';
         instantApproved.hidden = true;
-        startPayBtn.disabled = false;
-        startPayBtn.textContent = 'شروع مهلت جدید';
+        let restartBtn = document.getElementById('restartPayBtn');
+        if(!restartBtn && instantPay){
+            restartBtn = document.createElement('button');
+            restartBtn.type = 'button';
+            restartBtn.id = 'restartPayBtn';
+            restartBtn.className = 'btnNext';
+            restartBtn.style.marginTop = '12px';
+            restartBtn.textContent = 'ساخت مبلغ جدید';
+            restartBtn.addEventListener('click', function(){ ensureInstantPay(true); });
+            instantPay.appendChild(restartBtn);
+        }
+        if(restartBtn) restartBtn.hidden = false;
+        if(!payPollTimer && item.id){
+            payPollTimer = setInterval(function(){ pollPayStatus(item.id); }, 2000);
+        }
         return;
     }
 
@@ -463,6 +600,15 @@ function renderPay(item){
     instantStatus.hidden = true;
     instantStatus.textContent = '';
     instantApproved.hidden = true;
+    const restartBtn = document.getElementById('restartPayBtn');
+    if(restartBtn) restartBtn.hidden = true;
+}
+
+function pollPayStatus(id){
+    fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials: 'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(data){ if(data && data.ok && data.item) renderPay(data.item); })
+    .catch(function(){});
 }
 
 function startPayWatchers(id){
@@ -472,73 +618,202 @@ function startPayWatchers(id){
         currentPay.remaining = Math.max(0, (currentPay.remaining || 0) - 1);
         instantTimer.textContent = formatRemain(currentPay.remaining);
     }, 1000);
-    payPollTimer = setInterval(function(){
-        fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials: 'same-origin' })
-        .then(function(r){ return r.json(); })
-        .then(function(data){ if(data && data.ok && data.item) renderPay(data.item); })
-        .catch(function(){});
-    }, 3500);
+    payPollTimer = setInterval(function(){ pollPayStatus(id); }, 2000);
+    pollPayStatus(id);
+    document.addEventListener('visibilitychange', function onVis(){
+        if(!document.hidden && currentPay && currentPay.id === id && currentPay.status !== 'paid'){
+            pollPayStatus(id);
+        }
+    });
 }
 
-startPayBtn.addEventListener('click', function(){
-    const card = cardSelect.value;
-    const opt = cardSelect.options[cardSelect.selectedIndex];
-    const cardName = opt ? (opt.getAttribute('data-name') || opt.textContent || '') : '';
-    const subname = document.getElementById('subnameInput').value.trim();
-    if(!planSelect.value){ alert('پلن را انتخاب کنید'); return; }
-    if(!card){ alert('کارت را انتخاب کنید'); return; }
-    if(subname.length < 5){ alert('نام کانفیگ حداقل ۵ کاراکتر'); return; }
-
-    startPayBtn.disabled = true;
-    startPayBtn.textContent = 'در حال ساخت مبلغ…';
-
-    const body = new URLSearchParams();
-    body.set('action', 'create');
-    body.set('type', 'خرید');
-    body.set('plan', planSelect.value);
-    body.set('subname', subname);
-    body.set('card', card);
-    body.set('card_name', cardName);
-    if(hasCouponCheck.checked){
-        body.set('has_coupon', '1');
-        body.set('coupon_code', couponCodeInput.value.trim());
+function showPayCreateError(msg){
+    if(payCreating){
+        payCreating.classList.add('is-visible', 'is-error');
+        payCreating.textContent = msg || 'ساخت مبلغ ناموفق بود';
     }
+    if(instantPay) instantPay.hidden = true;
+}
 
-    fetch('instant-pay-api.php', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        body: body.toString()
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-        if(!data || !data.ok || !data.item){
-            startPayBtn.disabled = false;
-            startPayBtn.textContent = 'شروع مهلت پرداخت (۱۰ دقیقه)';
-            alert((data && data.error) || 'ساخت سفارش ناموفق بود');
+function ensureInstantPay(forceRestart){
+    const card = selectedCardInput ? selectedCardInput.value.trim() : '';
+    const cardName = selectedCardNameInput ? selectedCardNameInput.value.trim() : '';
+    const subname = document.getElementById('subnameInput').value.trim();
+
+    if(!planSelect.value){
+        showPayCreateError('ابتدا پلن را انتخاب کنید');
+        return;
+    }
+    if(!card){
+        showPayCreateError('کارت مقصد را از تب بانک‌ها انتخاب کنید');
+        return;
+    }
+    if(subname.length < 5 || subname.length > 20 || !/^[A-Za-z0-9._-]+$/.test(subname)){
+        showPayCreateError('نام کانفیگ باید ۵ تا ۲۰ کاراکتر لاتین/عدد باشد');
+        return;
+    }
+    if(!forceRestart && currentPay && (currentPay.status === 'waiting' || currentPay.status === 'processing')){
+        if(String(currentPay.card || '') === card){
             return;
         }
-        startPayBtn.textContent = 'پرداخت در جریان…';
-        renderPay(data.item);
-        startPayWatchers(data.item.id);
-        instantPay.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    })
-    .catch(function(){
-        startPayBtn.disabled = false;
-        startPayBtn.textContent = 'شروع مهلت پرداخت (۱۰ دقیقه)';
-        alert('خطا در ارتباط با سرور');
-    });
-});
+    }
+    if(payCreateInFlight) return;
+    payCreateInFlight = true;
 
-function copyText(t, msg){
-    if(!t) return;
-    navigator.clipboard.writeText(String(t)).then(function(){ alert(msg || 'کپی شد'); });
+    if(payCreating){
+        payCreating.classList.add('is-visible');
+        payCreating.classList.remove('is-error');
+        payCreating.textContent = 'در حال ایجاد مبلغ پرداخت…';
+    }
+    // هنگام ساخت، باکس مبلغ/تایمر را با حالت لودینگ نشان بده
+    if(instantPay){
+        instantPay.hidden = false;
+        if(instantAmount) instantAmount.textContent = '…';
+        if(instantTimer) instantTimer.textContent = '۳۰:۰۰';
+        if(instantPayHead) instantPayHead.textContent = 'مهلت پرداخت';
+        const amountTomanEl = document.getElementById('instantAmountToman');
+        if(amountTomanEl) amountTomanEl.textContent = '';
+        if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
+        if(instantApproved) instantApproved.hidden = true;
+    }
+
+    const prevId = currentPay && currentPay.id ? currentPay.id : '';
+    stopPayWatchers();
+    currentPay = null;
+
+    const startCreate = function(){
+        const body = new URLSearchParams();
+        body.set('action', 'create');
+        body.set('type', 'خرید');
+        body.set('plan', planSelect.value);
+        body.set('subname', subname);
+        body.set('card', card);
+        body.set('card_name', cardName);
+        if(hasCouponCheck.checked){
+            body.set('has_coupon', '1');
+            body.set('coupon_code', couponCodeInput.value.trim());
+        }
+        fetch('instant-pay-api.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: body.toString()
+        })
+        .then(function(r){
+            return r.text().then(function(t){
+                var data = null;
+                try{ data = JSON.parse(t); }catch(e){ data = null; }
+                if(!r.ok){
+                    throw new Error((data && data.error) || ('خطای سرور ' + r.status));
+                }
+                return data;
+            });
+        })
+        .then(function(data){
+            payCreateInFlight = false;
+            if(!data || !data.ok || !data.item){
+                showPayCreateError((data && data.error) || 'ساخت مبلغ ناموفق بود');
+                return;
+            }
+            if(payCreating){
+                payCreating.classList.remove('is-visible', 'is-error');
+                payCreating.textContent = 'در حال ایجاد مبلغ پرداخت…';
+            }
+            renderPay(data.item);
+            startPayWatchers(data.item.id);
+        })
+        .catch(function(err){
+            payCreateInFlight = false;
+            showPayCreateError((err && err.message) || 'خطا در ارتباط با سرور');
+        });
+    };
+
+    if(prevId){
+        // اول سفارش قبلی را لغو کن، بعد مبلغ جدید بساز (جلوگیری از تداخل)
+        const body = new URLSearchParams();
+        body.set('action', 'cancel');
+        body.set('id', prevId);
+        fetch('instant-pay-api.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: body.toString()
+        }).finally(startCreate);
+    } else {
+        startCreate();
+    }
 }
-document.getElementById('copyCardBtn').addEventListener('click', function(){ copyText(payCardNumber.textContent.trim(), 'شماره کارت کپی شد'); });
-document.getElementById('copyCardBtn2').addEventListener('click', function(){ copyText(payCardNumber.textContent.trim(), 'شماره کارت کپی شد'); });
+
+function copyText(t, msg, opts){
+    if(!t) return Promise.resolve(false);
+    opts = opts || {};
+    return navigator.clipboard.writeText(String(t)).then(function(){
+        if(msg && !opts.silent){ alert(msg); }
+        return true;
+    }).catch(function(){ return false; });
+}
+
+const PAY_GUIDE_KEY = 'pnv_pay_guide_seen_v1';
+const payGuideModal = document.getElementById('payGuideModal');
+const payGuideText = document.getElementById('payGuideText');
+const payGuideBtn = document.getElementById('payGuideBtn');
+let payGuideStep = 1;
+const payGuidePages = [
+    'روند خرید و تمدید را <b>خودکار</b> کردیم؛ شما کار خاصی لازم نیست انجام دهید. فقط مبلغ را <b>دقیقاً مطابق همین عدد</b> پرداخت کنید. چند ثانیه بعد پرداختتان تأیید می‌شود و اشتراک به‌صورت خودکار تمدید یا ایجاد می‌شود.',
+    'حتی اگر صفحه را ببندید مشکلی نیست؛ خرید یا تمدید تأیید می‌شود. می‌توانید از داشبورد، <b>اشتراک‌های من</b> را بزنید و نتیجه را ببینید.'
+];
+
+function openPayGuide(){
+    if(!payGuideModal || !payGuideText || !payGuideBtn) return;
+    payGuideStep = 1;
+    renderPayGuideStep();
+    payGuideModal.classList.add('is-open');
+    payGuideModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function renderPayGuideStep(){
+    if(!payGuideText || !payGuideBtn) return;
+    payGuideText.innerHTML = payGuidePages[payGuideStep - 1] || '';
+    if(payGuideStep === 1){
+        payGuideBtn.textContent = 'ادامه';
+        payGuideBtn.classList.add('is-primary');
+    } else {
+        payGuideBtn.textContent = 'متوجه شدم';
+        payGuideBtn.classList.remove('is-primary');
+    }
+}
+
+function closePayGuide(){
+    if(!payGuideModal) return;
+    payGuideModal.classList.remove('is-open');
+    payGuideModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    try{ localStorage.setItem(PAY_GUIDE_KEY, '1'); }catch(e){}
+}
+
+if(payGuideBtn){
+    payGuideBtn.addEventListener('click', function(){
+        if(payGuideStep === 1){
+            payGuideStep = 2;
+            renderPayGuideStep();
+            return;
+        }
+        closePayGuide();
+    });
+}
+
+document.getElementById('copyCardBtn').addEventListener('click', function(){
+    const raw = (selectedCardInput && selectedCardInput.value) || payCardNumber.textContent.replace(/\s+/g, '');
+    copyText(String(raw).replace(/\D+/g, ''), 'شماره کارت کپی شد');
+});
 document.getElementById('copyAmountBtn').addEventListener('click', function(){
     if(!currentPay) return;
-    copyText(currentPay.amount, 'مبلغ کپی شد');
+    var seen = false;
+    try{ seen = localStorage.getItem(PAY_GUIDE_KEY) === '1'; }catch(e){}
+    copyText(currentPay.amount, seen ? 'مبلغ کپی شد' : '', { silent: !seen }).then(function(){
+        if(!seen) openPayGuide();
+    });
 });
 document.getElementById('copyLinkBtn').addEventListener('click', function(){ copyText(resultLink.textContent.trim(), 'لینک کپی شد'); });
 </script>
