@@ -39,7 +39,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=14">
+<link rel="stylesheet" href="plan_step_ui.css?v=15">
 </head>
 <body>
 <div class="box">
@@ -360,7 +360,18 @@ function renderCardTabs(){
         btn.className = 'cardTab' + (idx === preferred ? ' is-active' : '');
         btn.setAttribute('role', 'tab');
         btn.setAttribute('data-idx', String(idx));
-        btn.textContent = card.bank_label || card.name || 'کارت';
+        if(card.icon){
+            const icon = document.createElement('img');
+            icon.className = 'cardTabIcon';
+            icon.src = card.icon;
+            icon.alt = '';
+            icon.loading = 'lazy';
+            btn.appendChild(icon);
+        }
+        const tabLabel = document.createElement('span');
+        tabLabel.className = 'cardTabLabel';
+        tabLabel.textContent = card.bank_label || card.name || 'کارت';
+        btn.appendChild(tabLabel);
         btn.addEventListener('click', function(){
             cardTabs.querySelectorAll('.cardTab').forEach(function(el){ el.classList.remove('is-active'); });
             btn.classList.add('is-active');

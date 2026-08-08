@@ -47,25 +47,39 @@ if(!function_exists('pnvBanksCatalog')){
         ];
     }
 
+    function pnvBankContains($haystack, $needle){
+        $haystack = (string)$haystack;
+        $needle = (string)$needle;
+
+        if($needle === '' || $haystack === ''){
+            return false;
+        }
+
+        if(function_exists('mb_stripos')){
+            return mb_stripos($haystack, $needle) !== false;
+        }
+
+        return (bool)preg_match('/' . preg_quote($needle, '/') . '/iu', $haystack);
+    }
+
     function pnvBankIconUrl($bankId){
         $bankId = preg_replace('/[^a-z0-9\-]/', '', strtolower(trim((string)$bankId)));
         if($bankId === ''){
             return '';
         }
 
-        // مسیر اصلی: /assets/bank-logos/ (لوگوهای nima-ca/logo-bank)
-        $candidates = [
-            ['fs' => __DIR__ . '/assets/bank-logos/' . $bankId . '.svg', 'url' => '/assets/bank-logos/' . rawurlencode($bankId) . '.svg'],
-            ['fs' => __DIR__ . '/banks/' . $bankId . '.svg', 'url' => '/banks/' . rawurlencode($bankId) . '.svg'],
-        ];
+        $fsPath = __DIR__ . '/assets/bank-logos/' . $bankId . '.svg';
 
-        foreach($candidates as $c){
-            if(is_file($c['fs'])){
-                return $c['url'];
-            }
+        if(is_file($fsPath)){
+            return 'bank-icon.php?b=' . rawurlencode($bankId);
         }
 
-        return '/assets/bank-logos/' . rawurlencode($bankId) . '.svg';
+        $altPath = __DIR__ . '/banks/' . $bankId . '.svg';
+        if(is_file($altPath)){
+            return 'bank-icon.php?b=' . rawurlencode($bankId);
+        }
+
+        return 'bank-icon.php?b=' . rawurlencode($bankId);
     }
 
     function pnvBankLabel($bankId){
@@ -119,7 +133,7 @@ if(!function_exists('pnvBanksCatalog')){
         ];
 
         foreach($map as $needle => $id){
-            if(mb_stripos($text, $needle) !== false){
+            if(pnvBankContains($text, $needle)){
                 return $id;
             }
         }
