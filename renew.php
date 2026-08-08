@@ -36,6 +36,7 @@ if(!is_array($cards)){
     $cards = [];
 }
 $cardsUi = pnvCardsForUi($cards);
+$payWindowSeconds = instantPayWindowSeconds();
 
 function renewIsValidSubLink($value){
 
@@ -347,7 +348,7 @@ pointer-events:none !important;
 <div class="instantPay" id="instantPay" hidden>
 <div class="instantPayTop">
 <div class="instantPayHead" id="instantPayHead">مهلت پرداخت</div>
-<div class="instantTimer" id="instantTimer">۳۰:۰۰</div>
+<div class="instantTimer" id="instantTimer">30:00</div>
 </div>
 
 <div class="instantAmountLabel">مبلغ قابل پرداخت</div>
@@ -411,6 +412,7 @@ pointer-events:none !important;
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+const payWindowSeconds = <?php echo intval($payWindowSeconds); ?>;
 const planSelect = document.getElementById('planSelect');
 const planGrid = document.getElementById('planGrid');
 const planEmpty = document.getElementById('planEmpty');
@@ -935,6 +937,7 @@ couponCodeInput.addEventListener('input', function(){
 planSelect.addEventListener('change', validateCoupon);
 
 function formatRemain(sec){ sec = Math.max(0, parseInt(sec,10)||0); return String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0'); }
+function defaultPayTimerText(){ return formatRemain(payWindowSeconds); }
 function stopPayWatchers(){ if(payPollTimer){clearInterval(payPollTimer);payPollTimer=null;} if(payTickTimer){clearInterval(payTickTimer);payTickTimer=null;} }
 
 function resetPaySession(){
@@ -947,7 +950,7 @@ function resetPaySession(){
     if(instantApproved){ instantApproved.hidden = true; }
     if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
     if(instantAmount){ instantAmount.textContent = '—'; }
-    if(instantTimer){ instantTimer.textContent = '۳۰:۰۰'; }
+    if(instantTimer){ instantTimer.textContent = defaultPayTimerText(); }
     if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
     const restartBtn = document.getElementById('restartPayBtn');
     if(restartBtn) restartBtn.hidden = true;
@@ -989,7 +992,7 @@ function renderPay(item){
         instantTimer.textContent = '۰۰:۰۰';
         instantPayHead.textContent = 'مهلت تمام شد';
         instantStatus.hidden = false;
-        instantStatus.textContent = 'مهلت ۳۰ دقیقه‌ای تمام شد. اگر همین الان واریز کرده‌اید تا ۱۰ دقیقه دیگر بررسی می‌شود؛ در غیر این صورت مبلغ جدید بسازید.';
+        instantStatus.textContent = 'مهلت پرداخت تمام شد. اگر همین الان واریز کرده‌اید، پیام @postbank_bot را دوباره به بازو فوروارد کنید؛ هنوز برای مدتی تأیید خودکار انجام می‌شود.';
         instantApproved.hidden = true;
         let restartBtn = document.getElementById('restartPayBtn');
         if(!restartBtn && instantPay){
@@ -1086,7 +1089,7 @@ function ensureInstantPay(forceRestart){
     if(instantPay){
         instantPay.hidden = false;
         if(instantAmount) instantAmount.textContent = '…';
-        if(instantTimer) instantTimer.textContent = '۳۰:۰۰';
+        if(instantTimer) instantTimer.textContent = defaultPayTimerText();
         if(instantPayHead) instantPayHead.textContent = 'مهلت پرداخت';
         if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
         if(instantApproved) instantApproved.hidden = true;

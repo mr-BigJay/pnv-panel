@@ -34,7 +34,8 @@ if(isset($_POST['save'])){
         'bot_token' => $token,
         'admin_chat_ids' => trim((string)($_POST['admin_chat_ids'] ?? '')),
         'bot_username' => trim((string)($_POST['bot_username'] ?? 'Jay24x7Pusbank_bot')),
-        'pay_window_seconds' => max(60, intval($_POST['pay_window_seconds'] ?? 600)),
+        'pay_window_seconds' => max(60, intval($_POST['pay_window_seconds'] ?? 1800)),
+        'match_grace_seconds' => max(0, intval($_POST['match_grace_seconds'] ?? 0)),
         'webhook_secret' => $config['webhook_secret'] ?? '',
         'forward_hint' => $config['forward_hint'] ?? ''
     ];
@@ -184,7 +185,12 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <div class="hint">اگر خالی است: در بله به بازو `/start` بزنید، بعد همین صفحه را رفرش کنید یا دکمه «خواندن شناسه از بله» را بزنید.</div>
 
 <label for="pay_window_seconds">مهلت پرداخت (ثانیه)</label>
-<input class="ltr" type="number" id="pay_window_seconds" name="pay_window_seconds" min="60" value="<?php echo intval($config['pay_window_seconds'] ?? 600); ?>">
+<input class="ltr" type="number" id="pay_window_seconds" name="pay_window_seconds" min="60" value="<?php echo intval($config['pay_window_seconds'] ?? 1800); ?>">
+<div class="hint">پیش‌فرض ۱۸۰۰ ثانیه = ۳۰ دقیقه. بعد از این زمان سفارش «منقضی» می‌شود ولی هنوز برای مدتی با فوروارد پیام پست‌بانک قابل تأیید است.</div>
+
+<label for="match_grace_seconds">مهلت اضافه برای مچ واریز (ثانیه)</label>
+<input class="ltr" type="number" id="match_grace_seconds" name="match_grace_seconds" min="0" value="<?php echo intval($config['match_grace_seconds'] ?? 0); ?>">
+<div class="hint">۰ = خودکار (حداقل ۳۰ دقیقه یا دوبرابر مهلت پرداخت). اگر کاربر دیر واریز کرد، در این بازه هنوز تأیید خودکار کار می‌کند.</div>
 
 <div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></div>
 

@@ -75,5 +75,24 @@ foreach($samples as $text => $expect){
     assertTrue(in_array($expect, $got, true), "parse [$text] expect $expect got " . json_encode($got));
 }
 
+// سفارش منقضی‌شده در بازه grace هنوز قابل مچ است
+$now = time();
+$expiredItem = [
+    'id' => 'test-expired',
+    'status' => 'expired',
+    'amount' => 2492920,
+    'currency' => 'rial',
+    'code' => 2920,
+    'expires_at' => $now - 120,
+    'csv_index' => 0,
+    'user' => 'demo'
+];
+assertTrue(instantPayItemMatchable($expiredItem, $now), 'expired order within grace is matchable');
+assertTrue(instantPayMatchAmountExact(2492920) === null, 'no match without stored order');
+
+$oldExpired = $expiredItem;
+$oldExpired['expires_at'] = $now - instantPayMatchGraceSeconds() - 60;
+assertTrue(!instantPayItemMatchable($oldExpired, $now), 'expired order outside grace is not matchable');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);
