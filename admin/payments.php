@@ -3,6 +3,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/../xui_lib.php';
+require_once __DIR__ . '/../instant_pay_lib.php';
 
 if(!pnvAdminIsLoggedIn()){
     header('Location: ' . pnvAdminEntryUrl());
@@ -31,6 +32,21 @@ if(file_exists($paymentsFile)){
     }
 
     fclose($f);
+}
+
+if(function_exists('instantPayPurgeStaleAdminRows')){
+    instantPayPurgeStaleAdminRows();
+    $payments = [];
+
+    if(file_exists($paymentsFile)){
+        $f = fopen($paymentsFile,'r');
+
+        while(($d = fgetcsv($f)) !== FALSE){
+            $payments[] = $d;
+        }
+
+        fclose($f);
+    }
 }
 
 if(!function_exists('getUserMobile')){
@@ -238,6 +254,10 @@ foreach($payments as $index => $pay){
     $type = trim($pay[9] ?? '');
 
     if($type == 'خرید' || $type == ''){
+
+        if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
+            continue;
+        }
 
         $buyPayments[] = [
 

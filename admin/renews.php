@@ -41,6 +41,10 @@ if (is_file(__DIR__ . '/../xui_lib.php')) {
     require_once __DIR__ . '/../xui_lib.php';
 }
 
+if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
+    require_once __DIR__ . '/../instant_pay_lib.php';
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -68,6 +72,21 @@ if(file_exists($paymentsFile)){
             $payments[] = $d;
         }
         fclose($f);
+    }
+}
+
+if(function_exists('instantPayPurgeStaleAdminRows')){
+    instantPayPurgeStaleAdminRows();
+    $payments = [];
+
+    if(file_exists($paymentsFile)){
+        $f = fopen($paymentsFile, 'r');
+        if($f){
+            while(($d = fgetcsv($f)) !== false){
+                $payments[] = $d;
+            }
+            fclose($f);
+        }
     }
 }
 
@@ -208,6 +227,10 @@ foreach($payments as $index=>$pay){
 $type=trim($pay[9] ?? '');
 
 if($type=='تمدید'){
+
+if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
+continue;
+}
 
 $renews[]=[
 'index'=>$index,
