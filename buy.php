@@ -39,7 +39,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=15">
+<link rel="stylesheet" href="plan_step_ui.css?v=16">
 </head>
 <body>
 <div class="box">
@@ -147,7 +147,6 @@ $h = static function($v){
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
 </button>
 </div>
-<div class="instantAmountToman" id="instantAmountToman"></div>
 <div class="instantExactHint">دقیقاً همین مبلغ را واریز کنید</div>
 
 <div class="instantStatus" id="instantStatus" hidden></div>
@@ -531,8 +530,6 @@ function resetPaySession(){
     if(instantApproved){ instantApproved.hidden = true; }
     if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
     if(instantAmount){ instantAmount.textContent = '—'; }
-    const amountTomanEl = document.getElementById('instantAmountToman');
-    if(amountTomanEl){ amountTomanEl.textContent = ''; }
     if(instantTimer){ instantTimer.textContent = '۳۰:۰۰'; }
     if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
     const restartBtn = document.getElementById('restartPayBtn');
@@ -547,10 +544,6 @@ function renderPay(item){
     if(payCreating) payCreating.classList.remove('is-visible');
     instantPay.hidden = false;
     instantAmount.textContent = item.amount_text || '—';
-    const amountTomanEl = document.getElementById('instantAmountToman');
-    if(amountTomanEl){
-        amountTomanEl.textContent = item.amount_toman_text || '';
-    }
     instantTimer.textContent = formatRemain(item.remaining);
 
     if(item.status === 'processing'){
@@ -682,8 +675,6 @@ function ensureInstantPay(forceRestart){
         if(instantAmount) instantAmount.textContent = '…';
         if(instantTimer) instantTimer.textContent = '۳۰:۰۰';
         if(instantPayHead) instantPayHead.textContent = 'مهلت پرداخت';
-        const amountTomanEl = document.getElementById('instantAmountToman');
-        if(amountTomanEl) amountTomanEl.textContent = '';
         if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
         if(instantApproved) instantApproved.hidden = true;
     }
@@ -764,7 +755,6 @@ function copyText(t, msg, opts){
     }).catch(function(){ return false; });
 }
 
-const PAY_GUIDE_KEY = 'pnv_pay_guide_seen_v1';
 const payGuideModal = document.getElementById('payGuideModal');
 const payGuideText = document.getElementById('payGuideText');
 const payGuideBtn = document.getElementById('payGuideBtn');
@@ -800,7 +790,6 @@ function closePayGuide(){
     payGuideModal.classList.remove('is-open');
     payGuideModal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
-    try{ localStorage.setItem(PAY_GUIDE_KEY, '1'); }catch(e){}
 }
 
 if(payGuideBtn){
@@ -820,10 +809,8 @@ document.getElementById('copyCardBtn').addEventListener('click', function(){
 });
 document.getElementById('copyAmountBtn').addEventListener('click', function(){
     if(!currentPay) return;
-    var seen = false;
-    try{ seen = localStorage.getItem(PAY_GUIDE_KEY) === '1'; }catch(e){}
-    copyText(currentPay.amount, seen ? 'مبلغ کپی شد' : '', { silent: !seen }).then(function(){
-        if(!seen) openPayGuide();
+    copyText(currentPay.amount, '', { silent: true }).then(function(){
+        openPayGuide();
     });
 });
 document.getElementById('copyLinkBtn').addEventListener('click', function(){ copyText(resultLink.textContent.trim(), 'لینک کپی شد'); });
