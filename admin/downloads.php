@@ -13,10 +13,12 @@ if(!file_exists($dir)){
 mkdir($dir,0777,true);
 }
 
-if(isset($_POST['upload'])){
+if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
 if(
 isset($_FILES['file'])
+&&
+$_FILES['file']['error'] === UPLOAD_ERR_OK
 &&
 $_FILES['file']['size'] > 0
 ){
@@ -35,8 +37,11 @@ $target
 ){
 
 echo "OK";
+exit;
 
 }else{
+
+http_response_code(400);
 
 echo "<pre>";
 
@@ -54,6 +59,11 @@ exit;
 
 }
 
+}
+
+http_response_code(400);
+echo "NO_FILE";
+exit;
 }
 
 if(isset($_GET['delete'])){
