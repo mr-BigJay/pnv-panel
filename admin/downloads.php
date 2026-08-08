@@ -35,6 +35,7 @@ $target
 ){
 
 echo "OK";
+exit;
 
 }else{
 
@@ -54,6 +55,7 @@ exit;
 
 }
 
+}
 }
 
 if(isset($_GET['delete'])){
