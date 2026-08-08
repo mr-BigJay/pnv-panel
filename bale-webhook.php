@@ -25,7 +25,8 @@ if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === '
     exit;
 }
 
-$message = $update['message'] ?? ($update['edited_message'] ?? null);
+$message = $update['message']
+    ?? ($update['edited_message'] ?? ($update['channel_post'] ?? ($update['edited_channel_post'] ?? null)));
 
 if(!is_array($message)){
     echo json_encode(['ok' => true, 'ignored' => 'no message']);
@@ -77,6 +78,13 @@ if($text === '/start' || $text === 'start'){
 }
 
 if($text === ''){
+    baleSendMessage(
+        $chatId,
+        "⚠️ متن پیام خوانده نشد.\n"
+        . "لطفاً پیام واریز @postbank_bot را با گزینه «فوروارد» (نه کپی) به همین بازو بفرستید.",
+        [],
+        $config
+    );
     echo json_encode(['ok' => true, 'ignored' => 'empty text', 'bootstrapped' => $bootstrapped]);
     exit;
 }

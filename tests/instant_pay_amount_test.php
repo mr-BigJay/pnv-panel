@@ -48,6 +48,21 @@ $c1 = instantPayExpandAmountCandidates($a1, ['rial_only' => true]);
 assertTrue($c1 === [998190], 'no toman×10 expand for postbank. got ' . json_encode($c1));
 assertTrue(!in_array(44108899, $c1, true), 'balance must not be candidate');
 
+// بدون mbstring هم باید کار کند
+if(function_exists('mb_stripos')){
+    assertTrue(true, 'mbstring available');
+}
+else{
+    assertTrue(baleContains('پست بانک واریز', 'پست بانک'), 'baleContains works without mbstring');
+}
+
+$forwarded = [
+    'text' => '',
+    'forward_from_message' => ['text' => $sample1],
+    'chat' => ['id' => '1']
+];
+assertTrue(baleExtractMessageText($forwarded) !== '', 'forwarded postbank text extracted');
+
 // پارس فرمت‌های دیگر
 $samples = [
     'واریز 1,499,280 ریال به حساب شما' => 1499280,

@@ -138,18 +138,52 @@ if(!function_exists('baleConfigPath')){
         return baleApiRequest('getMe', [], $config);
     }
 
+    function baleContains($haystack, $needle){
+        $haystack = (string)$haystack;
+        $needle = (string)$needle;
+
+        if($needle === '' || $haystack === ''){
+            return false;
+        }
+
+        if(function_exists('mb_stripos')){
+            return mb_stripos($haystack, $needle) !== false;
+        }
+
+        return (bool)preg_match('/' . preg_quote($needle, '/') . '/iu', $haystack);
+    }
+
     function baleExtractMessageText($message){
         if(!is_array($message)){
             return '';
         }
 
+        $parts = [];
+
         foreach(['text', 'caption'] as $key){
             if(!empty($message[$key]) && is_string($message[$key])){
-                return trim($message[$key]);
+                $parts[] = trim($message[$key]);
             }
         }
 
-        return '';
+        // بعضی فورواردها متن را داخل پیام اصلی می‌گذارند
+        foreach(['forward_from_message', 'reply_to_message'] as $nestedKey){
+            if(empty($message[$nestedKey]) || !is_array($message[$nestedKey])){
+                continue;
+            }
+
+            foreach(['text', 'caption'] as $key){
+                if(!empty($message[$nestedKey][$key]) && is_string($message[$nestedKey][$key])){
+                    $parts[] = trim($message[$nestedKey][$key]);
+                }
+            }
+        }
+
+        $parts = array_values(array_unique(array_filter($parts, static function($part){
+            return $part !== '';
+        })));
+
+        return count($parts) > 0 ? implode("\n", $parts) : '';
     }
 
     /**
@@ -293,7 +327,7 @@ if(!function_exists('baleConfigPath')){
         $needles = ['واریز', 'واریزی', 'بستانکار', 'deposit', 'مبلغ', 'حساب شما', 'پست بانک', 'پست‌بانک'];
 
         foreach($needles as $n){
-            if(mb_stripos($text, $n) !== false){
+            if(baleContains($text, $n)){
                 return true;
             }
         }
@@ -316,15 +350,15 @@ if(!function_exists('baleConfigPath')){
             return false;
         }
 
-        if(mb_stripos($text, 'پست بانک') !== false || mb_stripos($text, 'پست‌بانک') !== false){
+        if(baleContains($text, 'پست بانک') || baleContains($text, 'پست‌بانک')){
             return true;
         }
 
-        if(mb_stripos($text, 'واریز به کارت') !== false){
+        if(baleContains($text, 'واریز به کارت')){
             return true;
         }
 
-        if(preg_match('/\+\s*\d{1,3}(?:,\d{3})+/u', $text) && mb_stripos($text, 'مانده') !== false){
+        if(preg_match('/\+\s*\d{1,3}(?:,\d{3})+/u', $text) && baleContains($text, 'مانده')){
             return true;
         }
 
