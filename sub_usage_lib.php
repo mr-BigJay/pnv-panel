@@ -253,40 +253,36 @@ if(!function_exists('subUsageCachePath')){
             return null;
         }
 
-        $curl = curl_init($link);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_HEADER, true);
-        curl_setopt($curl, CURLOPT_NOBODY, true);
-        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 4);
-        curl_setopt($curl, CURLOPT_TIMEOUT, 8);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
-        $raw = curl_exec($curl);
-        $code = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
+        $modes = [
+            ['nobody' => true],
+            ['nobody' => false, 'range' => '0-0'],
+            ['nobody' => false],
+        ];
 
-        // بعضی پنل‌ها روی HEAD هدر نمی‌دهند → GET سبک
-        if($raw === false || $code >= 400 || stripos((string)$raw, 'subscription-userinfo') === false){
+        foreach($modes as $mode){
             $curl = curl_init($link);
             curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($curl, CURLOPT_HEADER, true);
             curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 4);
-            curl_setopt($curl, CURLOPT_TIMEOUT, 10);
+            curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($curl, CURLOPT_TIMEOUT, 12);
             curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
-            curl_setopt($curl, CURLOPT_RANGE, '0-0');
+
+            if(!empty($mode['nobody'])){
+                curl_setopt($curl, CURLOPT_NOBODY, true);
+            }
+
+            if(!empty($mode['range'])){
+                curl_setopt($curl, CURLOPT_RANGE, $mode['range']);
+            }
+
             $raw = curl_exec($curl);
             curl_close($curl);
-        }
 
-        if($raw === false || $raw === ''){
-            return null;
-        }
-
-        if(preg_match('/^subscription-userinfo:\s*(.+)$/im', $raw, $m)){
-            return subUsageParseUserinfoHeader($m[1]);
+            if($raw !== false && $raw !== '' && preg_match('/^subscription-userinfo:\s*(.+)$/im', $raw, $m)){
+                return subUsageParseUserinfoHeader($m[1]);
+            }
         }
 
         return null;
@@ -338,39 +334,8 @@ if(!function_exists('subUsageCachePath')){
             }
         }
 
-        // جستجوی سبک: فقط search صفحه‌بندی‌شده + inbound (بدون cascade کامل طولانی)
-        $subId = $parsed['sub_id'];
-        $searched = xuiApiRequest(
-            $server,
-            'GET',
-            '/panel/api/clients/list/paged?page=1&pageSize=50'
-            . '&search=' . rawurlencode($subId)
-            . '&filter=&protocol=&sort=email&order=ascend',
-            null,
-            $timeouts
-        );
-
-        if(!empty($searched['success'])){
-            $obj = $searched['obj'] ?? [];
-            $list = $obj['list'] ?? $obj['clients'] ?? [];
-
-            if(is_array($list)){
-                foreach($list as $item){
-                    $client = xuiNormalizeClientRecord($item['client'] ?? $item);
-
-                    if($client && xuiClientMatchesSubId($client, $subId)){
-                        $client = xuiHydrateClientByEmail($server, $client, $timeouts);
-                        return [
-                            'client' => $client,
-                            'email' => $client['email'] ?? '',
-                            'server_id' => $server['id'] ?? '',
-                        ];
-                    }
-                }
-            }
-        }
-
-        $client = xuiFindClientInInbounds($server, $subId);
+        // جستجوی کامل کلاینت از پنل (subId، inbound، UUID، email)
+        $client = xuiFindClientBySubId($server, $parsed['sub_id'], $link);
 
         if($client){
             $client = xuiHydrateClientByEmail($server, $client, $timeouts);
