@@ -10,6 +10,67 @@ if(!function_exists('profileUsersPath')){
         return __DIR__ . '/uploads/avatars';
     }
 
+    function profileEnsureAvatarsDir(){
+        $uploadsDir = __DIR__ . '/uploads';
+        $dir = profileAvatarsDir();
+
+        if(!is_dir($uploadsDir)){
+            @mkdir($uploadsDir, 0777, true);
+        }
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0777, true);
+        }
+
+        if(is_dir($dir) && !is_writable($dir)){
+            @chmod($dir, 0777);
+        }
+
+        return is_dir($dir) && is_writable($dir);
+    }
+
+    function profileUploadErrorMessage($code){
+        switch((int)$code){
+            case UPLOAD_ERR_INI_SIZE:
+            case UPLOAD_ERR_FORM_SIZE:
+                return 'حجم عکس بیش از حد مجاز است';
+            case UPLOAD_ERR_PARTIAL:
+                return 'آپلود عکس ناقص بود';
+            case UPLOAD_ERR_NO_FILE:
+                return 'فایلی انتخاب نشده است';
+            case UPLOAD_ERR_NO_TMP_DIR:
+                return 'پوشه موقت سرور در دسترس نیست';
+            case UPLOAD_ERR_CANT_WRITE:
+                return 'سرور اجازه نوشتن فایل را ندارد';
+            default:
+                return 'خطا در آپلود فایل';
+        }
+    }
+
+    function profileSaveUploadedImage($tmpPath, $destAbs){
+        if(is_uploaded_file($tmpPath)){
+            if(@move_uploaded_file($tmpPath, $destAbs)){
+                return true;
+            }
+        }
+
+        if(!is_readable($tmpPath)){
+            return false;
+        }
+
+        if(@copy($tmpPath, $destAbs)){
+            return true;
+        }
+
+        $contents = @file_get_contents($tmpPath);
+
+        if($contents === false){
+            return false;
+        }
+
+        return @file_put_contents($destAbs, $contents) !== false;
+    }
+
     function profileLoadUsers(){
         $path = profileUsersPath();
 
@@ -74,26 +135,53 @@ if(!function_exists('profileUsersPath')){
     }
 
     function profileUploadAvatar($username, $file){
-        if(!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])){
-            return ['ok' => false, 'error' => 'فایل ارسال نشد'];
+        $tmpName = (string)($file['tmp_name'] ?? '');
+        $uploadError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+
+        if($tmpName === ''){
+            return ['ok' => false, 'error' => profileUploadErrorMessage($uploadError)];
         }
 
-        if(($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK){
-            return ['ok' => false, 'error' => 'خطا در آپلود فایل'];
+        if($uploadError !== UPLOAD_ERR_OK){
+            return ['ok' => false, 'error' => profileUploadErrorMessage($uploadError)];
         }
 
-        if(($file['size'] ?? 0) > 2 * 1024 * 1024){
-            return ['ok' => false, 'error' => 'حجم عکس باید حداکثر 2 مگابایت باشد'];
+        if(($file['size'] ?? 0) > 5 * 1024 * 1024){
+            return ['ok' => false, 'error' => 'حجم عکس باید حداکثر 5 مگابایت باشد'];
+        }
+
+        $mime = '';
+
+        if(function_exists('finfo_open')){
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+
+            if($finfo){
+                $mime = (string)finfo_file($finfo, $tmpName);
+                finfo_close($finfo);
+            }
+        }
+
+        if($mime === '' && function_exists('mime_content_type')){
+            $mime = (string)@mime_content_type($tmpName);
         }
 
         $ext = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
         $allowed = ['jpg', 'jpeg', 'png', 'webp'];
 
-        if(!in_array($ext, $allowed, true)){
+        if($mime === 'image/jpeg' || $ext === 'jpg' || $ext === 'jpeg'){
+            $ext = 'jpg';
+        }
+        elseif($mime === 'image/png' || $ext === 'png'){
+            $ext = 'png';
+        }
+        elseif($mime === 'image/webp' || $ext === 'webp'){
+            $ext = 'webp';
+        }
+        elseif(!in_array($ext, $allowed, true)){
             return ['ok' => false, 'error' => 'فقط فرمت‌های JPG، PNG و WEBP مجاز هستند'];
         }
 
-        $info = @getimagesize($file['tmp_name']);
+        $info = @getimagesize($tmpName);
 
         if($info === false){
             return ['ok' => false, 'error' => 'فایل انتخاب‌شده یک تصویر معتبر نیست'];
@@ -106,20 +194,20 @@ if(!function_exists('profileUsersPath')){
             return ['ok' => false, 'error' => 'کاربر پیدا نشد'];
         }
 
-        $dir = profileAvatarsDir();
-
-        if(!is_dir($dir)){
-            @mkdir($dir, 0755, true);
+        if(!profileEnsureAvatarsDir()){
+            return ['ok' => false, 'error' => 'پوشه ذخیره عکس در دسترس نیست. دسترسی uploads/avatars را بررسی کنید.'];
         }
 
         $safeBase = preg_replace('/[^a-zA-Z0-9._-]+/', '_', $username);
         $filename = $safeBase . '_' . time() . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
-        $destAbs = $dir . '/' . $filename;
+        $destAbs = profileAvatarsDir() . '/' . $filename;
         $destRel = 'uploads/avatars/' . $filename;
 
-        if(!move_uploaded_file($file['tmp_name'], $destAbs)){
-            return ['ok' => false, 'error' => 'ذخیره عکس انجام نشد'];
+        if(!profileSaveUploadedImage($tmpName, $destAbs)){
+            return ['ok' => false, 'error' => 'ذخیره عکس انجام نشد. دسترسی پوشه uploads/avatars را بررسی کنید.'];
         }
+
+        @chmod($destAbs, 0644);
 
         $oldAvatar = trim((string)($users[$index]['avatar'] ?? ''));
 

@@ -507,6 +507,55 @@ cursor:not-allowed;
 .dashAvatarInput{
 display:none;
 }
+.avatarCropWrap{
+display:flex;
+flex-direction:column;
+align-items:center;
+gap:14px;
+}
+.avatarCropViewport{
+position:relative;
+width:260px;
+height:260px;
+border-radius:50%;
+overflow:hidden;
+background:#0f172a;
+border:2px solid rgba(148,163,184,.22);
+touch-action:none;
+cursor:grab;
+box-shadow:inset 0 0 0 1px rgba(15,23,42,.6);
+}
+.avatarCropViewport.is-dragging{
+cursor:grabbing;
+}
+.avatarCropImage{
+position:absolute;
+top:0;
+left:0;
+max-width:none;
+user-select:none;
+-webkit-user-drag:none;
+pointer-events:none;
+transform-origin:top left;
+}
+.avatarCropZoomWrap{
+width:100%;
+}
+.avatarCropZoomLabel{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:8px;
+font-size:12px;
+color:#94a3b8;
+}
+.avatarCropZoom{
+width:100%;
+accent-color:#2563eb;
+}
+.dashModal--crop{
+max-width:360px;
+}
 @media(max-width:360px){
 .dashPrimary{min-height:92px}
 .dashPrimaryIcon{width:34px;height:34px;font-size:18px}
@@ -620,6 +669,30 @@ display:none;
 </div>
 </div>
 
+<div class="dashModalOverlay" id="dashAvatarCropModal" aria-hidden="true">
+<div class="dashModal dashModal--crop" role="dialog" aria-modal="true" aria-labelledby="dashAvatarCropTitle">
+<h2 class="dashModalTitle" id="dashAvatarCropTitle">تنظیم عکس پروفایل</h2>
+<div class="avatarCropWrap">
+<div class="avatarCropViewport" id="avatarCropViewport">
+<img class="avatarCropImage" id="avatarCropImage" alt="">
+</div>
+<div class="avatarCropZoomWrap">
+<div class="avatarCropZoomLabel">
+<span>بزرگ‌نمایی</span>
+<span id="avatarCropZoomValue">100%</span>
+</div>
+<input type="range" class="avatarCropZoom" id="avatarCropZoom" min="100" max="300" step="1" value="100">
+</div>
+<p class="dashModalHint">عکس را بکشید تا قسمت دلخواه داخل دایره قرار بگیرد.</p>
+<div class="dashModalError" id="avatarCropError"></div>
+<div class="dashModalActions">
+<button type="button" class="dashModalBtn dashModalBtn--ghost" id="avatarCropCancel">انصراف</button>
+<button type="button" class="dashModalBtn dashModalBtn--primary" id="avatarCropSave">ذخیره عکس</button>
+</div>
+</div>
+</div>
+</div>
+
 <script>
 (function(){
     var moreBtn = document.getElementById('dashMoreBtn');
@@ -634,6 +707,28 @@ display:none;
     var usernameCancel = document.getElementById('dashUsernameCancel');
     var usernameSave = document.getElementById('dashUsernameSave');
     var dashUserEl = document.querySelector('.dashUser');
+    var avatarCropModal = document.getElementById('dashAvatarCropModal');
+    var avatarCropViewport = document.getElementById('avatarCropViewport');
+    var avatarCropImage = document.getElementById('avatarCropImage');
+    var avatarCropZoom = document.getElementById('avatarCropZoom');
+    var avatarCropZoomValue = document.getElementById('avatarCropZoomValue');
+    var avatarCropCancel = document.getElementById('avatarCropCancel');
+    var avatarCropSave = document.getElementById('avatarCropSave');
+    var avatarCropError = document.getElementById('avatarCropError');
+
+    var cropState = {
+        baseScale: 1,
+        zoom: 1,
+        offsetX: 0,
+        offsetY: 0,
+        viewportSize: 260,
+        outputSize: 512,
+        dragging: false,
+        startX: 0,
+        startY: 0,
+        startOffsetX: 0,
+        startOffsetY: 0
+    };
 
     function closeMenu(){
         if(moreMenu){
@@ -681,6 +776,199 @@ display:none;
         showUsernameError('');
     }
 
+    function showCropError(msg){
+        if(!avatarCropError){
+            return;
+        }
+
+        if(msg){
+            avatarCropError.textContent = msg;
+            avatarCropError.classList.add('is-visible');
+        } else {
+            avatarCropError.textContent = '';
+            avatarCropError.classList.remove('is-visible');
+        }
+    }
+
+    function getCropScale(){
+        return cropState.baseScale * cropState.zoom;
+    }
+
+    function clampCropOffsets(){
+        if(!avatarCropImage || !avatarCropImage.naturalWidth){
+            return;
+        }
+
+        var scale = getCropScale();
+        var iw = avatarCropImage.naturalWidth * scale;
+        var ih = avatarCropImage.naturalHeight * scale;
+        var half = cropState.viewportSize / 2;
+        var maxX = Math.max(0, (iw - cropState.viewportSize) / 2);
+        var maxY = Math.max(0, (ih - cropState.viewportSize) / 2);
+
+        cropState.offsetX = Math.min(maxX, Math.max(-maxX, cropState.offsetX));
+        cropState.offsetY = Math.min(maxY, Math.max(-maxY, cropState.offsetY));
+    }
+
+    function renderCropPreview(){
+        if(!avatarCropImage || !avatarCropViewport || !avatarCropImage.naturalWidth){
+            return;
+        }
+
+        var scale = getCropScale();
+        var iw = avatarCropImage.naturalWidth * scale;
+        var ih = avatarCropImage.naturalHeight * scale;
+        var half = cropState.viewportSize / 2;
+        var left = half - (iw / 2) + cropState.offsetX;
+        var top = half - (ih / 2) + cropState.offsetY;
+
+        avatarCropImage.style.width = iw + 'px';
+        avatarCropImage.style.height = ih + 'px';
+        avatarCropImage.style.left = left + 'px';
+        avatarCropImage.style.top = top + 'px';
+    }
+
+    function resetCropState(){
+        if(!avatarCropImage || !avatarCropImage.naturalWidth){
+            return;
+        }
+
+        cropState.baseScale = Math.max(
+            cropState.viewportSize / avatarCropImage.naturalWidth,
+            cropState.viewportSize / avatarCropImage.naturalHeight
+        );
+        cropState.zoom = 1;
+        cropState.offsetX = 0;
+        cropState.offsetY = 0;
+
+        if(avatarCropZoom){
+            avatarCropZoom.value = '100';
+        }
+
+        if(avatarCropZoomValue){
+            avatarCropZoomValue.textContent = '100%';
+        }
+
+        clampCropOffsets();
+        renderCropPreview();
+    }
+
+    function closeAvatarCropModal(){
+        if(!avatarCropModal){
+            return;
+        }
+
+        avatarCropModal.classList.remove('is-open');
+        avatarCropModal.setAttribute('aria-hidden', 'true');
+        showCropError('');
+
+        if(avatarCropImage){
+            avatarCropImage.removeAttribute('src');
+        }
+    }
+
+    function openAvatarCropModal(file){
+        if(!avatarCropModal || !avatarCropImage || !file){
+            return;
+        }
+
+        showCropError('');
+
+        var reader = new FileReader();
+
+        reader.onload = function(){
+            avatarCropImage.onload = function(){
+                resetCropState();
+            };
+            avatarCropImage.src = reader.result;
+            avatarCropModal.classList.add('is-open');
+            avatarCropModal.setAttribute('aria-hidden', 'false');
+        };
+
+        reader.onerror = function(){
+            alert('خواندن عکس انجام نشد.');
+        };
+
+        reader.readAsDataURL(file);
+    }
+
+    function beginCropDrag(clientX, clientY){
+        cropState.dragging = true;
+        cropState.startX = clientX;
+        cropState.startY = clientY;
+        cropState.startOffsetX = cropState.offsetX;
+        cropState.startOffsetY = cropState.offsetY;
+
+        if(avatarCropViewport){
+            avatarCropViewport.classList.add('is-dragging');
+        }
+    }
+
+    function moveCropDrag(clientX, clientY){
+        if(!cropState.dragging){
+            return;
+        }
+
+        cropState.offsetX = cropState.startOffsetX + (clientX - cropState.startX);
+        cropState.offsetY = cropState.startOffsetY + (clientY - cropState.startY);
+        clampCropOffsets();
+        renderCropPreview();
+    }
+
+    function endCropDrag(){
+        cropState.dragging = false;
+
+        if(avatarCropViewport){
+            avatarCropViewport.classList.remove('is-dragging');
+        }
+    }
+
+    function buildCroppedAvatarBlob(callback){
+        if(!avatarCropImage || !avatarCropImage.naturalWidth){
+            callback(null);
+            return;
+        }
+
+        var canvas = document.createElement('canvas');
+        var output = cropState.outputSize;
+        var ratio = output / cropState.viewportSize;
+        var scale = getCropScale();
+        var iw = avatarCropImage.naturalWidth * scale;
+        var ih = avatarCropImage.naturalHeight * scale;
+        var half = cropState.viewportSize / 2;
+        var left = (half - (iw / 2) + cropState.offsetX) * ratio;
+        var top = (half - (ih / 2) + cropState.offsetY) * ratio;
+
+        canvas.width = output;
+        canvas.height = output;
+
+        var ctx = canvas.getContext('2d');
+
+        if(!ctx){
+            callback(null);
+            return;
+        }
+
+        ctx.clearRect(0, 0, output, output);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(output / 2, output / 2, output / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(
+            avatarCropImage,
+            left,
+            top,
+            iw * ratio,
+            ih * ratio
+        );
+        ctx.restore();
+
+        canvas.toBlob(function(blob){
+            callback(blob);
+        }, 'image/jpeg', 0.92);
+    }
+
     function setAvatarImage(url){
         if(!avatarEl){
             return;
@@ -700,7 +988,7 @@ display:none;
 
         var formData = new FormData();
         formData.append('action', 'avatar');
-        formData.append('avatar', file);
+        formData.append('avatar', file, file.name || 'avatar.jpg');
 
         avatarEl.classList.add('is-loading');
 
@@ -725,6 +1013,28 @@ display:none;
         .catch(function(){
             avatarEl.classList.remove('is-loading');
             alert('خطا در ارتباط با سرور.');
+        });
+    }
+
+    function saveCroppedAvatar(){
+        if(!avatarCropSave){
+            return;
+        }
+
+        showCropError('');
+        avatarCropSave.disabled = true;
+
+        buildCroppedAvatarBlob(function(blob){
+            if(!blob){
+                avatarCropSave.disabled = false;
+                showCropError('ساخت عکس نهایی انجام نشد.');
+                return;
+            }
+
+            var croppedFile = new File([blob], 'avatar.jpg', {type: 'image/jpeg'});
+            closeAvatarCropModal();
+            avatarCropSave.disabled = false;
+            uploadAvatar(croppedFile);
         });
     }
 
@@ -797,9 +1107,69 @@ display:none;
 
         avatarInput.addEventListener('change', function(){
             if(avatarInput.files && avatarInput.files[0]){
-                uploadAvatar(avatarInput.files[0]);
+                openAvatarCropModal(avatarInput.files[0]);
             }
             avatarInput.value = '';
+        });
+    }
+
+    if(avatarCropZoom){
+        avatarCropZoom.addEventListener('input', function(){
+            cropState.zoom = parseInt(avatarCropZoom.value, 10) / 100;
+
+            if(avatarCropZoomValue){
+                avatarCropZoomValue.textContent = avatarCropZoom.value + '%';
+            }
+
+            clampCropOffsets();
+            renderCropPreview();
+        });
+    }
+
+    if(avatarCropViewport){
+        avatarCropViewport.addEventListener('mousedown', function(e){
+            e.preventDefault();
+            beginCropDrag(e.clientX, e.clientY);
+        });
+
+        avatarCropViewport.addEventListener('touchstart', function(e){
+            if(!e.touches || !e.touches[0]){
+                return;
+            }
+
+            beginCropDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive:true});
+
+        window.addEventListener('mousemove', function(e){
+            moveCropDrag(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('touchmove', function(e){
+            if(!e.touches || !e.touches[0]){
+                return;
+            }
+
+            moveCropDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive:true});
+
+        window.addEventListener('mouseup', endCropDrag);
+        window.addEventListener('touchend', endCropDrag);
+        window.addEventListener('touchcancel', endCropDrag);
+    }
+
+    if(avatarCropCancel){
+        avatarCropCancel.addEventListener('click', closeAvatarCropModal);
+    }
+
+    if(avatarCropSave){
+        avatarCropSave.addEventListener('click', saveCroppedAvatar);
+    }
+
+    if(avatarCropModal){
+        avatarCropModal.addEventListener('click', function(e){
+            if(e.target === avatarCropModal){
+                closeAvatarCropModal();
+            }
         });
     }
 
