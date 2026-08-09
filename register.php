@@ -755,7 +755,7 @@ name="referrer">
 <input
 type="text"
 name="captcha"
-placeholder="کد را بنویس"
+placeholder="کد را وارد کنید"
 autocomplete="off"
 required>
 

@@ -260,29 +260,86 @@ user-select:none;
 color:#94a3b8;
 }
 
-.captchaBox{
-height:54px;
-background:#0f172a;
+.captchaSection{
+margin:4px 0 14px;
+padding:10px;
+background:rgba(15,23,42,.45);
+border:1px solid rgba(148,163,184,.14);
 border-radius:14px;
-display:flex;
-justify-content:center;
-align-items:center;
-font-size:24px;
-font-weight:bold;
-letter-spacing:6px;
-color:#facc15;
-margin-bottom:12px;
-user-select:none;
 }
 
-.refresh{
-display:block;
-text-align:center;
-margin-bottom:16px;
-text-decoration:none;
-color:#38bdf8;
+.captchaRow{
+display:flex;
+align-items:center;
+gap:8px;
+direction:rtl;
+}
+
+.captchaInputWrap{
+flex:2;
+min-width:0;
+}
+
+.captchaInputWrap input{
+width:100%;
+height:40px;
+font-size:14px;
+}
+
+.captchaMeta{
+flex:1;
+display:flex;
+align-items:center;
+gap:6px;
+min-width:0;
+}
+
+.captchaCode{
+flex:1;
+min-width:0;
+height:40px;
+padding:0 8px;
+display:flex;
+align-items:center;
+justify-content:center;
+background:#0f172a;
+border-radius:10px;
 font-size:14px;
 font-weight:700;
+letter-spacing:2px;
+color:#facc15;
+user-select:none;
+overflow:hidden;
+white-space:nowrap;
+}
+
+.captchaRefresh{
+width:34px;
+height:34px;
+display:flex;
+align-items:center;
+justify-content:center;
+border-radius:10px;
+background:#334155;
+color:#94a3b8;
+text-decoration:none;
+flex-shrink:0;
+transition:.2s;
+}
+
+.captchaRefresh:hover{
+background:#475569;
+color:#38bdf8;
+}
+
+.captchaRefresh svg{
+width:16px;
+height:16px;
+stroke:currentColor;
+fill:none;
+stroke-width:2;
+stroke-linecap:round;
+stroke-linejoin:round;
 }
 
 button{
@@ -409,7 +466,24 @@ onclick="togglePassword()">
 
 </div>
 
-<div class="captchaBox">
+<div class="captchaSection">
+
+<div class="captchaRow">
+
+<div class="captchaInputWrap">
+
+<input
+type="text"
+name="captcha"
+placeholder="کد را وارد کنید"
+autocomplete="off"
+required>
+
+</div>
+
+<div class="captchaMeta">
+
+<div class="captchaCode">
 
 <?php echo $_SESSION['login_captcha']; ?>
 
@@ -417,19 +491,20 @@ onclick="togglePassword()">
 
 <a
 href="index.php?refreshcaptcha=1"
-class="refresh">
+class="captchaRefresh"
+aria-label="تغییر کد امنیتی"
+title="تغییر کد امنیتی">
 
-تغییر کد امنیتی
+<svg viewBox="0 0 24 24" aria-hidden="true">
+<path d="M21 12a9 9 0 11-3-6.7"/>
+<path d="M21 3v6h-6"/>
+</svg>
 
 </a>
 
-<div class="inputGroup">
+</div>
 
-<input
-type="text"
-name="captcha"
-placeholder="کد امنیتی"
-required>
+</div>
 
 </div>
 
