@@ -126,7 +126,6 @@ border-radius:18px !important;
 overflow:hidden;
 }
 .dashTopBar{
-position:relative;
 display:flex;
 align-items:center;
 justify-content:center;
@@ -138,21 +137,28 @@ min-height:34px;
 margin:0 !important;
 font-size:18px !important;
 }
+.dashWelcome{
+position:relative;
+background:#0f172a;
+border:1px solid #334155;
+border-radius:14px;
+padding:14px 12px 16px 44px;
+flex:0 0 auto;
+}
 .dashMoreWrap{
 position:absolute;
-left:0;
-top:50%;
-transform:translateY(-50%);
+left:10px;
+top:10px;
 z-index:5;
 }
 .dashMoreBtn{
-width:34px;
-height:34px;
+width:30px;
+height:30px;
 border:none;
-border-radius:10px;
+border-radius:8px;
 background:#334155;
 color:#e2e8f0;
-font-size:20px;
+font-size:18px;
 line-height:1;
 cursor:pointer;
 padding:0;
@@ -200,13 +206,7 @@ min-height:0;
 display:flex;
 flex-direction:column;
 gap:10px;
-}
-.dashWelcome{
-background:#0f172a;
-border:1px solid #334155;
-border-radius:14px;
-padding:16px 14px;
-flex:0 0 auto;
+overflow-y:auto;
 }
 .dashWelcomeRow{
 display:flex;
@@ -233,22 +233,23 @@ box-shadow:0 6px 16px rgba(37,99,235,.28);
 }
 .dashAvatarCam{
 position:absolute;
-left:-2px;
-bottom:-2px;
-width:22px;
-height:22px;
+left:-1px;
+bottom:-1px;
+width:20px;
+height:20px;
 border:none;
 border-radius:50%;
 background:#334155;
 border:2px solid #0f172a;
 color:#cbd5e1;
-font-size:11px;
-line-height:1;
 cursor:pointer;
 padding:0;
 display:flex;
 align-items:center;
 justify-content:center;
+}
+.dashAvatarCam svg{
+display:block;
 }
 .dashWelcomeText{
 min-width:0;
@@ -292,22 +293,19 @@ line-height:1.4;
 .dashPrimaryGrid{
 display:grid;
 grid-template-columns:1fr 1fr;
-gap:8px;
+gap:10px;
 flex:0 0 auto;
-width:min(100%, 168px);
-margin:0 auto;
+width:100%;
 }
 .dashPrimary{
 display:flex;
 flex-direction:column;
 align-items:center;
 justify-content:center;
-gap:5px;
-aspect-ratio:1 / 1;
-height:auto;
-width:100%;
-padding:8px 6px;
-border-radius:14px;
+gap:8px;
+height:118px;
+padding:12px 10px;
+border-radius:16px;
 text-decoration:none;
 color:#fff;
 text-align:center;
@@ -320,15 +318,15 @@ background:linear-gradient(180deg,#1e3a5f 0%,#172554 100%);
 border-color:#1d4ed8;
 }
 .dashPrimaryIcon{
-width:30px;
-height:30px;
-border-radius:8px;
+width:36px;
+height:36px;
+border-radius:10px;
 display:flex;
 align-items:center;
 justify-content:center;
 background:rgba(34,197,94,.18);
 color:#86efac;
-font-size:18px;
+font-size:22px;
 font-weight:700;
 flex:0 0 auto;
 line-height:1;
@@ -338,28 +336,24 @@ background:rgba(59,130,246,.18);
 color:#93c5fd;
 }
 .dashPrimaryLabel{
-font-size:11px;
+font-size:13px;
 font-weight:700;
-line-height:1.3;
+line-height:1.35;
 }
 .dashList{
 background:#0f172a;
 border:1px solid #334155;
 border-radius:14px;
 overflow:hidden;
-flex:1 1 auto;
-min-height:0;
-display:flex;
-flex-direction:column;
+flex:0 0 auto;
 }
 .dashItem{
 display:flex;
 align-items:center;
 justify-content:center;
 gap:8px;
-padding:0 12px;
-flex:1 1 0;
-min-height:46px;
+padding:0 14px;
+min-height:48px;
 text-decoration:none;
 color:#fff;
 border-bottom:1px solid #1e293b;
@@ -395,7 +389,7 @@ text-align:center;
 }
 .dashLogout{
 display:block;
-margin-top:8px;
+margin-top:auto;
 padding:11px;
 border-radius:12px;
 background:#7f1d1d;
@@ -418,7 +412,8 @@ background:#ef4444;
 box-shadow:0 0 8px rgba(239,68,68,.7);
 }
 @media(max-width:360px){
-.dashPrimaryLabel{font-size:10px}
+.dashPrimary{height:108px}
+.dashPrimaryLabel{font-size:12px}
 .dashItemText{font-size:12px}
 .dashStatLabel{font-size:9px}
 .dashAvatar{width:46px;height:46px;font-size:19px}
@@ -432,21 +427,24 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 
 <div class="dashTopBar">
 <h1 class="userPanelTitle">پنل کاربری</h1>
-<div class="dashMoreWrap">
-<button type="button" class="dashMoreBtn" id="dashMoreBtn" aria-label="منو">⋮</button>
-<div class="dashMoreMenu" id="dashMoreMenu">
-<button type="button" id="dashEditProfileBtn">ویرایش پروفایل</button>
-</div>
-</div>
 </div>
 
 <div class="dashGrowZone">
 
 <div class="dashWelcome">
+<div class="dashMoreWrap">
+<button type="button" class="dashMoreBtn" id="dashMoreBtn" aria-label="منو">⋮</button>
+<div class="dashMoreMenu" id="dashMoreMenu">
+<button type="button" id="dashEditAvatarBtn">ویرایش عکس پروفایل</button>
+<button type="button" id="dashEditUsernameBtn">تغییر نام کاربری</button>
+</div>
+</div>
 <div class="dashWelcomeRow">
 <div class="dashAvatarWrap">
 <div class="dashAvatar"><?php echo dashH(dashUserInitial($user)); ?></div>
-<button type="button" class="dashAvatarCam" id="dashAvatarCamBtn" title="تغییر عکس پروفایل" aria-label="تغییر عکس پروفایل">📷</button>
+<button type="button" class="dashAvatarCam" id="dashAvatarCamBtn" title="تغییر عکس پروفایل" aria-label="تغییر عکس پروفایل">
+<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h4l2-3h4l2 3h4v10H4V8z"/><circle cx="12" cy="13" r="3"/></svg>
+</button>
 </div>
 <div class="dashWelcomeText">
 <p class="dashHello">خوش آمدید</p>
@@ -484,7 +482,7 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 <a class="dashItem" href="subscriptions.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">≡</span>
-<span class="dashItemText">لیست اشتراک‌ها</span>
+<span class="dashItemText">اشتراک من</span>
 </span>
 </a>
 <a class="dashItem" href="renew-list.php">
@@ -524,7 +522,8 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 (function(){
     var moreBtn = document.getElementById('dashMoreBtn');
     var moreMenu = document.getElementById('dashMoreMenu');
-    var editBtn = document.getElementById('dashEditProfileBtn');
+    var editAvatarBtn = document.getElementById('dashEditAvatarBtn');
+    var editUsernameBtn = document.getElementById('dashEditUsernameBtn');
     var camBtn = document.getElementById('dashAvatarCamBtn');
 
     function closeMenu(){
@@ -548,17 +547,27 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
         });
     }
 
-    function showSoon(){
-        alert('ویرایش پروفایل به زودی فعال می‌شود.');
+    function showSoon(message){
+        alert(message || 'به زودی فعال می‌شود.');
         closeMenu();
     }
 
-    if(editBtn){
-        editBtn.addEventListener('click', showSoon);
+    if(editAvatarBtn){
+        editAvatarBtn.addEventListener('click', function(){
+            showSoon('ویرایش عکس پروفایل به زودی فعال می‌شود.');
+        });
+    }
+
+    if(editUsernameBtn){
+        editUsernameBtn.addEventListener('click', function(){
+            showSoon('تغییر نام کاربری به زودی فعال می‌شود.');
+        });
     }
 
     if(camBtn){
-        camBtn.addEventListener('click', showSoon);
+        camBtn.addEventListener('click', function(){
+            showSoon('ویرایش عکس پروفایل به زودی فعال می‌شود.');
+        });
     }
 })();
 </script>
