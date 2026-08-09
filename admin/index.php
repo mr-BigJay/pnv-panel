@@ -263,6 +263,8 @@ exit;
 $page = $_GET['page'] ?? 'dashboard';
 $pnvRootDir = dirname(__DIR__);
 
+require_once __DIR__ . '/admin_nav.php';
+
 $supportActionResult = null;
 
 if($page === 'support' && file_exists(__DIR__ . '/../support_lib.php')){
@@ -347,10 +349,14 @@ $supportData = supportLoad($supportFile);
 
 $hasUnreadSupport = supportAdminHasUnread($supportData);
 
+$supportUnreadCount = supportAdminUnreadTotal($supportData);
+
 }
 
 $hasNewPayments = false;
 $hasNewRenews = false;
+$pendingPaymentsCount = 0;
+$pendingRenewsCount = 0;
 
 foreach($payments as $pay){
 
@@ -369,6 +375,7 @@ $status != 'رد شد'
 ){
 
 $hasNewPayments = true;
+$pendingPaymentsCount++;
 
 }
 
@@ -381,10 +388,13 @@ $status != 'رد شد'
 ){
 
 $hasNewRenews = true;
+$pendingRenewsCount++;
 
 }
 
 }
+
+$supportUnreadCount = 0;
 
 $todayUsers = 0;
 
@@ -860,7 +870,7 @@ overflow:hidden;
 height:100dvh;
 }
 
-.adminMenuBtn{display:flex;align-items:center;justify-content:center}
+.adminMenuBtn{display:none}
 
 .sidebar{
 position:fixed;
@@ -914,9 +924,11 @@ grid-template-columns:1fr;
 
 </style>
 
+<?php adminBottomNavStyles(); ?>
+
 </head>
 
-<body class="<?php echo $page === 'support' ? 'adminPageSupport' : ''; ?>">
+<body class="<?php echo $page === 'support' ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
 
 <button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
 <div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
@@ -1207,6 +1219,20 @@ name="uploadcsv">
 
 </div>
 
+<?php
+$adminBottomActive = in_array($page, ['support', 'renews', 'payments'], true) ? $page : '';
+adminBottomNav([
+    'active' => $adminBottomActive,
+    'more_mode' => 'sidebar',
+    'badges' => [
+        'support' => $supportUnreadCount,
+        'renews' => $pendingRenewsCount,
+        'payments' => $pendingPaymentsCount,
+    ],
+]);
+adminBottomNavScript();
+?>
+
 <script>
 (function(){
     const menuBtn = document.getElementById('adminMenuBtn');
@@ -1235,7 +1261,7 @@ name="uploadcsv">
 
     const pollUrl = <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>;
 
-    function setUnreadDot(hasUnread){
+    function setUnreadDot(hasUnread, unreadCount){
         let dot = menuLink.querySelector('.notifDot');
 
         if(hasUnread){
@@ -1244,11 +1270,17 @@ name="uploadcsv">
                 dot.className = 'notifDot';
                 menuLink.insertBefore(dot, menuLink.firstChild);
             }
+            if(typeof window.adminBottomNavSetBadge === 'function'){
+                window.adminBottomNavSetBadge('support', unreadCount || 1);
+            }
             return;
         }
 
         if(dot){
             dot.remove();
+        }
+        if(typeof window.adminBottomNavSetBadge === 'function'){
+            window.adminBottomNavSetBadge('support', 0);
         }
     }
 
@@ -1256,7 +1288,7 @@ name="uploadcsv">
         fetch(pollUrl, {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(data){
-                setUnreadDot(!!data.has_unread);
+                setUnreadDot(!!data.has_unread, data.unread_count || 0);
             })
             .catch(function(){});
     }

@@ -725,9 +725,11 @@ background:#22c55e;
 
 </style>
 
+<?php adminBottomNavStyles(); ?>
+
 </head>
 
-<body>
+<body class="adminHasBottomNav">
 <?php adminQuickNavStyles(); adminQuickNav('users'); ?>
 
 
@@ -1322,6 +1324,11 @@ loadProfile(<?php echo json_encode($openProfile, JSON_UNESCAPED_UNICODE); ?>);
 <?php } ?>
 
 </script>
+
+<?php
+adminBottomNav(['active' => 'users', 'more_mode' => 'sheet']);
+adminBottomNavScript();
+?>
 
 </body>
 
