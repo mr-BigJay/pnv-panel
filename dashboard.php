@@ -199,18 +199,14 @@ flex:1;
 min-height:0;
 display:flex;
 flex-direction:column;
-gap:8px;
+gap:10px;
 }
 .dashWelcome{
 background:#0f172a;
 border:1px solid #334155;
 border-radius:14px;
-padding:14px 12px;
-flex:3 1 0;
-min-height:96px;
-display:flex;
-flex-direction:column;
-justify-content:center;
+padding:16px 14px;
+flex:0 0 auto;
 }
 .dashWelcomeRow{
 display:flex;
@@ -351,11 +347,10 @@ background:#0f172a;
 border:1px solid #334155;
 border-radius:14px;
 overflow:hidden;
-flex:1 1 0;
+flex:1 1 auto;
 min-height:0;
 display:flex;
 flex-direction:column;
-justify-content:stretch;
 }
 .dashItem{
 display:flex;
@@ -363,8 +358,8 @@ align-items:center;
 justify-content:center;
 gap:8px;
 padding:0 12px;
-flex:1;
-min-height:44px;
+flex:1 1 0;
+min-height:46px;
 text-decoration:none;
 color:#fff;
 border-bottom:1px solid #1e293b;
