@@ -52,12 +52,18 @@ content="width=device-width, initial-scale=1.0">
 
 </title>
 
-<link rel="stylesheet" href="user_bg.css?v=1">
+<link rel="stylesheet" href="user_bg.css?v=2">
 
 <style>
 
 *{
 box-sizing:border-box;
+}
+
+html,body{
+background:linear-gradient(165deg,#0B1220 0%,#0f172a 55%,#111827 100%);
+background-attachment:fixed;
+min-height:100%;
 }
 
 body{

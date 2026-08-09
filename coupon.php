@@ -29,8 +29,14 @@ $activeCodes = $summary['active_codes'] ?? [];
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>کوپن تخفیف</title>
-<link rel="stylesheet" href="user_panel.css?v=7">
+<link rel="stylesheet" href="user_panel.css?v=8">
+<link rel="stylesheet" href="user_bg.css?v=2">
 <style>
+html,body{
+background:linear-gradient(165deg,#0B1220 0%,#0f172a 55%,#111827 100%);
+background-attachment:fixed;
+min-height:100%;
+}
 .couponPageBox{margin-bottom:14px;}
 .couponCodeItem{background:#0f172a;padding:14px;border-radius:12px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
 .couponCodeText{font-size:18px;font-weight:700;letter-spacing:2px;word-break:break-all;}
