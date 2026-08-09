@@ -333,16 +333,9 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 <a class="dashItem" href="subscriptions.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">≡</span>
-<span class="dashItemText">لیست اشتراک‌ها</span>
+<span class="dashItemText">اشتراک‌های من</span>
 </span>
 <span class="dashItemMeta">مشاهده</span>
-</a>
-<a class="dashItem" href="renew-list.php">
-<span class="dashItemMain">
-<span class="dashItemIcon">↻</span>
-<span class="dashItemText">لیست تمدیدها</span>
-</span>
-<span class="dashItemMeta">پیگیری</span>
 </a>
 <a class="dashItem" href="downloads.php">
 <span class="dashItemMain">
