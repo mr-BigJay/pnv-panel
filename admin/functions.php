@@ -79,13 +79,17 @@ return '-';
 
 function pnvAdminInclude($fileName){
 
-    $candidates = [
-        __DIR__ . '/' . ltrim($fileName, '/'),
-    ];
+    $name = ltrim((string)$fileName, '/');
+    $candidates = [];
 
-    $adminDir = dirname(__DIR__) . '/admin';
-    if(is_dir($adminDir)){
-        $candidates[] = $adminDir . '/' . ltrim($fileName, '/');
+    foreach([__DIR__, dirname(__DIR__) . '/bigjay_controller', dirname(__DIR__) . '/admin'] as $root){
+        if(!is_dir($root)){
+            continue;
+        }
+        $path = rtrim($root, '/') . '/' . $name;
+        if(!in_array($path, $candidates, true)){
+            $candidates[] = $path;
+        }
     }
 
     foreach($candidates as $path){
@@ -96,7 +100,7 @@ function pnvAdminInclude($fileName){
     }
 
     echo '<div class="box" style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">'
-        . 'فایل «' . htmlspecialchars($fileName, ENT_QUOTES, 'UTF-8') . '» یافت نشد.'
+        . 'فایل «' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '» یافت نشد.'
         . '</div>';
 
     return false;

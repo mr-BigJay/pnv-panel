@@ -23,6 +23,25 @@ foreach($__pnvFuncCandidates as $__pnvBootFile){
     }
 }
 
+if(!function_exists('pnvAdminInclude')){
+    function pnvAdminInclude($fileName){
+        $name = ltrim((string)$fileName, '/');
+        foreach([
+            __DIR__ . '/' . $name,
+            __DIR__ . '/../admin/' . $name,
+        ] as $path){
+            if(is_file($path)){
+                include $path;
+                return true;
+            }
+        }
+        echo '<div class="box" style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">'
+            . 'فایل «' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '» یافت نشد.'
+            . '</div>';
+        return false;
+    }
+}
+
 if(!function_exists('pnvAdminIsLoggedIn')){
     if(session_status() === PHP_SESSION_NONE){
         session_start();
