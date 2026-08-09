@@ -228,12 +228,18 @@ min-width:0;
 flex:1;
 }
 .dashHello{
-margin:0 0 2px;
+margin:0 0 6px;
 font-size:11px;
 color:#94a3b8;
 }
+.dashNameRow{
+display:flex;
+flex-wrap:wrap;
+align-items:center;
+gap:6px 8px;
+}
 .dashUser{
-margin:0 0 8px;
+margin:0;
 font-size:17px;
 font-weight:700;
 word-break:break-word;
@@ -420,11 +426,13 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 <div class="dashAvatar"><?php echo dashH(dashUserInitial($user)); ?></div>
 <div class="dashWelcomeText">
 <p class="dashHello">خوش آمدید</p>
+<div class="dashNameRow">
 <p class="dashUser"><?php echo dashH($user); ?></p>
 <div class="dashStatsInline">
 <span class="dashChip"><b><?php echo (int)$approvedSubs; ?></b> اشتراک فعال</span>
 <span class="dashChip"><b><?php echo (int)$pendingBuys; ?></b> خرید در انتظار</span>
 <span class="dashChip"><b><?php echo (int)$pendingRenews; ?></b> تمدید در انتظار</span>
+</div>
 </div>
 </div>
 </div>
