@@ -371,9 +371,6 @@ $start = ($currentPage - 1) * $perPage;
 
 $buyPaymentsPage = array_slice($buyPayments, $start, $perPage);
 
-$rangeFrom = $totalItems > 0 ? $start + 1 : 0;
-$rangeTo = min($start + $perPage, $totalItems);
-
 function paymentsListUrl($page, $per){
 
     return pnvAdminUrl(
@@ -382,12 +379,12 @@ function paymentsListUrl($page, $per){
 
 }
 
-function paymentsFormatPlanLines($plan){
+function paymentsFormatPlanLine($plan){
 
     $plan = trim((string)$plan);
 
     if($plan === '' || $plan === '-'){
-        return ['-', ''];
+        return '—';
     }
 
     if(strpos($plan, ' - ') !== false){
@@ -397,694 +394,541 @@ function paymentsFormatPlanLines($plan){
         $size = trim($size);
         $price = trim($price);
 
-        if(preg_match('/(\d+)/u', $price, $match)){
-            $price = $match[1];
+        if($price !== ''){
+            $price = preg_replace('/\s*هزار\s*تومان/u', ' تومن', $price);
+            $price = preg_replace('/\s*تومان/u', ' تومن', $price);
+            $price = preg_replace('/\s+/u', ' ', trim($price));
         }
 
-        return [$size, $price];
+        if($size !== '' && $price !== ''){
+            return $size . ' - ' . $price;
+        }
+
+        if($size !== ''){
+            return $size;
+        }
+
+        return $price;
 
     }
 
-    return [$plan, ''];
+    return $plan;
 
 }
 
 ?>
 
+<link rel="stylesheet" href="/fonts.css">
+
 <style>
 
-.payTableWrap{
-width:100%;
-max-width:100%;
-overflow-x:auto;
--webkit-overflow-scrolling:touch;
+body{
+background:linear-gradient(165deg,#0B1220 0%,#182537 55%,#0f172a 100%) !important;
+background-attachment:fixed !important;
+font-family:tahoma,sans-serif !important;
 }
 
-.paymentsPage .payTable{
-width:100% !important;
-max-width:100% !important;
-table-layout:fixed !important;
-border-collapse:collapse !important;
-background:#1e293b;
+.content{
+background:transparent !important;
+}
+
+.content > .box.paymentsPage{
+background:rgba(24,37,55,.72);
+backdrop-filter:blur(14px);
+-webkit-backdrop-filter:blur(14px);
+border:1px solid rgba(148,163,184,.12);
+border-radius:24px;
+padding:20px 16px 18px;
+box-shadow:0 18px 50px rgba(0,0,0,.35);
+overflow:visible;
+}
+
+.paymentsPage h2{
+margin:0 0 18px;
+font-size:24px;
+font-family:"Lalezar",tahoma,sans-serif;
+font-weight:400;
+letter-spacing:0;
+text-align:right;
+color:#fff;
+}
+
+.payList{
+display:flex;
+flex-direction:column;
+gap:14px;
+overflow:visible;
+}
+
+.payCard{
+display:grid;
+grid-template-columns:minmax(0,.95fr) minmax(0,1.55fr) max-content;
+align-items:center;
+gap:12px;
+padding:16px 14px;
 border-radius:16px;
-}
-
-.paymentsPage .payTable th,
-.paymentsPage .payTable td{
-padding:10px 6px !important;
-border-bottom:1px solid #334155 !important;
-text-align:center !important;
-vertical-align:middle !important;
-color:white !important;
-}
-
-.paymentsPage .payTable th{
-background:#334155 !important;
-font-size:13px !important;
-font-weight:600;
-}
-
-.paymentsPage .payTable td{
-font-size:12px !important;
-}
-
-.paymentsPage .payTable .col-plan{
-text-align:center !important;
-vertical-align:middle !important;
-}
-
-.paymentsPage .planCell{
-display:flex !important;
-flex-direction:column !important;
-align-items:center !important;
-justify-content:center !important;
-gap:3px !important;
-line-height:1.15 !important;
-}
-
-.paymentsPage .planSize{
-display:block !important;
-font-size:12px !important;
-font-weight:600 !important;
-}
-
-.paymentsPage .planPrice{
-display:block !important;
-font-size:15px !important;
-font-weight:700 !important;
-color:#f8fafc !important;
-}
-
-.paymentsPage .payTable .col-num{
-width:11%;
-}
-
-.paymentsPage .payTable .col-user{
-width:20%;
-word-break:break-word;
-line-height:1.35;
-}
-
-.paymentsPage .payTable .col-plan{
-width:36%;
-}
-
-.paymentsPage .payTable .col-status{
-width:10%;
-}
-
-.paymentsPage .payTable .col-actions{
-width:23%;
-}
-
-.statusDot{
-width:12px;
-height:12px;
-border-radius:50%;
-display:inline-block;
-flex-shrink:0;
-}
-
-.statusDot--green{
-background:#22c55e;
-box-shadow:0 0 0 2px rgba(34,197,94,.25);
-}
-
-.statusDot--red{
-background:#ef4444;
-box-shadow:0 0 0 2px rgba(239,68,68,.25);
-}
-
-.statusDot--yellow{
-background:#facc15;
-box-shadow:0 0 0 2px rgba(250,204,21,.25);
-}
-
-.menuWrap{
+background:#1e293b;
+border:1px solid rgba(148,163,184,.10);
+box-shadow:0 10px 28px rgba(0,0,0,.28);
 position:relative;
-display:inline-block;
-width:34px;
+overflow:visible;
+}
+
+.payCardEmpty{
+justify-content:center;
+text-align:center;
+color:#94a3b8;
+font-size:14px;
+padding:28px 16px;
+}
+
+.payColUser,
+.payColPlan{
+min-width:0;
+}
+
+.payColUser{
+text-align:right;
+padding-inline-end:2px;
+}
+
+.payUserName{
+display:block;
+font-size:14px;
+font-weight:700;
+color:#fff;
+line-height:1.35;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+}
+
+.payUserMobile{
+display:block;
+margin-top:4px;
+font-size:12px;
+color:#94a3b8;
+line-height:1.3;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+direction:ltr;
+unicode-bidi:plaintext;
+}
+
+.payColPlan{
+text-align:center;
+}
+
+.payConfigName{
+display:block;
+font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+font-size:12.5px;
+font-weight:700;
+text-align:center;
+margin-bottom:6px;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+color:#fff;
+}
+
+.payPlanLine{
+display:block;
+text-align:center;
+color:#86efac;
+font-size:12px;
+font-weight:600;
+line-height:1.35;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+}
+
+.payActions{
+display:flex;
+align-items:center;
+justify-content:center;
+gap:8px;
+position:relative;
+flex-shrink:0;
+overflow:visible;
 }
 
 .menuBtn{
-width:34px;
-height:34px;
+width:30px !important;
+height:30px;
+min-width:30px;
 border:none;
 border-radius:10px;
 background:#334155;
-color:white;
-font-size:18px;
+color:#e2e8f0;
+font-size:15px;
 cursor:pointer;
-padding:0;
+line-height:1;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+flex:0 0 30px;
+box-sizing:border-box;
+margin:0 !important;
+padding:0 !important;
+box-shadow:inset 0 0 0 1px rgba(148,163,184,.16);
+-webkit-tap-highlight-color:transparent;
+touch-action:manipulation;
 }
+
+.statusIcon{
+width:22px !important;
+height:22px;
+min-width:22px;
+border:none;
+border-radius:999px;
+color:#fff;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+flex:0 0 22px;
+box-sizing:border-box;
+margin:0 !important;
+padding:0 !important;
+box-shadow:0 4px 10px rgba(0,0,0,.25);
+}
+
+.statusIcon svg{
+width:12px;
+height:12px;
+display:block;
+stroke:#fff;
+}
+
+.statusIcon.is-ok{background:#22c55e}
+.statusIcon.is-no{background:#ef4444}
+.statusIcon.is-pending{background:#f59e0b}
 
 .dropdown{
-    display:none;
-    position:absolute;
-    right:0;
-    top:45px;
-    background:#0f172a;
-    width:200px;
-    padding:10px;
-    border-radius:14px;
-    z-index:999;
-    box-shadow:0 10px 30px rgba(0,0,0,0.4);
-    direction:rtl;
+display:none;
+position:absolute;
+top:calc(100% + 6px);
+left:0;
+right:auto;
+background:#0f172a;
+width:180px;
+padding:10px;
+border-radius:14px;
+z-index:50;
+box-shadow:0 14px 36px rgba(0,0,0,.45);
+border:1px solid #334155;
 }
 
-.dropdown.active{
-    display:block;
-}
+.dropdown.active{display:block}
 
 .dropdown button{
-    width:100%;
-    padding:11px;
-    border:none;
-    border-radius:10px;
-    margin-bottom:8px;
-    background:#334155;
-    color:white;
-    cursor:pointer;
-    font-size:13px;
-    text-align:right;
+width:100%;
+padding:11px;
+border:none;
+border-radius:10px;
+margin-bottom:8px;
+background:#334155;
+color:#fff;
+cursor:pointer;
+font-family:inherit;
+-webkit-tap-highlight-color:transparent;
+text-align:right;
+font-size:13px;
 }
 
-.dropdown .red{
-    background:#ef4444;
-}
+.dropdown button:last-child{margin-bottom:0}
+.red{background:#ef4444 !important}
 
 .modalOverlay{
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,0.45);
-    backdrop-filter:blur(6px);
-    display:none;
-    justify-content:center;
-    align-items:center;
-    z-index:99999;
-    padding:16px;
+position:fixed;
+inset:0;
+background:rgba(0,0,0,.55);
+display:none;
+justify-content:center;
+align-items:center;
+padding:15px;
+z-index:9999999;
 }
 
 .modal{
-    background:#1e293b;
-    width:100%;
-    max-width:430px;
-    border-radius:20px;
-    padding:22px;
-    color:white;
+background:#1e293b;
+padding:20px;
+border-radius:18px;
+width:100%;
+max-width:420px;
+color:#fff;
+font-family:inherit;
 }
 
+.modal h3{margin:0 0 12px;text-align:center}
+
 .modalTitle{
-    font-size:20px;
-    text-align:center;
-    margin-bottom:18px;
-    font-weight:bold;
+font-size:20px;
+text-align:center;
+margin-bottom:18px;
+font-weight:bold;
 }
 
 .modalInfo{
-    background:#0f172a;
-    padding:14px;
-    border-radius:12px;
-    line-height:28px;
-    font-size:13px;
-    margin-bottom:16px;
+background:#0f172a;
+padding:14px;
+border-radius:12px;
+line-height:28px;
+font-size:13px;
+margin-bottom:16px;
 }
 
 .bigText{
-    background:#0f172a;
-    padding:18px;
-    border-radius:14px;
-    font-size:16px;
-    line-height:34px;
-    word-break:break-all;
-    margin-bottom:16px;
+background:#0f172a;
+padding:18px;
+border-radius:14px;
+font-size:16px;
+line-height:34px;
+word-break:break-all;
+margin-bottom:16px;
 }
 
 .modal input,
 .modal select{
-    width:100%;
-    padding:12px;
-    border:none;
-    border-radius:10px;
-    margin-bottom:12px;
-    background:#0f172a;
-    color:white;
-    font-size:14px;
-    box-sizing:border-box;
-}
-
-.modalBtns{
-    display:flex;
-    gap:10px;
-    margin-top:12px;
-}
-
-.modalBtns button{
-    flex:1;
-    padding:12px;
-    border:none;
-    border-radius:12px;
-    cursor:pointer;
-    color:white;
-    font-size:14px;
-}
-
-.green{
-    background:#22c55e;
-}
-
-.redBtn{
-    background:#ef4444;
-}
-
-.gray{
-    background:#475569;
-}
-
-.payPager{
-margin-top:18px;
-display:flex;
-align-items:center;
-justify-content:space-between;
-gap:12px;
-flex-wrap:wrap;
-background:#1e293b;
-border:1px solid #334155;
-border-radius:12px;
-padding:12px 14px;
-}
-
-.payPagerSize{
-display:flex;
-align-items:center;
-gap:8px;
-font-size:13px;
-color:#cbd5e1;
-}
-
-.payPerSelect{
-padding:8px 10px;
-border:1px solid #475569;
-border-radius:8px;
+width:100%;
+padding:12px;
+margin-bottom:12px;
+border:none;
+border-radius:10px;
 background:#0f172a;
-color:white;
+color:#fff;
+box-sizing:border-box;
 font-family:inherit;
-font-size:13px;
-min-width:64px;
 }
 
-.payPagerNav{
-display:flex;
-align-items:center;
-gap:8px;
+.modalBtns{display:flex;gap:10px;margin-top:12px}
+.modalBtns button{
+flex:1;
+padding:12px;
+border:none;
+border-radius:10px;
+cursor:pointer;
+color:#fff;
+font-family:inherit;
 }
 
-.payPagerInfo{
-font-size:13px;
-color:#cbd5e1;
-white-space:nowrap;
+.green{background:#22c55e}
+.gray{background:#475569}
+.redBtn{background:#ef4444}
+
+.paymentsPage .pagination{
+margin-top:18px;
+text-align:center;
 }
 
-.payPagerBtn{
-min-width:36px;
-height:36px;
-padding:0 10px;
+.paymentsPage .pagination a{
 display:inline-flex;
 align-items:center;
 justify-content:center;
-border:1px solid #475569;
-border-radius:8px;
-background:#0f172a;
-color:white;
+min-width:36px;
+padding:8px 12px;
+margin:4px;
+background:#1e293b;
+color:#fff;
+border-radius:10px;
 text-decoration:none;
-font-size:14px;
-box-sizing:border-box;
+border:1px solid rgba(148,163,184,.12);
 }
 
-.payPagerBtn.is-active{
-background:#2563eb;
-border-color:#2563eb;
-color:white;
+.paymentsPage .pagination a.active{
+background:#22c55e;
+border-color:transparent;
 }
 
-.payPagerBtn.is-disabled{
-opacity:.45;
-pointer-events:none;
+.paymentsPage .payAlertOk{
+background:#14532d;
+color:#bbf7d0;
+padding:12px 14px;
+border-radius:12px;
+margin-bottom:14px;
+line-height:1.8;
 }
 
-@media(max-width:900px){
-
-.dropdown{
-right:auto;
-left:0;
+.paymentsPage .payAlertErr{
+background:#7f1d1d;
+color:#fecaca;
+padding:12px 14px;
+border-radius:12px;
+margin-bottom:14px;
+line-height:1.8;
 }
 
+@media(max-width:560px){
+.content > .box.paymentsPage{
+padding:16px 12px 14px;
+border-radius:22px;
 }
-
-@media(max-width:768px){
-
-.box{
-padding:12px;
-overflow:hidden;
-}
-
-.paymentsPage .payTable th,
-.paymentsPage .payTable td{
-padding:7px 3px !important;
-font-size:10px !important;
-}
-
-.paymentsPage .payTable .col-num{
-width:9% !important;
-font-size:9px !important;
-}
-
-.paymentsPage .payTable .col-user{
-width:18% !important;
-font-size:10px !important;
-}
-
-.paymentsPage .payTable .col-plan{
-width:40% !important;
-}
-
-.paymentsPage .payTable .col-plan .planSize{
-font-size:11px !important;
-}
-
-.paymentsPage .payTable .col-plan .planPrice{
-font-size:13px !important;
-}
-
-.paymentsPage .payTable .col-status{
-width:9% !important;
-}
-
-.paymentsPage .payTable .col-actions{
-width:8% !important;
-}
-
-.menuWrap{
-width:30px;
-}
-
-.menuBtn{
-width:30px;
-height:30px;
-font-size:16px;
-}
-
-.payPager{
-flex-direction:column;
-align-items:stretch;
+.payCard{
+grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr) max-content;
 gap:10px;
+padding:14px 12px;
 }
-
-.payPagerNav{
-justify-content:space-between;
-width:100%;
+.payUserName{font-size:13px}
+.payUserMobile{font-size:11px}
+.payConfigName{font-size:11.5px}
+.payPlanLine{font-size:11px}
+.menuBtn{
+width:28px !important;
+height:28px;
+min-width:28px;
+flex:0 0 28px;
 }
-
-.dropdown{
-width:180px;
+.statusIcon{
+width:20px !important;
+height:20px;
+min-width:20px;
+flex:0 0 20px;
 }
-
+.statusIcon svg{width:11px;height:11px}
 }
 
 </style>
 
-<div class="paymentsPage" data-payments-ui="v3">
-
-<div class="box">
-
-    <h2>
-
-        لیست خرید های جدید
-
-    </h2>
-
-    <?php if($paymentMessage !== ''){ ?>
-    <div style="background:#14532d;color:#bbf7d0;padding:12px 14px;border-radius:12px;margin-bottom:14px;line-height:1.8"><?php echo htmlspecialchars($paymentMessage, ENT_QUOTES, 'UTF-8'); ?></div>
-    <?php } ?>
-    <?php if($paymentError !== ''){ ?>
-    <div style="background:#7f1d1d;color:#fecaca;padding:12px 14px;border-radius:12px;margin-bottom:14px;line-height:1.8"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
-    <?php } ?>
-
-    <div class="payTableWrap">
-
-    <table class="payTable">
-
-        <thead>
-
-            <tr>
-
-                <th class="col-num">شماره</th>
-
-                <th class="col-user">کاربر</th>
-
-                <th class="col-plan">پلن اشتراک</th>
-
-                <th class="col-status">وضعیت</th>
-
-                <th class="col-actions">عملیات</th>
-
-            </tr>
-
-        </thead>
-
-        <tbody>
-
-        <?php foreach($buyPaymentsPage as $row){
-
-            $i = $row['index'];
-
-            $p = $row['data'];
-
-            $status = trim($p[6] ?? '');
-
-            $statusDotClass = 'statusDot--yellow';
-            $statusTitle = 'در حال بررسی';
-
-            if($status === 'تایید شد'){
-                $statusDotClass = 'statusDot--green';
-                $statusTitle = 'تایید شد';
-            }
-
-            if($status === 'رد شد'){
-                $statusDotClass = 'statusDot--red';
-                $statusTitle = 'رد شد';
-            }
-
-            $mobile =
-            getUserMobile(
-                $p[0] ?? '',
-                $users
-            );
-
-            [$planSize, $planPrice] = paymentsFormatPlanLines($p[2] ?? '');
-            $payWhen = pnvFormatPaymentRowDateTime($p);
-
-        ?>
-
-            <tr>
-
-                <td class="col-num">
-
-                    <?php echo $i + 1; ?>
-
-                </td>
-
-                <td class="col-user">
-
-                    <?php echo htmlspecialchars($p[0] ?? '-'); ?>
-
-                </td>
-
-                <td class="col-plan">
-
-                    <div class="planCell">
-                        <span class="planSize"><?php echo htmlspecialchars($planSize, ENT_QUOTES, 'UTF-8'); ?></span>
-                        <?php if($planPrice !== ''){ ?>
-                        <span class="planPrice"><?php echo htmlspecialchars($planPrice, ENT_QUOTES, 'UTF-8'); ?></span>
-                        <?php } ?>
-                    </div>
-
-                </td>
-
-                <td class="col-status">
-
-                    <span
-                        class="statusDot <?php echo $statusDotClass; ?>"
-                        title="<?php echo htmlspecialchars($statusTitle, ENT_QUOTES, 'UTF-8'); ?>"></span>
-
-                </td>
-
-                <td class="col-actions">
-
-                    <div class="menuWrap">
-
-                        <button
-                            class="menuBtn"
-                            onclick="toggleMenu('m<?php echo $i; ?>')">
-
-                            ⋮
-
-                        </button>
-
-                        <div
-                            class="dropdown"
-                            id="m<?php echo $i; ?>">
-
-                            <button
-                                onclick='showConfig(
-                                <?php echo json_encode($p[0] ?? ""); ?>,
-                                <?php echo json_encode($mobile); ?>,
-                                <?php echo json_encode($payWhen['date']); ?>,
-                                <?php echo json_encode($payWhen['time']); ?>,
-                                <?php echo json_encode($p[1] ?? ""); ?>,
-                                <?php echo json_encode($p[2] ?? ""); ?>
-                                )'>
-
-                                نام کانفیگ
-
-                            </button>
-
-                            <button
-                                onclick='showPayment(
-                                <?php echo json_encode($p[0] ?? ""); ?>,
-                                <?php echo json_encode($mobile); ?>,
-                                <?php echo json_encode($p[1] ?? ""); ?>,
-                                <?php echo json_encode($p[3] ?? ""); ?>,
-                                <?php echo json_encode($payWhen['date']); ?>,
-                                <?php echo json_encode($payWhen['time']); ?>
-                                )'>
-
-                                جزئیات پرداخت
-
-                            </button>
-
-                            <button
-                                onclick='showAction(
-                                <?php echo $i; ?>,
-                                <?php echo json_encode($p[0] ?? ""); ?>,
-                                <?php echo json_encode($mobile); ?>,
-                                <?php echo json_encode($p[1] ?? ""); ?>,
-                                <?php echo json_encode($status); ?>,
-                                <?php echo json_encode($p[7] ?? ""); ?>
-                                )'>
-
-                                عملیات
-
-                            </button>
-
-                            <button
-                                class="red"
-                                onclick='showDelete(
-                                <?php echo $i; ?>,
-                                <?php echo json_encode($p[0] ?? ""); ?>,
-                                <?php echo json_encode($mobile); ?>,
-                                <?php echo json_encode($p[1] ?? ""); ?>
-                                )'>
-
-                                حذف
-
-                            </button>
-
-                        </div>
-
-                    </div>
-
-                </td>
-
-            </tr>
-
-        <?php } ?>
-
-        </tbody>
-
-    </table>
-
-    </div>
-
-    <div class="payPager">
-
-        <div class="payPagerSize">
-            <span>نمایش</span>
-            <select
-                class="payPerSelect"
-                onchange="window.location.href=this.value;">
-
-                <option
-                    value="<?php echo htmlspecialchars(paymentsListUrl(1, 20), ENT_QUOTES, 'UTF-8'); ?>"
-                    <?php echo $perPage === 20 ? 'selected' : ''; ?>>
-
-                    ۲۰
-
-                </option>
-
-                <option
-                    value="<?php echo htmlspecialchars(paymentsListUrl(1, 50), ENT_QUOTES, 'UTF-8'); ?>"
-                    <?php echo $perPage === 50 ? 'selected' : ''; ?>>
-
-                    ۵۰
-
-                </option>
-
-                <option
-                    value="<?php echo htmlspecialchars(paymentsListUrl(1, 100), ENT_QUOTES, 'UTF-8'); ?>"
-                    <?php echo $perPage === 100 ? 'selected' : ''; ?>>
-
-                    ۱۰۰
-
-                </option>
-
-            </select>
-            <span>مورد در هر صفحه</span>
-        </div>
-
-        <div class="payPagerNav">
-            <span class="payPagerInfo">
-                <?php echo number_format($rangeFrom); ?>-<?php echo number_format($rangeTo); ?>
-                از
-                <?php echo number_format($totalItems); ?>
-                مورد
-            </span>
-
-            <a
-                href="<?php echo htmlspecialchars(paymentsListUrl(max(1, $currentPage - 1), $perPage), ENT_QUOTES, 'UTF-8'); ?>"
-                class="payPagerBtn <?php echo $currentPage <= 1 ? 'is-disabled' : ''; ?>"
-                aria-label="صفحه قبل">
-
-                ‹
-
-            </a>
-
-            <span class="payPagerBtn is-active">
-
-                <?php echo number_format($currentPage); ?>
-
-            </span>
-
-            <a
-                href="<?php echo htmlspecialchars(paymentsListUrl(min($totalPages, $currentPage + 1), $perPage), ENT_QUOTES, 'UTF-8'); ?>"
-                class="payPagerBtn <?php echo $currentPage >= $totalPages ? 'is-disabled' : ''; ?>"
-                aria-label="صفحه بعد">
-
-                ›
-
-            </a>
-        </div>
-
-    </div>
+<div class="box paymentsPage" data-payments-ui="cards">
+
+<h2>لیست خرید های جدید</h2>
+
+<?php if($paymentMessage !== ''){ ?>
+<div class="payAlertOk"><?php echo htmlspecialchars($paymentMessage, ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } ?>
+<?php if($paymentError !== ''){ ?>
+<div class="payAlertErr"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } ?>
+
+<div class="payList">
+
+<?php if($totalItems === 0){ ?>
+<div class="payCard payCardEmpty">خریدی برای نمایش نیست</div>
+<?php } ?>
+
+<?php foreach($buyPaymentsPage as $row){
+
+$i = $row['index'];
+$p = $row['data'];
+
+$status = trim((string)($p[6] ?? ''));
+if($status === ''){
+$status = 'درحال بررسی';
+}
+
+$statusClass = 'is-pending';
+if($status === 'تایید شد'){
+$statusClass = 'is-ok';
+}
+elseif($status === 'رد شد'){
+$statusClass = 'is-no';
+}
+
+$mobile = getUserMobile($p[0] ?? '', $users);
+$configName = trim((string)($p[1] ?? ''));
+if($configName === ''){
+$configName = '—';
+}
+$planLine = paymentsFormatPlanLine($p[2] ?? '');
+$payWhen = pnvFormatPaymentRowDateTime($p);
+
+?>
+
+<div class="payCard">
+
+<div class="payColUser">
+<span class="payUserName"><?php echo htmlspecialchars($p[0] ?? '-', ENT_QUOTES, 'UTF-8'); ?></span>
+<span class="payUserMobile"><?php echo htmlspecialchars($mobile !== '' ? $mobile : '—', ENT_QUOTES, 'UTF-8'); ?></span>
+</div>
+
+<div class="payColPlan">
+<span class="payConfigName"><?php echo htmlspecialchars($configName, ENT_QUOTES, 'UTF-8'); ?></span>
+<span class="payPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
+</div>
+
+<div class="payActions">
+
+<?php if($statusClass === 'is-ok'){ ?>
+<span class="statusIcon is-ok" title="تایید شد" aria-label="تایید شد">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+</span>
+<?php } elseif($statusClass === 'is-no'){ ?>
+<span class="statusIcon is-no" title="رد شد" aria-label="رد شد">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+</span>
+<?php } else { ?>
+<span class="statusIcon is-pending" title="درحال بررسی" aria-label="درحال بررسی">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+</span>
+<?php } ?>
+
+<button
+class="menuBtn"
+type="button"
+aria-label="منو"
+onclick="openMenu(event,'m<?php echo $i; ?>')">
+⋮
+</button>
+
+<div class="dropdown" id="m<?php echo $i; ?>" onclick="event.stopPropagation()">
+<button type="button" onclick='showConfig(
+<?php echo json_encode($p[0] ?? ""); ?>,
+<?php echo json_encode($mobile); ?>,
+<?php echo json_encode($payWhen["date"]); ?>,
+<?php echo json_encode($payWhen["time"]); ?>,
+<?php echo json_encode($p[1] ?? ""); ?>,
+<?php echo json_encode($p[2] ?? ""); ?>
+)'>نام کانفیگ</button>
+<button type="button" onclick='showPayment(
+<?php echo json_encode($p[0] ?? ""); ?>,
+<?php echo json_encode($mobile); ?>,
+<?php echo json_encode($p[1] ?? ""); ?>,
+<?php echo json_encode($p[3] ?? ""); ?>,
+<?php echo json_encode($payWhen["date"]); ?>,
+<?php echo json_encode($payWhen["time"]); ?>
+)'>جزئیات پرداخت</button>
+<button type="button" onclick='showAction(
+<?php echo $i; ?>,
+<?php echo json_encode($p[0] ?? ""); ?>,
+<?php echo json_encode($mobile); ?>,
+<?php echo json_encode($p[1] ?? ""); ?>,
+<?php echo json_encode($status); ?>,
+<?php echo json_encode($p[7] ?? ""); ?>
+)'>عملیات</button>
+<button type="button" class="red" onclick='showDelete(
+<?php echo $i; ?>,
+<?php echo json_encode($p[0] ?? ""); ?>,
+<?php echo json_encode($mobile); ?>,
+<?php echo json_encode($p[1] ?? ""); ?>
+)'>حذف</button>
+</div>
+
+</div>
+
+</div>
+
+<?php } ?>
+
+</div>
+
+<?php if($totalPages > 1){ ?>
+<div class="pagination">
+<?php for($x = 1; $x <= $totalPages; $x++){ ?>
+<a
+href="<?php echo htmlspecialchars(paymentsListUrl($x, $perPage), ENT_QUOTES, 'UTF-8'); ?>"
+class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
+<?php echo $x; ?>
+</a>
+<?php } ?>
+</div>
+<?php } ?>
 
 </div>
 
 <div class="modalOverlay" id="modal">
-
-    <div class="modal" id="modalContent"></div>
-
-</div>
-
+<div class="modal" id="modalContent"></div>
 </div>
 
 <script>
@@ -1092,471 +936,186 @@ width:180px;
 const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments'), JSON_UNESCAPED_UNICODE); ?>;
 const paymentsPerPage = <?php echo (int)$perPage; ?>;
 
-function toggleMenu(id){
-
-    document.querySelectorAll('.dropdown').forEach(el => {
-
-        if(el.id != id){
-
-            el.classList.remove('active');
-
-        }
-
-    });
-
-    document
-    .getElementById(id)
-    .classList.toggle('active');
-
+function closeMenus(){
+document.querySelectorAll('.dropdown.active').forEach(function(el){
+el.classList.remove('active');
+});
 }
 
+var payMenuIgnoreUntil = 0;
+
+function openMenu(e,id){
+if(e && e.preventDefault){ e.preventDefault(); }
+if(e && e.stopPropagation){ e.stopPropagation(); }
+
+var m=document.getElementById(id);
+if(!m){ return; }
+
+var willOpen = !m.classList.contains('active');
+closeMenus();
+
+if(!willOpen){
+return;
+}
+
+m.classList.add('active');
+payMenuIgnoreUntil = Date.now() + 350;
+}
+
+document.addEventListener('click', function(){
+if(Date.now() < payMenuIgnoreUntil){
+return;
+}
+closeMenus();
+});
+
+document.addEventListener('keydown', function(ev){
+if(ev.key === 'Escape'){
+closeMenus();
+}
+});
+
+window.addEventListener('resize', closeMenus);
+
 function closeModal(){
-
-    document
-    .getElementById('modal')
-    .style.display = 'none';
-
+document.getElementById('modal').style.display='none';
 }
 
 function openModal(html){
-
-    document
-    .getElementById('modalContent')
-    .innerHTML = html;
-
-    document
-    .getElementById('modal')
-    .style.display = 'flex';
-
+closeMenus();
+document.getElementById('modalContent').innerHTML=html;
+document.getElementById('modal').style.display='flex';
 }
 
-function showConfig(
-    user,
-    mobile,
-    date,
-    time,
-    config,
-    plan
-){
+function showConfig(user,mobile,date,time,config,plan){
 
-    let last4 = '';
+let last4='';
+if(mobile){
+mobile=mobile.toString();
+last4=mobile.slice(-4);
+}
 
-    if(mobile){
-
-        mobile = mobile.toString();
-
-        last4 = mobile.slice(-4);
-
-    }
-
-let planNumber = '';
-
-let match =
-plan.match(/\d+/);
-
+let planNumber='';
+let match=plan.match(/\d+/);
 if(match){
-
-planNumber = match[0];
-
+planNumber=match[0];
 }
 
-let finalName =
-config
-+
-'_'
-+
-last4
-+
-'_'
-+
-planNumber;
+let finalName=config+'_'+last4+'_'+planNumber;
 
-    openModal(`
-
-        <div class="modalTitle">
-
-            نام نهایی کانفیگ
-
-        </div>
-
-        <div class="modalInfo">
-
-            نام کاربر: ${user}<br>
-            شماره موبایل: ${mobile}<br>
-            تاریخ: ${date}<br>
-            ساعت: ${time}
-
-        </div>
-
-        <div class="bigText" id="cfgText">
-
-            ${finalName}
-
-        </div>
-
-        <button
-            class="green"
-            style="width:100%;padding:12px;border:none;border-radius:12px;color:white;"
-            onclick="copyText('cfgText')">
-
-            کپی نام کانفیگ
-
-        </button>
-
-        <div class="modalBtns">
-
-            <button
-                class="gray"
-                onclick="closeModal()">
-
-                بستن
-
-            </button>
-
-        </div>
-
-    `);
-
+openModal(
+'<div class="modalTitle">نام نهایی کانفیگ</div>'+
+'<div class="modalInfo">'+
+'نام کاربر: '+user+'<br>'+
+'شماره موبایل: '+mobile+'<br>'+
+'تاریخ: '+date+'<br>'+
+'ساعت: '+time+
+'</div>'+
+'<div class="bigText" id="cfgText">'+finalName+'</div>'+
+'<button class="green" style="width:100%;padding:12px;border:none;border-radius:12px;color:white;margin-bottom:12px;" onclick="copyText(\'cfgText\')">کپی نام کانفیگ</button>'+
+'<div class="modalBtns"><button class="gray" onclick="closeModal()">بستن</button></div>'
+);
 }
 
-function showPayment(
-    user,
-    mobile,
-    config,
-    track,
-    date,
-    time
-){
-
-    openModal(`
-
-        <div class="modalTitle">
-
-            جزئیات پرداخت
-
-        </div>
-
-        <div class="modalInfo">
-
-            نام کاربر: ${user}<br>
-            شماره موبایل: ${mobile}<br>
-            نام کانفیگ: ${config}
-
-        </div>
-
-        <div class="bigText">
-
-            شماره پیگیری: ${track}<br>
-            تاریخ: ${date}<br>
-            ساعت: ${time}
-
-        </div>
-
-        <div class="modalBtns">
-
-            <button
-                class="gray"
-                onclick="closeModal()">
-
-                بستن
-
-            </button>
-
-        </div>
-
-    `);
-
+function showPayment(user,mobile,config,track,date,time){
+openModal(
+'<div class="modalTitle">جزئیات پرداخت</div>'+
+'<div class="modalInfo">'+
+'نام کاربر: '+user+'<br>'+
+'شماره موبایل: '+mobile+'<br>'+
+'نام کانفیگ: '+config+
+'</div>'+
+'<div class="bigText">'+
+'شماره پیگیری: '+track+'<br>'+
+'تاریخ: '+date+'<br>'+
+'ساعت: '+time+
+'</div>'+
+'<div class="modalBtns"><button class="gray" onclick="closeModal()">بستن</button></div>'
+);
 }
 
-function showAction(
-    id,
-    user,
-    mobile,
-    config,
-    status='',
-    savedLink=''
-){
-
-    let content = '';
-
-    if(status === 'تایید شد'){
-
-        content = `
-
-            <div class="bigText">
-
-                ${savedLink}
-
-            </div>
-
-            <div class="modalBtns">
-
-                <button
-                    class="gray"
-                    onclick="closeModal()">
-
-                    بستن
-
-                </button>
-
-            </div>
-
-        `;
-
-    }
-
-    else if(status === 'رد شد'){
-
-        content = `
-
-            <div style="background:#450a0a;padding:14px;border-radius:12px;line-height:30px;margin-bottom:15px;">
-
-                ${savedLink}
-
-            </div>
-
-            <div class="modalBtns">
-
-                <button
-                    class="gray"
-                    onclick="closeModal()">
-
-                    بستن
-
-                </button>
-
-            </div>
-
-        `;
-
-    }
-
-    else{
-
-        content = `
-
-            <form method="POST">
-
-                <input type="hidden" name="per" value="${paymentsPerPage}">
-
-                <input
-                    type="hidden"
-                    name="approve_index"
-                    value="${id}">
-
-                <input
-                    type="text"
-                    name="approve_link"
-                    id="approveLink"
-                    placeholder="لینک اشتراک">
-
-                <div class="modalBtns">
-
-                    <button
-                        type="button"
-                        class="gray"
-                        onclick="pasteClipboard()">
-
-                        Paste
-
-                    </button>
-
-                    <button
-                        type="submit"
-                        name="approve_payment"
-                        class="green">
-
-                        تایید
-
-                    </button>
-
-                </div>
-
-            </form>
-
-            <hr style="margin:20px 0;border-color:#334155;">
-
-            <form method="POST">
-
-                <input type="hidden" name="per" value="${paymentsPerPage}">
-
-                <input
-                    type="hidden"
-                    name="reject_index"
-                    value="${id}">
-
-                <select name="reject_reason">
-
-                    <option value="اطلاعات پرداخت اشتباه است">
-
-                        اطلاعات پرداخت اشتباه است
-
-                    </option>
-
-                    <option value="اطلاعات پرداخت تکراری است">
-
-                        اطلاعات پرداخت تکراری است
-
-                    </option>
-
-                </select>
-
-                <button
-                    type="submit"
-                    name="reject_payment"
-                    class="redBtn"
-                    style="width:100%;padding:12px;border:none;border-radius:12px;color:white;">
-
-                    رد پرداخت
-
-                </button>
-
-            </form>
-
-            <div class="modalBtns">
-
-                <button
-                    class="gray"
-                    onclick="closeModal()">
-
-                    بستن
-
-                </button>
-
-            </div>
-
-        `;
-
-    }
-
-    openModal(`
-
-        <div class="modalTitle">
-
-            عملیات پرداخت
-
-        </div>
-
-        <div class="modalInfo">
-
-            نام کاربر: ${user}<br>
-            شماره موبایل: ${mobile}<br>
-            نام کانفیگ: ${config}
-
-        </div>
-
-        ${content}
-
-    `);
-
+function showAction(id,user,mobile,config,status,savedLink){
+
+status=status||'';
+savedLink=savedLink||'';
+
+let content='';
+
+if(status==='تایید شد'){
+content='<div class="bigText">'+savedLink+'</div>'+
+'<div class="modalBtns"><button class="gray" onclick="closeModal()">بستن</button></div>';
+}
+else if(status==='رد شد'){
+content='<div style="background:#450a0a;padding:14px;border-radius:12px;line-height:30px;margin-bottom:15px;">'+savedLink+'</div>'+
+'<div class="modalBtns"><button class="gray" onclick="closeModal()">بستن</button></div>';
+}
+else{
+content=
+'<form method="POST">'+
+'<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="approve_index" value="'+id+'">'+
+'<input type="text" name="approve_link" id="approveLink" placeholder="لینک اشتراک">'+
+'<div class="modalBtns">'+
+'<button type="button" class="gray" onclick="pasteClipboard()">Paste</button>'+
+'<button type="submit" name="approve_payment" class="green">تایید</button>'+
+'</div></form>'+
+'<hr style="margin:20px 0;border-color:#334155;">'+
+'<form method="POST">'+
+'<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="reject_index" value="'+id+'">'+
+'<select name="reject_reason">'+
+'<option value="اطلاعات پرداخت اشتباه است">اطلاعات پرداخت اشتباه است</option>'+
+'<option value="اطلاعات پرداخت تکراری است">اطلاعات پرداخت تکراری است</option>'+
+'</select>'+
+'<button type="submit" name="reject_payment" class="redBtn" style="width:100%;padding:12px;border:none;border-radius:12px;color:white;">رد پرداخت</button>'+
+'</form>'+
+'<div class="modalBtns"><button class="gray" onclick="closeModal()">بستن</button></div>';
 }
 
-function showDelete(
-    id,
-    user,
-    mobile,
-    config
-){
+openModal(
+'<div class="modalTitle">عملیات پرداخت</div>'+
+'<div class="modalInfo">'+
+'نام کاربر: '+user+'<br>'+
+'شماره موبایل: '+mobile+'<br>'+
+'نام کانفیگ: '+config+
+'</div>'+
+content
+);
+}
 
-    openModal(`
-
-        <div class="modalTitle">
-
-            حذف پرداخت
-
-        </div>
-
-        <div class="modalInfo">
-
-            نام کاربر: ${user}<br>
-            شماره موبایل: ${mobile}<br>
-            نام کانفیگ: ${config}
-
-        </div>
-
-        <div class="modalBtns">
-
-            <button
-                class="redBtn"
-                onclick="confirmDelete(${id})">
-
-                حذف
-
-            </button>
-
-            <button
-                class="gray"
-                onclick="closeModal()">
-
-                بستن
-
-            </button>
-
-        </div>
-
-    `);
-
+function showDelete(id,user,mobile,config){
+openModal(
+'<div class="modalTitle">حذف پرداخت</div>'+
+'<div class="modalInfo">'+
+'نام کاربر: '+user+'<br>'+
+'شماره موبایل: '+mobile+'<br>'+
+'نام کانفیگ: '+config+
+'</div>'+
+'<div class="modalBtns">'+
+'<button class="redBtn" onclick="confirmDelete('+id+')">حذف</button>'+
+'<button class="gray" onclick="closeModal()">بستن</button>'+
+'</div>'
+);
 }
 
 function confirmDelete(id){
-
-    if(confirm('مطمئن هستید؟')){
-
-        location.href =
-        paymentsListBase
-        + '&deletepayment='
-        + id
-        + '&per='
-        + paymentsPerPage;
-
-    }
-
+if(confirm('مطمئن هستید؟')){
+location.href=paymentsListBase+'&deletepayment='+id+'&per='+paymentsPerPage;
+}
 }
 
 function copyText(id){
-
-    let text =
-    document.getElementById(id).innerText;
-
-    navigator.clipboard.writeText(text);
-
-    alert('کپی شد');
-
+navigator.clipboard.writeText(document.getElementById(id).innerText);
+alert('کپی شد');
 }
 
 async function pasteClipboard(){
-
-    try{
-
-        const text =
-        await navigator.clipboard.readText();
-
-        document
-        .getElementById('approveLink')
-        .value = text;
-
-    }
-
-    catch(e){
-
-        alert('دسترسی clipboard داده نشده');
-
-    }
-
+try{
+const text=await navigator.clipboard.readText();
+document.getElementById('approveLink').value=text;
+}catch(e){
+alert('دسترسی clipboard داده نشده');
 }
-
-document.addEventListener('click', function(e){
-
-    if(!e.target.closest('.menuWrap')){
-
-        document.querySelectorAll('.dropdown').forEach(el => {
-
-            el.classList.remove('active');
-
-        });
-
-    }
-
-});
+}
 
 </script>
