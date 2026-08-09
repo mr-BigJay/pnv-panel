@@ -1508,7 +1508,7 @@ if(!function_exists('instantPayPath')){
 
                 if($status === 'cancelled'){
                     if(is_array(instantPayFindCsvMatchByAmount($amount))){
-                        return 'سفارش در سیستم لغo شده ولی ردیف پرداخت هنوز فعال است؛ دوباره فوروارد کنید.';
+                        return 'سفارش در سیستم لغو شده ولی ردیف پرداخت هنوز فعال است؛ دوباره فوروارد کنید.';
                     }
 
                     return 'سفارش لغو شده است (احتمالاً مبلغ جدید ساخته شده). کاربر باید دقیقاً مبلغ فعلی صفحه را واریز کند.';
