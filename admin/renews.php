@@ -64,7 +64,6 @@ $renewsLoggedIn = (
 ) || !empty($_SESSION['admin']);
 
 if (!$renewsLoggedIn) {
-    // Match old payments.php behavior when embedded in index
     echo '<div style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">نشست مدیریت معتبر نیست. دوباره وارد شوید.</div>';
     return;
 }
@@ -127,7 +126,11 @@ if(function_exists('instantPayPurgeStaleAdminRows')){
 if(!function_exists('getUserMobile')){
     function getUserMobile($username, $users){
         foreach((array)$users as $u){
-            if(($u['username'] ?? '') === $username){
+            if(
+                strtolower(trim($u['username'] ?? ''))
+                ===
+                strtolower(trim($username))
+            ){
                 return $u['mobile'] ?? '-';
             }
         }
@@ -137,922 +140,1365 @@ if(!function_exists('getUserMobile')){
 
 $paymentMessage = '';
 $paymentError = '';
-$paymentMessageDetail = '';
 
 if(isset($_SESSION['payment_message'])){
-$paymentMessage = $_SESSION['payment_message'];
-unset($_SESSION['payment_message']);
+    $paymentMessage = $_SESSION['payment_message'];
+    unset($_SESSION['payment_message']);
 }
 
 if(isset($_SESSION['payment_message_detail'])){
-$paymentMessageDetail = $_SESSION['payment_message_detail'];
-unset($_SESSION['payment_message_detail']);
+    unset($_SESSION['payment_message_detail']);
 }
 
 if(isset($_SESSION['payment_error'])){
-$paymentError = $_SESSION['payment_error'];
-unset($_SESSION['payment_error']);
+    $paymentError = $_SESSION['payment_error'];
+    unset($_SESSION['payment_error']);
 }
+
+$allowedPerPage = [20, 50, 100];
 
 if(isset($_POST['approve_payment'])){
 
-$index=intval($_POST['approve_index']);
-$link=trim($_POST['approve_link'] ?? '');
+    $index = intval($_POST['approve_index']);
+    $link = trim($_POST['approve_link'] ?? '');
+    $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
-$xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig')
-    ? xuiIsEnabled(xuiLoadConfig())
-    : false;
+    if(!in_array($redirectPer, $allowedPerPage, true)){
+        $redirectPer = 20;
+    }
 
-if($xuiEnabled && function_exists('xuiApprovePaymentIndex')){
+    $xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig')
+        ? xuiIsEnabled(xuiLoadConfig())
+        : false;
 
-$result = xuiApprovePaymentIndex($index, 'تمدید');
+    if($xuiEnabled && function_exists('xuiApprovePaymentIndex')){
 
-if(empty($result['ok'])){
-$_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
-}
+        $result = xuiApprovePaymentIndex($index, 'تمدید');
 
-$_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
-$_SESSION['payment_message_detail'] = (string)($result['link'] ?? '');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+        if(empty($result['ok'])){
+            $_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
+            header('Location: ' . pnvAdminUrl('index.php?page=renews&per=' . $redirectPer));
+            exit;
+        }
 
-}
+        $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد: ' . ($result['link'] ?? '');
+        header('Location: ' . pnvAdminUrl('index.php?page=renews&per=' . $redirectPer));
+        exit;
 
-if(isset($payments[$index])){
+    }
 
-$payments[$index][6]='تایید شد';
-$payments[$index][7]=$link;
+    if(isset($payments[$index])){
+        $payments[$index][6] = 'تایید شد';
+        $payments[$index][7] = $link;
+    }
 
-}
+    $fp = fopen($paymentsFile, 'w');
+    foreach($payments as $p){
+        fputcsv($fp, $p);
+    }
+    fclose($fp);
 
-$fp=fopen($paymentsFile,'w');
-
-foreach($payments as $p){
-fputcsv($fp,$p);
-}
-
-fclose($fp);
-
-$_SESSION['payment_message'] = 'تمدید تایید شد';
-$_SESSION['payment_message_detail'] = $link;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+    $_SESSION['payment_message'] = 'تمدید تایید شد';
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&per=' . $redirectPer));
+    exit;
 
 }
 
 if(isset($_POST['reject_payment'])){
 
-$index=intval($_POST['reject_index']);
-$reason=trim($_POST['reject_reason']);
+    $index = intval($_POST['reject_index']);
+    $reason = trim($_POST['reject_reason']);
+    $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
-if(isset($payments[$index])){
+    if(!in_array($redirectPer, $allowedPerPage, true)){
+        $redirectPer = 20;
+    }
 
-$payments[$index][6]='رد شد';
-$payments[$index][7]=$reason;
+    if(isset($payments[$index])){
+        $payments[$index][6] = 'رد شد';
+        $payments[$index][7] = $reason;
+    }
 
-}
+    $fp = fopen($paymentsFile, 'w');
+    foreach($payments as $p){
+        fputcsv($fp, $p);
+    }
+    fclose($fp);
 
-$fp=fopen($paymentsFile,'w');
-
-foreach($payments as $p){
-fputcsv($fp,$p);
-}
-
-fclose($fp);
-
-$_SESSION['payment_message'] = 'تمدید رد شد';
-$_SESSION['payment_message_detail'] = $reason;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&per=' . $redirectPer));
+    exit;
 
 }
 
 if(isset($_GET['deletepayment'])){
 
-$id=intval($_GET['deletepayment']);
+    $id = intval($_GET['deletepayment']);
 
-if(isset($payments[$id])){
+    if(isset($payments[$id])){
+        unset($payments[$id]);
+        $payments = array_values($payments);
+    }
 
-unset($payments[$id]);
+    $fp = fopen($paymentsFile, 'w');
+    foreach($payments as $p){
+        fputcsv($fp, $p);
+    }
+    fclose($fp);
 
-$payments=array_values($payments);
-
-}
-
-$fp=fopen($paymentsFile,'w');
-
-foreach($payments as $p){
-fputcsv($fp,$p);
-}
-
-fclose($fp);
-
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&per=' . intval($_GET['per'] ?? 20)));
+    exit;
 
 }
 
-$renews=[];
+$renews = [];
 
-foreach($payments as $index=>$pay){
+foreach($payments as $index => $pay){
 
-$type=trim($pay[9] ?? '');
+    $type = trim($pay[9] ?? '');
 
-if($type=='تمدید'){
+    if($type == 'تمدید'){
 
-if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
-continue;
+        if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
+            continue;
+        }
+
+        $renews[] = [
+            'index' => $index,
+            'data' => $pay
+        ];
+
+    }
+
 }
 
-$renews[]=[
-'index'=>$index,
-'data'=>$pay
-];
+$renews = array_reverse($renews);
 
-}
-
-}
-
-$renews=array_reverse($renews);
-
-$perPage = 20;
 $currentPage = intval($_GET['p'] ?? 1);
+
 if($currentPage < 1){
-$currentPage = 1;
+    $currentPage = 1;
+}
+
+$perPage = intval($_GET['per'] ?? 20);
+
+if(!in_array($perPage, $allowedPerPage, true)){
+    $perPage = 20;
 }
 
 $totalItems = count($renews);
 $totalPages = max(1, (int)ceil($totalItems / $perPage));
+
 if($currentPage > $totalPages){
-$currentPage = $totalPages;
+    $currentPage = $totalPages;
 }
 
 $start = ($currentPage - 1) * $perPage;
 $renewsPage = array_slice($renews, $start, $perPage);
 
-if(!function_exists('renewsListUrl')){
-function renewsListUrl($page){
-return pnvAdminUrl('index.php?page=renews&p=' . intval($page));
-}
+$rangeFrom = $totalItems > 0 ? $start + 1 : 0;
+$rangeTo = min($start + $perPage, $totalItems);
+
+function renewsListUrl($page, $per){
+    return pnvAdminUrl(
+        'index.php?page=renews&p=' . intval($page) . '&per=' . intval($per)
+    );
 }
 
-
-if(!function_exists('renewParsePlanParts')){
 function renewParsePlanParts($plan){
-$plan = trim((string)$plan);
-$out = ['size' => '', 'price' => '', 'raw' => $plan !== '' ? $plan : '-'];
+    $plan = trim((string)$plan);
+    $out = ['size' => '', 'price' => '', 'raw' => $plan !== '' ? $plan : '-'];
 
-if($plan === '' || $plan === '-'){
-return $out;
+    if($plan === '' || $plan === '-'){
+        return $out;
+    }
+
+    if(strpos($plan, ' - ') !== false){
+        $parts = explode(' - ', $plan, 2);
+        $out['size'] = trim($parts[0] ?? '');
+        $out['price'] = trim($parts[1] ?? '');
+        return $out;
+    }
+
+    if(preg_match('/^(.+?)\s*[-–]\s*(.+)$/u', $plan, $m)){
+        $out['size'] = trim($m[1]);
+        $out['price'] = trim($m[2]);
+        return $out;
+    }
+
+    $out['size'] = $plan;
+    return $out;
 }
 
-if(strpos($plan, ' - ') !== false){
-$parts = explode(' - ', $plan, 2);
-$out['size'] = trim($parts[0] ?? '');
-$out['price'] = trim($parts[1] ?? '');
-return $out;
+function renewsFormatPlanLines($plan){
+
+    $parts = renewParsePlanParts($plan);
+    $size = trim((string)($parts['size'] ?? ''));
+    $price = trim((string)($parts['price'] ?? ''));
+
+    if($price !== ''){
+        if(preg_match('/(\d+)/u', $price, $match)){
+            $price = $match[1];
+        }
+    }
+
+    if($size === '' && $price === ''){
+        $raw = trim((string)($parts['raw'] ?? ''));
+        return [$raw !== '' ? $raw : '-', ''];
+    }
+
+    return [$size !== '' ? $size : '-', $price];
 }
 
-if(preg_match('/^(.+?)\s*[-–]\s*(.+)$/u', $plan, $m)){
-$out['size'] = trim($m[1]);
-$out['price'] = trim($m[2]);
-return $out;
-}
-
-$out['size'] = $plan;
-return $out;
-}
-}
-
-if(!function_exists('renewFormatPlanLine')){
-function renewFormatPlanLine($planParts){
-$size = trim((string)($planParts['size'] ?? ''));
-$price = trim((string)($planParts['price'] ?? ''));
-$raw = trim((string)($planParts['raw'] ?? ''));
-
-if($price !== ''){
-$price = preg_replace('/\s*هزار\s*تومان/u', ' تومن', $price);
-$price = preg_replace('/\s*تومان/u', ' تومن', $price);
-$price = preg_replace('/\s+/u', ' ', trim($price));
-}
-
-if($size !== '' && $price !== ''){
-return $size . ' - ' . $price;
-}
-
-if($size !== ''){
-return $size;
-}
-
-if($price !== ''){
-return $price;
-}
-
-return $raw !== '' ? $raw : '—';
-}
-}
-
-
-if(!function_exists('renewParseSubTarget')){
 function renewParseSubTarget($target){
-$target = trim((string)$target);
-$out = [
-'vip' => '',
-'sub_id' => '',
-'label' => '-'
-];
+    $target = trim((string)$target);
+    $out = [
+        'vip' => '',
+        'sub_id' => '',
+        'label' => '-'
+    ];
 
-if($target === ''){
-return $out;
-}
+    if($target === ''){
+        return $out;
+    }
 
-$host = '';
-$subId = '';
+    $host = '';
+    $subId = '';
 
-// فقط SubID الفبانumeric؛ متن اضافه فرم را نگیر
-if(preg_match('~https?://([^/:]+)(?::\d+)?/sub/([A-Za-z0-9]+)~i', $target, $m)){
-$host = strtolower($m[1]);
-$subId = $m[2];
-}
-elseif(preg_match('~/sub/([A-Za-z0-9]+)~i', $target, $m)){
-$subId = $m[1];
-}
-elseif(preg_match('~\b([A-Za-z0-9]{8,32})\b~', $target, $m)){
-$subId = $m[1];
-}
+    if(preg_match('~https?://([^/:]+)(?::\d+)?/sub/([A-Za-z0-9]+)~i', $target, $m)){
+        $host = strtolower($m[1]);
+        $subId = $m[2];
+    }
+    elseif(preg_match('~/sub/([A-Za-z0-9]+)~i', $target, $m)){
+        $subId = $m[1];
+    }
+    elseif(preg_match('~\b([A-Za-z0-9]{8,32})\b~', $target, $m)){
+        $subId = $m[1];
+    }
 
-if(preg_match('/^(vip\d*)\./i', $host, $m)){
-$out['vip'] = strtolower($m[1]);
-}
-elseif(preg_match('/^(vip\d*)$/i', $host, $m)){
-$out['vip'] = strtolower($m[1]);
-}
+    if(preg_match('/^(vip\d*)\./i', $host, $m)){
+        $out['vip'] = strtolower($m[1]);
+    }
+    elseif(preg_match('/^(vip\d*)$/i', $host, $m)){
+        $out['vip'] = strtolower($m[1]);
+    }
 
-$out['sub_id'] = $subId;
+    $out['sub_id'] = $subId;
 
-if($out['vip'] !== '' && $subId !== ''){
-$out['label'] = $out['vip'] . '-' . $subId;
-}
-elseif($subId !== ''){
-$out['label'] = $subId;
-}
+    if($out['vip'] !== '' && $subId !== ''){
+        $out['label'] = $out['vip'] . '-' . $subId;
+    }
+    elseif($subId !== ''){
+        $out['label'] = $subId;
+    }
 
-return $out;
+    return $out;
 }
-}
-
 
 ?>
 
-<link rel="stylesheet" href="/fonts.css">
-
 <style>
 
-body{
-background:linear-gradient(165deg,#0B1220 0%,#182537 55%,#0f172a 100%) !important;
-background-attachment:fixed !important;
-font-family:tahoma,sans-serif !important;
-}
-
-.content{
-background:transparent !important;
-}
-
-.content > .box.renewsPage{
-background:rgba(24,37,55,.72);
-backdrop-filter:blur(14px);
--webkit-backdrop-filter:blur(14px);
-border:1px solid rgba(148,163,184,.12);
-border-radius:24px;
-padding:20px 16px 18px;
-box-shadow:0 18px 50px rgba(0,0,0,.35);
-overflow:visible;
-}
-
-.renewsPage h2{
-margin:0 0 18px;
-font-size:24px;
-font-family:"Lalezar",tahoma,sans-serif;
-font-weight:400;
-letter-spacing:0;
-text-align:right;
-color:#fff;
-}
-
-.renewList{
-display:flex;
-flex-direction:column;
-gap:14px;
-overflow:visible;
-}
-
-.renewCard{
-display:grid;
-grid-template-columns:minmax(0,.95fr) minmax(0,1.55fr) max-content;
-align-items:center;
-gap:12px;
-padding:16px 14px;
-border-radius:16px;
-background:#1e293b;
-border:1px solid rgba(148,163,184,.10);
-box-shadow:0 10px 28px rgba(0,0,0,.28);
-position:relative;
-overflow:visible;
-}
-
-.renewCardEmpty{
-justify-content:center;
-text-align:center;
-color:#94a3b8;
-font-size:14px;
-padding:28px 16px;
-}
-
-.renewColUser,
-.renewColPlan{
-min-width:0;
-}
-
-.renewColUser{
-text-align:right;
-padding-inline-end:2px;
-}
-
-.renewUserName{
-display:block;
-font-size:14px;
-font-weight:700;
-color:#fff;
-line-height:1.35;
-white-space:nowrap;
-overflow:hidden;
-text-overflow:ellipsis;
-}
-
-.renewUserMobile{
-display:block;
-margin-top:4px;
-font-size:12px;
-color:#94a3b8;
-line-height:1.3;
-white-space:nowrap;
-overflow:hidden;
-text-overflow:ellipsis;
-direction:ltr;
-unicode-bidi:plaintext;
-}
-
-.renewColPlan{
-text-align:center;
-}
-
-.subCopyBtn{
-display:block;
+.payTableWrap{
 width:100%;
 max-width:100%;
+overflow-x:auto;
+-webkit-overflow-scrolling:touch;
+}
+
+.renewsPage .payTable{
+width:100% !important;
+max-width:100% !important;
+table-layout:fixed !important;
+border-collapse:collapse !important;
+background:#1e293b;
+border-radius:16px;
+}
+
+.renewsPage .payTable th,
+.renewsPage .payTable td{
+padding:10px 6px !important;
+border-bottom:1px solid #334155 !important;
+text-align:center !important;
+vertical-align:middle !important;
+color:white !important;
+}
+
+.renewsPage .payTable th{
+background:#334155 !important;
+font-size:13px !important;
+font-weight:600;
+}
+
+.renewsPage .payTable td{
+font-size:12px !important;
+}
+
+.renewsPage .payTable .col-plan{
+text-align:center !important;
+vertical-align:middle !important;
+}
+
+.renewsPage .planCell{
+display:flex !important;
+flex-direction:column !important;
+align-items:center !important;
+justify-content:center !important;
+gap:3px !important;
+line-height:1.15 !important;
+}
+
+.renewsPage .planSub{
+display:block !important;
+font-size:11px !important;
+font-weight:600 !important;
+font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+color:#cbd5e1 !important;
+cursor:pointer;
 border:none;
 background:transparent;
-color:#fff;
-font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-font-size:12.5px;
-font-weight:700;
-text-align:center;
-padding:0 !important;
-margin:0 0 6px !important;
-cursor:pointer;
-white-space:nowrap;
+padding:0;
+max-width:100%;
 overflow:hidden;
 text-overflow:ellipsis;
-letter-spacing:.01em;
-}
-
-.subCopyBtn:active{
-opacity:.75;
-}
-
-.renewPlanFallback{
-display:block;
-font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-font-size:12.5px;
-font-weight:700;
-margin-bottom:6px;
 white-space:nowrap;
-overflow:hidden;
-text-overflow:ellipsis;
 }
 
-.renewPlanLine{
-display:block;
-text-align:center;
-color:#86efac;
-font-size:12px;
-font-weight:600;
+.renewsPage .planSize{
+display:block !important;
+font-size:12px !important;
+font-weight:600 !important;
+}
+
+.renewsPage .planPrice{
+display:block !important;
+font-size:15px !important;
+font-weight:700 !important;
+color:#f8fafc !important;
+}
+
+.renewsPage .payTable .col-num{
+width:11%;
+}
+
+.renewsPage .payTable .col-user{
+width:20%;
+word-break:break-word;
 line-height:1.35;
-white-space:nowrap;
-overflow:hidden;
-text-overflow:ellipsis;
 }
 
-.renewActions{
-display:flex;
-align-items:center;
-justify-content:center;
-gap:8px;
-position:relative;
+.renewsPage .payTable .col-plan{
+width:36%;
+}
+
+.renewsPage .payTable .col-status{
+width:10%;
+}
+
+.renewsPage .payTable .col-actions{
+width:23%;
+}
+
+.statusDot{
+width:12px;
+height:12px;
+border-radius:50%;
+display:inline-block;
 flex-shrink:0;
-overflow:visible;
+}
+
+.statusDot--green{
+background:#22c55e;
+box-shadow:0 0 0 2px rgba(34,197,94,.25);
+}
+
+.statusDot--red{
+background:#ef4444;
+box-shadow:0 0 0 2px rgba(239,68,68,.25);
+}
+
+.statusDot--yellow{
+background:#facc15;
+box-shadow:0 0 0 2px rgba(250,204,21,.25);
+}
+
+.menuWrap{
+position:relative;
+display:inline-block;
+width:34px;
 }
 
 .menuBtn{
-width:30px !important;
-height:30px;
-min-width:30px;
+width:34px;
+height:34px;
 border:none;
 border-radius:10px;
 background:#334155;
-color:#e2e8f0;
-font-size:15px;
+color:white;
+font-size:18px;
 cursor:pointer;
-line-height:1;
-display:inline-flex;
-align-items:center;
-justify-content:center;
-flex:0 0 30px;
-box-sizing:border-box;
-margin:0 !important;
-padding:0 !important;
-box-shadow:inset 0 0 0 1px rgba(148,163,184,.16);
--webkit-tap-highlight-color:transparent;
-touch-action:manipulation;
+padding:0;
 }
-
-.statusIcon{
-width:22px !important;
-height:22px;
-min-width:22px;
-border:none;
-border-radius:999px;
-color:#fff;
-display:inline-flex;
-align-items:center;
-justify-content:center;
-flex:0 0 22px;
-box-sizing:border-box;
-margin:0 !important;
-padding:0 !important;
-box-shadow:0 4px 10px rgba(0,0,0,.25);
-}
-
-.statusIcon svg{
-width:12px;
-height:12px;
-display:block;
-stroke:#fff;
-}
-
-.statusIcon.is-ok{background:#22c55e}
-.statusIcon.is-no{background:#ef4444}
-.statusIcon.is-pending{background:#f59e0b}
 
 .dropdown{
-display:none;
-position:absolute;
-top:calc(100% + 6px);
-left:0;
-right:auto;
-background:#0f172a;
-width:180px;
-padding:10px;
-border-radius:14px;
-z-index:50;
-box-shadow:0 14px 36px rgba(0,0,0,.45);
-border:1px solid #334155;
+    display:none;
+    position:absolute;
+    right:0;
+    top:45px;
+    background:#0f172a;
+    width:200px;
+    padding:10px;
+    border-radius:14px;
+    z-index:999;
+    box-shadow:0 10px 30px rgba(0,0,0,0.4);
+    direction:rtl;
 }
 
-.dropdown.active{display:block}
+.dropdown.active{
+    display:block;
+}
 
 .dropdown button{
-width:100%;
-padding:11px;
-border:none;
-border-radius:10px;
-margin-bottom:8px;
-background:#334155;
-color:#fff;
-cursor:pointer;
-font-family:inherit;
--webkit-tap-highlight-color:transparent;
+    width:100%;
+    padding:11px;
+    border:none;
+    border-radius:10px;
+    margin-bottom:8px;
+    background:#334155;
+    color:white;
+    cursor:pointer;
+    font-size:13px;
+    text-align:right;
 }
 
-.dropdown button:last-child{margin-bottom:0}
-.red{background:#ef4444 !important}
+.dropdown .red{
+    background:#ef4444;
+}
 
 .modalOverlay{
-position:fixed;
-inset:0;
-background:rgba(0,0,0,.55);
-display:none;
-justify-content:center;
-align-items:center;
-padding:15px;
-z-index:9999999;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.45);
+    backdrop-filter:blur(6px);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:99999;
+    padding:16px;
 }
 
 .modal{
-background:#1e293b;
-padding:20px;
-border-radius:18px;
-width:100%;
-max-width:420px;
-color:#fff;
-font-family:inherit;
+    background:#1e293b;
+    width:100%;
+    max-width:430px;
+    border-radius:20px;
+    padding:22px;
+    color:white;
 }
 
-.modal h3{margin:0 0 12px;text-align:center}
-.modal .resultLead{text-align:center;font-size:16px;font-weight:700;margin:8px 0 10px}
-.modal .resultDetail{text-align:center;font-size:12px;line-height:1.8;color:#cbd5e1;word-break:break-all;margin-bottom:16px}
-.modal .resultOk .resultLead{color:#86efac}
-.modal .resultErr .resultLead{color:#fecaca}
+.modalTitle{
+    font-size:20px;
+    text-align:center;
+    margin-bottom:18px;
+    font-weight:bold;
+}
+
+.modalInfo{
+    background:#0f172a;
+    padding:14px;
+    border-radius:12px;
+    line-height:28px;
+    font-size:13px;
+    margin-bottom:16px;
+}
+
+.bigText{
+    background:#0f172a;
+    padding:18px;
+    border-radius:14px;
+    font-size:16px;
+    line-height:34px;
+    word-break:break-all;
+    margin-bottom:16px;
+}
 
 .modal input,
 .modal select{
-width:100%;
-padding:12px;
-margin-bottom:12px;
-border:none;
-border-radius:10px;
-background:#0f172a;
-color:#fff;
-box-sizing:border-box;
-font-family:inherit;
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    margin-bottom:12px;
+    background:#0f172a;
+    color:white;
+    font-size:14px;
+    box-sizing:border-box;
 }
 
-.modalBtns{display:flex;gap:10px}
+.modalBtns{
+    display:flex;
+    gap:10px;
+    margin-top:12px;
+}
+
 .modalBtns button{
-flex:1;
-padding:12px;
-border:none;
-border-radius:10px;
-cursor:pointer;
-color:#fff;
-font-family:inherit;
+    flex:1;
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    cursor:pointer;
+    color:white;
+    font-size:14px;
 }
 
-.green{background:#22c55e}
-.gray{background:#475569}
+.green{
+    background:#22c55e;
+}
 
-.renewsPage .pagination{
+.redBtn{
+    background:#ef4444;
+}
+
+.gray{
+    background:#475569;
+}
+
+.payPager{
 margin-top:18px;
-text-align:center;
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:12px;
+flex-wrap:wrap;
+background:#1e293b;
+border:1px solid #334155;
+border-radius:12px;
+padding:12px 14px;
 }
 
-.renewsPage .pagination a{
+.payPagerSize{
+display:flex;
+align-items:center;
+gap:8px;
+font-size:13px;
+color:#cbd5e1;
+}
+
+.payPerSelect{
+padding:8px 10px;
+border:1px solid #475569;
+border-radius:8px;
+background:#0f172a;
+color:white;
+font-family:inherit;
+font-size:13px;
+min-width:64px;
+}
+
+.payPagerNav{
+display:flex;
+align-items:center;
+gap:8px;
+}
+
+.payPagerInfo{
+font-size:13px;
+color:#cbd5e1;
+white-space:nowrap;
+}
+
+.payPagerBtn{
+min-width:36px;
+height:36px;
+padding:0 10px;
 display:inline-flex;
 align-items:center;
 justify-content:center;
-min-width:36px;
-padding:8px 12px;
-margin:4px;
-background:#1e293b;
-color:#fff;
-border-radius:10px;
+border:1px solid #475569;
+border-radius:8px;
+background:#0f172a;
+color:white;
 text-decoration:none;
-border:1px solid rgba(148,163,184,.12);
+font-size:14px;
+box-sizing:border-box;
 }
 
-.renewsPage .pagination a.active{
-background:#22c55e;
-border-color:transparent;
+.payPagerBtn.is-active{
+background:#2563eb;
+border-color:#2563eb;
+color:white;
 }
 
-@media(max-width:560px){
-.content > .box.renewsPage{
-padding:16px 12px 14px;
-border-radius:22px;
+.payPagerBtn.is-disabled{
+opacity:.45;
+pointer-events:none;
 }
-.renewCard{
-grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr) max-content;
-gap:10px;
-padding:14px 12px;
+
+@media(max-width:900px){
+
+.dropdown{
+right:auto;
+left:0;
 }
-.renewUserName{font-size:13px}
-.renewUserMobile{font-size:11px}
-.subCopyBtn,
-.renewPlanFallback{font-size:11.5px}
-.renewPlanLine{font-size:11px}
+
+}
+
+@media(max-width:768px){
+
+.box{
+padding:12px;
+overflow:hidden;
+}
+
+.renewsPage .payTable th,
+.renewsPage .payTable td{
+padding:7px 3px !important;
+font-size:10px !important;
+}
+
+.renewsPage .payTable .col-num{
+width:9% !important;
+font-size:9px !important;
+}
+
+.renewsPage .payTable .col-user{
+width:18% !important;
+font-size:10px !important;
+}
+
+.renewsPage .payTable .col-plan{
+width:40% !important;
+}
+
+.renewsPage .payTable .col-plan .planSub{
+font-size:10px !important;
+}
+
+.renewsPage .payTable .col-plan .planSize{
+font-size:11px !important;
+}
+
+.renewsPage .payTable .col-plan .planPrice{
+font-size:13px !important;
+}
+
+.renewsPage .payTable .col-status{
+width:9% !important;
+}
+
+.renewsPage .payTable .col-actions{
+width:8% !important;
+}
+
+.menuWrap{
+width:30px;
+}
+
 .menuBtn{
-width:28px !important;
-height:28px;
-min-width:28px;
-flex:0 0 28px;
+width:30px;
+height:30px;
+font-size:16px;
 }
-.statusIcon{
-width:20px !important;
-height:20px;
-min-width:20px;
-flex:0 0 20px;
+
+.payPager{
+flex-direction:column;
+align-items:stretch;
+gap:10px;
 }
-.statusIcon svg{width:11px;height:11px}
+
+.payPagerNav{
+justify-content:space-between;
+width:100%;
+}
+
+.dropdown{
+width:180px;
+}
+
 }
 
 </style>
 
-<div class="box renewsPage">
+<div class="renewsPage" data-renews-ui="v3">
 
-<h2>لیست تمدید ها</h2>
+<div class="box">
 
-<div class="renewList">
+    <h2>
 
-<?php if($totalItems === 0){ ?>
-<div class="renewCard renewCardEmpty">تمدیدی برای نمایش نیست</div>
-<?php } ?>
+        لیست تمدید ها
 
-<?php foreach($renewsPage as $r){
+    </h2>
 
-$i=$r['index'];
-$p=$r['data'];
+    <?php if($paymentMessage !== ''){ ?>
+    <div style="background:#14532d;color:#bbf7d0;padding:12px 14px;border-radius:12px;margin-bottom:14px;line-height:1.8"><?php echo htmlspecialchars($paymentMessage, ENT_QUOTES, 'UTF-8'); ?></div>
+    <?php } ?>
+    <?php if($paymentError !== ''){ ?>
+    <div style="background:#7f1d1d;color:#fecaca;padding:12px 14px;border-radius:12px;margin-bottom:14px;line-height:1.8"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
+    <?php } ?>
 
-$status=trim((string)($p[6] ?? ''));
-if($status === ''){
-$status = 'درحال بررسی';
-}
+    <div class="payTableWrap">
 
-$statusClass = 'is-pending';
-if($status === 'تایید شد'){
-$statusClass = 'is-ok';
-}
-elseif($status === 'رد شد'){
-$statusClass = 'is-no';
-}
+    <table class="payTable">
 
-$mobile=getUserMobile($p[0] ?? '',$users);
-$parsedTarget = renewParseSubTarget($p[1] ?? '');
-$targetLabel = $parsedTarget['label'];
-$targetSubId = $parsedTarget['sub_id'];
-$planParts = renewParsePlanParts($p[2] ?? '');
-$planLine = renewFormatPlanLine($planParts);
-$payWhen = pnvFormatPaymentRowDateTime($p);
+        <thead>
 
-?>
+            <tr>
 
-<div class="renewCard">
+                <th class="col-num">شماره</th>
 
-<div class="renewColUser">
-<span class="renewUserName"><?php echo htmlspecialchars($p[0] ?? '-', ENT_QUOTES, 'UTF-8'); ?></span>
-<span class="renewUserMobile"><?php echo htmlspecialchars($mobile !== '' ? $mobile : '—', ENT_QUOTES, 'UTF-8'); ?></span>
-</div>
+                <th class="col-user">کاربر</th>
 
-<div class="renewColPlan">
-<?php if($targetSubId !== ''){ ?>
-<button
-type="button"
-class="subCopyBtn"
-title="برای کپی SubID لمس کنید"
-onclick="copyRenewSubId(this)"
-data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
-<?php echo htmlspecialchars($targetLabel, ENT_QUOTES, 'UTF-8'); ?>
-</button>
-<?php } else { ?>
-<span class="renewPlanFallback"><?php echo htmlspecialchars($targetLabel, ENT_QUOTES, 'UTF-8'); ?></span>
-<?php } ?>
+                <th class="col-plan">پلن اشتراک</th>
 
-<span class="renewPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
-</div>
+                <th class="col-status">وضعیت</th>
 
-<div class="renewActions">
+                <th class="col-actions">عملیات</th>
 
-<?php if($statusClass === 'is-ok'){ ?>
-<span class="statusIcon is-ok" title="تایید شد" aria-label="تایید شد">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-</span>
-<?php } elseif($statusClass === 'is-no'){ ?>
-<span class="statusIcon is-no" title="رد شد" aria-label="رد شد">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-</span>
-<?php } else { ?>
-<span class="statusIcon is-pending" title="درحال بررسی" aria-label="درحال بررسی">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-</span>
-<?php } ?>
+            </tr>
 
-<button
-class="menuBtn"
-type="button"
-aria-label="منو"
-aria-expanded="false"
-onclick="openMenu(event,'m<?php echo $i; ?>')">
-⋮
-</button>
+        </thead>
 
-<div class="dropdown" id="m<?php echo $i; ?>" onclick="event.stopPropagation()">
-<button type="button" onclick="openDetails(
-'<?php echo htmlspecialchars($p[0] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($mobile,ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($p[1] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($p[2] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($p[3] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($payWhen['date'],ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($payWhen['time'],ENT_QUOTES); ?>'
-)">جزئیات پرداخت</button>
-<button type="button" onclick="openAction(
-'<?php echo $i; ?>',
-'<?php echo htmlspecialchars($p[0] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($mobile,ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($p[2] ?? '-',ENT_QUOTES); ?>'
-)">عملیات</button>
-<button type="button" class="red" onclick="deleteItem('<?php echo $i; ?>')">حذف</button>
-</div>
+        <tbody>
 
-</div>
+        <?php foreach($renewsPage as $row){
 
-</div>
+            $i = $row['index'];
+            $p = $row['data'];
 
-<?php } ?>
+            $status = trim($p[6] ?? '');
 
-</div>
+            $statusDotClass = 'statusDot--yellow';
+            $statusTitle = 'در حال بررسی';
 
-<?php if($totalPages > 1){ ?>
-<div class="pagination">
-<?php for($x = 1; $x <= $totalPages; $x++){ ?>
-<a
-href="<?php echo htmlspecialchars(renewsListUrl($x), ENT_QUOTES, 'UTF-8'); ?>"
-class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
-<?php echo $x; ?>
-</a>
-<?php } ?>
-</div>
-<?php } ?>
+            if($status === 'تایید شد'){
+                $statusDotClass = 'statusDot--green';
+                $statusTitle = 'تایید شد';
+            }
+
+            if($status === 'رد شد'){
+                $statusDotClass = 'statusDot--red';
+                $statusTitle = 'رد شد';
+            }
+
+            $mobile = getUserMobile($p[0] ?? '', $users);
+            $parsedTarget = renewParseSubTarget($p[1] ?? '');
+            [$planSize, $planPrice] = renewsFormatPlanLines($p[2] ?? '');
+            $payWhen = pnvFormatPaymentRowDateTime($p);
+
+        ?>
+
+            <tr>
+
+                <td class="col-num">
+
+                    <?php echo $i + 1; ?>
+
+                </td>
+
+                <td class="col-user">
+
+                    <?php echo htmlspecialchars($p[0] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
+
+                </td>
+
+                <td class="col-plan">
+
+                    <div class="planCell">
+                        <?php if($parsedTarget['sub_id'] !== ''){ ?>
+                        <button
+                            type="button"
+                            class="planSub"
+                            title="برای کپی SubID لمس کنید"
+                            onclick="copyRenewSubId(this)"
+                            data-subid="<?php echo htmlspecialchars($parsedTarget['sub_id'], ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php echo htmlspecialchars($parsedTarget['label'], ENT_QUOTES, 'UTF-8'); ?>
+                        </button>
+                        <?php } ?>
+                        <span class="planSize"><?php echo htmlspecialchars($planSize, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php if($planPrice !== ''){ ?>
+                        <span class="planPrice"><?php echo htmlspecialchars($planPrice, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php } ?>
+                    </div>
+
+                </td>
+
+                <td class="col-status">
+
+                    <span
+                        class="statusDot <?php echo $statusDotClass; ?>"
+                        title="<?php echo htmlspecialchars($statusTitle, ENT_QUOTES, 'UTF-8'); ?>"></span>
+
+                </td>
+
+                <td class="col-actions">
+
+                    <div class="menuWrap">
+
+                        <button
+                            class="menuBtn"
+                            onclick="toggleMenu('m<?php echo $i; ?>')">
+
+                            ⋮
+
+                        </button>
+
+                        <div
+                            class="dropdown"
+                            id="m<?php echo $i; ?>">
+
+                            <button
+                                onclick='showPayment(
+                                <?php echo json_encode($p[0] ?? ""); ?>,
+                                <?php echo json_encode($mobile); ?>,
+                                <?php echo json_encode($p[1] ?? ""); ?>,
+                                <?php echo json_encode($p[2] ?? ""); ?>,
+                                <?php echo json_encode($p[3] ?? ""); ?>,
+                                <?php echo json_encode($payWhen['date']); ?>,
+                                <?php echo json_encode($payWhen['time']); ?>,
+                                <?php echo json_encode($parsedTarget['sub_id']); ?>
+                                )'>
+
+                                جزئیات پرداخت
+
+                            </button>
+
+                            <button
+                                onclick='showAction(
+                                <?php echo $i; ?>,
+                                <?php echo json_encode($p[0] ?? ""); ?>,
+                                <?php echo json_encode($mobile); ?>,
+                                <?php echo json_encode($p[2] ?? ""); ?>,
+                                <?php echo json_encode($status); ?>,
+                                <?php echo json_encode($p[7] ?? ""); ?>
+                                )'>
+
+                                عملیات
+
+                            </button>
+
+                            <button
+                                class="red"
+                                onclick='showDelete(
+                                <?php echo $i; ?>,
+                                <?php echo json_encode($p[0] ?? ""); ?>,
+                                <?php echo json_encode($mobile); ?>,
+                                <?php echo json_encode($parsedTarget['label']); ?>
+                                )'>
+
+                                حذف
+
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+        <?php } ?>
+
+        </tbody>
+
+    </table>
+
+    </div>
+
+    <div class="payPager">
+
+        <div class="payPagerSize">
+            <span>نمایش</span>
+            <select
+                class="payPerSelect"
+                onchange="window.location.href=this.value;">
+
+                <option
+                    value="<?php echo htmlspecialchars(renewsListUrl(1, 20), ENT_QUOTES, 'UTF-8'); ?>"
+                    <?php echo $perPage === 20 ? 'selected' : ''; ?>>
+
+                    ۲۰
+
+                </option>
+
+                <option
+                    value="<?php echo htmlspecialchars(renewsListUrl(1, 50), ENT_QUOTES, 'UTF-8'); ?>"
+                    <?php echo $perPage === 50 ? 'selected' : ''; ?>>
+
+                    ۵۰
+
+                </option>
+
+                <option
+                    value="<?php echo htmlspecialchars(renewsListUrl(1, 100), ENT_QUOTES, 'UTF-8'); ?>"
+                    <?php echo $perPage === 100 ? 'selected' : ''; ?>>
+
+                    ۱۰۰
+
+                </option>
+
+            </select>
+            <span>مورد در هر صفحه</span>
+        </div>
+
+        <div class="payPagerNav">
+            <span class="payPagerInfo">
+                <?php echo number_format($rangeFrom); ?>-<?php echo number_format($rangeTo); ?>
+                از
+                <?php echo number_format($totalItems); ?>
+                مورد
+            </span>
+
+            <a
+                href="<?php echo htmlspecialchars(renewsListUrl(max(1, $currentPage - 1), $perPage), ENT_QUOTES, 'UTF-8'); ?>"
+                class="payPagerBtn <?php echo $currentPage <= 1 ? 'is-disabled' : ''; ?>"
+                aria-label="صفحه قبل">
+
+                ‹
+
+            </a>
+
+            <span class="payPagerBtn is-active">
+
+                <?php echo number_format($currentPage); ?>
+
+            </span>
+
+            <a
+                href="<?php echo htmlspecialchars(renewsListUrl(min($totalPages, $currentPage + 1), $perPage), ENT_QUOTES, 'UTF-8'); ?>"
+                class="payPagerBtn <?php echo $currentPage >= $totalPages ? 'is-disabled' : ''; ?>"
+                aria-label="صفحه بعد">
+
+                ›
+
+            </a>
+        </div>
+
+    </div>
 
 </div>
 
 <div class="modalOverlay" id="modal">
-<div class="modal" id="modalBody"></div>
+
+    <div class="modal" id="modalContent"></div>
+
+</div>
+
 </div>
 
 <script>
 
-var renewResultMessage = <?php echo json_encode($paymentMessage, JSON_UNESCAPED_UNICODE); ?>;
-var renewResultDetail = <?php echo json_encode($paymentMessageDetail, JSON_UNESCAPED_UNICODE); ?>;
-var renewResultError = <?php echo json_encode($paymentError, JSON_UNESCAPED_UNICODE); ?>;
-var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews'), JSON_UNESCAPED_UNICODE); ?>;
+const renewsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=renews'), JSON_UNESCAPED_UNICODE); ?>;
+const renewsPerPage = <?php echo (int)$perPage; ?>;
 
-function closeMenus(){
-document.querySelectorAll('.dropdown.active').forEach(function(el){
-el.classList.remove('active');
-});
-}
+function toggleMenu(id){
 
-var renewMenuIgnoreUntil = 0;
+    document.querySelectorAll('.dropdown').forEach(el => {
 
-function openMenu(e,id){
-if(e && e.preventDefault){ e.preventDefault(); }
-if(e && e.stopPropagation){ e.stopPropagation(); }
+        if(el.id != id){
 
-var m=document.getElementById(id);
-if(!m){ return; }
+            el.classList.remove('active');
 
-var willOpen = !m.classList.contains('active');
-closeMenus();
+        }
 
-if(!willOpen){
-return;
-}
+    });
 
-m.classList.add('active');
-renewMenuIgnoreUntil = Date.now() + 350;
-}
+    document
+    .getElementById(id)
+    .classList.toggle('active');
 
-document.addEventListener('click', function(){
-if(Date.now() < renewMenuIgnoreUntil){
-return;
-}
-closeMenus();
-});
-
-document.addEventListener('keydown', function(ev){
-if(ev.key === 'Escape'){
-closeMenus();
-}
-});
-
-window.addEventListener('resize', closeMenus);
-
-function openModal(html){
-closeMenus();
-document.getElementById('modalBody').innerHTML=html;
-document.getElementById('modal').style.display='flex';
 }
 
 function closeModal(){
-document.getElementById('modal').style.display='none';
+
+    document
+    .getElementById('modal')
+    .style.display = 'none';
+
 }
 
-function showResultModal(ok, title, detail){
-var cls = ok ? 'resultOk' : 'resultErr';
-var safeDetail = detail ? String(detail) : '';
-openModal(
-'<div class="'+cls+'">'+
-'<h3>نتیجه عملیات</h3>'+
-'<div class="resultLead">'+title+'</div>'+
-(safeDetail ? '<div class="resultDetail">'+safeDetail+'</div>' : '')+
-'<div class="modalBtns">'+
-'<button class="gray" type="button" onclick="closeModal()">بستن</button>'+
-'</div>'+
-'</div>'
-);
-}
+function openModal(html){
 
-function copySubId(id){
-navigator.clipboard.writeText(id);
-alert('SubID کپی شد');
+    document
+    .getElementById('modalContent')
+    .innerHTML = html;
+
+    document
+    .getElementById('modal')
+    .style.display = 'flex';
+
 }
 
 function copyRenewSubId(btn){
-var id = (btn && btn.getAttribute('data-subid')) || '';
-if(!id){
-return;
+
+    const id = (btn && btn.getAttribute('data-subid')) || '';
+
+    if(!id){
+        return;
+    }
+
+    if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(id).then(function(){
+            btn.style.opacity = '0.55';
+            setTimeout(function(){ btn.style.opacity = '1'; }, 250);
+        }).catch(function(){
+            window.prompt('SubID را کپی کنید:', id);
+        });
+        return;
+    }
+
+    window.prompt('SubID را کپی کنید:', id);
+
 }
 
-if(navigator.clipboard && navigator.clipboard.writeText){
-navigator.clipboard.writeText(id).then(function(){
-btn.style.opacity = '0.55';
-setTimeout(function(){ btn.style.opacity = '1'; }, 250);
-}).catch(function(){
-window.prompt('SubID را کپی کنید:', id);
+function showPayment(
+    user,
+    mobile,
+    config,
+    plan,
+    track,
+    date,
+    time,
+    subId
+){
+
+    openModal(`
+
+        <div class="modalTitle">
+
+            جزئیات پرداخت
+
+        </div>
+
+        <div class="modalInfo">
+
+            نام کاربر: ${user}<br>
+            شماره موبایل: ${mobile}<br>
+            لینک اشتراک: ${config}<br>
+            پلن: ${plan}
+
+        </div>
+
+        <div class="bigText">
+
+            SubID: ${subId || '-'}<br>
+            شماره پیگیری: ${track}<br>
+            تاریخ: ${date}<br>
+            ساعت: ${time}
+
+        </div>
+
+        ${subId ? `
+        <button
+            class="green"
+            style="width:100%;padding:12px;border:none;border-radius:12px;color:white;margin-bottom:12px;"
+            onclick="copySubId('${subId}')">
+
+            کپی SubID
+
+        </button>
+        ` : ''}
+
+        <div class="modalBtns">
+
+            <button
+                class="gray"
+                onclick="closeModal()">
+
+                بستن
+
+            </button>
+
+        </div>
+
+    `);
+
+}
+
+function copySubId(id){
+
+    navigator.clipboard.writeText(id);
+    alert('SubID کپی شد');
+
+}
+
+function showAction(
+    id,
+    user,
+    mobile,
+    plan,
+    status='',
+    savedLink=''
+){
+
+    let content = '';
+
+    if(status === 'تایید شد'){
+
+        content = `
+
+            <div class="bigText">
+
+                ${savedLink}
+
+            </div>
+
+            <div class="modalBtns">
+
+                <button
+                    class="gray"
+                    onclick="closeModal()">
+
+                    بستن
+
+                </button>
+
+            </div>
+
+        `;
+
+    }
+
+    else if(status === 'رد شد'){
+
+        content = `
+
+            <div style="background:#450a0a;padding:14px;border-radius:12px;line-height:30px;margin-bottom:15px;">
+
+                ${savedLink}
+
+            </div>
+
+            <div class="modalBtns">
+
+                <button
+                    class="gray"
+                    onclick="closeModal()">
+
+                    بستن
+
+                </button>
+
+            </div>
+
+        `;
+
+    }
+
+    else{
+
+        content = `
+
+            <form method="POST">
+
+                <input type="hidden" name="per" value="${renewsPerPage}">
+
+                <input
+                    type="hidden"
+                    name="approve_index"
+                    value="${id}">
+
+                <input
+                    type="text"
+                    name="approve_link"
+                    id="approveLink"
+                    placeholder="لینک تمدید">
+
+                <div class="modalBtns">
+
+                    <button
+                        type="button"
+                        class="gray"
+                        onclick="pasteClipboard()">
+
+                        Paste
+
+                    </button>
+
+                    <button
+                        type="submit"
+                        name="approve_payment"
+                        class="green">
+
+                        تایید
+
+                    </button>
+
+                </div>
+
+            </form>
+
+            <hr style="margin:20px 0;border-color:#334155;">
+
+            <form method="POST">
+
+                <input type="hidden" name="per" value="${renewsPerPage}">
+
+                <input
+                    type="hidden"
+                    name="reject_index"
+                    value="${id}">
+
+                <select name="reject_reason">
+
+                    <option value="اطلاعات پرداخت اشتباه است">
+
+                        اطلاعات پرداخت اشتباه است
+
+                    </option>
+
+                    <option value="اطلاعات پرداخت تکراری است">
+
+                        اطلاعات پرداخت تکراری است
+
+                    </option>
+
+                </select>
+
+                <button
+                    type="submit"
+                    name="reject_payment"
+                    class="redBtn"
+                    style="width:100%;padding:12px;border:none;border-radius:12px;color:white;">
+
+                    رد پرداخت
+
+                </button>
+
+            </form>
+
+            <div class="modalBtns">
+
+                <button
+                    class="gray"
+                    onclick="closeModal()">
+
+                    بستن
+
+                </button>
+
+            </div>
+
+        `;
+
+    }
+
+    openModal(`
+
+        <div class="modalTitle">
+
+            عملیات تمدید
+
+        </div>
+
+        <div class="modalInfo">
+
+            نام کاربر: ${user}<br>
+            شماره موبایل: ${mobile}<br>
+            پلن: ${plan}
+
+        </div>
+
+        ${content}
+
+    `);
+
+}
+
+function showDelete(
+    id,
+    user,
+    mobile,
+    target
+){
+
+    openModal(`
+
+        <div class="modalTitle">
+
+            حذف تمدید
+
+        </div>
+
+        <div class="modalInfo">
+
+            نام کاربر: ${user}<br>
+            شماره موبایل: ${mobile}<br>
+            اشتراک: ${target}
+
+        </div>
+
+        <div class="modalBtns">
+
+            <button
+                class="redBtn"
+                onclick="confirmDelete(${id})">
+
+                حذف
+
+            </button>
+
+            <button
+                class="gray"
+                onclick="closeModal()">
+
+                بستن
+
+            </button>
+
+        </div>
+
+    `);
+
+}
+
+function confirmDelete(id){
+
+    if(confirm('مطمئن هستید؟')){
+
+        location.href =
+        renewsListBase
+        + '&deletepayment='
+        + id
+        + '&per='
+        + renewsPerPage;
+
+    }
+
+}
+
+async function pasteClipboard(){
+
+    try{
+
+        const text =
+        await navigator.clipboard.readText();
+
+        document
+        .getElementById('approveLink')
+        .value = text;
+
+    }
+
+    catch(e){
+
+        alert('دسترسی clipboard داده نشده');
+
+    }
+
+}
+
+document.addEventListener('click', function(e){
+
+    if(!e.target.closest('.menuWrap')){
+
+        document.querySelectorAll('.dropdown').forEach(el => {
+
+            el.classList.remove('active');
+
+        });
+
+    }
+
 });
-return;
-}
-
-window.prompt('SubID را کپی کنید:', id);
-}
-
-function openDetails(user,mobile,config,plan,track,date,time){
-var subid='';
-try{
-subid = config.split('/sub/')[1] || '';
-}catch(e){
-subid='';
-}
-
-openModal(
-'<h3>جزئیات پرداخت</h3>'+
-'<p><b>کاربر:</b> '+user+'</p>'+
-'<p><b>موبایل:</b> '+mobile+'</p>'+
-'<p><b>لینک:</b> '+config+'</p>'+
-'<p><b>SubID:</b> '+subid+'</p>'+
-'<button style="width:100%;padding:10px;border:none;border-radius:10px;background:#22c55e;color:white;cursor:pointer;margin-bottom:12px;" onclick="copySubId(\''+subid+'\')">📋 کپی SubID</button>'+
-'<p><b>پلن:</b> '+plan+'</p>'+
-'<hr>'+
-'<p><b>پیگیری:</b> '+track+'</p>'+
-'<p><b>تاریخ:</b> '+date+' '+time+'</p>'+
-'<div class="modalBtns">'+
-'<button class="gray" onclick="closeModal()">بستن</button>'+
-'</div>'
-);
-}
-
-function openAction(id,user,mobile,plan){
-openModal(
-'<h3>عملیات تمدید</h3>'+
-'<p><b>کاربر:</b> '+user+'</p>'+
-'<p><b>موبایل:</b> '+mobile+'</p>'+
-'<p><b>پلن:</b> '+plan+'</p>'+
-'<form method="POST">'+
-'<input type="hidden" name="approve_index" value="'+id+'">'+
-'<input type="text" name="approve_link" placeholder="لینک تمدید">'+
-'<div class="modalBtns">'+
-'<button class="green" name="approve_payment">تایید</button>'+
-'</div>'+
-'</form>'+
-'<hr style="margin:15px 0;">'+
-'<form method="POST">'+
-'<input type="hidden" name="reject_index" value="'+id+'">'+
-'<select name="reject_reason">'+
-'<option value="اطلاعات پرداخت اشتباه است">اطلاعات پرداخت اشتباه است</option>'+
-'<option value="اطلاعات پرداخت تکراری است">اطلاعات پرداخت تکراری است</option>'+
-'</select>'+
-'<div class="modalBtns">'+
-'<button class="red" name="reject_payment">رد پرداخت</button>'+
-'</div>'+
-'</form>'+
-'<div class="modalBtns" style="margin-top:10px;">'+
-'<button class="gray" onclick="closeModal()">بستن</button>'+
-'</div>'
-);
-}
-
-function deleteItem(id){
-if(confirm('حذف شود؟')){
-location.href = renewsPageUrl + (renewsPageUrl.indexOf('?') >= 0 ? '&' : '?') + 'deletepayment=' + encodeURIComponent(id);
-}
-}
-
-if(renewResultError){
-showResultModal(false, renewResultError, '');
-}else if(renewResultMessage){
-showResultModal(true, renewResultMessage, renewResultDetail);
-}
 
 </script>
