@@ -47,6 +47,7 @@ if(!function_exists('pnvAdminInclude')){
             __DIR__ . '/../admin/' . $name,
         ] as $path){
             if(is_file($path)){
+                extract($GLOBALS, EXTR_SKIP);
                 include $path;
                 return true;
             }
@@ -260,6 +261,7 @@ exit;
 }
 
 $page = $_GET['page'] ?? 'dashboard';
+$pnvRootDir = dirname(__DIR__);
 
 $supportActionResult = null;
 
@@ -271,7 +273,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
 $supportActionResult =
 supportProcessAdminActions(
-'../db/support.json',
+$pnvRootDir . '/db/support.json',
 true
 );
 
@@ -287,10 +289,10 @@ exit;
 
 }
 
-$plansFile = '../db/plans.json';
-$cardsFile = '../db/cards.json';
-$usersFile = '../db/users.json';
-$paymentsFile = '../invoices/payments.csv';
+$plansFile = $pnvRootDir . '/db/plans.json';
+$cardsFile = $pnvRootDir . '/db/cards.json';
+$usersFile = $pnvRootDir . '/db/users.json';
+$paymentsFile = $pnvRootDir . '/invoices/payments.csv';
 
 $plans = file_exists($plansFile)
 ? json_decode(file_get_contents($plansFile),true)
@@ -333,7 +335,7 @@ fclose($f);
 }
 
 $supportFile =
-"../db/support.json";
+$pnvRootDir . '/db/support.json';
 
 $hasUnreadSupport = false;
 
@@ -438,7 +440,7 @@ foreach($payments as $pay){
 $renewsCount = 0;
 
 $renewFile =
-"../db/renews.json";
+$pnvRootDir . '/db/renews.json';
 
 if(file_exists($renewFile)){
 
@@ -600,7 +602,7 @@ $server = $_POST['server'];
 
 move_uploaded_file(
 $_FILES['csv']['tmp_name'],
-'../db/'.$server.'.csv'
+$pnvRootDir . '/db/' . $server . '.csv'
 );
 
 header('Location: ' . pnvAdminUrl('index.php?page=upload'));

@@ -94,6 +94,7 @@ function pnvAdminInclude($fileName){
 
     foreach($candidates as $path){
         if(is_file($path)){
+            extract($GLOBALS, EXTR_SKIP);
             include $path;
             return true;
         }
