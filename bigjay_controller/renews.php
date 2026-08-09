@@ -9,7 +9,7 @@ foreach ([__DIR__ . '/auth.php', __DIR__ . '/functions.php', __DIR__ . '/../admi
 }
 
 if(!function_exists('pnvFormatPaymentRowDateTime')){
-    require_once __DIR__ . '/../date_lib.php';
+    require_once __DIR__ . '/../pnv_date_bootstrap.php';
 }
 
 if (!function_exists('pnvAdminUrl')) {

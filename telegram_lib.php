@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/date_lib.php';
+require_once __DIR__ . '/pnv_date_bootstrap.php';
 
 if(file_exists(__DIR__ . '/telegram_xui.php')){
     require_once __DIR__ . '/telegram_xui.php';

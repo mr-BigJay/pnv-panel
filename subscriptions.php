@@ -4,7 +4,7 @@ session_start();
 
 require_once "phpqrcode/qrlib.php";
 require_once __DIR__ . '/subscription_lib.php';
-require_once __DIR__ . '/date_lib.php';
+require_once __DIR__ . '/pnv_date_bootstrap.php';
 
 if(!isset($_SESSION['user'])){
 header("Location: index.php");

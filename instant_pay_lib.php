@@ -3,7 +3,7 @@
 require_once __DIR__ . '/bale_lib.php';
 require_once __DIR__ . '/xui_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
-require_once __DIR__ . '/date_lib.php';
+require_once __DIR__ . '/pnv_date_bootstrap.php';
 
 if(!function_exists('instantPayPath')){
 

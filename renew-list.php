@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/date_lib.php';
+require_once __DIR__ . '/pnv_date_bootstrap.php';
 
 session_start();
 

@@ -1,6 +1,6 @@
 <?php
 
-require_once dirname(__DIR__) . '/date_lib.php';
+require_once dirname(__DIR__) . '/pnv_date_bootstrap.php';
 
 if(session_status() === PHP_SESSION_NONE){
     session_start();
