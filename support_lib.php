@@ -874,6 +874,12 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportIsEditRequest(){
+
+        return trim((string)($_POST['edit_id'] ?? '')) !== '';
+
+    }
+
     function supportProcessAdminActions($file, $embedded = false){
 
         $data = supportLoad($file);
@@ -898,7 +904,7 @@ if(!function_exists('supportLoad')){
 
         }
 
-        if(isset($_POST['edit_id']) && $redirect === null){
+        if(supportIsEditRequest() && $redirect === null){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';
@@ -906,6 +912,9 @@ if(!function_exists('supportLoad')){
             else{
                 $id = $_POST['edit_id'] ?? '';
                 $text = trim($_POST['edit_text'] ?? '');
+                if($text === ''){
+                    $text = trim($_POST['message'] ?? '');
+                }
                 $user = $_POST['user'] ?? '';
 
                 foreach($data as $i => $ticket){
@@ -936,7 +945,7 @@ if(!function_exists('supportLoad')){
                 isset($_POST['reply'])
                 || (
                     isset($_POST['message'], $_POST['user'])
-                    && !isset($_POST['edit_id'])
+                    && !supportIsEditRequest()
                     && !isset($_POST['delete_message'])
                 )
             )
@@ -1070,7 +1079,7 @@ if(!function_exists('supportLoad')){
 
         }
 
-        if(isset($_POST['edit_id']) && $error === null){
+        if(supportIsEditRequest() && $error === null){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';
@@ -1078,6 +1087,9 @@ if(!function_exists('supportLoad')){
             else{
                 $editId = $_POST['edit_id'] ?? '';
                 $newText = trim($_POST['edit_text'] ?? '');
+                if($newText === ''){
+                    $newText = trim($_POST['message'] ?? '');
+                }
 
                 foreach($data as $i => $ticket){
 
@@ -1111,7 +1123,10 @@ if(!function_exists('supportLoad')){
         if(
             (
                 isset($_POST['send'])
-                || isset($_POST['message'])
+                || (
+                    isset($_POST['message'])
+                    && !supportIsEditRequest()
+                )
             )
             && $error === null
         ){
