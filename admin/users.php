@@ -231,6 +231,36 @@ $start,
 $perPage
 );
 
+if(!function_exists('pnvUsersAvatarInitial')){
+    function pnvUsersAvatarInitial($username){
+        $username = trim((string)$username);
+        if($username === ''){
+            return '?';
+        }
+        if(function_exists('mb_substr')){
+            return mb_strtoupper(mb_substr($username, 0, 1, 'UTF-8'), 'UTF-8');
+        }
+        return strtoupper(substr($username, 0, 1));
+    }
+
+    function pnvUsersAvatarHue($username){
+        return abs(crc32((string)$username)) % 360;
+    }
+}
+
+$totalAllUsers = count($allUsers);
+$todayRegistrations = 0;
+
+foreach($allUsers as $u){
+    if(
+        !empty($u['created_at'])
+        && function_exists('pnvIsTodayTehran')
+        && pnvIsTodayTehran($u['created_at'])
+    ){
+        $todayRegistrations++;
+    }
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -292,73 +322,256 @@ font-size:14px;
 display:flex;
 flex-direction:column;
 gap:12px;
-margin-bottom:20px;
+margin-bottom:16px;
 }
 
-.backupBtn{
-background:#2563eb;
-padding:12px;
-border-radius:10px;
-color:white;
-text-decoration:none;
-font-size:14px;
-text-align:center;
+.usersToolbar{
+display:flex;
+gap:10px;
+align-items:stretch;
 }
 
 .searchBox{
+flex:1;
 background:#1e293b;
-padding:14px;
+padding:10px 12px;
 border-radius:14px;
+border:1px solid #334155;
+display:flex;
+align-items:center;
+gap:10px;
+}
+
+.searchBox svg{
+flex:0 0 auto;
+opacity:.65;
+}
+
+.searchBox form{
+flex:1;
+min-width:0;
 }
 
 .searchBox input{
 width:100%;
-padding:12px;
+padding:10px 0;
 border:none;
-border-radius:10px;
+background:transparent;
 font-size:14px;
+color:#fff;
+outline:none;
+font-family:tahoma;
+}
+
+.searchBox input::placeholder{
+color:#94a3b8;
+}
+
+.backupBtn{
+display:inline-flex;
+align-items:center;
+justify-content:center;
+gap:6px;
+background:#1e293b;
+border:1px solid #2563eb;
+padding:0 14px;
+border-radius:14px;
+color:#93c5fd;
+text-decoration:none;
+font-size:13px;
+white-space:nowrap;
+min-height:52px;
+}
+
+.usersStats{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+margin-bottom:16px;
+}
+
+.usersStatPill{
+display:inline-flex;
+align-items:center;
+gap:6px;
+padding:8px 12px;
+border-radius:999px;
+background:#1e293b;
+border:1px solid #334155;
+font-size:12px;
+color:#cbd5e1;
+}
+
+.usersStatPill strong{
+color:#fff;
+font-weight:700;
+}
+
+.usersStatPill.is-today{
+border-color:#166534;
+background:#052e16;
+color:#bbf7d0;
+}
+
+.userList{
+display:flex;
+flex-direction:column;
+gap:12px;
 }
 
 .userCard{
+position:relative;
 background:#1e293b;
-border-radius:16px;
-padding:16px;
-margin-bottom:14px;
+border-radius:18px;
+overflow:hidden;
+border:1px solid #334155;
 }
 
-.top{
+.userCardAccent{
+position:absolute;
+right:0;
+top:0;
+bottom:0;
+width:4px;
+background:linear-gradient(180deg,#22c55e,#16a34a);
+}
+
+.userCardBody{
+padding:14px 16px 14px 18px;
+}
+
+.userCardHead{
 display:flex;
-justify-content:space-between;
-align-items:flex-start;
-gap:10px;
+align-items:center;
+gap:12px;
+margin-bottom:12px;
 }
 
-.info{
+.userAvatar{
+width:48px;
+height:48px;
+border-radius:999px;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:20px;
+font-weight:700;
+color:#fff;
+flex:0 0 auto;
+box-shadow:0 8px 18px rgba(0,0,0,.22);
+}
+
+.userCardMeta{
 flex:1;
-line-height:30px;
-font-size:14px;
+min-width:0;
+}
+
+.userCardName{
+font-size:17px;
+font-weight:700;
+line-height:1.3;
 word-break:break-word;
 }
 
-.info b{
-display:inline-block;
-min-width:90px;
-color:#cbd5e1;
+.userCardIndex{
+font-size:12px;
+color:#94a3b8;
+margin-top:2px;
+}
+
+.userChips{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+margin-bottom:12px;
+}
+
+.userChip{
+display:inline-flex;
+align-items:center;
+gap:6px;
+padding:7px 11px;
+border-radius:999px;
+font-size:12px;
+line-height:1.2;
+max-width:100%;
+}
+
+.userChip svg{
+flex:0 0 auto;
+opacity:.85;
+}
+
+.userChip--phone{
+background:#0f172a;
+color:#e2e8f0;
+border:1px solid #334155;
+}
+
+.userChip--ref{
+background:#172554;
+color:#bfdbfe;
+border:1px solid #1d4ed8;
+}
+
+.userChipText{
+overflow:hidden;
+text-overflow:ellipsis;
+white-space:nowrap;
+}
+
+.userCardFoot{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+flex-wrap:wrap;
+}
+
+.userDateBadge{
+display:inline-flex;
+align-items:center;
+gap:6px;
+padding:7px 11px;
+border-radius:999px;
+background:#0f172a;
+border:1px solid #334155;
+font-size:12px;
+color:#94a3b8;
+}
+
+.userSubsBtn{
+border:none;
+border-radius:12px;
+background:#22c55e;
+color:#052e16;
+padding:10px 16px;
+font-size:13px;
+font-weight:700;
+cursor:pointer;
+font-family:tahoma;
+white-space:nowrap;
+}
+
+.userSubsBtn:active{
+transform:scale(.98);
 }
 
 .menuWrap{
 position:relative;
+flex:0 0 auto;
 }
 
 .menuBtn{
-background:#334155;
-border:none;
+background:#0f172a;
+border:1px solid #334155;
 width:40px;
 height:40px;
-border-radius:10px;
+border-radius:12px;
 color:white;
 font-size:22px;
 cursor:pointer;
+line-height:1;
 }
 
 .dropdown{
@@ -747,17 +960,26 @@ class="backTop">
 
 </a>
 
+<div class="usersStats">
+<span class="usersStatPill">
+<strong><?php echo number_format($totalAllUsers); ?></strong>
+کاربر
+</span>
+<?php if($todayRegistrations > 0){ ?>
+<span class="usersStatPill is-today">
+<strong><?php echo number_format($todayRegistrations); ?></strong>
+ثبت‌نام امروز
+</span>
+<?php } ?>
+</div>
+
 <div class="topbar">
 
-<a
-href="<?php echo htmlspecialchars(pnvAdminUrl('users.php?backup=1'), ENT_QUOTES, 'UTF-8'); ?>"
-class="backupBtn">
-
-دانلود بکاپ کاربران
-
-</a>
+<div class="usersToolbar">
 
 <div class="searchBox">
+
+<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
 
 <form method="GET">
 
@@ -771,7 +993,27 @@ value="<?php echo htmlspecialchars($search); ?>">
 
 </div>
 
+<a
+href="<?php echo htmlspecialchars(pnvAdminUrl('users.php?backup=1'), ENT_QUOTES, 'UTF-8'); ?>"
+class="backupBtn"
+title="دانلود بکاپ">
+
+<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+بکاپ
+
+</a>
+
 </div>
+
+</div>
+
+<div class="userList">
+
+<?php if(count($users) === 0){ ?>
+<div class="emptySubs" style="padding:32px 16px;border:1px dashed #334155;border-radius:16px;">
+<?php echo $search !== '' ? 'کاربری با این جستجو پیدا نشد' : 'هنوز کاربری ثبت نشده'; ?>
+</div>
+<?php } ?>
 
 <?php foreach($users as $i=>$u){
 
@@ -781,45 +1023,42 @@ $u,
 $allUsers
 );
 
+$username = $u['username'] ?? '-';
+$mobile = $u['mobile'] ?? '-';
+$referrer = trim((string)($u['referrer'] ?? ''));
+$referrerLabel = $referrer !== '' ? $referrer : 'بدون معرف';
+$createdLabel = pnvFormatUserCreatedAt($u['created_at'] ?? '');
+if($createdLabel === '' || $createdLabel === '-'){
+    $createdLabel = 'تاریخ نامشخص';
+}
+$avatarHue = pnvUsersAvatarHue($username);
+$avatarInitial = pnvUsersAvatarInitial($username);
+
 ?>
 
 <div class="userCard">
 
-<div class="top">
+<div class="userCardAccent"></div>
 
-<div class="info">
+<div class="userCardBody">
 
-<div>
-<b>ردیف:</b>
-<?php echo $start + $i + 1; ?>
+<div class="userCardHead">
+
+<div class="userAvatar" style="background:linear-gradient(135deg,hsl(<?php echo $avatarHue; ?>,68%,48%),hsl(<?php echo ($avatarHue + 36) % 360; ?>,72%,36%));">
+<?php echo htmlspecialchars($avatarInitial, ENT_QUOTES, 'UTF-8'); ?>
 </div>
 
-<div>
-<b>نام کاربری:</b>
-<?php echo htmlspecialchars($u['username']); ?>
-</div>
-
-<div>
-<b>موبایل:</b>
-<?php echo htmlspecialchars($u['mobile']); ?>
-</div>
-
-<div>
-<b>معرف:</b>
-<?php echo htmlspecialchars($u['referrer'] ?? '-'); ?>
-</div>
-
-<div>
-<b>تاریخ ثبت نام:</b>
-<?php echo htmlspecialchars(pnvFormatUserCreatedAt($u['created_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
-</div>
-
+<div class="userCardMeta">
+<div class="userCardName"><?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?></div>
+<div class="userCardIndex">#<?php echo $start + $i + 1; ?></div>
 </div>
 
 <div class="menuWrap">
 
 <button
 class="menuBtn"
+type="button"
+aria-label="منو"
 onclick="toggleMenu('menu<?php echo $i; ?>')">
 
 ⋮
@@ -831,10 +1070,11 @@ class="dropdown"
 id="menu<?php echo $i; ?>">
 
 <button
+type="button"
 onclick="openMobileModal(
 '<?php echo $realId; ?>',
-'<?php echo htmlspecialchars($u['username']); ?>',
-'<?php echo htmlspecialchars($u['mobile']); ?>'
+'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>',
+'<?php echo htmlspecialchars($u['mobile'], ENT_QUOTES); ?>'
 )">
 
 ویرایش شماره موبایل
@@ -842,10 +1082,11 @@ onclick="openMobileModal(
 </button>
 
 <button
+type="button"
 onclick="openRefModal(
 '<?php echo $realId; ?>',
-'<?php echo htmlspecialchars($u['username']); ?>',
-'<?php echo htmlspecialchars($u['referrer'] ?? ''); ?>'
+'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>',
+'<?php echo htmlspecialchars($u['referrer'] ?? '', ENT_QUOTES); ?>'
 )">
 
 ویرایش معرف
@@ -853,20 +1094,14 @@ onclick="openRefModal(
 </button>
 
 <button
+type="button"
 onclick="openPassModal(
 '<?php echo $realId; ?>',
-'<?php echo htmlspecialchars($u['username']); ?>',
-'<?php echo htmlspecialchars($u['mobile']); ?>'
+'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>',
+'<?php echo htmlspecialchars($u['mobile'], ENT_QUOTES); ?>'
 )">
 
 ویرایش رمز عبور
-
-</button>
-
-<button
-onclick="loadProfile(<?php echo json_encode($u['username'], JSON_UNESCAPED_UNICODE); ?>)">
-
-مشاهده اشتراک‌ها
 
 </button>
 
@@ -875,9 +1110,9 @@ href="#"
 class="deleteBtn"
 onclick="openDeleteModal(
 '<?php echo $realId; ?>',
-'<?php echo htmlspecialchars($u['username']); ?>',
-'<?php echo htmlspecialchars($u['mobile']); ?>'
-)">
+'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>',
+'<?php echo htmlspecialchars($u['mobile'], ENT_QUOTES); ?>'
+); return false;">
 
 حذف کاربر
 
@@ -889,9 +1124,45 @@ onclick="openDeleteModal(
 
 </div>
 
+<div class="userChips">
+
+<span class="userChip userChip--phone">
+<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.86.3 1.7.54 2.5a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.58-1.11a2 2 0 012.11-.45c.8.24 1.64.42 2.5.54A2 2 0 0122 16.92z"/></svg>
+<span class="userChipText"><?php echo htmlspecialchars($mobile, ENT_QUOTES, 'UTF-8'); ?></span>
+</span>
+
+<span class="userChip userChip--ref">
+<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+<span class="userChipText"><?php echo htmlspecialchars($referrerLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+</span>
+
+</div>
+
+<div class="userCardFoot">
+
+<span class="userDateBadge">
+<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+<?php echo htmlspecialchars($createdLabel, ENT_QUOTES, 'UTF-8'); ?>
+</span>
+
+<button
+type="button"
+class="userSubsBtn"
+onclick="loadProfile(<?php echo json_encode($username, JSON_UNESCAPED_UNICODE); ?>)">
+
+اشتراک‌ها
+
+</button>
+
+</div>
+
+</div>
+
 </div>
 
 <?php } ?>
+
+</div>
 
 <?php if($totalPages > 1){ ?>
 
