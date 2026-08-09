@@ -473,29 +473,74 @@ user-select:none;
 color:#94a3b8;
 }
 
-.captchaBox{
-height:54px;
-background:#0f172a;
+.captchaSection{
+margin:4px 0 14px;
+padding:12px;
+background:rgba(15,23,42,.45);
+border:1px solid rgba(148,163,184,.14);
 border-radius:14px;
+}
+
+.captchaRow{
 display:flex;
-justify-content:center;
 align-items:center;
-font-size:24px;
-font-weight:bold;
-letter-spacing:6px;
+justify-content:center;
+gap:8px;
+margin-bottom:10px;
+}
+
+.captchaCode{
+min-width:118px;
+height:36px;
+padding:0 12px;
+display:flex;
+align-items:center;
+justify-content:center;
+background:#0f172a;
+border-radius:10px;
+font-size:17px;
+font-weight:700;
+letter-spacing:4px;
 color:#facc15;
-margin-bottom:12px;
 user-select:none;
 }
 
-.refresh{
-display:block;
-text-align:center;
-margin-bottom:16px;
+.captchaRefresh{
+width:36px;
+height:36px;
+display:flex;
+align-items:center;
+justify-content:center;
+border-radius:10px;
+background:#334155;
+color:#94a3b8;
 text-decoration:none;
+flex-shrink:0;
+transition:.2s;
+}
+
+.captchaRefresh:hover{
+background:#475569;
 color:#38bdf8;
+}
+
+.captchaRefresh svg{
+width:18px;
+height:18px;
+stroke:currentColor;
+fill:none;
+stroke-width:2;
+stroke-linecap:round;
+stroke-linejoin:round;
+}
+
+.captchaInputGroup{
+margin-bottom:0;
+}
+
+.captchaInputGroup input{
+height:40px;
 font-size:14px;
-font-weight:700;
 }
 
 button{
@@ -689,7 +734,11 @@ name="referrer">
 
 <?php } ?>
 
-<div class="captchaBox">
+<div class="captchaSection">
+
+<div class="captchaRow">
+
+<div class="captchaCode">
 
 <?php echo $_SESSION['register_captcha']; ?>
 
@@ -697,19 +746,29 @@ name="referrer">
 
 <a
 href="register.php?refreshcaptcha=1"
-class="refresh">
+class="captchaRefresh"
+aria-label="تغییر کد امنیتی"
+title="تغییر کد امنیتی">
 
-تغییر کد امنیتی
+<svg viewBox="0 0 24 24" aria-hidden="true">
+<path d="M21 12a9 9 0 11-3-6.7"/>
+<path d="M21 3v6h-6"/>
+</svg>
 
 </a>
 
-<div class="inputGroup">
+</div>
+
+<div class="inputGroup captchaInputGroup">
 
 <input
 type="text"
 name="captcha"
-placeholder="کد امنیتی"
+placeholder="کد امنیتی را وارد کنید"
+autocomplete="off"
 required>
+
+</div>
 
 </div>
 
