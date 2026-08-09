@@ -168,9 +168,11 @@ display:flex;
 flex-direction:column;
 align-items:center;
 justify-content:center;
-gap:8px;
-height:118px;
-padding:12px 10px;
+gap:6px;
+aspect-ratio:1 / 1;
+height:auto;
+width:100%;
+padding:10px 8px;
 border-radius:16px;
 text-decoration:none;
 color:#fff;
@@ -202,7 +204,7 @@ background:rgba(59,130,246,.18);
 color:#93c5fd;
 }
 .dashPrimaryLabel{
-font-size:13px;
+font-size:12px;
 font-weight:700;
 line-height:1.35;
 }
@@ -215,11 +217,12 @@ flex:1;
 min-height:0;
 display:flex;
 flex-direction:column;
+justify-content:center;
 }
 .dashItem{
 display:flex;
 align-items:center;
-justify-content:space-between;
+justify-content:center;
 gap:8px;
 padding:0 12px;
 flex:1;
@@ -233,6 +236,7 @@ position:relative;
 .dashItemMain{
 display:flex;
 align-items:center;
+justify-content:center;
 gap:10px;
 min-width:0;
 }
@@ -248,16 +252,13 @@ background:#1e293b;
 color:#93c5fd;
 font-size:13px;
 font-weight:700;
+position:relative;
 }
 .dashItemText{
 font-size:13px;
 font-weight:700;
 line-height:1.3;
-}
-.dashItemMeta{
-font-size:11px;
-color:#64748b;
-flex:0 0 auto;
+text-align:center;
 }
 .dashLogout{
 display:block;
@@ -275,9 +276,8 @@ flex:0 0 auto;
 }
 .dashNotif{
 position:absolute;
-top:50%;
-left:12px;
-transform:translateY(-50%);
+top:-2px;
+left:-2px;
 width:8px;
 height:8px;
 border-radius:50%;
@@ -285,8 +285,7 @@ background:#ef4444;
 box-shadow:0 0 8px rgba(239,68,68,.7);
 }
 @media(max-width:360px){
-.dashPrimary{height:108px}
-.dashPrimaryLabel{font-size:12px}
+.dashPrimaryLabel{font-size:11px}
 .dashItemText{font-size:12px}
 .dashStatLabel{font-size:9px}
 }
@@ -335,36 +334,30 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 <span class="dashItemIcon">≡</span>
 <span class="dashItemText">لیست اشتراک‌ها</span>
 </span>
-<span class="dashItemMeta">مشاهده</span>
 </a>
 <a class="dashItem" href="renew-list.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">↻</span>
 <span class="dashItemText">لیست تمدیدها</span>
 </span>
-<span class="dashItemMeta">پیگیری</span>
 </a>
 <a class="dashItem" href="downloads.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">↓</span>
 <span class="dashItemText">دانلود نرم‌افزارها</span>
 </span>
-<span class="dashItemMeta">اپ‌ها</span>
 </a>
 <a class="dashItem" href="coupon.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">%</span>
 <span class="dashItemText">کوپن تخفیف</span>
 </span>
-<span class="dashItemMeta">دعوت دوستان</span>
 </a>
 <a class="dashItem" href="support.php">
-<?php if($hasUnreadSupport){ ?><span class="dashNotif"></span><?php } ?>
 <span class="dashItemMain">
-<span class="dashItemIcon">✉</span>
+<span class="dashItemIcon">✉<?php if($hasUnreadSupport){ ?><span class="dashNotif"></span><?php } ?></span>
 <span class="dashItemText">پیام به پشتیبانی</span>
 </span>
-<span class="dashItemMeta"><?php echo $hasUnreadSupport ? 'پیام جدید' : 'گفتگو'; ?></span>
 </a>
 </div>
 
