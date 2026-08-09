@@ -1,0 +1,117 @@
+/* Unified user-panel top back navigation */
+
+.userBackBar{
+display:flex;
+align-items:center;
+justify-content:flex-start;
+gap:10px;
+width:100%;
+box-sizing:border-box;
+margin:0 0 16px;
+padding:8px 0;
+min-height:44px;
+position:sticky;
+top:0;
+z-index:50;
+background:inherit;
+}
+
+.userBackBar--flush{
+margin-bottom:0;
+}
+
+.userBack,
+a.userBack,
+.msgBack{
+display:inline-flex;
+align-items:center;
+justify-content:center;
+gap:6px;
+min-width:40px;
+width:auto;
+height:40px;
+padding:0 12px;
+border-radius:12px;
+background:#0f172a;
+color:#e2e8f0;
+text-decoration:none;
+font-size:13px;
+font-family:tahoma,sans-serif;
+font-weight:400;
+line-height:1;
+white-space:nowrap;
+flex:0 0 auto;
+border:1px solid #334155;
+box-sizing:border-box;
+-webkit-tap-highlight-color:transparent;
+}
+
+.userBack:hover,
+.msgBack:hover{
+background:#1e293b;
+color:#fff;
+}
+
+.userBackTitle{
+flex:1;
+min-width:0;
+text-align:center;
+font-family:"Lalezar",tahoma,sans-serif;
+font-size:18px;
+font-weight:400;
+color:#fff;
+line-height:1.35;
+}
+
+.userBackSpacer{
+flex:0 0 auto;
+width:72px;
+min-width:72px;
+height:40px;
+visibility:hidden;
+pointer-events:none;
+}
+
+/* Buy/renew topBar: keep layout, use shared back look */
+.topBar .userBack,
+.topBar .backIcon{
+width:auto;
+min-width:40px;
+height:40px;
+padding:0 12px;
+flex:0 0 auto;
+font-size:13px;
+border-radius:12px;
+background:#0f172a;
+color:#e2e8f0;
+border:1px solid #334155;
+}
+
+.topBar .userBackSpacer,
+.topBar .backSpacer{
+width:72px;
+min-width:72px;
+height:40px;
+flex:0 0 72px;
+visibility:hidden;
+pointer-events:none;
+}
+
+/* Support header uses same control */
+.msgHeader .userBack,
+.msgHeader .msgBack{
+margin:0;
+}
+
+@media(max-width:420px){
+.userBackTitle{
+font-size:16px;
+}
+.userBackSpacer,
+.topBar .userBackSpacer,
+.topBar .backSpacer{
+width:64px;
+min-width:64px;
+flex-basis:64px;
+}
+}
