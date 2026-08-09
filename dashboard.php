@@ -455,10 +455,11 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 </span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
 </a>
-<a class="dashItem" href="downloads.php">
+<a class="dashItem" href="support.php">
+<?php if($hasUnreadSupport){ ?><span class="dashNotif"></span><?php } ?>
 <span class="dashItemMain">
-<span class="dashItemIcon">↓</span>
-<span class="dashItemText">دانلود نرم‌افزارها</span>
+<span class="dashItemIcon">✉</span>
+<span class="dashItemText">پیام به پشتیبانی</span>
 </span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
 </a>
@@ -469,11 +470,10 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 </span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
 </a>
-<a class="dashItem" href="support.php">
-<?php if($hasUnreadSupport){ ?><span class="dashNotif"></span><?php } ?>
+<a class="dashItem" href="downloads.php">
 <span class="dashItemMain">
-<span class="dashItemIcon">✉</span>
-<span class="dashItemText">پیام به پشتیبانی</span>
+<span class="dashItemIcon">↓</span>
+<span class="dashItemText">دانلود نرم‌افزارها</span>
 </span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
 </a>
