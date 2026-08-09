@@ -17,6 +17,10 @@ $hasUnreadSupport = false;
 $approvedSubs = 0;
 $pendingBuys = 0;
 $pendingRenews = 0;
+$avatarUrl = '';
+
+require_once __DIR__ . '/profile_lib.php';
+$avatarUrl = profileGetUserAvatar($user);
 
 if(file_exists($supportFile)){
     $supportData = json_decode(file_get_contents($supportFile), true);
@@ -222,6 +226,16 @@ font-weight:700;
 color:#fff;
 background:linear-gradient(135deg,#22c55e 0%,#2563eb 100%);
 box-shadow:0 4px 14px rgba(37,99,235,.25);
+overflow:hidden;
+}
+.dashAvatar img{
+width:100%;
+height:100%;
+object-fit:cover;
+display:block;
+}
+.dashAvatar.is-loading{
+opacity:.65;
 }
 .dashWelcomeText{
 min-width:0;
@@ -396,6 +410,103 @@ border-radius:50%;
 background:#ef4444;
 box-shadow:0 0 8px rgba(239,68,68,.7);
 }
+.dashModalOverlay{
+display:none;
+position:fixed;
+inset:0;
+z-index:100;
+background:rgba(2,6,23,.72);
+backdrop-filter:blur(4px);
+-webkit-backdrop-filter:blur(4px);
+align-items:center;
+justify-content:center;
+padding:16px;
+box-sizing:border-box;
+}
+.dashModalOverlay.is-open{
+display:flex;
+}
+.dashModal{
+width:100%;
+max-width:340px;
+background:rgba(15,23,42,.96);
+border:1px solid rgba(148,163,184,.18);
+border-radius:18px;
+padding:18px 16px 16px;
+box-shadow:0 20px 48px rgba(0,0,0,.45);
+}
+.dashModalTitle{
+margin:0 0 12px;
+font-size:16px;
+font-weight:700;
+color:#fff;
+}
+.dashModalInput{
+width:100%;
+height:44px;
+border:1px solid rgba(148,163,184,.2);
+border-radius:12px;
+padding:0 12px;
+box-sizing:border-box;
+background:rgba(30,41,59,.85);
+color:#fff;
+font-family:inherit;
+font-size:14px;
+outline:none;
+}
+.dashModalInput:focus{
+border-color:#3b82f6;
+}
+.dashModalHint{
+margin:8px 0 0;
+font-size:11px;
+color:#94a3b8;
+line-height:1.5;
+}
+.dashModalError{
+display:none;
+margin:10px 0 0;
+padding:8px 10px;
+border-radius:10px;
+background:rgba(127,29,29,.75);
+border:1px solid rgba(239,68,68,.35);
+color:#fecaca;
+font-size:12px;
+line-height:1.45;
+}
+.dashModalError.is-visible{
+display:block;
+}
+.dashModalActions{
+display:flex;
+gap:8px;
+margin-top:14px;
+}
+.dashModalBtn{
+flex:1;
+height:42px;
+border:none;
+border-radius:12px;
+font-family:inherit;
+font-size:13px;
+font-weight:700;
+cursor:pointer;
+}
+.dashModalBtn--ghost{
+background:rgba(51,65,85,.85);
+color:#e2e8f0;
+}
+.dashModalBtn--primary{
+background:#2563eb;
+color:#fff;
+}
+.dashModalBtn:disabled{
+opacity:.6;
+cursor:not-allowed;
+}
+.dashAvatarInput{
+display:none;
+}
 @media(max-width:360px){
 .dashPrimary{min-height:92px}
 .dashPrimaryIcon{width:34px;height:34px;font-size:18px}
@@ -424,7 +535,13 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 </div>
 </div>
 <div class="dashWelcomeRow">
-<div class="dashAvatar"><?php echo dashH(dashUserInitial($user)); ?></div>
+<div class="dashAvatar" id="dashAvatar">
+<?php if($avatarUrl !== ''){ ?>
+<img src="<?php echo dashH($avatarUrl); ?>?v=<?php echo (int)filemtime(__DIR__ . '/' . ltrim($avatarUrl, '/')); ?>" alt="">
+<?php } else { ?>
+<?php echo dashH(dashUserInitial($user)); ?>
+<?php } ?>
+</div>
 <div class="dashWelcomeText">
 <p class="dashHello">خوش آمدید</p>
 <div class="dashNameRow">
@@ -488,15 +605,177 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 
 </div>
 
+<input type="file" id="dashAvatarInput" class="dashAvatarInput" accept="image/jpeg,image/png,image/webp">
+
+<div class="dashModalOverlay" id="dashUsernameModal" aria-hidden="true">
+<div class="dashModal" role="dialog" aria-modal="true" aria-labelledby="dashUsernameModalTitle">
+<h2 class="dashModalTitle" id="dashUsernameModalTitle">تغییر نام کاربری</h2>
+<input type="text" class="dashModalInput" id="dashUsernameInput" maxlength="20" autocomplete="username" value="<?php echo dashH($user); ?>">
+<p class="dashModalHint">نام کاربری باید 6 تا 20 کاراکتر و فقط شامل حروف لاتین، عدد و . _ - باشد.</p>
+<div class="dashModalError" id="dashUsernameError"></div>
+<div class="dashModalActions">
+<button type="button" class="dashModalBtn dashModalBtn--ghost" id="dashUsernameCancel">انصراف</button>
+<button type="button" class="dashModalBtn dashModalBtn--primary" id="dashUsernameSave">ذخیره</button>
+</div>
+</div>
+</div>
+
 <script>
 (function(){
     var moreBtn = document.getElementById('dashMoreBtn');
     var moreMenu = document.getElementById('dashMoreMenu');
+    var editAvatarBtn = document.getElementById('dashEditAvatarBtn');
+    var editUsernameBtn = document.getElementById('dashEditUsernameBtn');
+    var avatarInput = document.getElementById('dashAvatarInput');
+    var avatarEl = document.getElementById('dashAvatar');
+    var usernameModal = document.getElementById('dashUsernameModal');
+    var usernameInput = document.getElementById('dashUsernameInput');
+    var usernameError = document.getElementById('dashUsernameError');
+    var usernameCancel = document.getElementById('dashUsernameCancel');
+    var usernameSave = document.getElementById('dashUsernameSave');
+    var dashUserEl = document.querySelector('.dashUser');
 
     function closeMenu(){
         if(moreMenu){
             moreMenu.classList.remove('is-open');
         }
+    }
+
+    function showUsernameError(msg){
+        if(!usernameError){
+            return;
+        }
+
+        if(msg){
+            usernameError.textContent = msg;
+            usernameError.classList.add('is-visible');
+        } else {
+            usernameError.textContent = '';
+            usernameError.classList.remove('is-visible');
+        }
+    }
+
+    function openUsernameModal(){
+        if(!usernameModal || !usernameInput){
+            return;
+        }
+
+        showUsernameError('');
+        usernameInput.value = dashUserEl ? dashUserEl.textContent.trim() : '';
+        usernameModal.classList.add('is-open');
+        usernameModal.setAttribute('aria-hidden', 'false');
+        closeMenu();
+        setTimeout(function(){
+            usernameInput.focus();
+            usernameInput.select();
+        }, 0);
+    }
+
+    function closeUsernameModal(){
+        if(!usernameModal){
+            return;
+        }
+
+        usernameModal.classList.remove('is-open');
+        usernameModal.setAttribute('aria-hidden', 'true');
+        showUsernameError('');
+    }
+
+    function setAvatarImage(url){
+        if(!avatarEl){
+            return;
+        }
+
+        avatarEl.innerHTML = '';
+        var img = document.createElement('img');
+        img.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
+        img.alt = '';
+        avatarEl.appendChild(img);
+    }
+
+    function uploadAvatar(file){
+        if(!file || !avatarEl){
+            return;
+        }
+
+        var formData = new FormData();
+        formData.append('action', 'avatar');
+        formData.append('avatar', file);
+
+        avatarEl.classList.add('is-loading');
+
+        fetch('profile-api.php', {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        })
+        .then(function(res){
+            return res.json();
+        })
+        .then(function(data){
+            avatarEl.classList.remove('is-loading');
+
+            if(!data || !data.ok){
+                alert((data && data.error) ? data.error : 'آپلود عکس انجام نشد.');
+                return;
+            }
+
+            setAvatarImage(data.avatar);
+        })
+        .catch(function(){
+            avatarEl.classList.remove('is-loading');
+            alert('خطا در ارتباط با سرور.');
+        });
+    }
+
+    function saveUsername(){
+        if(!usernameInput || !usernameSave){
+            return;
+        }
+
+        var nextUsername = usernameInput.value.trim();
+
+        if(nextUsername.length < 6){
+            showUsernameError('نام کاربری باید حداقل 6 کاراکتر باشد.');
+            return;
+        }
+
+        usernameSave.disabled = true;
+        showUsernameError('');
+
+        var body = new URLSearchParams();
+        body.append('action', 'username');
+        body.append('username', nextUsername);
+
+        fetch('profile-api.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: body.toString(),
+            credentials: 'same-origin'
+        })
+        .then(function(res){
+            return res.json();
+        })
+        .then(function(data){
+            usernameSave.disabled = false;
+
+            if(!data || !data.ok){
+                showUsernameError((data && data.error) ? data.error : 'تغییر نام کاربری انجام نشد.');
+                return;
+            }
+
+            if(dashUserEl){
+                dashUserEl.textContent = data.username;
+            }
+
+            closeUsernameModal();
+        })
+        .catch(function(){
+            usernameSave.disabled = false;
+            showUsernameError('خطا در ارتباط با سرور.');
+        });
     }
 
     if(moreBtn && moreMenu){
@@ -510,22 +789,50 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
         });
     }
 
-    function showSoon(msg){
-        alert(msg || 'به زودی فعال می‌شود.');
-        closeMenu();
-    }
-
-    var editAvatarBtn = document.getElementById('dashEditAvatarBtn');
-    var editUsernameBtn = document.getElementById('dashEditUsernameBtn');
-
-    if(editAvatarBtn){
+    if(editAvatarBtn && avatarInput){
         editAvatarBtn.addEventListener('click', function(){
-            showSoon('ویرایش عکس پروفایل به زودی فعال می‌شود.');
+            closeMenu();
+            avatarInput.click();
+        });
+
+        avatarInput.addEventListener('change', function(){
+            if(avatarInput.files && avatarInput.files[0]){
+                uploadAvatar(avatarInput.files[0]);
+            }
+            avatarInput.value = '';
         });
     }
+
     if(editUsernameBtn){
-        editUsernameBtn.addEventListener('click', function(){
-            showSoon('تغییر نام کاربری به زودی فعال می‌شود.');
+        editUsernameBtn.addEventListener('click', openUsernameModal);
+    }
+
+    if(usernameCancel){
+        usernameCancel.addEventListener('click', closeUsernameModal);
+    }
+
+    if(usernameSave){
+        usernameSave.addEventListener('click', saveUsername);
+    }
+
+    if(usernameModal){
+        usernameModal.addEventListener('click', function(e){
+            if(e.target === usernameModal){
+                closeUsernameModal();
+            }
+        });
+    }
+
+    if(usernameInput){
+        usernameInput.addEventListener('keydown', function(e){
+            if(e.key === 'Enter'){
+                e.preventDefault();
+                saveUsername();
+            }
+
+            if(e.key === 'Escape'){
+                closeUsernameModal();
+            }
         });
     }
 })();
