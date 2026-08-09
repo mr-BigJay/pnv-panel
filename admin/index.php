@@ -8,7 +8,9 @@ $__pnvBootCandidates = [
 foreach($__pnvBootCandidates as $__pnvBootFile){
     if(is_file($__pnvBootFile)){
         require_once $__pnvBootFile;
-        break;
+        if(function_exists('pnvAdminIsLoggedIn')){
+            break;
+        }
     }
 }
 
@@ -19,7 +21,21 @@ $__pnvFuncCandidates = [
 foreach($__pnvFuncCandidates as $__pnvBootFile){
     if(is_file($__pnvBootFile)){
         require_once $__pnvBootFile;
-        break;
+        if(function_exists('pnvAdminInclude') || function_exists('getUserMobile')){
+            break;
+        }
+    }
+}
+
+if(!function_exists('pnvJalaliToday')){
+    foreach([
+        __DIR__ . '/../pnv_date_bootstrap.php',
+        dirname(__DIR__) . '/pnv_date_bootstrap.php',
+    ] as $__pnvDateBoot){
+        if(is_file($__pnvDateBoot)){
+            require_once $__pnvDateBoot;
+            break;
+        }
     }
 }
 

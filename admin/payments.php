@@ -2,14 +2,31 @@
 
 // Live panel includes this from /bigjay_controller/ where auth.php & functions.php
 // are often missing (HTTP 404). Hard require_once fatals → blank content area.
-foreach ([
-    __DIR__ . '/auth.php',
-    __DIR__ . '/functions.php',
-    __DIR__ . '/../admin/auth.php',
-    __DIR__ . '/../admin/functions.php',
-] as $paymentsBootFile) {
-    if (is_file($paymentsBootFile)) {
-        require_once $paymentsBootFile;
+if(!function_exists('pnvAdminIsLoggedIn')){
+    foreach ([
+        __DIR__ . '/auth.php',
+        __DIR__ . '/../admin/auth.php',
+    ] as $paymentsBootFile) {
+        if (is_file($paymentsBootFile)) {
+            require_once $paymentsBootFile;
+            if(function_exists('pnvAdminIsLoggedIn')){
+                break;
+            }
+        }
+    }
+}
+
+if(!function_exists('getUserMobile')){
+    foreach ([
+        __DIR__ . '/functions.php',
+        __DIR__ . '/../admin/functions.php',
+    ] as $paymentsBootFile) {
+        if (is_file($paymentsBootFile)) {
+            require_once $paymentsBootFile;
+            if(function_exists('getUserMobile')){
+                break;
+            }
+        }
     }
 }
 
