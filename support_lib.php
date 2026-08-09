@@ -202,8 +202,12 @@ if(!function_exists('supportLoad')){
             return 'پیام';
         }
 
-        if(mb_strlen($text) > 48){
+        if(function_exists('mb_strlen') && mb_strlen($text) > 48){
             return mb_substr($text, 0, 48) . '…';
+        }
+
+        if(strlen($text) > 48){
+            return substr($text, 0, 48) . '…';
         }
 
         return $text;

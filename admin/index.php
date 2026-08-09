@@ -263,7 +263,18 @@ exit;
 $page = $_GET['page'] ?? 'dashboard';
 $pnvRootDir = dirname(__DIR__);
 
-require_once __DIR__ . '/admin_nav.php';
+foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $__navFile) {
+    if (is_file($__navFile)) {
+        require_once $__navFile;
+        break;
+    }
+}
+
+if(!function_exists('adminBottomNavStyles')){
+    function adminBottomNavStyles(){}
+    function adminBottomNav($options = []){}
+    function adminBottomNavScript(){}
+}
 
 $supportActionResult = null;
 
