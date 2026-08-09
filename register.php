@@ -421,11 +421,21 @@ margin-bottom:14px;
 }
 
 .label{
-display:block;
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:8px;
 margin-bottom:6px;
 font-size:14px;
 font-weight:700;
 color:#cbd5e1;
+}
+
+.fieldHint{
+font-size:11px;
+font-weight:400;
+color:#64748b;
+white-space:nowrap;
 }
 
 input{
@@ -527,13 +537,6 @@ transition:.2s;
 background:#475569;
 }
 
-.helper{
-font-size:12px;
-color:#94a3b8;
-margin:-6px 0 12px;
-line-height:20px;
-}
-
 .refbox{
 background:#0f172a;
 padding:12px;
@@ -603,20 +606,20 @@ text-align:center;
 
 <label class="label">
 
-نام کاربری
+<span>نام کاربری</span>
+
+<span class="fieldHint">۶–۲۰ کاراکتر</span>
 
 </label>
 
 <input
 type="text"
 name="username"
+minlength="6"
+maxlength="20"
+pattern="[a-zA-Z0-9._-]+"
+title="نام کاربری باید بین ۶ تا ۲۰ کاراکتر و فقط شامل حروف لاتین، عدد و . _ - باشد"
 required>
-
-</div>
-
-<div class="helper">
-
-نام کاربری باید بین 6 تا 20 کارکتر باشد
 
 </div>
 
@@ -624,7 +627,9 @@ required>
 
 <label class="label">
 
-رمز عبور
+<span>رمز عبور</span>
+
+<span class="fieldHint">حروف و عدد · حداقل ۸</span>
 
 </label>
 
@@ -634,6 +639,9 @@ required>
 type="password"
 name="password"
 id="password"
+minlength="8"
+pattern="(?=.*[A-Za-z])(?=.*\d).+"
+title="رمز عبور باید حداقل ۸ کاراکتر و شامل حروف انگلیسی و عدد باشد"
 required>
 
 <span
@@ -648,17 +656,11 @@ onclick="togglePassword()">
 
 </div>
 
-<div class="helper">
-
-رمز عبور باید شامل حروف انگلیسی و عدد باشد
-
-</div>
-
 <div class="inputGroup">
 
 <label class="label">
 
-شماره موبایل
+<span>شماره موبایل</span>
 
 </label>
 
