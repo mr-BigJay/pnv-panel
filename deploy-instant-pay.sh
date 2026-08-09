@@ -46,7 +46,8 @@ curl -fsSL "$BASE/bigjay_controller/bale.php" -o bigjay_controller/bale.php
 curl -fsSL "$BASE/tools/postbank_bale_listener.py" -o tools/postbank_bale_listener.py
 curl -fsSL "$BASE/tools/requirements-postbank.txt" -o tools/requirements-postbank.txt
 curl -fsSL "$BASE/tools/postbank-listener.service" -o tools/postbank-listener.service
-chmod +x tools/postbank_bale_listener.py
+curl -fsSL "$BASE/tools/setup-postbank-listener.sh" -o tools/setup-postbank-listener.sh
+chmod +x tools/postbank_bale_listener.py tools/setup-postbank-listener.sh
 
 mkdir -p db
 touch db/bale_webhook.log
@@ -63,7 +64,7 @@ echo
 echo "Done."
 echo "Next steps on server:"
 echo "  1) Admin → بله → save + register webhook"
-echo "  2) pip3 install -r tools/requirements-postbank.txt"
-echo "  3) python3 tools/postbank_bale_listener.py --login --session db/bale_user_session.bale"
-echo "  4) Save POSTBANK_INGEST_SECRET to db/postbank-listener.env"
+echo "  2) bash tools/setup-postbank-listener.sh $ROOT"
+echo "  3) tools/postbank-venv/bin/python tools/postbank_bale_listener.py --login --session db/bale_user_session.bale"
+echo "  4) Save real POSTBANK_INGEST_SECRET to db/postbank-listener.env (from Admin → بله)"
 echo "  5) systemctl enable --now postbank-listener"
