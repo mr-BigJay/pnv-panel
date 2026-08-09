@@ -1002,7 +1002,7 @@ class="red">
 
 <?php if($page=='dashboard'){ ?>
 
-<?php include "dashboard.php"; ?>
+<?php pnvAdminInclude('dashboard.php'); ?>
 
 <?php } ?>
 
@@ -1010,20 +1010,20 @@ class="red">
 
 <?php
 $supportEmbedded = true;
-include "support.php";
+pnvAdminInclude('support.php');
 ?>
 
 <?php } ?>
 
 <?php if($page=='payments'){ ?>
 
-<?php include "payments.php"; ?>
+<?php pnvAdminInclude('payments.php'); ?>
 
 <?php } ?>
 
 <?php if($page=='renews'){ ?>
 
-<?php include "renews.php"; ?>
+<?php pnvAdminInclude('renews.php'); ?>
 
 <?php } ?>
 

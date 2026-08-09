@@ -76,6 +76,33 @@ return $r[0];
 return '-';
 
 }
+
+function pnvAdminInclude($fileName){
+
+    $candidates = [
+        __DIR__ . '/' . ltrim($fileName, '/'),
+    ];
+
+    $adminDir = dirname(__DIR__) . '/admin';
+    if(is_dir($adminDir)){
+        $candidates[] = $adminDir . '/' . ltrim($fileName, '/');
+    }
+
+    foreach($candidates as $path){
+        if(is_file($path)){
+            include $path;
+            return true;
+        }
+    }
+
+    echo '<div class="box" style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">'
+        . 'فایل «' . htmlspecialchars($fileName, ENT_QUOTES, 'UTF-8') . '» یافت نشد.'
+        . '</div>';
+
+    return false;
+
+}
+
 function formatPrice($price){
 
 $price = intval($price);
