@@ -153,14 +153,28 @@ background:rgba(0,0,0,.45);
 }
 .adminMoreSheetPanel{
 position:absolute;
-left:0;
-right:0;
-bottom:0;
+left:10px;
+right:auto;
+bottom:calc(64px + env(safe-area-inset-bottom,0) + 6px);
+width:min(320px, calc(100vw - 20px));
 background:#1e293b;
-border-radius:18px 18px 0 0;
-padding:14px 14px calc(14px + env(safe-area-inset-bottom,0));
-max-height:72vh;
+border-radius:16px;
+padding:14px;
+max-height:min(70vh, calc(100vh - 90px));
 overflow:auto;
+border:1px solid #334155;
+box-shadow:0 12px 40px rgba(0,0,0,.5);
+transform:translateY(10px) scale(.97);
+opacity:0;
+transition:transform .2s ease, opacity .2s ease;
+transform-origin:left bottom;
+}
+.adminMoreSheet.is-open .adminMoreSheetPanel{
+transform:translateY(0) scale(1);
+opacity:1;
+}
+.adminBottomNavMoreBtn.is-open{
+color:#22c55e;
 }
 .adminMoreSheetTitle{
 font-size:15px;
@@ -312,12 +326,20 @@ body.adminPageSupport{padding-bottom:0}
     function openSheet(){
         if(!sheet){ return; }
         sheet.hidden = false;
-        sheet.classList.add('is-open');
+        requestAnimationFrame(function(){
+            sheet.classList.add('is-open');
+        });
+        if(moreBtn){
+            moreBtn.classList.add('is-open');
+        }
     }
 
     function closeSheet(){
         if(!sheet){ return; }
         sheet.classList.remove('is-open');
+        if(moreBtn){
+            moreBtn.classList.remove('is-open');
+        }
         sheet.hidden = true;
     }
 
@@ -329,6 +351,10 @@ body.adminPageSupport{padding-bottom:0}
         moreBtn.addEventListener('click', function(){
             if(moreBtn.getAttribute('data-more-mode') === 'sidebar'){
                 toggleSidebar();
+                return;
+            }
+            if(sheet && sheet.classList.contains('is-open')){
+                closeSheet();
                 return;
             }
             openSheet();

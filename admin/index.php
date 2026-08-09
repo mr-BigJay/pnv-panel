@@ -1234,7 +1234,7 @@ name="uploadcsv">
 $adminBottomActive = in_array($page, ['support', 'renews', 'payments'], true) ? $page : '';
 adminBottomNav([
     'active' => $adminBottomActive,
-    'more_mode' => 'sidebar',
+    'more_mode' => 'sheet',
     'badges' => [
         'support' => $supportUnreadCount,
         'renews' => $pendingRenewsCount,
