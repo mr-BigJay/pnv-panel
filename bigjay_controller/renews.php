@@ -2,10 +2,14 @@
 
 // Live panel includes this from /bigjay_controller/ where auth.php & functions.php
 // are often missing (HTTP 404). Hard require_once fatals → blank content area.
-foreach ([__DIR__ . '/auth.php', __DIR__ . '/functions.php'] as $renewsBootFile) {
+foreach ([__DIR__ . '/auth.php', __DIR__ . '/functions.php', __DIR__ . '/../admin/auth.php', __DIR__ . '/../admin/functions.php'] as $renewsBootFile) {
     if (is_file($renewsBootFile)) {
         require_once $renewsBootFile;
     }
+}
+
+if(!function_exists('pnvFormatPaymentRowDateTime')){
+    require_once __DIR__ . '/../date_lib.php';
 }
 
 if (!function_exists('pnvAdminUrl')) {
@@ -736,6 +740,7 @@ $targetLabel = $parsedTarget['label'];
 $targetSubId = $parsedTarget['sub_id'];
 $planParts = renewParsePlanParts($p[2] ?? '');
 $planLine = renewFormatPlanLine($planParts);
+$payWhen = pnvFormatPaymentRowDateTime($p);
 
 ?>
 
@@ -795,8 +800,8 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 '<?php echo htmlspecialchars($p[1] ?? '-',ENT_QUOTES); ?>',
 '<?php echo htmlspecialchars($p[2] ?? '-',ENT_QUOTES); ?>',
 '<?php echo htmlspecialchars($p[3] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($p[4] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($p[5] ?? '-',ENT_QUOTES); ?>'
+'<?php echo htmlspecialchars($payWhen['date'],ENT_QUOTES); ?>',
+'<?php echo htmlspecialchars($payWhen['time'],ENT_QUOTES); ?>'
 )">جزئیات پرداخت</button>
 <button type="button" onclick="openAction(
 '<?php echo $i; ?>',

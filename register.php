@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/date_lib.php';
+
 session_start();
 
 if(!file_exists("db/users.json")){
@@ -14,8 +16,6 @@ true
 if(!is_array($users)){
 $users = [];
 }
-
-date_default_timezone_set("Asia/Tehran");
 
 function generateReferralCode($length = 6){
 
@@ -95,18 +95,11 @@ trim($_POST['referrer'] ?? "");
 $captcha =
 trim($_POST['captcha']);
 
-$today =
-date("Y-m-d");
-
 $registerCount = 0;
 
 foreach($users as $u){
 
-if(
-isset($u['created_at']) &&
-substr($u['created_at'],0,10)
-== $today
-){
+if(isset($u['created_at']) && pnvIsTodayTehran($u['created_at'])){
 
 $registerCount++;
 
@@ -305,7 +298,7 @@ PASSWORD_DEFAULT
 
 "referrer"=>$finalReferrer,
 
-"created_at"=>date("Y-m-d H:i:s")
+"created_at"=>pnvNowParts()['datetime']
 
 ];
 

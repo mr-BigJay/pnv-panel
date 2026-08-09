@@ -89,10 +89,7 @@ if($text === ''){
     exit;
 }
 
-$result = instantPayHandleDepositText($text, [
-    'date' => date('Y/m/d'),
-    'time' => date('H:i')
-]);
+$result = instantPayHandleDepositText($text, pnvNowParts());
 
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];

@@ -349,20 +349,11 @@ $hasNewRenews = true;
 
 }
 
-$today =
-date("Y-m-d");
-
 $todayUsers = 0;
 
 foreach($users as $u){
 
-if(
-isset($u['created_at'])
-&&
-substr($u['created_at'],0,10)
-==
-$today
-){
+if(isset($u['created_at']) && pnvIsTodayTehran($u['created_at'])){
 
 $todayUsers++;
 
@@ -378,21 +369,18 @@ $todayPayments = 0;
 $totalRenews = 0;
 $todayRenews = 0;
 
-$todayShamsi = function_exists('pnvJalaliToday') ? pnvJalaliToday('/') : date('Y/m/d');
+$todayShamsi = pnvJalaliToday('/');
 
 foreach($payments as $pay){
 
     $type =
     trim($pay[9] ?? '');
 
-    $payDate =
-    trim($pay[4] ?? '');
-
     if($type == 'تمدید'){
 
         $totalRenews++;
 
-        if($payDate == $todayShamsi){
+        if(pnvPaymentRowIsToday($pay)){
 
             $todayRenews++;
 
@@ -402,7 +390,7 @@ foreach($payments as $pay){
 
         $totalPayments++;
 
-        if($payDate == $todayShamsi){
+        if(pnvPaymentRowIsToday($pay)){
 
             $todayPayments++;
 

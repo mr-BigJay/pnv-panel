@@ -808,6 +808,7 @@ width:180px;
             );
 
             [$planSize, $planPrice] = paymentsFormatPlanLines($p[2] ?? '');
+            $payWhen = pnvFormatPaymentRowDateTime($p);
 
         ?>
 
@@ -864,8 +865,8 @@ width:180px;
                                 onclick='showConfig(
                                 <?php echo json_encode($p[0] ?? ""); ?>,
                                 <?php echo json_encode($mobile); ?>,
-                                <?php echo json_encode($p[4] ?? ""); ?>,
-                                <?php echo json_encode($p[5] ?? ""); ?>,
+                                <?php echo json_encode($payWhen['date']); ?>,
+                                <?php echo json_encode($payWhen['time']); ?>,
                                 <?php echo json_encode($p[1] ?? ""); ?>,
                                 <?php echo json_encode($p[2] ?? ""); ?>
                                 )'>

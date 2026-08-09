@@ -4,6 +4,7 @@ session_start();
 
 require_once "phpqrcode/qrlib.php";
 require_once __DIR__ . '/subscription_lib.php';
+require_once __DIR__ . '/date_lib.php';
 
 if(!isset($_SESSION['user'])){
 header("Location: index.php");
@@ -291,8 +292,9 @@ continue;
 
 $plan = $row[2] ?? "";
 $tracking = $row[3] ?? "";
-$date = $row[4] ?? "";
-$time = $row[5] ?? "";
+$payWhen = pnvFormatPaymentRowDateTime($row);
+$date = $payWhen['date'];
+$time = $payWhen['time'];
 $status = $row[6] ?? "درحال بررسی";
 $link = $row[7] ?? "";
 

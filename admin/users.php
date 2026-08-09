@@ -811,7 +811,7 @@ $allUsers
 
 <div>
 <b>تاریخ ثبت نام:</b>
-<?php echo htmlspecialchars($u['created_at'] ?? '-'); ?>
+<?php echo htmlspecialchars(pnvFormatUserCreatedAt($u['created_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
 </div>
 
 </div>

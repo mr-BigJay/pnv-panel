@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/date_lib.php';
+
 session_start();
 
 if(!isset($_SESSION['user'])){
@@ -296,6 +298,7 @@ $status = $p[6] ?? "";
 
 $email =
 findEmailBySub($p[1]);
+$payWhen = pnvFormatPaymentRowDateTime($p);
 
 ?>
 
@@ -361,7 +364,7 @@ findEmailBySub($p[1]);
 
 <div class="value">
 
-<?php echo $p[4]; ?>
+<?php echo htmlspecialchars($payWhen['date']); ?>
 
 </div>
 
@@ -377,7 +380,7 @@ findEmailBySub($p[1]);
 
 <div class="value">
 
-<?php echo $p[5]; ?>
+<?php echo htmlspecialchars($payWhen['time']); ?>
 
 </div>
 

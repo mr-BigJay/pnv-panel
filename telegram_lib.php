@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/date_lib.php';
+
 if(file_exists(__DIR__ . '/telegram_xui.php')){
     require_once __DIR__ . '/telegram_xui.php';
 }
@@ -1594,13 +1596,14 @@ if(!function_exists('telegramConfigPath')){
         }
 
         $now = time();
+        $nowParts = pnvNowParts();
         $newmsg = [
             'id' => uniqid(),
             'sender' => 'admin',
             'text' => $text,
             'image' => '',
-            'date' => date('Y/m/d', $now),
-            'time' => date('H:i', $now),
+            'date' => $nowParts['date'],
+            'time' => $nowParts['time'],
             'timestamp' => $now,
             'seen_by_user' => false
         ];

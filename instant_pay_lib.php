@@ -3,6 +3,7 @@
 require_once __DIR__ . '/bale_lib.php';
 require_once __DIR__ . '/xui_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
+require_once __DIR__ . '/date_lib.php';
 
 if(!function_exists('instantPayPath')){
 
@@ -1072,8 +1073,9 @@ if(!function_exists('instantPayPath')){
         $payments = xuiLoadPayments();
 
         if(isset($payments[$csvIndex])){
-            $payments[$csvIndex][4] = $meta['date'] ?? date('Y/m/d');
-            $payments[$csvIndex][5] = $meta['time'] ?? date('H:i');
+            $nowParts = pnvNowParts();
+            $payments[$csvIndex][4] = $meta['date'] ?? $nowParts['date'];
+            $payments[$csvIndex][5] = $meta['time'] ?? $nowParts['time'];
             xuiSavePayments($payments);
         }
 
@@ -1124,13 +1126,14 @@ if(!function_exists('instantPayPath')){
                 $notifyRow = $payments[$csvIndex] ?? null;
 
                 if(!is_array($notifyRow)){
+                    $nowParts = pnvNowParts();
                     $notifyRow = [
                         $found['user'] ?? '',
                         ($found['type'] ?? '') === 'تمدید' ? ($found['sub'] ?? '') : ($found['subname'] ?? ''),
                         $found['plan'] ?? '',
                         'AUTO-' . ($found['code'] ?? ''),
-                        $meta['date'] ?? date('Y/m/d'),
-                        $meta['time'] ?? date('H:i'),
+                        $meta['date'] ?? $nowParts['date'],
+                        $meta['time'] ?? $nowParts['time'],
                         'تایید شد',
                         $items[$idx]['link'] ?? '',
                         intval($found['created_at'] ?? time()),
@@ -1219,8 +1222,9 @@ if(!function_exists('instantPayPath')){
         }
 
         if(isset($payments[$csvIndex])){
-            $payments[$csvIndex][4] = $meta['date'] ?? date('Y/m/d');
-            $payments[$csvIndex][5] = $meta['time'] ?? date('H:i');
+            $nowParts = pnvNowParts();
+            $payments[$csvIndex][4] = $meta['date'] ?? $nowParts['date'];
+            $payments[$csvIndex][5] = $meta['time'] ?? $nowParts['time'];
             xuiSavePayments($payments);
         }
 

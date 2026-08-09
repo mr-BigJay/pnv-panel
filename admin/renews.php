@@ -759,6 +759,7 @@ $targetLabel = $parsedTarget['label'];
 $targetSubId = $parsedTarget['sub_id'];
 $planParts = renewParsePlanParts($p[2] ?? '');
 $planLine = renewFormatPlanLine($planParts);
+$payWhen = pnvFormatPaymentRowDateTime($p);
 
 ?>
 
@@ -818,8 +819,8 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 '<?php echo htmlspecialchars($p[1] ?? '-',ENT_QUOTES); ?>',
 '<?php echo htmlspecialchars($p[2] ?? '-',ENT_QUOTES); ?>',
 '<?php echo htmlspecialchars($p[3] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($p[4] ?? '-',ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($p[5] ?? '-',ENT_QUOTES); ?>'
+'<?php echo htmlspecialchars($payWhen['date'],ENT_QUOTES); ?>',
+'<?php echo htmlspecialchars($payWhen['time'],ENT_QUOTES); ?>'
 )">جزئیات پرداخت</button>
 <button type="button" onclick="openAction(
 '<?php echo $i; ?>',
