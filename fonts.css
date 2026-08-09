@@ -1,0 +1,26 @@
+/* فونت‌های محلی — بدون وابستگی به CDN خارجی */
+
+@font-face{
+font-family:"Lalezar";
+src:url("/fonts/Lalezar-Regular.ttf") format("truetype");
+font-weight:400;
+font-style:normal;
+font-display:swap;
+}
+
+/* عناوین سایت */
+h1,
+h2,
+h3,
+.brand,
+.page-title,
+.sectionTitle,
+.userPanel h1,
+.userPanel h2,
+.userPanelTitle,
+.userPanel .heroTitle,
+.box > h2{
+font-family:"Lalezar",tahoma,sans-serif;
+font-weight:400;
+letter-spacing:0;
+}
