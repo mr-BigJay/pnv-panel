@@ -110,6 +110,10 @@ if(!empty($result['ok'])){
         $msg .= "\nلینک:\n" . $item['link'];
     }
 
+    if(!empty($result['matched_via'])){
+        $msg .= "\nمسیر: " . $result['matched_via'];
+    }
+
     baleSendMessage($chatId, $msg, [], $config);
     echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId]);
     exit;
@@ -121,10 +125,19 @@ if(!empty($result['ignored'])){
 }
 
 $err = (string)($result['error'] ?? 'no match');
-$parsed = $result['amounts'] ?? [];
+$parsed = $result['amounts'] ?? $result['parsed_amounts'] ?? [];
 $parsedText = is_array($parsed) && count($parsed) ? implode('، ', array_map(static function($n){
     return number_format(intval($n)) . ' ریال';
 }, $parsed)) : '—';
+$debug = is_array($result['debug'] ?? null) ? $result['debug'] : [];
+$debugText = '';
+
+if($debug){
+    $debugText = "\n"
+        . 'سفارش waiting: ' . intval($debug['waiting'] ?? 0) . ' | '
+        . 'قابل مچ: ' . intval($debug['matchable'] ?? 0) . ' | '
+        . 'CSV در انتظار: ' . intval($debug['csv_pending'] ?? 0);
+}
 
 // اگر مچ شده ولی صدور اشتراک شکست خورده، واضح بگو (نه «مچ نشد»)
 if(!empty($result['matched_amount']) && empty($result['ok'])){
@@ -143,7 +156,7 @@ else{
         $chatId,
         "⚠️ پیام دریافت شد ولی سفارش مچ نشد.\n"
         . $err . "\n"
-        . 'مبالغ خوانده‌شده: ' . $parsedText . "\n"
+        . 'مبالغ خوانده‌شده: ' . $parsedText . $debugText . "\n"
         . "نکته: کاربر باید دقیقاً همان مبلغ صفحه را کارت‌به‌کارت کند و پیام @postbank_bot را فوروارد کنید.",
         [],
         $config

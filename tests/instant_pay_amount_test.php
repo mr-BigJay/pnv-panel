@@ -94,5 +94,18 @@ $oldExpired = $expiredItem;
 $oldExpired['expires_at'] = $now - instantPayMatchGraceSeconds() - 60;
 assertTrue(!instantPayItemMatchable($oldExpired, $now), 'expired order outside grace is not matchable');
 
+// CSV fallback matcher
+$csvRow = array_fill(0, 14, '');
+$csvRow[0] = 'demo';
+$csvRow[2] = '20 گیگ';
+$csvRow[3] = 'AUTO-2920';
+$csvRow[6] = 'درحال بررسی';
+$csvRow[8] = time();
+$csvRow[9] = 'خرید';
+$csvRow[12] = 2492920;
+$csvRow[13] = 2920;
+assertTrue(instantPayCsvRowPending($csvRow), 'csv pending row detected');
+assertTrue(instantPayCsvRowAmountRial($csvRow) === 2492920, 'csv amount column');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);
