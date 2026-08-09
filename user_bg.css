@@ -1,0 +1,7 @@
+/* Shared page background — matches buy/renew (Concept C) */
+
+body{
+background:linear-gradient(165deg,#0B1220 0%,#0f172a 55%,#111827 100%);
+background-attachment:fixed;
+min-height:100vh;
+}

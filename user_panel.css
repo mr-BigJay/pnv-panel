@@ -23,7 +23,8 @@ min-height:100dvh;
 font-family:tahoma,system-ui,sans-serif;
 direction:rtl;
 color:#fff;
-background:#0f172a;
+background:linear-gradient(165deg,#0B1220 0%,#0f172a 55%,#111827 100%);
+background-attachment:fixed;
 }
 
 body.userPanel--auth{

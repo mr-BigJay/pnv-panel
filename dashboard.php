@@ -77,7 +77,7 @@ function dashH($value){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>داشبورد کاربر</title>
-<link rel="stylesheet" href="user_panel.css?v=6">
+<link rel="stylesheet" href="user_panel.css?v=7">
 <style>
 html,body{
 height:100%;
