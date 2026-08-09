@@ -98,10 +98,10 @@ $firstOkOpen = true;
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>اشتراک‌های من</title>
-<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="user_bg.css?v=4">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="user_bg.css?v=3">
-<link rel="stylesheet" href="subscriptions_ui.css?v=5">
+<link rel="stylesheet" href="subscriptions_ui.css?v=6">
 </head>
 <body>
 <div class="box">

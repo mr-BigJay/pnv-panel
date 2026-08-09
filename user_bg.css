@@ -1,6 +1,6 @@
-@import url("fonts.css");
+@import url("/fonts.css");
 
-/* Page shell background — matches buy/renew (plan_step_ui.css v14) */
+/* Page background — exact copy from plan_step_ui.css v14 (buy/renew) */
 
 html,
 body{

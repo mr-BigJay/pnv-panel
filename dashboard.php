@@ -77,13 +77,18 @@ function dashH($value){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>داشبورد کاربر</title>
-<link rel="stylesheet" href="fonts.css">
-<link rel="stylesheet" href="user_panel.css?v=9">
-<link rel="stylesheet" href="user_bg.css?v=3">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="user_bg.css?v=4">
+<link rel="stylesheet" href="user_panel.css?v=10">
 <style>
 html,body{
 height:100%;
 overflow:hidden;
+background:
+radial-gradient(120% 70% at 50% -10%, rgba(61,220,151,.16) 0%, transparent 55%),
+radial-gradient(90% 50% at 100% 100%, rgba(34,197,94,.08) 0%, transparent 45%),
+linear-gradient(180deg, #0b1016 0%, #0f1419 48%, #0c1218 100%);
+background-attachment:fixed;
 }
 body.userPanel--dashboard{
 min-height:100dvh;

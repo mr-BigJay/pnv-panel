@@ -29,9 +29,9 @@ $activeCodes = $summary['active_codes'] ?? [];
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>کوپن تخفیف</title>
-<link rel="stylesheet" href="fonts.css">
-<link rel="stylesheet" href="user_panel.css?v=9">
-<link rel="stylesheet" href="user_bg.css?v=3">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="user_bg.css?v=4">
+<link rel="stylesheet" href="user_panel.css?v=10">
 <style>
 html,body{
 min-height:100%;

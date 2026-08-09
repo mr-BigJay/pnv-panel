@@ -289,8 +289,9 @@ content="width=device-width, initial-scale=1.0">
 
 </title>
 
-<link rel="stylesheet" href="fonts.css">
-<link rel="stylesheet" href="user_bg.css?v=3">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="user_bg.css?v=4">
+<link rel="stylesheet" href="user_nav.css?v=1">
 
 <style>
 
