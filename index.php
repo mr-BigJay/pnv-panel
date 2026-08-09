@@ -155,6 +155,8 @@ content="width=device-width, initial-scale=1.0">
 
 </title>
 
+<link rel="stylesheet" href="/fonts.css">
+
 <style>
 
 *{
@@ -164,17 +166,12 @@ box-sizing:border-box;
 }
 
 body{
-background:
-linear-gradient(
-180deg,
-#08113a 0%,
-#0f172a 100%
-);
+background:linear-gradient(180deg,#08113a 0%,#0f172a 100%);
 font-family:tahoma;
 direction:rtl;
-color:white;
+color:#fff;
 min-height:100vh;
-padding:18px;
+padding:12px;
 display:flex;
 justify-content:center;
 align-items:center;
@@ -182,63 +179,67 @@ align-items:center;
 
 .container{
 width:100%;
-max-width:720px;
+max-width:380px;
 }
 
 .box{
 background:#1e293b;
-border-radius:36px;
-padding:46px 34px;
-box-shadow:
-0 14px 40px rgba(0,0,0,0.40);
+border-radius:22px;
+padding:24px 20px;
+box-shadow:0 10px 30px rgba(0,0,0,.35);
 }
 
 .logo{
 text-align:center;
-font-size:52px;
-margin-bottom:22px;
+font-size:34px;
+margin-bottom:12px;
 }
 
 h2{
 text-align:center;
-font-size:32px;
-margin-bottom:32px;
-font-weight:bold;
+font-size:22px;
+margin-bottom:18px;
+font-weight:700;
 }
 
 .error{
 background:#7f1d1d;
 border:1px solid #ef4444;
-padding:16px;
-border-radius:18px;
-margin-bottom:24px;
-line-height:32px;
+padding:12px;
+border-radius:14px;
+margin-bottom:16px;
+line-height:24px;
 text-align:center;
-font-size:18px;
+font-size:14px;
 }
 
 .inputGroup{
-margin-bottom:22px;
+margin-bottom:14px;
 }
 
 .label{
 display:block;
-margin-bottom:10px;
-font-size:18px;
-font-weight:bold;
+margin-bottom:6px;
+font-size:14px;
+font-weight:700;
 color:#cbd5e1;
 }
 
 input{
 width:100%;
-height:62px;
+height:46px;
 border:none;
-border-radius:20px;
-padding:0 20px;
-font-size:18px;
+border-radius:14px;
+padding:0 16px;
+font-size:15px;
 background:#0f172a;
-color:white;
+color:#fff;
 outline:none;
+transition:.2s;
+}
+
+input:focus{
+box-shadow:0 0 0 2px #2563eb;
 }
 
 .passwordWrap{
@@ -246,79 +247,89 @@ position:relative;
 }
 
 .passwordWrap input{
-padding-left:64px;
+padding-left:46px;
 }
 
 .eye{
 position:absolute;
-left:20px;
-top:18px;
-font-size:24px;
+left:16px;
+top:11px;
+font-size:20px;
 cursor:pointer;
 user-select:none;
 color:#94a3b8;
 }
 
 .captchaBox{
-height:78px;
+height:54px;
 background:#0f172a;
-border-radius:22px;
+border-radius:14px;
 display:flex;
 justify-content:center;
 align-items:center;
-font-size:32px;
+font-size:24px;
 font-weight:bold;
-letter-spacing:10px;
+letter-spacing:6px;
 color:#facc15;
-margin-bottom:18px;
+margin-bottom:12px;
 user-select:none;
 }
 
 .refresh{
 display:block;
 text-align:center;
-margin-bottom:24px;
+margin-bottom:16px;
 text-decoration:none;
 color:#38bdf8;
-font-size:18px;
-font-weight:bold;
+font-size:14px;
+font-weight:700;
 }
 
 button{
 width:100%;
-height:62px;
+height:46px;
 border:none;
-border-radius:20px;
+border-radius:14px;
 background:#22c55e;
-color:white;
-font-size:22px;
-font-weight:bold;
+color:#fff;
+font-size:17px;
+font-weight:700;
 cursor:pointer;
+transition:.2s;
+}
+
+button:hover{
+background:#16a34a;
 }
 
 .links{
-margin-top:26px;
+margin-top:16px;
 }
 
 .links a{
 display:flex;
 justify-content:center;
 align-items:center;
-height:60px;
+height:46px;
 background:#334155;
-border-radius:20px;
+border-radius:14px;
 text-decoration:none;
-color:white;
-font-size:20px;
-margin-top:14px;
+color:#fff;
+font-size:16px;
+margin-top:10px;
+transition:.2s;
+}
+
+.links a:hover{
+background:#475569;
 }
 
 .footer{
 text-align:center;
-margin-top:26px;
-font-size:14px;
+margin-top:18px;
+font-size:12px;
 color:#94a3b8;
-line-height:28px;
+line-height:20px;
 }
 
 </style>
@@ -437,12 +448,6 @@ required>
 ساخت حساب کاربری
 
 </a>
-
-</div>
-
-<div class="footer">
-
-Ticketin User Panel
 
 </div>
 

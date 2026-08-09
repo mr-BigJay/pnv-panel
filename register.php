@@ -349,48 +349,100 @@ content="width=device-width, initial-scale=1.0">
 <style>
 
 *{
+margin:0;
+padding:0;
 box-sizing:border-box;
 }
 
 body{
-margin:0;
-padding:16px;
-background:#0f172a;
+background:linear-gradient(180deg,#08113a 0%,#0f172a 100%);
 font-family:tahoma;
 direction:rtl;
-color:white;
+color:#fff;
 min-height:100vh;
+padding:12px;
 display:flex;
 justify-content:center;
-align-items:center;
+align-items:flex-start;
+padding-top:24px;
+padding-bottom:24px;
+}
+
+.container{
+width:100%;
+max-width:380px;
 }
 
 .box{
-width:100%;
-max-width:720px;
 background:#1e293b;
-padding:44px 28px;
-border-radius:28px;
+border-radius:22px;
+padding:24px 20px;
+box-shadow:0 10px 30px rgba(0,0,0,.35);
+}
+
+.logo{
+text-align:center;
+font-size:34px;
+margin-bottom:12px;
 }
 
 h2{
-font-size:32px;
-margin-top:0;
-margin-bottom:30px;
 text-align:center;
+font-size:22px;
+margin-bottom:18px;
+font-weight:700;
+}
+
+.error{
+background:#7f1d1d;
+border:1px solid #ef4444;
+padding:12px;
+border-radius:14px;
+margin-bottom:16px;
+line-height:24px;
+text-align:center;
+font-size:14px;
+}
+
+.success{
+background:#14532d;
+border:1px solid #22c55e;
+padding:12px;
+border-radius:14px;
+margin-bottom:16px;
+line-height:24px;
+text-align:center;
+font-size:14px;
+color:#bbf7d0;
+}
+
+.inputGroup{
+margin-bottom:14px;
+}
+
+.label{
+display:block;
+margin-bottom:6px;
+font-size:14px;
+font-weight:700;
+color:#cbd5e1;
 }
 
 input{
 width:100%;
-padding:16px;
-margin-top:10px;
-margin-bottom:18px;
+height:46px;
 border:none;
 border-radius:14px;
-box-sizing:border-box;
-font-size:18px;
+padding:0 16px;
+font-size:15px;
 background:#0f172a;
-color:white;
+color:#fff;
+outline:none;
+transition:.2s;
+}
+
+input:focus{
+box-shadow:0 0 0 2px #2563eb;
 }
 
 .passwordWrap{
@@ -398,165 +450,99 @@ position:relative;
 }
 
 .passwordWrap input{
-padding-left:55px;
+padding-left:46px;
 }
 
 .eye{
 position:absolute;
-left:18px;
-top:25px;
-font-size:22px;
+left:16px;
+top:11px;
+font-size:20px;
 cursor:pointer;
 user-select:none;
 color:#94a3b8;
+}
+
+.captchaBox{
+height:54px;
+background:#0f172a;
+border-radius:14px;
+display:flex;
+justify-content:center;
+align-items:center;
+font-size:24px;
+font-weight:bold;
+letter-spacing:6px;
+color:#facc15;
+margin-bottom:12px;
+user-select:none;
+}
+
+.refresh{
+display:block;
+text-align:center;
+margin-bottom:16px;
+text-decoration:none;
+color:#38bdf8;
+font-size:14px;
+font-weight:700;
 }
 
 button{
 width:100%;
-padding:16px;
-background:#22c55e;
+height:46px;
 border:none;
 border-radius:14px;
-color:white;
-font-size:22px;
+background:#22c55e;
+color:#fff;
+font-size:17px;
+font-weight:700;
 cursor:pointer;
+transition:.2s;
 }
 
-.back{
-display:block;
-margin-top:18px;
-text-align:center;
-background:#334155;
-padding:16px;
-border-radius:14px;
-color:white;
-text-decoration:none;
-font-size:20px;
-}
-
-.error{
-background:#dc2626;
-padding:16px;
-border-radius:14px;
-margin-bottom:18px;
-line-height:32px;
-font-size:18px;
-}
-
-.success{
+button:hover{
 background:#16a34a;
-padding:16px;
-border-radius:14px;
-margin-bottom:18px;
-line-height:32px;
-font-size:18px;
 }
 
-.captchaBox{
-background:#0f172a;
-padding:20px;
-border-radius:14px;
-margin-bottom:18px;
-text-align:center;
-font-size:34px;
-font-weight:bold;
-letter-spacing:6px;
-color:#facc15;
-user-select:none;
+.links{
+margin-top:16px;
 }
 
-.refresh{
-display:block;
-margin-top:-4px;
-margin-bottom:18px;
-text-align:center;
-color:#38bdf8;
+.links a{
+display:flex;
+justify-content:center;
+align-items:center;
+height:46px;
+background:#334155;
+border-radius:14px;
 text-decoration:none;
-font-size:18px;
+color:#fff;
+font-size:16px;
+margin-top:10px;
+transition:.2s;
+}
+
+.links a:hover{
+background:#475569;
 }
 
 .helper{
-font-size:15px;
+font-size:12px;
 color:#94a3b8;
-margin-top:-8px;
-margin-bottom:18px;
-line-height:28px;
+margin:-6px 0 12px;
+line-height:20px;
 }
 
 .refbox{
 background:#0f172a;
-padding:14px;
-border-radius:12px;
-margin-bottom:18px;
-font-size:15px;
-line-height:28px;
+padding:12px;
+border-radius:14px;
+margin-bottom:14px;
+font-size:13px;
+line-height:22px;
 color:#cbd5e1;
-}
-
-@media(max-width:768px){
-
-body{
-padding:10px;
-align-items:flex-start;
-}
-
-.box{
-max-width:100%;
-padding:30px 20px;
-border-radius:24px;
-margin-top:12px;
-}
-
-h2{
-font-size:28px;
-margin-bottom:24px;
-}
-
-input{
-font-size:16px;
-padding:14px;
-}
-
-button{
-font-size:20px;
-padding:14px;
-}
-
-.back{
-font-size:18px;
-padding:14px;
-}
-
-.error,
-.success{
-font-size:16px;
-line-height:28px;
-}
-
-.captchaBox{
-font-size:28px;
-padding:18px;
-}
-
-.refresh{
-font-size:16px;
-}
-
-.helper{
-font-size:14px;
-line-height:24px;
-}
-
-.refbox{
-font-size:14px;
-line-height:24px;
-}
-
-.eye{
-top:22px;
-font-size:20px;
-}
-
+text-align:center;
 }
 
 </style>
@@ -565,7 +551,15 @@ font-size:20px;
 
 <body>
 
+<div class="container">
+
 <div class="box">
+
+<div class="logo">
+
+📝
+
+</div>
 
 <h2>
 
@@ -605,11 +599,20 @@ font-size:20px;
 
 <form method="POST">
 
+<div class="inputGroup">
+
+<label class="label">
+
+نام کاربری
+
+</label>
+
 <input
 type="text"
 name="username"
-placeholder="نام کاربری"
 required>
+
+</div>
 
 <div class="helper">
 
@@ -617,13 +620,20 @@ required>
 
 </div>
 
+<div class="inputGroup">
+
+<label class="label">
+
+رمز عبور
+
+</label>
+
 <div class="passwordWrap">
 
 <input
 type="password"
 name="password"
 id="password"
-placeholder="رمز عبور"
 required>
 
 <span
@@ -636,24 +646,44 @@ onclick="togglePassword()">
 
 </div>
 
+</div>
+
 <div class="helper">
 
 رمز عبور باید شامل حروف انگلیسی و عدد باشد
 
 </div>
 
+<div class="inputGroup">
+
+<label class="label">
+
+شماره موبایل
+
+</label>
+
 <input
 type="text"
 name="mobile"
-placeholder="شماره موبایل"
 required>
+
+</div>
 
 <?php if($refFromLink==""){ ?>
 
+<div class="inputGroup">
+
+<label class="label">
+
+کد یا شماره معرف (اختیاری)
+
+</label>
+
 <input
 type="text"
-name="referrer"
-placeholder="کد یا شماره معرف (اختیاری)">
+name="referrer">
+
+</div>
 
 <?php } ?>
 
@@ -671,11 +701,15 @@ class="refresh">
 
 </a>
 
+<div class="inputGroup">
+
 <input
 type="text"
 name="captcha"
 placeholder="کد امنیتی"
 required>
+
+</div>
 
 <button type="submit">
 
@@ -685,13 +719,17 @@ required>
 
 </form>
 
-<a
-href="index.php"
-class="back">
+<div class="links">
 
-بازگشت
+<a href="index.php">
+
+بازگشت به ورود
 
 </a>
+
+</div>
+
+</div>
 
 </div>
 
