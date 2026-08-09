@@ -475,7 +475,7 @@ color:#94a3b8;
 
 .captchaSection{
 margin:4px 0 14px;
-padding:12px;
+padding:10px;
 background:rgba(15,23,42,.45);
 border:1px solid rgba(148,163,184,.14);
 border-radius:14px;
@@ -484,30 +484,51 @@ border-radius:14px;
 .captchaRow{
 display:flex;
 align-items:center;
-justify-content:center;
 gap:8px;
-margin-bottom:10px;
+direction:rtl;
+}
+
+.captchaInputWrap{
+flex:2;
+min-width:0;
+}
+
+.captchaInputWrap input{
+width:100%;
+height:40px;
+font-size:14px;
+}
+
+.captchaMeta{
+flex:1;
+display:flex;
+align-items:center;
+gap:6px;
+min-width:0;
 }
 
 .captchaCode{
-min-width:118px;
-height:36px;
-padding:0 12px;
+flex:1;
+min-width:0;
+height:40px;
+padding:0 8px;
 display:flex;
 align-items:center;
 justify-content:center;
 background:#0f172a;
 border-radius:10px;
-font-size:17px;
+font-size:14px;
 font-weight:700;
-letter-spacing:4px;
+letter-spacing:2px;
 color:#facc15;
 user-select:none;
+overflow:hidden;
+white-space:nowrap;
 }
 
 .captchaRefresh{
-width:36px;
-height:36px;
+width:34px;
+height:34px;
 display:flex;
 align-items:center;
 justify-content:center;
@@ -525,22 +546,13 @@ color:#38bdf8;
 }
 
 .captchaRefresh svg{
-width:18px;
-height:18px;
+width:16px;
+height:16px;
 stroke:currentColor;
 fill:none;
 stroke-width:2;
 stroke-linecap:round;
 stroke-linejoin:round;
-}
-
-.captchaInputGroup{
-margin-bottom:0;
-}
-
-.captchaInputGroup input{
-height:40px;
-font-size:14px;
 }
 
 button{
@@ -738,6 +750,19 @@ name="referrer">
 
 <div class="captchaRow">
 
+<div class="captchaInputWrap">
+
+<input
+type="text"
+name="captcha"
+placeholder="کد را بنویس"
+autocomplete="off"
+required>
+
+</div>
+
+<div class="captchaMeta">
+
 <div class="captchaCode">
 
 <?php echo $_SESSION['register_captcha']; ?>
@@ -758,15 +783,6 @@ title="تغییر کد امنیتی">
 </a>
 
 </div>
-
-<div class="inputGroup captchaInputGroup">
-
-<input
-type="text"
-name="captcha"
-placeholder="کد امنیتی را وارد کنید"
-autocomplete="off"
-required>
 
 </div>
 
