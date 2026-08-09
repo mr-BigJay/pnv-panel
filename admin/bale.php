@@ -214,9 +214,9 @@ Listener روی <b>همان اکانت بله صاحب کارت</b> اجرا م�
 آدرس Ingest اتوماتیک:<br><code>https://panel.ticketin.ir/postbank-ingest.php</code><br>
 کلید Ingest (برای Listener):<br><code><?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?></code><br><br>
 راه‌اندازی یک‌بار روی سرور:<br>
-<code>cd /var/www/html && pip3 install -r tools/requirements-postbank.txt</code><br>
-<code>python3 tools/postbank_bale_listener.py --login --session /var/www/html/db/bale_user_session.bale</code><br>
-<code>printf 'POSTBANK_INGEST_SECRET=%s\n' '<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>' &gt; db/postbank-listener.env && chmod 600 db/postbank-listener.env</code><br>
+<code>cd /var/www/html && bash tools/setup-postbank-listener.sh</code><br>
+<code>tools/postbank-venv/bin/python tools/postbank_bale_listener.py --login --session /var/www/html/db/bale_user_session.bale</code><br>
+<code>printf 'POSTBANK_INGEST_SECRET=%s\n' 'کلید_بالا' &gt; db/postbank-listener.env && chmod 600 db/postbank-listener.env</code><br>
 <code>cp tools/postbank-listener.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now postbank-listener</code><br>
 <code>systemctl status postbank-listener --no-pager</code><br>
 لاگین باید با <b>همان شماره بله</b> باشد که پیام‌های <code>@postbank_bot</code> را می‌گیرد.<br>
