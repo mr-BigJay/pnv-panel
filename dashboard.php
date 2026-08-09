@@ -151,7 +151,9 @@ overflow:hidden;
 .dashWelcome{
 position:relative;
 flex:0 0 auto;
-padding:8px 8px 9px 36px;
+padding:16px 10px 16px 36px;
+margin-bottom:4px;
+border-bottom:1px solid rgba(148,163,184,.16);
 }
 .dashMoreWrap{
 position:absolute;
@@ -205,17 +207,17 @@ cursor:pointer;
 .dashWelcomeRow{
 display:flex;
 align-items:flex-start;
-gap:8px;
+gap:12px;
 }
 .dashAvatar{
-width:44px;
-height:44px;
+width:48px;
+height:48px;
 border-radius:50%;
 flex:0 0 auto;
 display:flex;
 align-items:center;
 justify-content:center;
-font-size:18px;
+font-size:20px;
 font-weight:700;
 color:#fff;
 background:linear-gradient(135deg,#22c55e 0%,#2563eb 100%);
@@ -226,22 +228,22 @@ min-width:0;
 flex:1;
 }
 .dashHello{
-margin:0 0 4px;
-font-size:11px;
+margin:0 0 6px;
+font-size:12px;
 color:#94a3b8;
 }
 .dashNameRow{
 display:flex;
-flex-wrap:wrap;
-align-items:center;
-gap:4px 6px;
+flex-direction:column;
+align-items:flex-start;
+gap:8px;
 }
 .dashUser{
 margin:0;
-font-size:16px;
+font-size:17px;
 font-weight:700;
 word-break:break-word;
-line-height:1.25;
+line-height:1.3;
 }
 .dashStatsInline{
 display:flex;
@@ -271,6 +273,7 @@ display:grid;
 grid-template-columns:1fr 1fr;
 gap:8px;
 flex:0 0 auto;
+margin-top:4px;
 }
 .dashPrimary{
 display:flex;
@@ -397,7 +400,7 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 .dashPrimary{min-height:92px}
 .dashPrimaryIcon{width:34px;height:34px;font-size:18px}
 .dashPrimaryLabel{font-size:11px}
-.dashAvatar{width:40px;height:40px;font-size:16px}
+.dashAvatar{width:44px;height:44px;font-size:18px}
 .dashChip{font-size:9px}
 .dashChip b{font-size:11px}
 .dashItem{min-height:36px;padding:7px 10px}
