@@ -1,12 +1,28 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/admin_nav.php';
+foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $__navFile) {
+    if (is_file($__navFile)) {
+        require_once $__navFile;
+        break;
+    }
+}
+if(!function_exists('adminQuickNav')){
+    function adminQuickNav($active = ''){}
+    function adminQuickNavStyles(){}
+    function adminBottomNavStyles(){}
+    function adminBottomNav($options = []){}
+    function adminBottomNavScript(){}
+}
 require_once "functions.php";
 
 pnvAdminRequireAuth();
 
-$usersFile = '../db/users.json';
+$pnvRootDir = dirname(__DIR__);
+$usersFile = $pnvRootDir . '/db/users.json';
+if (!is_file($usersFile) && is_file(__DIR__ . '/../db/users.json')) {
+    $usersFile = __DIR__ . '/../db/users.json';
+}
 
 if(!file_exists($usersFile)){
 
