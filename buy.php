@@ -378,7 +378,6 @@ function renderCardTabs(){
             cardTabs.querySelectorAll('.cardTab').forEach(function(el){ el.classList.remove('is-active'); });
             btn.classList.add('is-active');
             selectCardMeta(card);
-            ensureInstantPay(true);
         });
         cardTabs.appendChild(btn);
     });
@@ -496,6 +495,7 @@ function validateCoupon(){
         if(!data.ok){ couponResult.className = 'couponResult is-error'; couponResult.textContent = data.error || 'کد تخفیف معتبر نیست'; return; }
         couponResult.className = 'couponResult is-ok';
         couponResult.innerHTML = 'تخفیف ' + data.percent + '٪<br>مبلغ پلن: ' + data.original_text + '<br><b>قابل پرداخت تقریبی: ' + data.final_text + '</b>';
+        if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
     })
     .catch(function(){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'خطا در بررسی کد'; });
 }
@@ -509,7 +509,6 @@ couponCodeInput.addEventListener('input', function(){
     clearTimeout(couponTimer);
     couponTimer = setTimeout(function(){
         validateCoupon();
-        if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
     }, 450);
 });
 planSelect.addEventListener('change', validateCoupon);

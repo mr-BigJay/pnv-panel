@@ -157,6 +157,14 @@ if(!function_exists('instantPayPath')){
             return $matches[0];
         }
 
+        if(count($matches) > 1){
+            usort($matches, static function($a, $b){
+                return intval($b['row'][8] ?? 0) <=> intval($a['row'][8] ?? 0);
+            });
+
+            return $matches[0];
+        }
+
         return null;
     }
 
@@ -464,6 +472,9 @@ if(!function_exists('instantPayPath')){
                 if($status === 'failed' && instantPayWithinMatchGrace($item, $now)){
                     $shouldDelete = false;
                 }
+                elseif($status === 'cancelled' && instantPayWithinMatchGrace($item, $now)){
+                    $shouldDelete = false;
+                }
                 else{
                     $shouldDelete = true;
                 }
@@ -592,6 +603,67 @@ if(!function_exists('instantPayPath')){
         return true;
     }
 
+    function instantPayOptsSignature($opts){
+        return implode('|', [
+            trim((string)($opts['type'] ?? 'خرید')),
+            trim((string)($opts['plan'] ?? '')),
+            trim((string)($opts['subname'] ?? '')),
+            trim((string)($opts['sub'] ?? '')),
+            trim((string)($opts['card'] ?? '')),
+            strtoupper(trim((string)($opts['coupon_code'] ?? ''))),
+            (string)intval($opts['discount_percent'] ?? 0),
+        ]);
+    }
+
+    function instantPayItemSignature($item){
+        return instantPayOptsSignature([
+            'type' => $item['type'] ?? 'خرید',
+            'plan' => $item['plan_value'] ?? ($item['plan'] ?? ''),
+            'subname' => $item['subname'] ?? '',
+            'sub' => $item['sub'] ?? '',
+            'card' => $item['card'] ?? '',
+            'coupon_code' => $item['coupon_code'] ?? '',
+            'discount_percent' => $item['discount_percent'] ?? 0,
+        ]);
+    }
+
+    function instantPayFindReusableWaiting($username, $opts, $items = null){
+        $username = trim((string)$username);
+
+        if($username === ''){
+            return null;
+        }
+
+        if($items === null){
+            $items = instantPayExpireDue();
+        }
+
+        $sig = instantPayOptsSignature($opts);
+        $now = time();
+
+        foreach($items as $item){
+            if(trim((string)($item['user'] ?? '')) !== $username){
+                continue;
+            }
+
+            if(($item['status'] ?? '') !== 'waiting'){
+                continue;
+            }
+
+            if(intval($item['expires_at'] ?? 0) < $now){
+                continue;
+            }
+
+            if(instantPayItemSignature($item) !== $sig){
+                continue;
+            }
+
+            return $item;
+        }
+
+        return null;
+    }
+
     function instantPayCloseUserMatchable($username, $exceptId = null, $items = null){
         $username = trim((string)$username);
         $exceptId = $exceptId !== null ? trim((string)$exceptId) : null;
@@ -616,20 +688,15 @@ if(!function_exists('instantPayPath')){
 
             $status = (string)($item['status'] ?? '');
 
-            if(!in_array($status, ['waiting', 'expired', 'failed'], true)){
+            if($status !== 'waiting'){
                 continue;
             }
 
-            if($status === 'waiting'){
-                $items[$i]['status'] = 'cancelled';
-                $items[$i]['message'] = 'لغو به‌خاطر مبلغ جدید';
-                $items[$i]['cancelled_at'] = $now;
-            }
-
-            instantPayDeleteAbandonedCsv($items[$i]);
-            $items[$i]['csv_purged'] = true;
-            $items[$i]['csv_index'] = -1;
+            $items[$i]['status'] = 'cancelled';
+            $items[$i]['message'] = 'لغو به‌خاطر مبلغ جدید';
+            $items[$i]['cancelled_at'] = $now;
             $changed = true;
+            // CSV را عمداً نگه می‌داریم تا واریزِ همین مبلغ هنوز مچ شود
         }
 
         if($changed){
@@ -845,7 +912,28 @@ if(!function_exists('instantPayPath')){
 
         $items = instantPayExpireDue();
 
-        // سفارش‌های قبلی کاربر را از لیست ادمین حذف کن
+        $createOpts = [
+            'user' => $username,
+            'type' => $type,
+            'plan' => $planValue,
+            'subname' => $subname,
+            'sub' => $sub,
+            'card' => $card,
+            'coupon_code' => $couponCode,
+            'discount_percent' => $discountPercent,
+        ];
+
+        $reusable = instantPayFindReusableWaiting($username, $createOpts, $items);
+
+        if(is_array($reusable)){
+            return [
+                'ok' => true,
+                'item' => instantPayPublicView($reusable),
+                'reused' => true,
+            ];
+        }
+
+        // سفارش waiting قبلی را لغو کن (CSV را نگه می‌داریم)
         $items = instantPayCloseUserMatchable($username, null, $items);
 
         $code = instantPayAllocateCode($items);
@@ -960,7 +1048,18 @@ if(!function_exists('instantPayPath')){
         }
 
         if($force && ($found['status'] ?? '') === 'cancelled'){
-            return ['ok' => false, 'error' => 'سفارش لغو شده است'];
+            $csvIndexCheck = instantPayResolveCsvIndex($found);
+
+            if($csvIndexCheck < 0){
+                return ['ok' => false, 'error' => 'سفارش لغو شده است'];
+            }
+
+            $items[$idx]['status'] = 'expired';
+            $items[$idx]['message'] = 'بازیابی برای تأیید واریز';
+            $items[$idx]['csv_index'] = $csvIndexCheck;
+            $items[$idx]['csv_purged'] = false;
+            instantPaySave($items);
+            $found = $items[$idx];
         }
 
         $csvIndex = instantPayResolveCsvIndex($found);
@@ -1408,6 +1507,10 @@ if(!function_exists('instantPayPath')){
                 $status = (string)($item['status'] ?? '');
 
                 if($status === 'cancelled'){
+                    if(is_array(instantPayFindCsvMatchByAmount($amount))){
+                        return 'سفارش در سیستم لغo شده ولی ردیف پرداخت هنوز فعال است؛ دوباره فوروارد کنید.';
+                    }
+
                     return 'سفارش لغو شده است (احتمالاً مبلغ جدید ساخته شده). کاربر باید دقیقاً مبلغ فعلی صفحه را واریز کند.';
                 }
 
