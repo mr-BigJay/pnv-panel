@@ -608,6 +608,15 @@ stroke:#fff;
 .statusIcon.is-ok{background:#22c55e}
 .statusIcon.is-no{background:#ef4444}
 .statusIcon.is-pending{background:#f59e0b}
+.payCard.is-waiting-pay{
+border-color:rgba(245,158,11,.45);
+background:linear-gradient(180deg,rgba(245,158,11,.12) 0%,#1e293b 100%);
+box-shadow:0 10px 28px rgba(245,158,11,.12);
+}
+.payCard.is-expired-pay{
+border-color:rgba(239,68,68,.4);
+background:linear-gradient(180deg,rgba(239,68,68,.10) 0%,#1e293b 100%);
+}
 
 .dropdown{
 display:none;
@@ -825,8 +834,19 @@ $statusClass = 'is-pending';
 if($status === 'تایید شد'){
 $statusClass = 'is-ok';
 }
-elseif($status === 'رد شد'){
+elseif($status === 'رد شد' || $status === 'منقضی شد'){
 $statusClass = 'is-no';
+}
+
+$cardStateClass = '';
+$trackingCode = trim((string)($p[3] ?? ''));
+if(strpos($trackingCode, 'AUTO-') === 0){
+if(in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true)){
+$cardStateClass = ' is-waiting-pay';
+}
+elseif($status === 'منقضی شد'){
+$cardStateClass = ' is-expired-pay';
+}
 }
 
 $mobile = getUserMobile($p[0] ?? '', $users);
@@ -839,7 +859,7 @@ $payWhen = pnvFormatPaymentRowDateTime($p);
 
 ?>
 
-<div class="payCard">
+<div class="payCard<?php echo $cardStateClass; ?>">
 
 <div class="payColUser">
 <span class="payUserName"><?php echo htmlspecialchars($p[0] ?? '-', ENT_QUOTES, 'UTF-8'); ?></span>
@@ -858,7 +878,7 @@ $payWhen = pnvFormatPaymentRowDateTime($p);
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
 </span>
 <?php } elseif($statusClass === 'is-no'){ ?>
-<span class="statusIcon is-no" title="رد شد" aria-label="رد شد">
+<span class="statusIcon is-no" title="<?php echo $status === 'منقضی شد' ? 'منقضی شد' : 'رد شد'; ?>" aria-label="<?php echo $status === 'منقضی شد' ? 'منقضی شد' : 'رد شد'; ?>">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
 </span>
 <?php } else { ?>
