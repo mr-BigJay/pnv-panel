@@ -1064,6 +1064,42 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportNotifyTelegramAdmins($username, $message){
+
+        $lib = __DIR__ . '/telegram_lib.php';
+
+        if(!is_file($lib)){
+            return;
+        }
+
+        require_once $lib;
+
+        if(!function_exists('telegramSendSupportNotification')){
+            return;
+        }
+
+        $config = function_exists('telegramLoadConfig') ? telegramLoadConfig() : [];
+
+        if(
+            empty($config['enabled'])
+            || trim((string)($config['bot_token'] ?? '')) === ''
+            || count(telegramAdminChatIds($config)) === 0
+        ){
+            return;
+        }
+
+        $mobile = function_exists('telegramGetUserMobile')
+            ? telegramGetUserMobile($username)
+            : '';
+
+        try{
+            telegramSendSupportNotification($username, $message, $mobile);
+        }catch(Throwable $e){
+            error_log('support telegram notify failed: ' . $e->getMessage());
+        }
+
+    }
+
     function supportProcessUserActions($file, $username){
 
         $data = supportLoad($file);
@@ -1210,6 +1246,7 @@ if(!function_exists('supportLoad')){
                     }
 
                     supportSave($file, $data);
+                    supportNotifyTelegramAdmins($username, $newmsg);
                     header('Location: support.php');
                     exit;
                 }
