@@ -154,104 +154,17 @@ $paymentError = $_SESSION['payment_error'];
 unset($_SESSION['payment_error']);
 }
 
-if(isset($_POST['approve_payment'])){
-
-$index=intval($_POST['approve_index']);
-$link=trim($_POST['approve_link'] ?? '');
-
-$xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig')
-    ? xuiIsEnabled(xuiLoadConfig())
-    : false;
-
-if($xuiEnabled && function_exists('xuiApprovePaymentIndex')){
-
-$result = xuiApprovePaymentIndex($index, 'تمدید');
-
-if(empty($result['ok'])){
-$_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+if(!defined('PNV_RENEW_PAYMENTS_ACTIONS_RAN')){
+foreach ([__DIR__ . '/payment_list_actions.php', __DIR__ . '/../admin/payment_list_actions.php'] as $__actionsFile) {
+    if (is_file($__actionsFile)) {
+        require_once $__actionsFile;
+        break;
+    }
 }
 
-$_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
-$_SESSION['payment_message_detail'] = (string)($result['link'] ?? '');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
-
+if(function_exists('pnvAdminRenewPaymentsHandleActions')){
+    pnvAdminRenewPaymentsHandleActions($paymentsFile, $payments);
 }
-
-if(isset($payments[$index])){
-
-$payments[$index][6]='تایید شد';
-$payments[$index][7]=$link;
-
-}
-
-$fp=fopen($paymentsFile,'w');
-
-foreach($payments as $p){
-fputcsv($fp,$p);
-}
-
-fclose($fp);
-
-$_SESSION['payment_message'] = 'تمدید تایید شد';
-$_SESSION['payment_message_detail'] = $link;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
-
-}
-
-if(isset($_POST['reject_payment'])){
-
-$index=intval($_POST['reject_index']);
-$reason=trim($_POST['reject_reason']);
-
-if(isset($payments[$index])){
-
-$payments[$index][6]='رد شد';
-$payments[$index][7]=$reason;
-
-}
-
-$fp=fopen($paymentsFile,'w');
-
-foreach($payments as $p){
-fputcsv($fp,$p);
-}
-
-fclose($fp);
-
-$_SESSION['payment_message'] = 'تمدید رد شد';
-$_SESSION['payment_message_detail'] = $reason;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
-
-}
-
-if(isset($_GET['deletepayment'])){
-
-$id=intval($_GET['deletepayment']);
-
-if(isset($payments[$id])){
-
-unset($payments[$id]);
-
-$payments=array_values($payments);
-
-}
-
-$fp=fopen($paymentsFile,'w');
-
-foreach($payments as $p){
-fputcsv($fp,$p);
-}
-
-fclose($fp);
-
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
-
 }
 
 $renews=[];
@@ -917,6 +830,7 @@ var renewResultMessage = <?php echo json_encode($paymentMessage, JSON_UNESCAPED_
 var renewResultDetail = <?php echo json_encode($paymentMessageDetail, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultError = <?php echo json_encode($paymentError, JSON_UNESCAPED_UNICODE); ?>;
 var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews'), JSON_UNESCAPED_UNICODE); ?>;
+var renewsCurrentPage = <?php echo (int)$currentPage; ?>;
 
 function closeMenus(){
 document.querySelectorAll('.dropdown.active').forEach(function(el){
@@ -1065,7 +979,7 @@ openModal(
 
 function deleteItem(id){
 if(confirm('حذف شود؟')){
-location.href = renewsPageUrl + (renewsPageUrl.indexOf('?') >= 0 ? '&' : '?') + 'deletepayment=' + encodeURIComponent(id);
+location.href = renewsPageUrl + (renewsPageUrl.indexOf('?') >= 0 ? '&' : '?') + 'deletepayment=' + encodeURIComponent(id) + '&p=' + renewsCurrentPage;
 }
 }
 

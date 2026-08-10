@@ -197,129 +197,17 @@ if(isset($_SESSION['payment_error'])){
 
 $allowedPerPage = [20, 50, 100];
 
-// ==================== عملیات POST ====================
-
-if(isset($_POST['approve_payment'])){
-
-    $index = intval($_POST['approve_index']);
-
-    $link = trim($_POST['approve_link'] ?? '');
-    $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
-
-    if(!in_array($redirectPer, $allowedPerPage, true)){
-        $redirectPer = 20;
-    }
-
-    $xuiConfig = xuiLoadConfig();
-
-    if(function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])){
-
-        $result = xuiApprovePaymentIndex($index, 'خرید');
-
-        if(empty($result['ok'])){
-            $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-            header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-            exit;
+if(!defined('PNV_BUY_PAYMENTS_ACTIONS_RAN')){
+    foreach ([__DIR__ . '/payment_list_actions.php', __DIR__ . '/../admin/payment_list_actions.php'] as $__actionsFile) {
+        if (is_file($__actionsFile)) {
+            require_once $__actionsFile;
+            break;
         }
-
-        $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-        exit;
-
     }
 
-    if(!isValidSubscriptionLink($link)){
-        $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-        exit;
+    if(function_exists('pnvAdminBuyPaymentsHandleActions')){
+        pnvAdminBuyPaymentsHandleActions($paymentsFile, $payments);
     }
-
-    if(isset($payments[$index])){
-
-        $payments[$index][6] = 'تایید شد';
-
-        $payments[$index][7] = $link;
-
-    }
-
-    $fp = fopen($paymentsFile,'w');
-
-    foreach($payments as $p){
-
-        fputcsv($fp, $p);
-
-    }
-
-    fclose($fp);
-
-    $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-
-    exit;
-
-}
-
-if(isset($_POST['reject_payment'])){
-
-    $index = intval($_POST['reject_index']);
-
-    $reason = trim($_POST['reject_reason']);
-    $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
-
-    if(!in_array($redirectPer, $allowedPerPage, true)){
-        $redirectPer = 20;
-    }
-
-    if(isset($payments[$index])){
-
-        $payments[$index][6] = 'رد شد';
-
-        $payments[$index][7] = $reason;
-
-    }
-
-    $fp = fopen($paymentsFile,'w');
-
-    foreach($payments as $p){
-
-        fputcsv($fp, $p);
-
-    }
-
-    fclose($fp);
-
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
-
-    exit;
-
-}
-
-if(isset($_GET['deletepayment'])){
-
-    $id = intval($_GET['deletepayment']);
-
-    if(isset($payments[$id])){
-
-        unset($payments[$id]);
-
-        $payments = array_values($payments);
-
-    }
-
-    $fp = fopen($paymentsFile,'w');
-
-    foreach($payments as $p){
-
-        fputcsv($fp, $p);
-
-    }
-
-    fclose($fp);
-
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . intval($_GET['per'] ?? 20)));
-
-    exit;
-
 }
 
 // ==================== آماده‌سازی لیست خرید ====================
@@ -958,6 +846,7 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 
 const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments'), JSON_UNESCAPED_UNICODE); ?>;
 const paymentsPerPage = <?php echo (int)$perPage; ?>;
+const paymentsCurrentPage = <?php echo (int)$currentPage; ?>;
 
 function closeMenus(){
 document.querySelectorAll('.dropdown.active').forEach(function(el){
@@ -1123,7 +1012,7 @@ openModal(
 
 function confirmDelete(id){
 if(confirm('مطمئن هستید؟')){
-location.href=paymentsListBase+'&deletepayment='+id+'&per='+paymentsPerPage;
+location.href=paymentsListBase+'&deletepayment='+id+'&per='+paymentsPerPage+'&p='+paymentsCurrentPage;
 }
 }
 

@@ -671,6 +671,23 @@ exit;
 
 }
 
+foreach ([__DIR__ . '/payment_list_actions.php', __DIR__ . '/../admin/payment_list_actions.php'] as $__actionsFile) {
+    if (is_file($__actionsFile)) {
+        require_once $__actionsFile;
+        break;
+    }
+}
+
+if($page === 'payments' && function_exists('pnvAdminBuyPaymentsHandleActions')){
+    define('PNV_BUY_PAYMENTS_ACTIONS_RAN', true);
+    pnvAdminBuyPaymentsHandleActions($paymentsFile, $payments);
+}
+
+if($page === 'renews' && function_exists('pnvAdminRenewPaymentsHandleActions')){
+    define('PNV_RENEW_PAYMENTS_ACTIONS_RAN', true);
+    pnvAdminRenewPaymentsHandleActions($paymentsFile, $payments);
+}
+
 ?>
 
 <!DOCTYPE html>
