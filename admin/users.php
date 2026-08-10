@@ -3,6 +3,7 @@
 session_start();
 
 require_once "functions.php";
+require_once __DIR__ . '/../profile_lib.php';
 
 if(!isset($_SESSION['admin'])){
 header("Location: index.php");
@@ -30,6 +31,9 @@ $allUsers = [];
 }
 
 $users = $allUsers;
+
+$flashMsg = trim((string)($_SESSION['admin_users_msg'] ?? ''));
+unset($_SESSION['admin_users_msg']);
 
 if(isset($_GET['backup'])){
 
@@ -122,6 +126,72 @@ JSON_PRETTY_PRINT
 LOCK_EX
 );
 
+}
+
+header("Location: users.php");
+exit;
+}
+
+if(isset($_POST['setavatar'])){
+
+require_once __DIR__ . '/../profile_lib.php';
+
+$id = intval($_POST['userid'] ?? -1);
+$username = trim((string)($_POST['username'] ?? ''));
+
+if(
+    isset($allUsers[$id])
+    && strcasecmp(trim($allUsers[$id]['username'] ?? ''), $username) === 0
+){
+    $result = profileUploadAvatar($username, $_FILES['avatar'] ?? []);
+
+    if(empty($result['ok'])){
+        $_SESSION['admin_users_msg'] = $result['error'] ?? 'آپلود عکس انجام نشد';
+    }
+    else{
+        $_SESSION['admin_users_msg'] = 'عکس پروفایل «' . $username . '» ذخیره شد';
+    }
+}
+else{
+    $_SESSION['admin_users_msg'] = 'کاربر پیدا نشد';
+}
+
+header("Location: users.php");
+exit;
+}
+
+if(isset($_POST['removeavatar'])){
+
+require_once __DIR__ . '/../profile_lib.php';
+
+$id = intval($_POST['userid'] ?? -1);
+$username = trim((string)($_POST['username'] ?? ''));
+
+if(
+    isset($allUsers[$id])
+    && strcasecmp(trim($allUsers[$id]['username'] ?? ''), $username) === 0
+){
+    $users = profileLoadUsers();
+    $index = profileFindUserIndex($users, $username);
+
+    if($index >= 0){
+        $oldAvatar = trim((string)($users[$index]['avatar'] ?? ''));
+
+        if($oldAvatar !== ''){
+            $oldPath = dirname(__DIR__) . '/' . ltrim($oldAvatar, '/');
+
+            if(is_file($oldPath)){
+                @unlink($oldPath);
+            }
+        }
+
+        unset($users[$index]['avatar']);
+        profileSaveUsers($users);
+        $_SESSION['admin_users_msg'] = 'عکس پروفایل «' . $username . '» حذف شد';
+    }
+}
+else{
+    $_SESSION['admin_users_msg'] = 'کاربر پیدا نشد';
 }
 
 header("Location: users.php");
@@ -513,6 +583,66 @@ user-select:none;
 color:#94a3b8;
 }
 
+.adminFlash{
+background:#166534;
+padding:14px;
+border-radius:12px;
+margin-bottom:18px;
+line-height:1.8;
+font-size:14px;
+}
+
+.adminUserAvatar{
+width:52px;
+height:52px;
+border-radius:50%;
+object-fit:cover;
+flex:0 0 auto;
+background:linear-gradient(135deg,#22c55e 0%,#2563eb 100%);
+color:#fff;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:20px;
+font-weight:700;
+overflow:hidden;
+}
+
+.adminUserAvatar img{
+width:100%;
+height:100%;
+object-fit:cover;
+display:block;
+}
+
+.userCardTop{
+display:flex;
+align-items:flex-start;
+gap:12px;
+}
+
+.modalAvatarPreview{
+width:72px;
+height:72px;
+border-radius:50%;
+object-fit:cover;
+display:block;
+margin:0 auto 14px;
+background:#0f172a;
+}
+
+.modalFile{
+width:100%;
+margin-bottom:12px;
+font-size:13px;
+color:#e2e8f0;
+}
+
+.modalDanger{
+background:#ef4444 !important;
+margin-top:8px;
+}
+
 </style>
 
 </head>
@@ -534,6 +664,10 @@ class="backTop">
 بازگشت
 
 </a>
+
+<?php if($flashMsg !== ''){ ?>
+<div class="adminFlash"><?php echo htmlspecialchars($flashMsg, ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } ?>
 
 <div class="topbar">
 
@@ -569,11 +703,22 @@ $u,
 $allUsers
 );
 
+$avatarPath = profileGetUserAvatar($u['username'] ?? '');
+$avatarInitial = strtoupper(substr((string)($u['username'] ?? '?'), 0, 1));
+
 ?>
 
 <div class="userCard">
 
-<div class="top">
+<div class="top userCardTop">
+
+<div class="adminUserAvatar">
+<?php if($avatarPath !== ''){ ?>
+<img src="../<?php echo htmlspecialchars($avatarPath, ENT_QUOTES, 'UTF-8'); ?>" alt="">
+<?php } else { ?>
+<?php echo htmlspecialchars($avatarInitial, ENT_QUOTES, 'UTF-8'); ?>
+<?php } ?>
+</div>
 
 <div class="info">
 
@@ -617,6 +762,17 @@ onclick="toggleMenu('menu<?php echo $i; ?>')">
 <div
 class="dropdown"
 id="menu<?php echo $i; ?>">
+
+<button
+onclick="openAvatarModal(
+'<?php echo $realId; ?>',
+'<?php echo htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8'); ?>',
+'<?php echo htmlspecialchars($avatarPath, ENT_QUOTES, 'UTF-8'); ?>'
+)">
+
+تنظیم عکس پروفایل
+
+</button>
 
 <button
 onclick="openMobileModal(
@@ -760,6 +916,64 @@ document
 document
 .getElementById('modalOverlay')
 .style.display='flex';
+
+}
+
+function openAvatarModal(id,user,avatar){
+
+const preview = avatar
+    ? `<img class="modalAvatarPreview" src="../${avatar}" alt="">`
+    : `<div class="modalAvatarPreview" style="display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:700;">${user.charAt(0).toUpperCase()}</div>`;
+
+openModal(`
+
+<div class="modalTitle">
+
+تنظیم عکس پروفایل
+
+</div>
+
+<div class="modalInfo">
+
+نام کاربری: ${user}
+
+</div>
+
+${preview}
+
+<form method="POST" enctype="multipart/form-data">
+
+<input type="hidden" name="userid" value="${id}">
+<input type="hidden" name="username" value="${user}">
+
+<input class="modalFile" type="file" name="avatar" accept="image/jpeg,image/png,image/webp" required>
+
+<button type="submit" name="setavatar">
+
+ذخیره عکس
+
+</button>
+
+<button type="button" class="closeBtn" onclick="closeModal()">
+
+بستن
+
+</button>
+
+</form>
+
+${avatar ? `
+<form method="POST" style="margin-top:8px">
+<input type="hidden" name="userid" value="${id}">
+<input type="hidden" name="username" value="${user}">
+<button type="submit" name="removeavatar" class="modalDanger">
+
+حذف عکس فعلی
+
+</button>
+</form>` : ''}
+
+`);
 
 }
 
