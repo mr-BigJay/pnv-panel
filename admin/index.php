@@ -257,6 +257,8 @@ $cardsFile = '../db/cards.json';
 $usersFile = '../db/users.json';
 $paymentsFile = '../invoices/payments.csv';
 
+require_once __DIR__ . '/../instant_pay_lib.php';
+
 $plans = file_exists($plansFile)
 ? json_decode(file_get_contents($plansFile),true)
 : [];
@@ -281,21 +283,7 @@ if(!is_array($users)){
 $users=[];
 }
 
-$payments=[];
-
-if(file_exists($paymentsFile)){
-
-$f=fopen($paymentsFile,'r');
-
-while(($d=fgetcsv($f))!==FALSE){
-
-$payments[]=$d;
-
-}
-
-fclose($f);
-
-}
+$payments = instantPayPurgeAndReloadPaymentsCsv($paymentsFile);
 
 $supportFile =
 "../db/support.json";
@@ -326,9 +314,9 @@ trim($pay[9] ?? '');
 if(
 ($type == 'خرید' || $type == '')
 &&
-$status != 'تایید شد'
+function_exists('instantPayIsAdminPendingPayment')
 &&
-$status != 'رد شد'
+instantPayIsAdminPendingPayment($pay)
 ){
 
 $hasNewPayments = true;
@@ -338,9 +326,9 @@ $hasNewPayments = true;
 if(
 $type == 'تمدید'
 &&
-$status != 'تایید شد'
+function_exists('instantPayIsAdminPendingPayment')
 &&
-$status != 'رد شد'
+instantPayIsAdminPendingPayment($pay)
 ){
 
 $hasNewRenews = true;

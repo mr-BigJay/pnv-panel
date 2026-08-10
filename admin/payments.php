@@ -34,7 +34,10 @@ if(file_exists($paymentsFile)){
     fclose($f);
 }
 
-if(function_exists('instantPayPurgeStaleAdminRows')){
+if(function_exists('instantPayPurgeAndReloadPaymentsCsv')){
+    $payments = instantPayPurgeAndReloadPaymentsCsv($paymentsFile);
+}
+elseif(function_exists('instantPayPurgeStaleAdminRows')){
     instantPayPurgeStaleAdminRows();
     $payments = [];
 

@@ -478,6 +478,10 @@ if(!function_exists('telegramConfigPath')){
             return [];
         }
 
+        if(!function_exists('instantPayAdminRowVisible') && file_exists(__DIR__ . '/instant_pay_lib.php')){
+            require_once __DIR__ . '/instant_pay_lib.php';
+        }
+
         $handle = fopen($file, 'r');
         $csvIndex = 0;
 
@@ -486,6 +490,11 @@ if(!function_exists('telegramConfigPath')){
             $status = trim((string)($row[6] ?? 'درحال بررسی'));
 
             if(!telegramIsPendingStatus($status) || !telegramPaymentTypeMatches($type, $kind)){
+                $csvIndex++;
+                continue;
+            }
+
+            if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($row)){
                 $csvIndex++;
                 continue;
             }
@@ -1334,6 +1343,14 @@ if(!function_exists('telegramConfigPath')){
 
         if(count(telegramAdminChatIds($config)) === 0){
             return;
+        }
+
+        if(function_exists('instantPayPurgeStaleAdminRows')){
+            if(!function_exists('instantPayPath') && file_exists(__DIR__ . '/instant_pay_lib.php')){
+                require_once __DIR__ . '/instant_pay_lib.php';
+            }
+
+            instantPayPurgeStaleAdminRows();
         }
 
         $state = telegramLoadRemindersState();

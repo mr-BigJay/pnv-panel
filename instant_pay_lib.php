@@ -389,6 +389,42 @@ if(!function_exists('instantPayPath')){
         return true;
     }
 
+    function instantPayIsAdminPendingPayment($row){
+        if(!is_array($row) || !instantPayAdminRowVisible($row)){
+            return false;
+        }
+
+        $status = trim((string)($row[6] ?? ''));
+
+        return $status !== 'تایید شد' && $status !== 'رد شد';
+    }
+
+    function instantPayReloadPaymentsCsv($paymentsFile){
+        $payments = [];
+
+        if(file_exists($paymentsFile)){
+            $handle = fopen($paymentsFile, 'r');
+
+            if($handle){
+                while(($row = fgetcsv($handle)) !== false){
+                    $payments[] = $row;
+                }
+
+                fclose($handle);
+            }
+        }
+
+        return $payments;
+    }
+
+    function instantPayPurgeAndReloadPaymentsCsv($paymentsFile){
+        if(function_exists('instantPayPurgeStaleAdminRows')){
+            instantPayPurgeStaleAdminRows();
+        }
+
+        return instantPayReloadPaymentsCsv($paymentsFile);
+    }
+
     function instantPayCloseUserMatchable($username, $exceptId = null, $items = null){
         $username = trim((string)$username);
         $exceptId = $exceptId !== null ? trim((string)$exceptId) : null;
