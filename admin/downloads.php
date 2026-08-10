@@ -54,6 +54,8 @@ exit;
 
 }
 
+}
+
 if(isset($_GET['delete'])){
 
 $file =
@@ -286,9 +288,11 @@ text-align:center;
 
 </style>
 
+<?php adminBottomNavStyles(); ?>
+
 </head>
 
-<body>
+<body class="adminHasBottomNav">
 <?php adminQuickNavStyles(); adminQuickNav('downloads'); ?>
 
 
@@ -511,6 +515,8 @@ xhr.send(formData);
 });
 
 </script>
+
+<?php adminStandaloneBottomNav('downloads'); ?>
 
 </body>
 

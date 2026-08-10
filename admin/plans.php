@@ -312,9 +312,11 @@ font-size:16px;
 
 </style>
 
+<?php adminBottomNavStyles(); ?>
+
 </head>
 
-<body>
+<body class="adminHasBottomNav">
 <?php adminQuickNavStyles(); adminQuickNav('plans'); ?>
 
 
@@ -511,6 +513,8 @@ class="back">
 </div>
 
 </div>
+
+<?php adminStandaloneBottomNav('plans'); ?>
 
 </body>
 

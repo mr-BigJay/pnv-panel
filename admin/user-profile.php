@@ -97,12 +97,14 @@ if(file_exists($paymentsFile)){
         $status = trim($d[6] ?? 'درحال بررسی');
         $linkCleared = ($status === 'تایید شد' && $link === '');
 
+        $when = pnvFormatPaymentRowDateTime($d);
+
         $purchases[] = [
             'config' => $configName,
             'plan' => $d[2] ?? '',
             'tracking' => $d[3] ?? '',
-            'date' => $d[4] ?? '',
-            'time' => $d[5] ?? '',
+            'date' => $when['date'],
+            'time' => $when['time'],
             'status' => $status,
             'link' => $link,
             'timestamp' => intval($d[8] ?? 0),

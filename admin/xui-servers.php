@@ -257,8 +257,9 @@ h1{font-size:20px}
 .card-head{align-items:flex-start;flex-direction:column}
 }
 </style>
+<?php adminBottomNavStyles(); ?>
 </head>
-<body>
+<body class="adminHasBottomNav">
 <?php adminQuickNavStyles(); adminQuickNav('xui'); ?>
 
 <div class="page">
@@ -346,5 +347,6 @@ h1{font-size:20px}
 <a class="back" href="<?php echo xuiAdminH($backUrl); ?>">بازگشت به مدیریت</a>
 
 </div>
+<?php adminStandaloneBottomNav('xui'); ?>
 </body>
 </html>

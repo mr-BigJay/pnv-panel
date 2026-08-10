@@ -108,8 +108,9 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 .test{background:#2563eb}.back{background:#334155;margin-top:20px}
 @media(max-width:600px){body{padding:10px}.box{padding:22px 16px;border-radius:16px}h2{font-size:22px}.tokenRow{flex-direction:column}.tokenRow button{width:100%;padding:12px}}
 </style>
+<?php adminBottomNavStyles(); ?>
 </head>
-<body>
+<body class="adminHasBottomNav">
 <?php adminQuickNavStyles(); adminQuickNav('telegram'); ?>
 
 <div class="box">
@@ -163,5 +164,6 @@ function toggleTokenVisibility(){
     }
 }
 </script>
+<?php adminStandaloneBottomNav('telegram'); ?>
 </body>
 </html>

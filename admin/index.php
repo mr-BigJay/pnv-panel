@@ -8,7 +8,9 @@ $__pnvBootCandidates = [
 foreach($__pnvBootCandidates as $__pnvBootFile){
     if(is_file($__pnvBootFile)){
         require_once $__pnvBootFile;
-        break;
+        if(function_exists('pnvAdminIsLoggedIn')){
+            break;
+        }
     }
 }
 
@@ -19,7 +21,41 @@ $__pnvFuncCandidates = [
 foreach($__pnvFuncCandidates as $__pnvBootFile){
     if(is_file($__pnvBootFile)){
         require_once $__pnvBootFile;
-        break;
+        if(function_exists('pnvAdminInclude') || function_exists('getUserMobile')){
+            break;
+        }
+    }
+}
+
+if(!function_exists('pnvJalaliToday')){
+    foreach([
+        __DIR__ . '/../pnv_date_bootstrap.php',
+        dirname(__DIR__) . '/pnv_date_bootstrap.php',
+    ] as $__pnvDateBoot){
+        if(is_file($__pnvDateBoot)){
+            require_once $__pnvDateBoot;
+            break;
+        }
+    }
+}
+
+if(!function_exists('pnvAdminInclude')){
+    function pnvAdminInclude($fileName){
+        $name = ltrim((string)$fileName, '/');
+        foreach([
+            __DIR__ . '/' . $name,
+            __DIR__ . '/../admin/' . $name,
+        ] as $path){
+            if(is_file($path)){
+                extract($GLOBALS, EXTR_SKIP);
+                include $path;
+                return true;
+            }
+        }
+        echo '<div class="box" style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">'
+            . 'فایل «' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '» یافت نشد.'
+            . '</div>';
+        return false;
     }
 }
 
@@ -225,6 +261,20 @@ exit;
 }
 
 $page = $_GET['page'] ?? 'dashboard';
+$pnvRootDir = dirname(__DIR__);
+
+foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $__navFile) {
+    if (is_file($__navFile)) {
+        require_once $__navFile;
+        break;
+    }
+}
+
+if(!function_exists('adminBottomNavStyles')){
+    function adminBottomNavStyles(){}
+    function adminBottomNav($options = []){}
+    function adminBottomNavScript(){}
+}
 
 $supportActionResult = null;
 
@@ -236,7 +286,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
 $supportActionResult =
 supportProcessAdminActions(
-'../db/support.json',
+$pnvRootDir . '/db/support.json',
 true
 );
 
@@ -252,12 +302,16 @@ exit;
 
 }
 
-$plansFile = '../db/plans.json';
-$cardsFile = '../db/cards.json';
-$usersFile = '../db/users.json';
-$paymentsFile = '../invoices/payments.csv';
+$plansFile = $pnvRootDir . '/db/plans.json';
+$cardsFile = $pnvRootDir . '/db/cards.json';
+$usersFile = $pnvRootDir . '/db/users.json';
+$paymentsFile = $pnvRootDir . '/invoices/payments.csv';
 
-require_once __DIR__ . '/../instant_pay_lib.php';
+$instantPayLib = __DIR__ . '/../instant_pay_lib.php';
+
+if(is_file($instantPayLib)){
+    require_once $instantPayLib;
+}
 
 $plans = file_exists($plansFile)
 ? json_decode(file_get_contents($plansFile),true)
@@ -283,10 +337,27 @@ if(!is_array($users)){
 $users=[];
 }
 
-$payments = instantPayPurgeAndReloadPaymentsCsv($paymentsFile);
+$payments=[];
+
+if(function_exists('instantPayPurgeAndReloadPaymentsCsv')){
+    $payments = instantPayPurgeAndReloadPaymentsCsv($paymentsFile);
+}
+elseif(file_exists($paymentsFile)){
+
+$f=fopen($paymentsFile,'r');
+
+while(($d=fgetcsv($f))!==FALSE){
+
+$payments[]=$d;
+
+}
+
+fclose($f);
+
+}
 
 $supportFile =
-"../db/support.json";
+$pnvRootDir . '/db/support.json';
 
 $hasUnreadSupport = false;
 
@@ -298,10 +369,14 @@ $supportData = supportLoad($supportFile);
 
 $hasUnreadSupport = supportAdminHasUnread($supportData);
 
+$supportUnreadCount = supportAdminUnreadTotal($supportData);
+
 }
 
 $hasNewPayments = false;
 $hasNewRenews = false;
+$pendingPaymentsCount = 0;
+$pendingRenewsCount = 0;
 
 foreach($payments as $pay){
 
@@ -320,6 +395,21 @@ instantPayIsAdminPendingPayment($pay)
 ){
 
 $hasNewPayments = true;
+$pendingPaymentsCount++;
+
+}
+elseif(
+($type == 'خرید' || $type == '')
+&&
+!function_exists('instantPayIsAdminPendingPayment')
+&&
+$status != 'تایید شد'
+&&
+$status != 'رد شد'
+){
+
+$hasNewPayments = true;
+$pendingPaymentsCount++;
 
 }
 
@@ -332,25 +422,35 @@ instantPayIsAdminPendingPayment($pay)
 ){
 
 $hasNewRenews = true;
+$pendingRenewsCount++;
+
+}
+elseif(
+$type == 'تمدید'
+&&
+!function_exists('instantPayIsAdminPendingPayment')
+&&
+$status != 'تایید شد'
+&&
+$status != 'رد شد'
+){
+
+$hasNewRenews = true;
+$pendingRenewsCount++;
 
 }
 
 }
 
-$today =
-date("Y-m-d");
+if(!isset($supportUnreadCount)){
+    $supportUnreadCount = 0;
+}
 
 $todayUsers = 0;
 
 foreach($users as $u){
 
-if(
-isset($u['created_at'])
-&&
-substr($u['created_at'],0,10)
-==
-$today
-){
+if(isset($u['created_at']) && pnvIsTodayTehran($u['created_at'])){
 
 $todayUsers++;
 
@@ -366,21 +466,18 @@ $todayPayments = 0;
 $totalRenews = 0;
 $todayRenews = 0;
 
-$todayShamsi = function_exists('pnvJalaliToday') ? pnvJalaliToday('/') : date('Y/m/d');
+$todayShamsi = pnvJalaliToday('/');
 
 foreach($payments as $pay){
 
     $type =
     trim($pay[9] ?? '');
 
-    $payDate =
-    trim($pay[4] ?? '');
-
     if($type == 'تمدید'){
 
         $totalRenews++;
 
-        if($payDate == $todayShamsi){
+        if(pnvPaymentRowIsToday($pay)){
 
             $todayRenews++;
 
@@ -390,7 +487,7 @@ foreach($payments as $pay){
 
         $totalPayments++;
 
-        if($payDate == $todayShamsi){
+        if(pnvPaymentRowIsToday($pay)){
 
             $todayPayments++;
 
@@ -403,7 +500,7 @@ foreach($payments as $pay){
 $renewsCount = 0;
 
 $renewFile =
-"../db/renews.json";
+$pnvRootDir . '/db/renews.json';
 
 if(file_exists($renewFile)){
 
@@ -565,7 +662,7 @@ $server = $_POST['server'];
 
 move_uploaded_file(
 $_FILES['csv']['tmp_name'],
-'../db/'.$server.'.csv'
+$pnvRootDir . '/db/' . $server . '.csv'
 );
 
 header('Location: ' . pnvAdminUrl('index.php?page=upload'));
@@ -823,7 +920,7 @@ overflow:hidden;
 height:100dvh;
 }
 
-.adminMenuBtn{display:flex;align-items:center;justify-content:center}
+.adminMenuBtn{display:none}
 
 .sidebar{
 position:fixed;
@@ -877,9 +974,11 @@ grid-template-columns:1fr;
 
 </style>
 
+<?php adminBottomNavStyles(); ?>
+
 </head>
 
-<body class="<?php echo $page === 'support' ? 'adminPageSupport' : ''; ?>">
+<body class="<?php echo $page === 'support' ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
 
 <button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
 <div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
@@ -1002,7 +1101,7 @@ class="red">
 
 <?php if($page=='dashboard'){ ?>
 
-<?php include "dashboard.php"; ?>
+<?php pnvAdminInclude('dashboard.php'); ?>
 
 <?php } ?>
 
@@ -1010,20 +1109,20 @@ class="red">
 
 <?php
 $supportEmbedded = true;
-include "support.php";
+pnvAdminInclude('support.php');
 ?>
 
 <?php } ?>
 
 <?php if($page=='payments'){ ?>
 
-<?php include "payments.php"; ?>
+<?php pnvAdminInclude('payments.php'); ?>
 
 <?php } ?>
 
 <?php if($page=='renews'){ ?>
 
-<?php include "renews.php"; ?>
+<?php pnvAdminInclude('renews.php'); ?>
 
 <?php } ?>
 
@@ -1170,6 +1269,20 @@ name="uploadcsv">
 
 </div>
 
+<?php
+$adminBottomActive = in_array($page, ['support', 'renews', 'payments'], true) ? $page : '';
+adminBottomNav([
+    'active' => $adminBottomActive,
+    'more_mode' => 'sheet',
+    'badges' => [
+        'support' => $supportUnreadCount,
+        'renews' => $pendingRenewsCount,
+        'payments' => $pendingPaymentsCount,
+    ],
+]);
+adminBottomNavScript();
+?>
+
 <script>
 (function(){
     const menuBtn = document.getElementById('adminMenuBtn');
@@ -1198,7 +1311,7 @@ name="uploadcsv">
 
     const pollUrl = <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>;
 
-    function setUnreadDot(hasUnread){
+    function setUnreadDot(hasUnread, unreadCount){
         let dot = menuLink.querySelector('.notifDot');
 
         if(hasUnread){
@@ -1207,11 +1320,17 @@ name="uploadcsv">
                 dot.className = 'notifDot';
                 menuLink.insertBefore(dot, menuLink.firstChild);
             }
+            if(typeof window.adminBottomNavSetBadge === 'function'){
+                window.adminBottomNavSetBadge('support', unreadCount || 1);
+            }
             return;
         }
 
         if(dot){
             dot.remove();
+        }
+        if(typeof window.adminBottomNavSetBadge === 'function'){
+            window.adminBottomNavSetBadge('support', 0);
         }
     }
 
@@ -1219,7 +1338,7 @@ name="uploadcsv">
         fetch(pollUrl, {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(data){
-                setUnreadDot(!!data.has_unread);
+                setUnreadDot(!!data.has_unread, data.unread_count || 0);
             })
             .catch(function(){});
     }
