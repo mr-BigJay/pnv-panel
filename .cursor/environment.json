@@ -2,6 +2,7 @@
   "name": "pnv-panel",
   "user": "ubuntu",
   "install": "sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y php-cli php-sqlite3 php-gd php-mbstring php-curl && mkdir -p temp phpqrcode/cache",
+  "start": "mkdir -p temp phpqrcode/cache",
   "terminals": [
     {
       "name": "PHP Server",
