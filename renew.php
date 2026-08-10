@@ -169,7 +169,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=17">
+<link rel="stylesheet" href="plan_step_ui.css?v=18">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -646,6 +646,25 @@ function pickSubscription(){
 }
 window.pickSubscription = pickSubscription;
 
+function escapeHtml(s){
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+const planSummaryCubeSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg>';
+
+function renderPlanSummaryHtml(plan, category, extraHtml){
+    extraHtml = extraHtml || '';
+    const typeLabel = category === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی';
+    return '<div class="planSummaryCard">' +
+        '<div class="planSummaryBody">' +
+        '<div class="planSummaryLine1">پلن: <span class="planSummaryHighlight">' + escapeHtml(plan.name) + '</span> — ' + escapeHtml(plan.price_text) + '</div>' +
+        '<div class="planSummaryLine2">نوع: ' + typeLabel + '</div>' +
+        extraHtml +
+        '</div>' +
+        '<div class="planSummaryIcon">' + planSummaryCubeSvg + '</div>' +
+        '</div>';
+}
+
 function updateContinueState(){
     if(!toStep2Btn) return;
     const locked = selectedCategory && (
@@ -763,12 +782,15 @@ function showStep(step){
     if(stepLine2) stepLine2.classList.toggle('is-active', step > 2);
     if(step === 2 && selectedPlan){
         planSummary.classList.add('is-visible');
-        let html = 'پلن: <b>' + selectedPlan.name + '</b> — ' + selectedPlan.price_text;
-        html += '<br>نوع: ' + (selectedCategory === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی');
-        if(selectedCategory === 'limited') html += '<br>مدت: <b>' + (selectedPlan.days_label || '—') + '</b>';
+        let extraHtml = '';
+        if(selectedCategory === 'limited'){
+            extraHtml += '<div class="planSummaryExtra">مدت: <b>' + escapeHtml(selectedPlan.days_label || '—') + '</b></div>';
+        }
         const sub = document.getElementById('subInput').value.trim();
-        if(sub) html += '<br>اشتراک: <b style="word-break:break-all">' + sub + '</b>';
-        planSummary.innerHTML = html;
+        if(sub){
+            extraHtml += '<div class="planSummaryExtra">اشتراک: <b style="word-break:break-all">' + escapeHtml(sub) + '</b></div>';
+        }
+        planSummary.innerHTML = renderPlanSummaryHtml(selectedPlan, selectedCategory, extraHtml);
         syncCardBox();
         validateCoupon();
         ensureInstantPay();
@@ -790,9 +812,16 @@ function selectCardMeta(card){
 function renderCardTabs(){
     if(!cardTabs) return;
     cardTabs.innerHTML = '';
+    cardTabs.classList.remove('is-hidden');
     const list = Array.isArray(cardsData) ? cardsData : [];
     if(list.length === 0){
         cardTabs.innerHTML = '<div class="cardTabsEmpty">کارتی تعریف نشده است. از پنل ادمین کارت اضافه کنید.</div>';
+        selectCardMeta(null);
+        return;
+    }
+    if(list.length === 1){
+        cardTabs.classList.add('is-hidden');
+        selectCardMeta(list[0]);
         return;
     }
     let preferred = 0;
@@ -1063,7 +1092,7 @@ function ensureInstantPay(forceRestart){
         return;
     }
     if(!card){
-        showPayCreateError('کارت مقصد را از تب بانک‌ها انتخاب کنید');
+        showPayCreateError('کارت مقصد تعریف نشده است');
         return;
     }
     if(!sub){

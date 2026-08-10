@@ -355,17 +355,53 @@ font-size:14px;
 .planEmpty.is-visible{display:block}
 .planSummary{
 display:none;
-background:#0f172a;
-border:1px solid #334155;
-border-radius:16px;
-padding:14px 16px;
 margin-bottom:18px;
-font-size:14px;
-line-height:1.9;
-color:#cbd5e1;
 }
 .planSummary.is-visible{display:block}
-.planSummary b{color:#86efac}
+.planSummaryCard{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:14px;
+padding:14px 16px;
+border-radius:16px;
+background:rgba(15,23,42,.88);
+border:1.5px solid rgba(34,197,94,.55);
+box-shadow:0 0 22px rgba(34,197,94,.14), inset 0 0 0 1px rgba(34,197,94,.06);
+}
+.planSummaryBody{flex:1;min-width:0;text-align:right}
+.planSummaryLine1{
+font-size:14px;
+line-height:1.65;
+color:#f1f5f9;
+margin-bottom:4px;
+}
+.planSummaryHighlight{color:#4ade80;font-weight:700}
+.planSummaryLine2{
+font-size:13px;
+color:#e2e8f0;
+line-height:1.55;
+}
+.planSummaryExtra{
+font-size:12px;
+color:#94a3b8;
+margin-top:4px;
+line-height:1.55;
+}
+.planSummaryExtra b{color:#cbd5e1;font-weight:600}
+.planSummaryIcon{
+flex:0 0 52px;
+width:52px;
+height:52px;
+border-radius:50%;
+background:rgba(34,197,94,.14);
+border:1px solid rgba(34,197,94,.35);
+display:flex;
+align-items:center;
+justify-content:center;
+box-shadow:0 0 18px rgba(34,197,94,.18);
+}
+.planSummaryIcon svg{width:26px;height:26px;color:#4ade80;display:block}
 .infoText{
 margin:0 0 10px;
 font-size:14px;
@@ -460,6 +496,12 @@ border:1px solid rgba(51,65,85,.9);
 overflow-x:auto;
 -webkit-overflow-scrolling:touch;
 scrollbar-width:none;
+}
+.cardTabs.is-hidden{
+display:none!important;
+margin:0;
+padding:0;
+border:0;
 }
 .cardTabs::-webkit-scrollbar{display:none}
 .cardTabsEmpty{
