@@ -845,6 +845,7 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 <script>
 
 const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments'), JSON_UNESCAPED_UNICODE); ?>;
+const paymentsDeleteBase = <?php echo json_encode(pnvAdminUrl('payment_delete.php'), JSON_UNESCAPED_UNICODE); ?>;
 const paymentsPerPage = <?php echo (int)$perPage; ?>;
 const paymentsCurrentPage = <?php echo (int)$currentPage; ?>;
 
@@ -1012,7 +1013,13 @@ openModal(
 
 function confirmDelete(id){
 if(confirm('مطمئن هستید؟')){
-location.href=paymentsListBase+'&deletepayment='+id+'&per='+paymentsPerPage+'&p='+paymentsCurrentPage;
+var target = paymentsDeleteBase
++ (paymentsDeleteBase.indexOf('?') >= 0 ? '&' : '?')
++ 'page=payments'
++ '&deletepayment=' + encodeURIComponent(id)
++ '&per=' + encodeURIComponent(paymentsPerPage)
++ '&p=' + encodeURIComponent(paymentsCurrentPage);
+window.location.replace(target);
 }
 }
 

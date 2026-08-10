@@ -1,5 +1,7 @@
 <?php
 
+ob_start();
+
 // bigjay_controller اغلب auth/functions را کنار index ندارد؛ soft-load کن
 $__pnvBootCandidates = [
     __DIR__ . '/auth.php',
@@ -43,8 +45,8 @@ if(!function_exists('pnvAdminInclude')){
     function pnvAdminInclude($fileName){
         $name = ltrim((string)$fileName, '/');
         foreach([
-            __DIR__ . '/' . $name,
             __DIR__ . '/../admin/' . $name,
+            __DIR__ . '/' . $name,
         ] as $path){
             if(is_file($path)){
                 extract($GLOBALS, EXTR_SKIP);
@@ -262,6 +264,54 @@ exit;
 
 $page = $_GET['page'] ?? 'dashboard';
 $pnvRootDir = dirname(__DIR__);
+
+$pnvListMutation = in_array($page, ['payments', 'renews'], true)
+    && (
+        isset($_GET['deletepayment'])
+        || isset($_POST['approve_payment'])
+        || isset($_POST['reject_payment'])
+    );
+
+if($pnvListMutation){
+    $earlyPaymentsFile = $pnvRootDir . '/invoices/payments.csv';
+    $earlyPayments = [];
+
+    if(is_file(__DIR__ . '/../instant_pay_lib.php')){
+        require_once __DIR__ . '/../instant_pay_lib.php';
+    }
+
+    if(function_exists('instantPayPurgeAndReloadPaymentsCsv')){
+        $earlyPayments = instantPayPurgeAndReloadPaymentsCsv($earlyPaymentsFile);
+    }
+    elseif(is_file($earlyPaymentsFile)){
+        $earlyHandle = fopen($earlyPaymentsFile, 'r');
+
+        if($earlyHandle){
+            while(($earlyRow = fgetcsv($earlyHandle)) !== false){
+                $earlyPayments[] = $earlyRow;
+            }
+
+            fclose($earlyHandle);
+        }
+    }
+
+    foreach ([__DIR__ . '/payment_list_actions.php', __DIR__ . '/../admin/payment_list_actions.php'] as $__actionsFile) {
+        if (is_file($__actionsFile)) {
+            require_once $__actionsFile;
+            break;
+        }
+    }
+
+    if($page === 'payments' && function_exists('pnvAdminBuyPaymentsHandleActions')){
+        define('PNV_BUY_PAYMENTS_ACTIONS_RAN', true);
+        pnvAdminBuyPaymentsHandleActions($earlyPaymentsFile, $earlyPayments);
+    }
+
+    if($page === 'renews' && function_exists('pnvAdminRenewPaymentsHandleActions')){
+        define('PNV_RENEW_PAYMENTS_ACTIONS_RAN', true);
+        pnvAdminRenewPaymentsHandleActions($earlyPaymentsFile, $earlyPayments);
+    }
+}
 
 foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $__navFile) {
     if (is_file($__navFile)) {
@@ -669,23 +719,6 @@ header('Location: ' . pnvAdminUrl('index.php?page=upload'));
 
 exit;
 
-}
-
-foreach ([__DIR__ . '/payment_list_actions.php', __DIR__ . '/../admin/payment_list_actions.php'] as $__actionsFile) {
-    if (is_file($__actionsFile)) {
-        require_once $__actionsFile;
-        break;
-    }
-}
-
-if($page === 'payments' && function_exists('pnvAdminBuyPaymentsHandleActions')){
-    define('PNV_BUY_PAYMENTS_ACTIONS_RAN', true);
-    pnvAdminBuyPaymentsHandleActions($paymentsFile, $payments);
-}
-
-if($page === 'renews' && function_exists('pnvAdminRenewPaymentsHandleActions')){
-    define('PNV_RENEW_PAYMENTS_ACTIONS_RAN', true);
-    pnvAdminRenewPaymentsHandleActions($paymentsFile, $payments);
 }
 
 ?>

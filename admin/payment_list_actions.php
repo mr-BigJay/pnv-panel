@@ -1,5 +1,24 @@
 <?php
 
+if(!function_exists('pnvAdminDeletePaymentByIndex')){
+    function pnvAdminDeletePaymentByIndex($paymentsFile, &$payments, $id){
+        $id = intval($id);
+
+        if(isset($payments[$id])){
+            unset($payments[$id]);
+            $payments = array_values($payments);
+        }
+
+        pnvAdminSavePaymentsCsv($paymentsFile, $payments);
+
+        if(function_exists('instantPayRebuildCsvIndexes')){
+            instantPayRebuildCsvIndexes();
+        }
+
+        return true;
+    }
+}
+
 if(!function_exists('pnvAdminSavePaymentsCsv')){
     function pnvAdminSavePaymentsCsv($paymentsFile, $payments){
         $fp = fopen($paymentsFile, 'w');
@@ -127,16 +146,7 @@ if(!function_exists('pnvAdminBuyPaymentsHandleActions')){
                 $redirectPer = 20;
             }
 
-            if(isset($payments[$id])){
-                unset($payments[$id]);
-                $payments = array_values($payments);
-            }
-
-            pnvAdminSavePaymentsCsv($paymentsFile, $payments);
-
-            if(function_exists('instantPayRebuildCsvIndexes')){
-                instantPayRebuildCsvIndexes();
-            }
+            pnvAdminDeletePaymentByIndex($paymentsFile, $payments, $id);
 
             header('Location: ' . pnvAdminUrl(
                 'index.php?page=payments&p=' . $redirectPage . '&per=' . $redirectPer
@@ -207,16 +217,7 @@ if(!function_exists('pnvAdminRenewPaymentsHandleActions')){
             $id = intval($_GET['deletepayment']);
             $redirectPage = max(1, intval($_GET['p'] ?? 1));
 
-            if(isset($payments[$id])){
-                unset($payments[$id]);
-                $payments = array_values($payments);
-            }
-
-            pnvAdminSavePaymentsCsv($paymentsFile, $payments);
-
-            if(function_exists('instantPayRebuildCsvIndexes')){
-                instantPayRebuildCsvIndexes();
-            }
+            pnvAdminDeletePaymentByIndex($paymentsFile, $payments, $id);
 
             header('Location: ' . pnvAdminUrl('index.php?page=renews&p=' . $redirectPage));
             exit;

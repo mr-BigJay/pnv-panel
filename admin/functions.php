@@ -82,7 +82,7 @@ function pnvAdminInclude($fileName){
     $name = ltrim((string)$fileName, '/');
     $candidates = [];
 
-    foreach([__DIR__, dirname(__DIR__) . '/bigjay_controller', dirname(__DIR__) . '/admin'] as $root){
+    foreach([__DIR__, dirname(__DIR__) . '/admin', dirname(__DIR__) . '/bigjay_controller'] as $root){
         if(!is_dir($root)){
             continue;
         }

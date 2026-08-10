@@ -830,6 +830,7 @@ var renewResultMessage = <?php echo json_encode($paymentMessage, JSON_UNESCAPED_
 var renewResultDetail = <?php echo json_encode($paymentMessageDetail, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultError = <?php echo json_encode($paymentError, JSON_UNESCAPED_UNICODE); ?>;
 var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews'), JSON_UNESCAPED_UNICODE); ?>;
+var renewsDeleteBase = <?php echo json_encode(pnvAdminUrl('payment_delete.php'), JSON_UNESCAPED_UNICODE); ?>;
 var renewsCurrentPage = <?php echo (int)$currentPage; ?>;
 
 function closeMenus(){
@@ -979,7 +980,12 @@ openModal(
 
 function deleteItem(id){
 if(confirm('حذف شود؟')){
-location.href = renewsPageUrl + (renewsPageUrl.indexOf('?') >= 0 ? '&' : '?') + 'deletepayment=' + encodeURIComponent(id) + '&p=' + renewsCurrentPage;
+var target = renewsDeleteBase
++ (renewsDeleteBase.indexOf('?') >= 0 ? '&' : '?')
++ 'page=renews'
++ '&deletepayment=' + encodeURIComponent(id)
++ '&p=' + encodeURIComponent(renewsCurrentPage);
+window.location.replace(target);
 }
 }
 
