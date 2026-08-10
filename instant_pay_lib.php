@@ -42,6 +42,80 @@ if(!function_exists('instantPayPath')){
         return $n > 60 ? $n : 600;
     }
 
+    function instantPayMatchGraceSeconds($config = null){
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        $grace = intval($config['match_grace_seconds'] ?? 0);
+
+        if($grace > 0){
+            return $grace;
+        }
+
+        $window = instantPayWindowSeconds($config);
+        return max(1800, $window * 2);
+    }
+
+    function instantPayMatchUntil($item){
+        return intval($item['expires_at'] ?? 0) + instantPayMatchGraceSeconds();
+    }
+
+    function instantPayItemCanMatch($item, $now = null){
+        if(!is_array($item)){
+            return false;
+        }
+
+        $now = $now ?? time();
+        $status = (string)($item['status'] ?? '');
+
+        if(!in_array($status, ['waiting', 'expired'], true)){
+            return false;
+        }
+
+        return instantPayMatchUntil($item) >= $now;
+    }
+
+    function instantPayResolveCsvIndex($item){
+        if(!is_array($item) || !function_exists('xuiLoadPayments')){
+            return -1;
+        }
+
+        $tracking = instantPayTrackingCode($item);
+        $user = strtolower(trim((string)($item['user'] ?? '')));
+        $payments = xuiLoadPayments();
+        $idx = intval($item['csv_index'] ?? -1);
+
+        if($idx >= 0 && isset($payments[$idx]) && is_array($payments[$idx])){
+            $row = $payments[$idx];
+
+            if(
+                trim((string)($row[3] ?? '')) === $tracking
+                && ($user === '' || strtolower(trim((string)($row[0] ?? ''))) === $user)
+            ){
+                return $idx;
+            }
+        }
+
+        foreach($payments as $i => $row){
+            if(!is_array($row)){
+                continue;
+            }
+
+            if(trim((string)($row[3] ?? '')) !== $tracking){
+                continue;
+            }
+
+            if($user !== '' && strtolower(trim((string)($row[0] ?? ''))) !== $user){
+                continue;
+            }
+
+            return intval($i);
+        }
+
+        return -1;
+    }
+
     function instantPayNewId(){
         try{
             return bin2hex(random_bytes(8));
@@ -68,11 +142,7 @@ if(!function_exists('instantPayPath')){
         $codes = [];
 
         foreach($items as $item){
-            if(($item['status'] ?? '') !== 'waiting'){
-                continue;
-            }
-
-            if(intval($item['expires_at'] ?? 0) < $now){
+            if(!instantPayItemCanMatch($item, $now)){
                 continue;
             }
 
@@ -241,7 +311,18 @@ if(!function_exists('instantPayPath')){
 
             $st = trim((string)($row[6] ?? ''));
 
-            if(in_array($st, ['', 'درحال بررسی', 'در حال بررسی', 'رد شد'], true)){
+            if(in_array($st, ['', 'درحال بررسی', 'در حال بررسی'], true)){
+                $toDelete[] = $i;
+                continue;
+            }
+
+            if($st === 'رد شد'){
+                $reason = trim((string)($row[7] ?? ''));
+
+                if(strpos($reason, 'خطا در صدور') === 0){
+                    continue;
+                }
+
                 $toDelete[] = $i;
             }
         }
@@ -265,7 +346,7 @@ if(!function_exists('instantPayPath')){
         }
 
         $now = time();
-        $grace = 600;
+        $grace = instantPayMatchGraceSeconds();
         $changed = false;
 
         foreach($items as $i => $item){
@@ -273,8 +354,12 @@ if(!function_exists('instantPayPath')){
             $expires = intval($item['expires_at'] ?? 0);
             $shouldDelete = false;
 
-            if(in_array($status, ['cancelled', 'failed'], true)){
+            if($status === 'cancelled'){
                 $shouldDelete = true;
+            }
+
+            if($status === 'failed'){
+                $shouldDelete = empty($item['provision_failed']);
             }
 
             if($status === 'expired' && $expires > 0 && ($now - $expires) >= $grace){
@@ -310,7 +395,13 @@ if(!function_exists('instantPayPath')){
         foreach($items as $item){
             $st = (string)($item['status'] ?? '');
 
-            if(in_array($st, ['waiting', 'processing', 'paid'], true) && empty($item['csv_purged'])){
+            if(
+                empty($item['csv_purged'])
+                && (
+                    in_array($st, ['waiting', 'processing', 'paid'], true)
+                    || ($st === 'failed' && !empty($item['provision_failed']))
+                )
+            ){
                 $activeKeys[strtolower(trim((string)($item['user'] ?? ''))) . '|' . instantPayTrackingCode($item)] = true;
             }
         }
@@ -330,6 +421,14 @@ if(!function_exists('instantPayPath')){
             }
 
             $st = trim((string)($row[6] ?? ''));
+
+            if($st === 'رد شد'){
+                $reason = trim((string)($row[7] ?? ''));
+
+                if(strpos($reason, 'خطا در صدور') === 0){
+                    continue;
+                }
+            }
 
             if(!in_array($st, ['', 'درحال بررسی', 'در حال بررسی', 'رد شد'], true)){
                 continue;
@@ -383,6 +482,10 @@ if(!function_exists('instantPayPath')){
 
             if(in_array($reason, ['لغو شد', 'منقضی شد', 'لغو به‌خاطر مبلغ جدید'], true)){
                 return false;
+            }
+
+            if(strpos($reason, 'خطا در صدور') === 0){
+                return true;
             }
         }
 
@@ -487,7 +590,7 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if(intval($item['expires_at'] ?? 0) >= $now){
+            if(instantPayMatchUntil($item) >= $now){
                 continue;
             }
 
@@ -772,7 +875,7 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayMarkPaid($id, $meta = []){
-        $items = instantPayExpireDue();
+        $items = instantPayRebuildCsvIndexes(instantPayExpireDue());
         $id = trim((string)$id);
         $found = null;
         $idx = -1;
@@ -793,14 +896,24 @@ if(!function_exists('instantPayPath')){
             return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
         }
 
-        if(($found['status'] ?? '') !== 'waiting'){
+        if(($found['status'] ?? '') === 'processing'){
+            return ['ok' => false, 'error' => 'سفارش در حال پردازش است'];
+        }
+
+        if(!instantPayItemCanMatch($found)){
             return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . ($found['status'] ?? '') . ')'];
         }
 
-        $csvIndex = intval($found['csv_index'] ?? -1);
+        $csvIndex = instantPayResolveCsvIndex($found);
 
         if($csvIndex < 0){
-            return ['ok' => false, 'error' => 'ایندکس پرداخت نامعتبر است'];
+            return ['ok' => false, 'error' => 'ردیف پرداخت در لیست پیدا نشد'];
+        }
+
+        if($idx >= 0 && intval($items[$idx]['csv_index'] ?? -1) !== $csvIndex){
+            $items[$idx]['csv_index'] = $csvIndex;
+            instantPaySave($items);
+            $found['csv_index'] = $csvIndex;
         }
 
         // تاریخ/ساعت را برای لاگ پر می‌کنیم
@@ -835,6 +948,12 @@ if(!function_exists('instantPayPath')){
         if(empty($result['ok'])){
             $items[$idx]['status'] = 'failed';
             $items[$idx]['message'] = $result['error'] ?? 'تأیید ناموفق';
+            $items[$idx]['provision_failed'] = true;
+
+            if(function_exists('xuiRejectPaymentIndex') && $csvIndex >= 0){
+                xuiRejectPaymentIndex($csvIndex, 'خطا در صدور: ' . ($result['error'] ?? 'ناموفق'));
+            }
+
             instantPaySave($items);
             return $result;
         }
@@ -915,11 +1034,7 @@ if(!function_exists('instantPayPath')){
         $candidates = [];
 
         foreach($items as $item){
-            if(($item['status'] ?? '') !== 'waiting'){
-                continue;
-            }
-
-            if(intval($item['expires_at'] ?? 0) < $now){
+            if(!instantPayItemCanMatch($item)){
                 continue;
             }
 
@@ -1057,11 +1172,7 @@ if(!function_exists('instantPayPath')){
         $now = time();
 
         foreach($items as $item){
-            if(($item['status'] ?? '') !== 'waiting'){
-                continue;
-            }
-
-            if(intval($item['expires_at'] ?? 0) < $now){
+            if(!instantPayItemCanMatch($item, $now)){
                 continue;
             }
 

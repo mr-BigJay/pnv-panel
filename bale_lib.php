@@ -179,6 +179,19 @@ if(!function_exists('baleConfigPath')){
             }
         }
 
+        // API بله: forward_from / forward_origin
+        foreach(['forward_origin', 'forward_from'] as $forwardKey){
+            if(empty($message[$forwardKey]) || !is_array($message[$forwardKey])){
+                continue;
+            }
+
+            foreach(['text', 'caption', 'title', 'username'] as $key){
+                if(!empty($message[$forwardKey][$key]) && is_string($message[$forwardKey][$key])){
+                    $parts[] = trim($message[$forwardKey][$key]);
+                }
+            }
+        }
+
         $parts = array_values(array_unique(array_filter($parts, static function($part){
             return $part !== '';
         })));
