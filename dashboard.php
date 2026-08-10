@@ -213,20 +213,43 @@ display:flex;
 align-items:flex-start;
 gap:12px;
 }
-.dashAvatar{
-width:72px;
-height:72px;
-border-radius:50%;
+.dashAvatarWrap{
+position:relative;
 flex:0 0 auto;
+}
+.dashAvatar{
+width:108px;
+height:108px;
+border-radius:50%;
 display:flex;
 align-items:center;
 justify-content:center;
-font-size:30px;
+font-size:42px;
 font-weight:700;
 color:#fff;
 background:linear-gradient(135deg,#22c55e 0%,#2563eb 100%);
 box-shadow:0 4px 14px rgba(37,99,235,.25);
 overflow:hidden;
+}
+.dashAvatar--empty{
+cursor:pointer;
+}
+.dashAvatarBadge{
+position:absolute;
+left:-2px;
+bottom:-2px;
+width:30px;
+height:30px;
+border-radius:50%;
+background:rgba(15,23,42,.92);
+border:2px solid rgba(148,163,184,.28);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:15px;
+line-height:1;
+pointer-events:none;
+box-shadow:0 4px 10px rgba(0,0,0,.28);
 }
 .dashAvatar img{
 width:100%;
@@ -560,7 +583,8 @@ max-width:360px;
 .dashPrimary{min-height:92px}
 .dashPrimaryIcon{width:34px;height:34px;font-size:18px}
 .dashPrimaryLabel{font-size:11px}
-.dashAvatar{width:66px;height:66px;font-size:26px}
+.dashAvatar{width:99px;height:99px;font-size:36px}
+.dashAvatarBadge{width:26px;height:26px;font-size:13px}
 .dashChip{font-size:9px}
 .dashChip b{font-size:11px}
 .dashItem{min-height:36px;padding:7px 10px}
@@ -579,16 +603,23 @@ max-width:360px;
 <div class="dashMoreWrap">
 <button type="button" class="dashMoreBtn" id="dashMoreBtn" aria-label="منو">⋮</button>
 <div class="dashMoreMenu" id="dashMoreMenu">
+<?php if($avatarUrl !== ''){ ?>
 <button type="button" id="dashEditAvatarBtn">ویرایش عکس پروفایل</button>
+<?php } ?>
 <button type="button" id="dashEditUsernameBtn">تغییر نام کاربری</button>
 </div>
 </div>
 <div class="dashWelcomeRow">
-<div class="dashAvatar" id="dashAvatar">
+<div class="dashAvatarWrap" id="dashAvatarWrap">
+<div class="dashAvatar<?php echo $avatarUrl === '' ? ' dashAvatar--empty' : ''; ?>" id="dashAvatar"<?php echo $avatarUrl === '' ? ' role="button" tabindex="0" aria-label="افزودن عکس پروفایل"' : ''; ?>>
 <?php if($avatarUrl !== ''){ ?>
 <img src="<?php echo dashH($avatarUrl); ?>?v=<?php echo (int)filemtime(__DIR__ . '/' . ltrim($avatarUrl, '/')); ?>" alt="">
 <?php } else { ?>
 <?php echo dashH(dashUserInitial($user)); ?>
+<?php } ?>
+</div>
+<?php if($avatarUrl === ''){ ?>
+<span class="dashAvatarBadge" id="dashAvatarBadge" aria-hidden="true">📷</span>
 <?php } ?>
 </div>
 <div class="dashWelcomeText">
@@ -701,6 +732,8 @@ max-width:360px;
     var editUsernameBtn = document.getElementById('dashEditUsernameBtn');
     var avatarInput = document.getElementById('dashAvatarInput');
     var avatarEl = document.getElementById('dashAvatar');
+    var avatarBadge = document.getElementById('dashAvatarBadge');
+    var hasAvatar = <?php echo $avatarUrl !== '' ? 'true' : 'false'; ?>;
     var usernameModal = document.getElementById('dashUsernameModal');
     var usernameInput = document.getElementById('dashUsernameInput');
     var usernameError = document.getElementById('dashUsernameError');
@@ -979,6 +1012,83 @@ max-width:360px;
         img.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
         img.alt = '';
         avatarEl.appendChild(img);
+        markAvatarHasPhoto();
+    }
+
+    function ensureEditAvatarMenuItem(){
+        var btn = document.getElementById('dashEditAvatarBtn');
+
+        if(btn){
+            return btn;
+        }
+
+        if(!moreMenu){
+            return null;
+        }
+
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'dashEditAvatarBtn';
+        btn.textContent = 'ویرایش عکس پروفایل';
+        btn.addEventListener('click', function(){
+            closeMenu();
+            openAvatarPicker();
+        });
+        moreMenu.insertBefore(btn, moreMenu.firstChild);
+
+        return btn;
+    }
+
+    function markAvatarHasPhoto(){
+        hasAvatar = true;
+
+        if(!avatarEl){
+            return;
+        }
+
+        avatarEl.classList.remove('dashAvatar--empty');
+        avatarEl.removeAttribute('role');
+        avatarEl.removeAttribute('tabindex');
+        avatarEl.removeAttribute('aria-label');
+
+        if(avatarBadge){
+            avatarBadge.remove();
+        }
+
+        ensureEditAvatarMenuItem();
+    }
+
+    function openAvatarPicker(){
+        if(!avatarInput){
+            return;
+        }
+
+        avatarInput.click();
+    }
+
+    function bindEmptyAvatarActions(){
+        if(!avatarEl || hasAvatar){
+            return;
+        }
+
+        avatarEl.addEventListener('click', function(){
+            if(hasAvatar){
+                return;
+            }
+
+            openAvatarPicker();
+        });
+
+        avatarEl.addEventListener('keydown', function(e){
+            if(hasAvatar){
+                return;
+            }
+
+            if(e.key === 'Enter' || e.key === ' '){
+                e.preventDefault();
+                openAvatarPicker();
+            }
+        });
     }
 
     function uploadAvatar(file){
@@ -1099,12 +1209,14 @@ max-width:360px;
         });
     }
 
-    if(editAvatarBtn && avatarInput){
+    if(editAvatarBtn){
         editAvatarBtn.addEventListener('click', function(){
             closeMenu();
-            avatarInput.click();
+            openAvatarPicker();
         });
+    }
 
+    if(avatarInput){
         avatarInput.addEventListener('change', function(){
             if(avatarInput.files && avatarInput.files[0]){
                 openAvatarCropModal(avatarInput.files[0]);
@@ -1112,6 +1224,8 @@ max-width:360px;
             avatarInput.value = '';
         });
     }
+
+    bindEmptyAvatarActions();
 
     if(avatarCropZoom){
         avatarCropZoom.addEventListener('input', function(){
