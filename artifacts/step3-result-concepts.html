@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>طرح‌های صفحه آخر خرید / تمدید</title>
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/plan_step_ui.css?v=preview">
+<style>
+body.previewHub{
+background:#0a0f14;
+padding:24px 16px 48px;
+min-height:auto;
+display:block;
+}
+.hubTitle{
+text-align:center;
+font-family:"Lalezar",tahoma,sans-serif;
+font-size:28px;
+color:#fff;
+margin:0 0 8px;
+}
+.hubSub{
+text-align:center;
+color:#94a3b8;
+font-size:14px;
+line-height:1.8;
+max-width:520px;
+margin:0 auto 28px;
+}
+.conceptGrid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+gap:28px;
+max-width:1200px;
+margin:0 auto;
+}
+.conceptBlock{}
+.conceptLabel{
+font-size:18px;
+font-family:"Lalezar",tahoma,sans-serif;
+color:#86efac;
+margin:0 0 6px;
+}
+.conceptDesc{
+font-size:13px;
+color:#94a3b8;
+line-height:1.7;
+margin:0 0 12px;
+min-height:44px;
+}
+.phoneShell{
+width:100%;
+max-width:390px;
+margin:0 auto;
+border-radius:28px;
+border:2px solid #334155;
+overflow:hidden;
+box-shadow:0 24px 60px rgba(0,0,0,.45);
+background:#0b1016;
+}
+.phoneViewport{
+height:680px;
+overflow:hidden;
+position:relative;
+}
+.phoneViewport .box{
+margin:0;
+min-height:100%;
+border-radius:0;
+border:none;
+box-shadow:none;
+max-width:none;
+padding:14px 14px 16px;
+display:flex;
+flex-direction:column;
+}
+.modeTabs{
+display:flex;
+gap:8px;
+margin-bottom:12px;
+}
+.modeTab{
+flex:1;
+padding:8px;
+border-radius:10px;
+border:1px solid #334155;
+background:#0f172a;
+color:#94a3b8;
+font:inherit;
+font-size:12px;
+cursor:pointer;
+}
+.modeTab.is-on{
+border-color:#22c55e;
+color:#86efac;
+background:rgba(34,197,94,.12);
+}
+.step3Concept{display:none;flex:1;min-height:0}
+.step3Concept.is-on{display:flex;flex-direction:column}
+
+/* ── فعلی (بازتولید فشرده‌تر) ── */
+.c-current .resultCard{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding:16px 14px}
+.c-current .resultQrFrame img{width:min(58vw,180px)}
+.c-current .resultQrWrap{padding:10px}
+.c-current .resultMeta{margin-bottom:10px;font-size:13px}
+.c-current .resultTitle{font-size:20px;margin-bottom:8px}
+
+/* ── A: فشرده یک‌صفحه ── */
+.c-a .doneHero{
+text-align:center;
+padding:10px 0 8px;
+}
+.c-a .doneIcon{
+width:52px;height:52px;
+margin:0 auto 8px;
+border-radius:50%;
+background:rgba(34,197,94,.15);
+border:2px solid rgba(34,197,94,.45);
+display:flex;align-items:center;justify-content:center;
+font-size:26px;
+}
+.c-a .doneTitle{
+font-family:"Lalezar",tahoma,sans-serif;
+font-size:20px;
+margin:0 0 6px;
+}
+.c-a .metaChips{
+display:flex;flex-wrap:wrap;gap:6px;justify-content:center;
+margin-bottom:10px;
+}
+.c-a .chip{
+font-size:11px;
+padding:5px 10px;
+border-radius:999px;
+background:#1e293b;
+border:1px solid #334155;
+color:#cbd5e1;
+}
+.c-a .linkRow{
+display:flex;gap:8px;align-items:stretch;
+margin-bottom:10px;
+}
+.c-a .linkRow .resultLink{
+flex:1;margin:0;font-size:11px;padding:10px;
+max-height:52px;overflow:hidden;
+}
+.c-a .linkRow .copybtn{
+flex:0 0 auto;width:auto;margin:0;padding:10px 14px;font-size:13px;
+}
+.c-a .qrRow{
+display:flex;align-items:center;gap:12px;
+background:#052e16;border:1px solid rgba(34,197,94,.28);
+border-radius:14px;padding:10px 12px;
+margin-bottom:10px;
+}
+.c-a .qrRow img{width:88px;height:88px;border-radius:10px;background:#fff;padding:6px}
+.c-a .qrRowText{font-size:11px;color:#94a3b8;line-height:1.6;text-align:right;flex:1}
+.c-a .btnRow{display:flex;gap:8px}
+.c-a .btnRow .btnGhost{flex:1;margin:0;padding:11px;font-size:13px}
+
+/* ── B: بلیت موفقیت ── */
+.c-b .ticket{
+flex:1;display:flex;flex-direction:column;
+background:#0f172a;border-radius:18px;
+border:1px solid rgba(34,197,94,.35);
+overflow:hidden;
+}
+.c-b .ticketHead{
+background:linear-gradient(135deg,#166534,#22c55e);
+padding:14px 16px;text-align:center;
+}
+.c-b .ticketHead h3{
+margin:0;font-family:"Lalezar",tahoma,sans-serif;font-size:20px;color:#fff;
+}
+.c-b .ticketHead p{margin:4px 0 0;font-size:12px;color:rgba(255,255,255,.85)}
+.c-b .ticketBody{padding:12px 14px;flex:1;display:flex;flex-direction:column}
+.c-b .ticketRow{
+display:flex;justify-content:space-between;gap:8px;
+font-size:12px;padding:6px 0;
+border-bottom:1px dashed rgba(148,163,184,.2);
+color:#cbd5e1;
+}
+.c-b .ticketRow b{color:#fff;font-weight:600}
+.c-b .ticketLink{
+margin:10px 0 8px;
+font-size:11px;line-height:1.6;
+word-break:break-all;direction:ltr;text-align:left;
+color:#bbf7d0;background:#052e16;
+border-radius:10px;padding:8px 10px;
+border:1px solid rgba(34,197,94,.3);
+max-height:48px;overflow:hidden;
+}
+.c-b .ticketFoot{
+display:flex;align-items:center;gap:10px;margin-top:auto;
+}
+.c-b .ticketFoot img{width:80px;height:80px;background:#fff;border-radius:10px;padding:5px}
+.c-b .ticketActions{flex:1;display:flex;flex-direction:column;gap:8px}
+.c-b .ticketActions .copybtn{margin:0;padding:11px}
+.c-b .ticketActions .btnGhost{margin:0;padding:10px;font-size:12px}
+
+/* ── C: خلاصه پلن + QR ── */
+.c-c .resultSplit{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0}
+.c-c .planSummary{margin:0}
+.c-c .planSummary.is-visible{display:block}
+.c-c .planSummaryCard{padding:12px 14px;margin:0}
+.c-c .planSummaryLine1,.c-c .planSummaryLine2{font-size:13px}
+.c-c .successBanner{
+display:flex;align-items:center;gap:10px;
+padding:10px 12px;border-radius:14px;
+background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);
+}
+.c-c .successBanner .tick{font-size:22px}
+.c-c .successBanner strong{display:block;font-size:15px;color:#fff}
+.c-c .successBanner span{font-size:11px;color:#94a3b8}
+.c-c .dualPanel{
+display:grid;grid-template-columns:1fr 100px;gap:10px;align-items:center;
+background:#052e16;border-radius:14px;padding:10px;
+border:1px solid rgba(34,197,94,.28);
+}
+.c-c .dualPanel .resultLink{
+margin:0;font-size:10px;padding:8px;max-height:72px;overflow:hidden;
+}
+.c-c .dualPanel img{width:88px;height:88px;background:#fff;border-radius:10px;padding:5px}
+.c-c .copybtn{margin:0}
+.c-c .btnGhost{margin:0}
+
+/* ── D: مینیمال فیکس ── */
+.c-d .miniDone{
+flex:1;display:flex;flex-direction:column;
+justify-content:space-between;min-height:0;
+padding:4px 0;
+}
+.c-d .miniTop{text-align:center}
+.c-d .miniTop .resultTitle{margin-bottom:6px;font-size:19px}
+.c-d .miniMeta{font-size:12px;color:#94a3b8;line-height:1.7;margin-bottom:8px}
+.c-d .miniMid{
+background:#0f172a;border-radius:16px;padding:12px;
+border:1px solid rgba(148,163,184,.15);
+}
+.c-d .miniLinkLabel{font-size:11px;color:#64748b;margin-bottom:6px;text-align:right}
+.c-d .miniLinkBox{
+display:flex;gap:6px;align-items:center;
+}
+.c-d .miniLinkBox code{
+flex:1;font-size:10px;line-height:1.5;
+color:#bbf7d0;word-break:break-all;direction:ltr;text-align:left;
+background:#052e16;padding:8px;border-radius:10px;
+border:1px solid rgba(34,197,94,.25);
+max-height:40px;overflow:hidden;
+}
+.c-d .miniCopy{
+width:42px;height:42px;border-radius:12px;border:none;
+background:#22c55e;color:#fff;font-size:18px;cursor:pointer;flex-shrink:0;
+}
+.c-d .miniQr{
+display:flex;justify-content:center;align-items:center;gap:14px;
+margin-top:10px;padding-top:10px;
+border-top:1px solid rgba(148,163,184,.12);
+}
+.c-d .miniQr img{width:96px;height:96px;background:#fff;border-radius:12px;padding:6px}
+.c-d .miniQr p{font-size:11px;color:#64748b;line-height:1.6;margin:0;max-width:140px;text-align:right}
+.c-d .miniBottom .btnGhost{width:100%;margin:0;padding:12px}
+
+.hubNote{
+max-width:720px;margin:32px auto 0;
+padding:16px 18px;border-radius:14px;
+background:#1e293b;border:1px solid #334155;
+color:#cbd5e1;font-size:13px;line-height:1.9;
+}
+.hubNote b{color:#86efac}
+</style>
+</head>
+<body class="previewHub">
+
+<h1 class="hubTitle">طرح صفحه آخر — خرید و تمدید</h1>
+<p class="hubSub">هر بلوک = یک موبایل ۳۹۰×۶۸۰. هدف: لینک + QR + اطلاعات بدون اسکرول. روی تب «تمدید» هم ببینید.</p>
+
+<div class="conceptGrid" id="conceptGrid"></div>
+
+<div class="hubNote">
+<b>فعلی</b> = همان ساختار الان (کمی فشرده برای مقایسه)<br>
+<b>A</b> = آیکون موفقیت + چیپ + QR کنار توضیح<br>
+<b>B</b> = بلیت/رسید با هدر سبز<br>
+<b>C</b> = کارت خلاصه پلن (مثل مرحله ۲) + QR کنار لینک<br>
+<b>D</b> = مینیمال: لینک یک‌خط + دکمه کپی + QR کوچک<br>
+بعد از انتخاب بگویید کدام را روی <code>buy.php</code> و <code>renew.php</code> اعمال کنم.
+</div>
+
+<script>
+const SAMPLE = {
+  buy: {
+    title: 'اشتراک شما آماده است',
+    configLabel: 'نام کانفیگ',
+    config: 'tester',
+    plan: '10 گیگ - 100 هزار تومان',
+    link: 'https://vip4.boozhaan.ir:2096/sub/w26d5069t3y07hab',
+    cta: 'اشتراک\u200cهای من',
+    cta2: null
+  },
+  renew: {
+    title: 'تمدید انجام شد',
+    configLabel: 'SubID',
+    config: 'w26d5069t3y07hab',
+    plan: '10 گیگ - 100 هزار تومان',
+    link: 'https://vip4.boozhaan.ir:2096/sub/w26d5069t3y07hab',
+    cta: 'اشتراک\u200cهای من',
+    cta2: 'خرید اشتراک جدید'
+  }
+};
+
+const QR = (url) => 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=' + encodeURIComponent(url);
+
+const stepperHtml = `
+<div class="topBar">
+<a class="backIcon" href="#">←</a>
+<div class="brand">خرید <span>اشتراک</span> جدید</div>
+<div style="width:40px"></div>
+</div>
+<div class="stepper">
+<div class="stepItem is-done"><div class="stepNum">1</div><div class="stepLabel">انتخاب پلن</div></div>
+<div class="stepLine is-done" style="width:36px"></div>
+<div class="stepItem is-done"><div class="stepNum">2</div><div class="stepLabel">پرداخت</div></div>
+<div class="stepLine is-done" style="width:36px"></div>
+<div class="stepItem is-active"><div class="stepNum">3</div><div class="stepLabel">دریافت</div></div>
+</div>`;
+
+function shell(conceptId, label, desc, innerFn){
+  return `<div class="conceptBlock c-${conceptId}" data-concept="${conceptId}">
+    <h2 class="conceptLabel">${label}</h2>
+    <p class="conceptDesc">${desc}</p>
+    <div class="phoneShell">
+      <div class="phoneViewport">
+        <div class="box">
+          <div class="modeTabs">
+            <button type="button" class="modeTab is-on" data-mode="buy">خرید</button>
+            <button type="button" class="modeTab" data-mode="renew">تمدید</button>
+          </div>
+          <div class="step3Concept is-on" data-panel="buy">${innerFn('buy')}</div>
+          <div class="step3Concept" data-panel="renew">${innerFn('renew')}</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function metaHtml(d){
+  return `<div class="resultMeta">${d.configLabel}: <b>${d.config}</b><br>پلن: ${d.plan}</div>`;
+}
+
+function ctaHtml(d){
+  let h = `<a class="btnGhost" href="#">${d.cta}</a>`;
+  if(d.cta2) h += `<a class="btnGhost" href="#">${d.cta2}</a>`;
+  return h;
+}
+
+const concepts = [
+  ['current', 'فعلی (الان)', 'همان چیدمان فعلی — QR بزرگ و فاصله زیاد؛ معمولاً اسکرول می‌خورد.', (mode) => {
+    const d = SAMPLE[mode];
+    return `${stepperHtml}
+    <div class="resultCard">
+      <div class="resultTitle">${d.title}</div>
+      ${metaHtml(d)}
+      <div class="resultLinkWrap">
+        <div class="fieldLabel">لینک اشتراک</div>
+        <div class="resultLink">${d.link}</div>
+        <button type="button" class="copybtn">کپی لینک</button>
+      </div>
+      <div class="resultQrWrap is-visible">
+        <div class="fieldLabel">اسکن QR Code</div>
+        <div class="resultQrFrame"><img src="${QR(d.link)}" alt="QR"></div>
+        <div class="resultQrHint">با اسکن این کد، لینک اشتراک وارد اپ می‌شود</div>
+      </div>
+      ${ctaHtml(d)}
+    </div>`;
+  }],
+  ['a', 'A — فشرده یک‌صفحه', 'تیک + چیپ‌های کوچک؛ QR ۸۸px کنار راهنما؛ بدون اسکرول در ۶۸۰px.', (mode) => {
+    const d = SAMPLE[mode];
+    return `${stepperHtml}
+    <div class="doneHero">
+      <div class="doneIcon">✓</div>
+      <h3 class="doneTitle">${d.title}</h3>
+      <div class="metaChips">
+        <span class="chip">${d.configLabel}: ${d.config}</span>
+        <span class="chip">${d.plan}</span>
+      </div>
+    </div>
+    <div class="linkRow">
+      <div class="resultLink">${d.link}</div>
+      <button type="button" class="copybtn">کپی</button>
+    </div>
+    <div class="qrRow">
+      <img src="${QR(d.link)}" alt="QR">
+      <div class="qrRowText">QR را با اپ VPN اسکن کنید یا لینک را کپی کنید.</div>
+    </div>
+    <div class="btnRow">${ctaHtml(d)}</div>`;
+  }],
+  ['b', 'B — بلیت موفقیت', 'حس رسید بانکی/بلیت؛ QR و دکمه‌ها پایین کارت.', (mode) => {
+    const d = SAMPLE[mode];
+    return `${stepperHtml}
+    <div class="ticket">
+      <div class="ticketHead">
+        <h3>${d.title}</h3>
+        <p>پرداخت تأیید شد</p>
+      </div>
+      <div class="ticketBody">
+        <div class="ticketRow"><span>${d.configLabel}</span><b>${d.config}</b></div>
+        <div class="ticketRow"><span>پلن</span><b>${d.plan}</b></div>
+        <div class="ticketLink">${d.link}</div>
+        <div class="ticketFoot">
+          <img src="${QR(d.link)}" alt="QR">
+          <div class="ticketActions">
+            <button type="button" class="copybtn">کپی لینک</button>
+            ${ctaHtml(d)}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }],
+  ['c', 'C — خلاصه پلن + QR', 'همان استایل planSummary مرحله ۲ + QR کنار لینک.', (mode) => {
+    const d = SAMPLE[mode];
+    const extra = mode === 'buy'
+      ? `<div class="planSummaryLine2">${d.configLabel}: <span class="planSummaryHighlight">${d.config}</span></div>`
+      : `<div class="planSummaryLine2">SubID: <span class="planSummaryHighlight">${d.config}</span></div>`;
+    return `${stepperHtml}
+    <div class="resultSplit">
+      <div class="successBanner">
+        <span class="tick">✅</span>
+        <div><strong>${d.title}</strong><span>لینک و QR آماده است</span></div>
+      </div>
+      <div class="planSummary is-visible">
+        <div class="planSummaryCard">
+          <div class="planSummaryBody">
+            <div class="planSummaryLine1">پلن: <span class="planSummaryHighlight">${d.plan.split(' - ')[0]}</span> — ${d.plan.split(' - ')[1] || ''}</div>
+            ${extra}
+          </div>
+          <div class="planSummaryIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg></div>
+        </div>
+      </div>
+      <div class="dualPanel">
+        <div class="resultLink">${d.link}</div>
+        <img src="${QR(d.link)}" alt="QR">
+      </div>
+      <button type="button" class="copybtn">کپی لینک</button>
+      ${ctaHtml(d)}
+    </div>`;
+  }],
+  ['d', 'D — مینیمال فیکس', 'کمترین متن؛ لینک کوتاه + آیکن کپی + QR ۹۶px.', (mode) => {
+    const d = SAMPLE[mode];
+    return `${stepperHtml}
+    <div class="miniDone">
+      <div class="miniTop">
+        <div class="resultTitle">${d.title}</div>
+        <div class="miniMeta">${d.configLabel}: <b style="color:#fff">${d.config}</b> · ${d.plan}</div>
+      </div>
+      <div class="miniMid">
+        <div class="miniLinkLabel">لینک اشتراک</div>
+        <div class="miniLinkBox">
+          <code>${d.link}</code>
+          <button type="button" class="miniCopy" title="کپی">⧉</button>
+        </div>
+        <div class="miniQr">
+          <img src="${QR(d.link)}" alt="QR">
+          <p>اسکن QR یا کپی لینک برای افزودن به اپ</p>
+        </div>
+      </div>
+      <div class="miniBottom">${ctaHtml(d)}</div>
+    </div>`;
+  }]
+];
+
+document.getElementById('conceptGrid').innerHTML = concepts.map(([id,l,desc,fn]) => shell(id,l,desc,fn)).join('');
+
+document.querySelectorAll('.conceptBlock').forEach(block => {
+  block.querySelectorAll('.modeTab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const mode = tab.dataset.mode;
+      block.querySelectorAll('.modeTab').forEach(t => t.classList.toggle('is-on', t === tab));
+      block.querySelectorAll('.step3Concept').forEach(p => p.classList.toggle('is-on', p.dataset.panel === mode));
+    });
+  });
+});
+</script>
+</body>
+</html>
