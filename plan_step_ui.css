@@ -1,0 +1,1002 @@
+@import url("/fonts.css");
+
+/* Buy/renew step UI — soft mint halo + translucent panel */
+
+*{box-sizing:border-box}
+body{
+background:
+radial-gradient(120% 70% at 50% -10%, rgba(61,220,151,.16) 0%, transparent 55%),
+radial-gradient(90% 50% at 100% 100%, rgba(34,197,94,.08) 0%, transparent 45%),
+linear-gradient(180deg, #0b1016 0%, #0f1419 48%, #0c1218 100%);
+background-attachment:fixed;
+font-family:tahoma,sans-serif;
+direction:rtl;
+color:#fff;
+padding:18px 14px 28px;
+margin:0;
+display:flex;
+justify-content:center;
+min-height:100vh;
+}
+.box{
+width:100%;
+max-width:430px;
+margin:auto;
+background:rgba(18,24,32,.72);
+padding:18px 16px 22px;
+border-radius:24px;
+border:1px solid rgba(148,163,184,.14);
+box-shadow:0 20px 48px rgba(0,0,0,.28);
+backdrop-filter:blur(10px);
+-webkit-backdrop-filter:blur(10px);
+}
+.topBar{
+display:flex;
+align-items:center;
+justify-content:space-between;
+margin-bottom:18px;
+gap:10px;
+}
+.topBar .backIcon{
+width:40px;
+height:40px;
+border-radius:12px;
+background:#0f172a;
+color:#e2e8f0;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+text-decoration:none;
+font-size:20px;
+border:1px solid #334155;
+flex:0 0 40px;
+}
+.topBar .brand{
+flex:1;
+text-align:center;
+font-family:"Lalezar",tahoma,sans-serif;
+font-size:20px;
+font-weight:400;
+letter-spacing:0;
+line-height:1.4;
+color:#fff;
+}
+.topBar .brand span{color:#86efac}
+h2{
+display:none;
+}
+.stepper{
+display:flex;
+align-items:flex-start;
+justify-content:center;
+gap:0;
+margin:8px 0 28px;
+}
+.stepItem{
+display:flex;
+flex-direction:column;
+align-items:center;
+gap:8px;
+min-width:72px;
+}
+.stepNum{
+width:36px;
+height:36px;
+border-radius:999px;
+background:#0f172a;
+border:1px solid #334155;
+color:#94a3b8;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:15px;
+font-weight:700;
+}
+.stepItem.is-active .stepNum{
+background:#22c55e;
+border-color:#22c55e;
+color:#fff;
+}
+.stepItem.is-done .stepNum{
+background:#14532d;
+border-color:#22c55e;
+color:#bbf7d0;
+}
+.stepLabel{
+font-size:13px;
+color:#94a3b8;
+font-weight:600;
+}
+.stepItem.is-active .stepLabel{color:#e2e8f0}
+.stepLine{
+width:36px;
+height:2px;
+background:#334155;
+margin-top:17px;
+border-radius:2px;
+flex-shrink:0;
+}
+.stepLine.is-active{background:#22c55e}
+.formStep{display:none}
+.formStep.is-active{display:block}
+.sectionTitle{
+margin:0 0 12px;
+font-size:18px;
+font-family:"Lalezar",tahoma,sans-serif;
+font-weight:400;
+color:#f8fafc;
+}
+.fieldLabel{
+margin:0 0 8px;
+font-size:14px;
+color:#94a3b8;
+}
+input,select{
+width:100%;
+padding:15px 14px;
+margin:0 0 18px;
+border:1px solid #334155;
+border-radius:14px;
+box-sizing:border-box;
+font-size:16px;
+font-family:inherit;
+background:#0f172a;
+color:#fff;
+}
+input:focus,select:focus{
+outline:none;
+border-color:#22c55e;
+}
+button{
+width:100%;
+padding:16px;
+background:#22c55e;
+border:none;
+border-radius:16px;
+color:#fff;
+font-size:18px;
+font-weight:700;
+font-family:inherit;
+cursor:pointer;
+}
+.btnNext{
+display:flex;
+align-items:center;
+justify-content:center;
+gap:8px;
+margin-top:8px;
+box-shadow:0 10px 24px rgba(34,197,94,.25);
+}
+.btnNext:disabled{
+opacity:.4;
+cursor:not-allowed;
+box-shadow:none;
+}
+.btnGhost{
+width:100%;
+padding:14px;
+margin-bottom:12px;
+background:#0f172a;
+border:1px solid #334155;
+border-radius:14px;
+color:#e2e8f0;
+font-size:16px;
+font-weight:600;
+cursor:pointer;
+}
+.back{
+display:none;
+}
+.msg,.err{
+padding:14px;
+border-radius:14px;
+margin-bottom:16px;
+font-size:15px;
+line-height:1.8;
+}
+.msg{background:#14532d}
+.err{background:#7f1d1d}
+.catGrid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:12px;
+margin-bottom:26px;
+}
+.catCard{
+position:relative;
+width:100%;
+min-height:132px;
+padding:18px 14px 16px;
+border:1.5px solid #334155;
+border-radius:18px;
+background:#0f172a;
+color:#e2e8f0;
+cursor:pointer;
+text-align:center;
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+gap:8px;
+line-height:1.45;
+font-size:inherit;
+font-weight:inherit;
+box-shadow:none;
+}
+.catCard .catIcon{
+width:42px;
+height:42px;
+border-radius:14px;
+background:#1e293b;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:22px;
+color:#86efac;
+}
+.catCard .catTitle{
+font-size:15px;
+font-weight:700;
+color:#fff;
+}
+.catCard .catDesc{
+font-size:12px;
+color:#94a3b8;
+font-weight:500;
+}
+.catCard .catCheck{
+display:none;
+position:absolute;
+top:10px;
+left:10px;
+width:22px;
+height:22px;
+border-radius:999px;
+background:#22c55e;
+color:#fff;
+font-size:13px;
+align-items:center;
+justify-content:center;
+line-height:1;
+}
+.catCard.is-active{
+border-color:#22c55e;
+background:#052e16;
+box-shadow:0 0 0 1px rgba(34,197,94,.35);
+}
+.catCard.is-active .catCheck{display:flex}
+.catCard.is-active .catIcon{
+background:#14532d;
+color:#bbf7d0;
+}
+.planBlock{display:none}
+.planBlock.is-visible{display:block}
+.planGrid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:12px;
+margin-bottom:18px;
+}
+.planChip{
+position:relative;
+width:100%;
+min-height:92px;
+padding:18px 12px 16px;
+border:1.5px solid #334155;
+border-radius:18px;
+background:#0f172a;
+color:#fff;
+cursor:pointer;
+text-align:center;
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+gap:6px;
+font-size:inherit;
+font-weight:inherit;
+}
+.planChip .planName{
+display:block;
+font-size:16px;
+font-weight:700;
+color:#fff;
+}
+.planChip .planPrice{
+display:block;
+font-size:13px;
+color:#86efac;
+font-weight:700;
+}
+.planChip .planDays{
+display:block;
+font-size:12px;
+color:#94a3b8;
+font-weight:600;
+line-height:1.4;
+}
+.planChip.is-active .planDays{
+color:#bbf7d0;
+}
+.planChip--limited{
+min-height:104px;
+}
+.planChip .planCheck{
+display:none;
+position:absolute;
+top:10px;
+left:10px;
+width:22px;
+height:22px;
+border-radius:999px;
+background:#22c55e;
+color:#fff;
+font-size:13px;
+align-items:center;
+justify-content:center;
+line-height:1;
+}
+.planChip.is-active{
+border-color:#22c55e;
+background:#052e16;
+}
+.planChip.is-active .planCheck{display:flex}
+.planEmpty{
+display:none;
+padding:18px 14px;
+border-radius:16px;
+background:#0f172a;
+border:1px dashed #334155;
+color:#94a3b8;
+text-align:center;
+margin-bottom:18px;
+font-size:14px;
+}
+.planEmpty.is-visible{display:block}
+.planSummary{
+display:none;
+background:#0f172a;
+border:1px solid #334155;
+border-radius:16px;
+padding:14px 16px;
+margin-bottom:18px;
+font-size:14px;
+line-height:1.9;
+color:#cbd5e1;
+}
+.planSummary.is-visible{display:block}
+.planSummary b{color:#86efac}
+.infoText{
+margin:0 0 10px;
+font-size:14px;
+color:#94a3b8;
+line-height:1.7;
+}
+.helper{
+font-size:13px;
+color:#64748b;
+margin:0 0 16px;
+line-height:1.7;
+}
+.cardbox{
+display:none;
+background:#0f172a;
+padding:16px;
+border-radius:14px;
+margin-bottom:18px;
+word-break:break-all;
+font-size:16px;
+line-height:1.8;
+border:1px solid #334155;
+}
+.copybtn{
+margin-top:12px;
+background:#334155;
+font-size:15px;
+}
+.couponSection{
+background:#0f172a;
+padding:14px;
+border-radius:14px;
+margin-bottom:18px;
+border:1px solid #334155;
+}
+.couponToggle{
+display:flex;
+align-items:center;
+gap:10px;
+font-size:15px;
+margin-bottom:10px;
+cursor:pointer;
+}
+.couponToggle input{
+width:18px;
+height:18px;
+margin:0;
+cursor:pointer;
+}
+.couponBox{display:none;margin-top:8px}
+.couponBox.is-open{display:block}
+.couponRow input{width:100%;margin:0}
+.couponResult{
+margin-top:10px;
+padding:12px;
+border-radius:12px;
+font-size:14px;
+line-height:1.8;
+display:none;
+}
+.couponResult.is-ok{display:block;background:#14532d}
+.couponResult.is-error{display:block;background:#7f1d1d}
+.subSection{margin-bottom:8px}
+
+/* Destination card — segmented bank tabs + green card panel */
+.destCardSection{margin:0 0 14px}
+.destCardTitle{
+display:flex;
+align-items:center;
+justify-content:flex-start;
+gap:8px;
+margin:0 0 12px;
+color:#f8fafc;
+font-size:15px;
+font-weight:700;
+}
+.destCardTitle svg{
+width:20px;
+height:20px;
+flex:0 0 auto;
+color:#e2e8f0;
+}
+.cardTabs{
+display:flex;
+align-items:stretch;
+width:100%;
+margin:0 0 14px;
+padding:3px;
+border-radius:10px;
+background:rgba(2,6,23,.35);
+border:1px solid rgba(51,65,85,.9);
+overflow-x:auto;
+-webkit-overflow-scrolling:touch;
+scrollbar-width:none;
+}
+.cardTabs::-webkit-scrollbar{display:none}
+.cardTabsEmpty{
+color:#fca5a5;
+font-size:13px;
+line-height:1.8;
+padding:8px;
+}
+.cardTab{
+appearance:none;
+position:relative;
+flex:1 1 0;
+min-width:max-content;
+border:1px solid transparent;
+background:transparent;
+border-radius:7px;
+padding:10px 10px;
+margin:0;
+cursor:pointer;
+color:#f1f5f9;
+font-size:12px;
+font-family:tahoma,sans-serif;
+font-weight:600;
+line-height:1.3;
+white-space:nowrap;
+text-align:center;
+-webkit-tap-highlight-color:transparent;
+}
+.cardTab:not(:last-child)::after{
+content:"";
+position:absolute;
+left:0;
+top:22%;
+bottom:22%;
+width:1px;
+background:rgba(51,65,85,.95);
+pointer-events:none;
+}
+.cardTab.is-active{
+border-color:#22c55e;
+color:#4ade80;
+background:rgba(5,46,22,.35);
+z-index:1;
+}
+.cardTab.is-active::after,
+.cardTab.is-active + .cardTab::after{display:none}
+.payCardNumberRow,
+.instantAmountRow{
+display:flex;
+align-items:center;
+justify-content:center;
+gap:10px;
+}
+.iconCopyBtn{
+flex:0 0 auto;
+width:38px;
+height:38px;
+border-radius:12px;
+border:1px solid rgba(34,197,94,.55);
+background:rgba(2,6,23,.35);
+color:#4ade80;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+cursor:pointer;
+padding:0;
+-webkit-tap-highlight-color:transparent;
+}
+.iconCopyBtn:active{filter:brightness(1.1)}
+.iconCopyBtn svg{width:18px;height:18px;display:block}
+.instantPay{
+margin-top:14px;
+padding:16px 14px 14px;
+border-radius:18px;
+background:#052e16;
+border:1px solid rgba(34,197,94,.35);
+text-align:center;
+}
+.instantPayTop{
+display:flex;
+align-items:center;
+justify-content:center;
+gap:8px;
+margin-bottom:12px;
+}
+.instantPayHead{
+font-size:12px;
+color:#86efac;
+margin:0;
+}
+.instantTimer{
+font-size:15px;
+font-weight:700;
+letter-spacing:.5px;
+color:#bbf7d0;
+font-variant-numeric:tabular-nums;
+margin:0;
+min-width:52px;
+}
+.instantAmountLabel{
+font-size:13px;
+color:#94a3b8;
+margin-bottom:6px;
+}
+.instantBaseRow{
+display:flex;
+justify-content:center;
+gap:8px;
+align-items:center;
+font-size:13px;
+color:#94a3b8;
+margin-bottom:8px;
+}
+.instantBaseRow b{
+color:#e2e8f0;
+font-weight:700;
+text-decoration:line-through;
+opacity:.85;
+}
+.instantAmount{
+font-size:28px;
+font-weight:800;
+color:#86efac;
+margin-bottom:4px;
+direction:ltr;
+}
+.instantAmountToman{
+font-size:14px;
+color:#cbd5e1;
+margin-bottom:8px;
+direction:ltr;
+}
+.instantExactHint{
+font-size:12px;
+color:#fde68a;
+margin-bottom:12px;
+line-height:1.7;
+}
+.instantCodeHint{
+font-size:13px;
+color:#cbd5e1;
+line-height:1.8;
+margin-bottom:14px;
+}
+.instantCodeHint b{color:#fff;letter-spacing:1px}
+.instantActions{
+display:flex;
+gap:10px;
+margin-bottom:14px;
+}
+.instantActions .copybtn{
+flex:1;
+margin:0;
+}
+.instantStatus{
+font-size:13px;
+color:#bbf7d0;
+line-height:1.8;
+}
+.instantDone{
+margin-top:16px;
+padding-top:14px;
+border-top:1px solid rgba(34,197,94,.25);
+}
+.instantDoneTitle{
+font-size:18px;
+font-weight:700;
+color:#fff;
+margin-bottom:12px;
+}
+.instantLink{
+display:block;
+margin:0 0 10px;
+padding:12px;
+border-radius:12px;
+background:#14532d;
+color:#bbf7d0;
+text-decoration:none;
+word-break:break-all;
+font-size:13px;
+line-height:1.7;
+}
+
+.payCardBox{
+background:
+radial-gradient(120% 90% at 100% 0%, rgba(34,197,94,.12) 0%, transparent 55%),
+linear-gradient(180deg, rgba(15,23,42,.92) 0%, rgba(2,6,23,.88) 100%);
+border:1.5px solid #22c55e;
+border-radius:22px;
+padding:16px 16px 14px;
+margin:0 0 10px;
+text-align:right;
+}
+.payCardHead{
+display:flex;
+align-items:center;
+justify-content:flex-start;
+gap:12px;
+margin:0 0 18px;
+}
+.payCardIcon{
+width:46px;
+height:46px;
+border-radius:50%;
+object-fit:contain;
+background:#fff;
+padding:4px;
+flex:0 0 auto;
+display:block;
+}
+.payCardMeta{min-width:0}
+.payCardBank{
+font-size:15px;
+font-weight:800;
+color:#f8fafc;
+line-height:1.35;
+}
+.payCardOwner{
+font-size:13px;
+color:#e2e8f0;
+margin-top:4px;
+line-height:1.4;
+}
+.payCardBox .payCardNumberRow{
+justify-content:space-between;
+align-items:center;
+gap:12px;
+}
+.payCardNumber{
+font-size:20px;
+font-weight:800;
+letter-spacing:1.2px;
+color:#fff;
+direction:ltr;
+margin:0;
+word-break:break-all;
+flex:1;
+min-width:0;
+text-align:right;
+font-variant-numeric:tabular-nums;
+}
+.payCardBox .iconCopyBtn{
+width:36px;
+height:36px;
+border-radius:10px;
+border-color:rgba(34,197,94,.65);
+}
+.instantAmountRow .instantAmount{
+margin:0;
+flex:1;
+min-width:0;
+}
+.payCreating{
+display:none;
+margin:10px 0 0;
+padding:12px 14px;
+border-radius:12px;
+font-size:13px;
+line-height:1.8;
+color:#cbd5e1;
+background:rgba(15,23,42,.65);
+border:1px solid rgba(148,163,184,.2);
+}
+.payCreating.is-visible{display:block}
+.payCreating.is-error{
+color:#fecaca;
+background:rgba(127,29,29,.35);
+border-color:rgba(248,113,113,.45);
+}
+.warnExact{
+background:#7f1d1d;
+border:1px solid #ef4444;
+color:#fecaca;
+border-radius:14px;
+padding:12px 14px;
+font-size:13px;
+line-height:1.9;
+margin:0 0 16px;
+}
+.warnExact b{color:#fff}
+.instantApproved{
+margin-top:14px;
+padding-top:14px;
+border-top:1px solid rgba(34,197,94,.25);
+}
+.resultCard{
+background:#0f172a;
+border:1px solid rgba(34,197,94,.35);
+border-radius:18px;
+padding:16px 14px;
+text-align:center;
+}
+.resultTitle{
+font-size:20px;
+font-family:"Lalezar",tahoma,sans-serif;
+margin-bottom:10px;
+color:#fff;
+}
+.resultInfoCard{
+display:flex;
+align-items:center;
+gap:12px;
+text-align:right;
+background:linear-gradient(180deg,#0f172a 0%,#052e16 100%);
+border:1.5px solid rgba(34,197,94,.45);
+border-radius:16px;
+padding:14px 12px;
+margin-bottom:12px;
+box-shadow:0 0 0 1px rgba(34,197,94,.12);
+}
+.resultInfoIcon{
+width:46px;
+height:46px;
+border-radius:50%;
+flex:0 0 auto;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:18px;
+font-weight:700;
+color:#86efac;
+background:rgba(34,197,94,.12);
+border:1px solid rgba(34,197,94,.28);
+}
+.resultInfoText{
+min-width:0;
+flex:1;
+}
+.resultInfoPlan{
+font-size:15px;
+font-weight:700;
+color:#fff;
+line-height:1.5;
+margin-bottom:4px;
+}
+.resultInfoAccent{
+color:#86efac;
+}
+.resultInfoConfig{
+font-size:12px;
+color:#94a3b8;
+line-height:1.45;
+word-break:break-word;
+}
+.resultInfoConfig:empty{
+display:none;
+}
+.resultLinkWrap{margin-bottom:10px;text-align:right}
+.resultLinkWrap .fieldLabel{
+margin-bottom:6px;
+font-size:12px;
+}
+.resultLinkRow{
+display:flex;
+align-items:stretch;
+gap:0;
+background:#052e16;
+border:1px solid rgba(34,197,94,.35);
+border-radius:12px;
+overflow:hidden;
+}
+.resultLink{
+flex:1;
+min-width:0;
+padding:10px 12px;
+color:#bbf7d0;
+word-break:break-all;
+direction:ltr;
+text-align:left;
+font-size:12px;
+line-height:1.55;
+background:transparent;
+border:none;
+}
+.resultLinkCopy{
+flex:0 0 auto;
+width:44px;
+border:none;
+border-right:1px solid rgba(34,197,94,.22);
+background:rgba(34,197,94,.12);
+color:#86efac;
+display:flex;
+align-items:center;
+justify-content:center;
+cursor:pointer;
+padding:0;
+}
+.resultLinkCopy:active{
+background:rgba(34,197,94,.22);
+}
+.resultQrWrap{
+display:none;
+margin:0 0 10px;
+padding:10px;
+border-radius:14px;
+background:#052e16;
+border:1px solid rgba(34,197,94,.28);
+}
+.resultQrWrap.is-visible{display:block}
+.resultQrFrame{
+display:inline-flex;
+padding:8px;
+background:#fff;
+border-radius:12px;
+margin:0 auto;
+}
+.resultQrFrame img{
+width:min(38vw,128px);
+height:auto;
+display:block;
+}
+.btnGhost--compact{
+margin-top:8px;
+padding:11px 12px;
+font-size:13px;
+}
+body.planStep--result{
+padding:10px 12px 12px;
+overflow:hidden;
+min-height:100dvh;
+height:100dvh;
+}
+body.planStep--result .box{
+padding:12px 14px 14px;
+max-height:calc(100dvh - 20px);
+display:flex;
+flex-direction:column;
+overflow:hidden;
+}
+body.planStep--result .topBar{
+margin-bottom:10px;
+}
+body.planStep--result .stepper{
+margin:2px 0 12px;
+}
+body.planStep--result .stepItem{
+min-width:64px;
+gap:5px;
+}
+body.planStep--result .stepLabel{
+font-size:10px;
+}
+body.planStep--result .formStep.is-active{
+flex:1;
+min-height:0;
+overflow:auto;
+}
+body.planStep--result .resultCard{
+padding:12px 10px;
+}
+body.planStep--result .resultTitle{
+font-size:18px;
+margin-bottom:8px;
+}
+body.planStep--result .resultInfoCard{
+padding:10px;
+margin-bottom:8px;
+}
+body.planStep--result .resultInfoIcon{
+width:40px;
+height:40px;
+font-size:16px;
+}
+body.planStep--result .resultInfoPlan{
+font-size:14px;
+}
+body.planStep--result .resultQrFrame img{
+width:min(34vw,112px);
+}
+
+/* Shared info modal (plan lock + pay guide) */
+.catLockModal{
+position:fixed;
+inset:0;
+z-index:120;
+display:none;
+align-items:center;
+justify-content:center;
+padding:22px;
+}
+.catLockModal.is-open{display:flex}
+.catLockBackdrop{
+position:absolute;
+inset:0;
+background:rgba(2,6,23,.55);
+backdrop-filter:blur(7px);
+-webkit-backdrop-filter:blur(7px);
+}
+.catLockCard{
+position:relative;
+z-index:1;
+width:min(100%,340px);
+background:#1e293b;
+border:1px solid rgba(148,163,184,.22);
+border-radius:18px;
+padding:18px 16px 16px;
+box-shadow:0 22px 50px rgba(0,0,0,.45);
+text-align:center;
+animation:catLockPop .16s ease-out;
+}
+@keyframes catLockPop{
+from{opacity:0;transform:scale(.96)}
+to{opacity:1;transform:scale(1)}
+}
+.catLockCard p{
+margin:0 0 14px;
+font-size:13px;
+line-height:1.9;
+color:#e2e8f0;
+}
+.catLockCard a{color:#86efac;font-weight:700}
+.catLockClose{
+width:100%;
+margin:0;
+background:#334155;
+border:0;
+color:#fff;
+border-radius:12px;
+padding:12px;
+font-size:14px;
+font-family:tahoma,sans-serif;
+font-weight:700;
+cursor:pointer;
+}
+.catLockClose.is-primary{
+background:#22c55e;
+color:#052e16;
+}
+
+@media(max-width:768px){
+body{padding:14px 12px 24px}
+.box{max-width:100%;padding:16px 14px 20px;border-radius:22px}
+.topBar .brand{font-size:15px}
+input,select{font-size:15px;padding:14px}
+button,.btnNext{font-size:17px;padding:15px}
+.catCard{min-height:120px}
+.planChip{min-height:86px}
+.stepLabel{font-size:11px}
+.stepLine{width:22px}
+}

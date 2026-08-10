@@ -8,7 +8,11 @@ if(!isset($_SESSION['user'])){
 }
 
 require_once __DIR__ . '/coupon_lib.php';
+require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/telegram_lib.php';
+require_once __DIR__ . '/plan_ui_lib.php';
+require_once __DIR__ . '/instant_pay_lib.php';
+require_once __DIR__ . '/bank_lib.php';
 
 $plans = [];
 
@@ -20,6 +24,8 @@ if(!is_array($plans)){
     $plans = [];
 }
 
+$plansUi = pnvPlansForStepUi($plans);
+
 $cards = [];
 
 if(file_exists('db/cards.json')){
@@ -29,8 +35,15 @@ if(file_exists('db/cards.json')){
 if(!is_array($cards)){
     $cards = [];
 }
+$cardsUi = pnvCardsForUi($cards);
 
 function renewIsValidSubLink($value){
+
+    $value = renewNormalizeSubLink($value);
+
+    if($value === ''){
+        return false;
+    }
 
     $validDomains = [
         'vip.boozhaan.ir',
@@ -46,6 +59,31 @@ function renewIsValidSubLink($value){
     }
 
     return false;
+}
+
+function renewNormalizeSubLink($value){
+    $value = trim((string)$value);
+
+    if($value === ''){
+        return '';
+    }
+
+    // لینک کامل داخل متن کثیف
+    if(preg_match('~https?://(?:vip\d*)\.boozhaan\.ir(?::\d+)?/sub/[A-Za-z0-9]+~i', $value, $m)){
+        return $m[0];
+    }
+
+    // فقط SubID خام
+    if(preg_match('/^[A-Za-z0-9]{8,32}$/', $value)){
+        return $value;
+    }
+
+    // SubID در ابتدای متن خراب
+    if(preg_match('/^\s*([A-Za-z0-9]{8,32})\b/u', $value, $m)){
+        return $m[1];
+    }
+
+    return trim(preg_split('/\s+/u', $value)[0] ?? '');
 }
 
 function renewLoadUserSubscriptions($username){
@@ -72,16 +110,22 @@ function renewLoadUserSubscriptions($username){
         $col1 = trim($data[1] ?? '');
         $link = trim($data[7] ?? '');
         $type = trim($data[9] ?? '');
+        $planText = trim((string)($data[2] ?? ''));
+        $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
+        $timeCategory = $planDays > 0 ? 'limited' : 'unlimited';
 
-        if($type === 'خرید' && renewIsValidSubLink($link)){
+        if($type === 'خرید' && renewIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
+            $link = renewNormalizeSubLink($link);
             $key = strtolower($link);
             $linkIndex[$key] = [
                 'name' => $col1,
-                'link' => $link
+                'link' => $link,
+                'time_category' => $timeCategory
             ];
         }
 
-        if($type === 'تمدید' && renewIsValidSubLink($col1)){
+        if($type === 'تمدید' && renewIsValidSubLink($col1) && !pnvIsSubLinkCleared($username, $col1)){
+            $col1 = renewNormalizeSubLink($col1);
             $key = strtolower($col1);
 
             if(!isset($linkIndex[$key])){
@@ -93,7 +137,8 @@ function renewLoadUserSubscriptions($username){
 
                 $linkIndex[$key] = [
                     'name' => $name,
-                    'link' => $col1
+                    'link' => $col1,
+                    'time_category' => $timeCategory
                 ];
             }
         }
@@ -109,842 +154,1157 @@ $userSubscriptions = renewLoadUserSubscriptions($_SESSION['user']);
 $message = "";
 $error = "";
 
-if($_SERVER['REQUEST_METHOD'] == "POST"){
+// ثبت تمدید از طریق instant-pay-api.php انجام می‌شود (پرداخت آنی بله)
 
-    $sub = trim($_POST['sub']);
-    $plan = trim($_POST['plan']);
-    $tracking = trim($_POST['tracking']);
-    $time = trim($_POST['time']);
-    $date = trim($_POST['date']);
-    $hasCoupon = isset($_POST['has_coupon']);
-    $couponCode = trim($_POST['coupon_code'] ?? '');
-    $discountPercent = 0;
-
-    if(!renewIsValidSubLink($sub)){
-        $error = "لینک اشتراک صحیح نیست";
-    }
-
-    elseif(!preg_match('/^(0[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$/',$time)){
-        $error = "ساعت وارد شده صحیح نیست";
-    }
-
-    elseif(!preg_match('/^140[5-7]\/(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])$/',$date)){
-        $error = "تاریخ وارد شده صحیح نیست";
-    }
-
-    else{
-
-        if($hasCoupon){
-
-            if($couponCode === ''){
-                $error = 'کد تخفیف را وارد کنید';
-            }
-            else{
-                $couponResult = couponCalculateForPlan(
-                    $_SESSION['user'],
-                    $couponCode,
-                    $plan,
-                    $plans
-                );
-
-                if(empty($couponResult['ok'])){
-                    $error = $couponResult['error'] ?? 'کد تخفیف معتبر نیست';
-                }
-                else{
-                    $plan = $couponResult['plan_label'];
-                    $discountPercent = intval($couponResult['percent']);
-                }
-            }
-
-        }
-
-    }
-
-    if($error == ""){
-
-        $status = "درحال بررسی";
-        $link = "";
-        $created = time();
-
-        $row = [
-            $_SESSION['user'],
-            $sub,
-            $plan,
-            $tracking,
-            $date,
-            $time,
-            $status,
-            $link,
-            $created,
-            "تمدید",
-            $hasCoupon ? strtoupper($couponCode) : '',
-            $discountPercent
-        ];
-
-        $file = fopen("invoices/payments.csv","a");
-        fputcsv($file,$row);
-        fclose($file);
-
-        try{
-            telegramNotifyNewPayment('تمدید', $row);
-        }
-        catch(Throwable $e){
-            error_log('Telegram renew notification failed: ' . $e->getMessage());
-        }
-
-        if($hasCoupon && $couponCode !== ''){
-            couponMarkUsed($couponCode, $_SESSION['user']);
-        }
-
-        $message = "درخواست تمدید ثبت شد و حداکثر تا یک ساعت آینده بررسی خواهد شد";
-    }
-}
+$h = static function($v){
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+};
 
 ?>
-
 <!DOCTYPE html>
-<html lang="fa">
-
+<html lang="fa" dir="rtl">
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
-
-<title>
-
-تمدید اشتراک
-
-</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تمدید اشتراک</title>
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="user_nav.css?v=1">
+<link rel="stylesheet" href="plan_step_ui.css?v=15">
 <style>
-
-*{
-box-sizing:border-box;
+.topBar .brand{
+font-size:24px;
+letter-spacing:.2px;
 }
-
-body{
-background:#0f172a;
-font-family:tahoma;
-direction:rtl;
-color:white;
-padding:16px;
-margin:0;
-display:flex;
-justify-content:center;
+.sectionTitle{
+text-align:center;
 }
-
-.box{
-width:100%;
-max-width:760px;
-margin:auto;
+.catCard.is-locked{
+opacity:.45;
+filter:grayscale(.85);
+cursor:not-allowed;
 background:#1e293b;
-padding:46px 30px;
-border-radius:28px;
+border-color:#475569;
+box-shadow:none;
 }
-
-h2{
-font-size:32px;
-margin-bottom:28px;
-text-align:center;
+.catCard.is-locked.is-active{
+border-color:#475569;
+background:#1e293b;
+box-shadow:none;
 }
-
-input,select{
-width:100%;
-padding:16px;
-margin-top:10px;
-margin-bottom:20px;
-border:none;
-border-radius:14px;
-box-sizing:border-box;
-font-size:18px;
-background:#0f172a;
-color:white;
+.catCard.is-locked .catCheck{display:none !important}
+.planChip.is-locked{
+opacity:.4;
+filter:grayscale(.9);
+cursor:not-allowed;
+background:#1e293b;
+border-color:#475569;
 }
-
-button{
-width:100%;
-padding:16px;
-background:#22c55e;
-border:none;
-border-radius:14px;
-color:white;
-font-size:22px;
-cursor:pointer;
+.planChip.is-locked.is-active{
+border-color:#475569;
+background:#1e293b;
 }
-
-.back{
-display:block;
-margin-top:20px;
-text-align:center;
-background:#334155;
-padding:16px;
-border-radius:14px;
-color:white;
-text-decoration:none;
-font-size:20px;
-}
-
-.msg{
-background:#16a34a;
-padding:16px;
-border-radius:14px;
-margin-bottom:20px;
-font-size:18px;
-line-height:34px;
-}
-
-.err{
-background:#dc2626;
-padding:16px;
-border-radius:14px;
-margin-bottom:20px;
-font-size:18px;
-line-height:34px;
-}
-
-.cardbox{
-display:none;
-background:#0f172a;
-padding:18px;
-border-radius:16px;
-margin-bottom:22px;
-word-break:break-all;
-font-size:18px;
-line-height:36px;
-}
-
-.copybtn{
-margin-top:14px;
-background:#3b82f6;
-font-size:18px;
-}
-
-.infoText{
-margin-bottom:16px;
-font-size:18px;
-color:#cbd5e1;
-line-height:34px;
-}
-
-.helper{
-font-size:16px;
-color:#94a3b8;
-margin-bottom:20px;
-line-height:30px;
-}
-
-.subSection{
-background:#0f172a;
-padding:16px;
-border-radius:14px;
-margin-bottom:20px;
-}
-
-.subSection .infoText{
-margin-bottom:10px;
-margin-top:0;
-}
-
-.subSection select,
-.subSection input{
-margin-top:0;
-margin-bottom:12px;
-}
-
-.subSection input:last-child{
-margin-bottom:0;
-}
-
-.couponSection{
-background:#0f172a;
-padding:16px;
-border-radius:14px;
-margin-bottom:20px;
-}
-
-.couponToggle{
-display:flex;
-align-items:center;
-gap:10px;
-font-size:16px;
-margin-bottom:12px;
-cursor:pointer;
-}
-
-.couponToggle input{
-width:20px;
-height:20px;
-margin:0;
-cursor:pointer;
-}
-
-.couponBox{
-display:none;
-margin-top:10px;
-}
-
-.couponBox.is-open{
-display:block;
-}
-
-.couponRow input{
-width:100%;
-margin:0;
-}
-
-.couponResult{
-margin-top:12px;
-padding:12px;
+.planChip.is-locked .planCheck{display:none !important}
+.subPickedLink{
+margin:0 0 18px;
+padding:10px 12px;
 border-radius:12px;
-font-size:15px;
-line-height:1.8;
-display:none;
+background:#052e16;
+border:1px solid rgba(34,197,94,.35);
+color:#bbf7d0;
+font-size:12px;
+line-height:1.7;
+word-break:break-all;
+direction:ltr;
+text-align:left;
 }
-
-.couponResult.is-ok{
-display:block;
-background:#14532d;
+.subPickedLink[hidden]{display:none !important}
+#subSelect.has-picked{margin-bottom:8px}
+#subInput.is-hidden-input{
+position:absolute !important;
+width:1px !important;
+height:1px !important;
+padding:0 !important;
+margin:-1px !important;
+overflow:hidden !important;
+clip:rect(0,0,0,0) !important;
+border:0 !important;
+opacity:0 !important;
+pointer-events:none !important;
 }
-
-.couponResult.is-error{
-display:block;
-background:#7f1d1d;
-}
-
 @media(max-width:768px){
-
-body{
-padding:10px;
+.topBar .brand{font-size:20px !important}
 }
-
-.box{
-max-width:100%;
-padding:30px 20px;
-border-radius:24px;
-}
-
-h2{
-font-size:28px;
-}
-
-input,
-select{
-font-size:16px;
-padding:14px;
-}
-
-button{
-font-size:20px;
-padding:14px;
-}
-
-.back{
-font-size:18px;
-padding:14px;
-}
-
-.cardbox{
-font-size:16px;
-line-height:30px;
-}
-
-.msg,
-.err{
-font-size:16px;
-line-height:30px;
-}
-
-.infoText{
-font-size:16px;
-line-height:30px;
-}
-
-.helper{
-font-size:14px;
-line-height:26px;
-}
-
-}
-
 </style>
-
 </head>
-
 <body>
-
 <div class="box">
 
-<h2>
+<div class="topBar">
+<a class="userBack" href="dashboard.php">بازگشت</a>
+<div class="brand">تمدید اشتراک</div>
+<span class="userBackSpacer" aria-hidden="true"></span>
+</div>
 
-تمدید اشتراک
+<h2>تمدید اشتراک</h2>
 
-</h2>
+<div class="stepper" id="stepper">
+<div class="stepItem is-active" id="stepTab1"><div class="stepNum">1</div><div class="stepLabel">انتخاب پلن</div></div>
+<div class="stepLine" id="stepLine1"></div>
+<div class="stepItem" id="stepTab2"><div class="stepNum">2</div><div class="stepLabel">پرداخت</div></div>
+<div class="stepLine" id="stepLine2"></div>
+<div class="stepItem" id="stepTab3"><div class="stepNum">3</div><div class="stepLabel">تمدید اشتراک</div></div>
+</div>
 
-<?php if($message!=""){ ?>
-<div class="msg"><?php echo $message; ?></div>
-<?php } ?>
+<form id="renewForm" onsubmit="return false;">
 
-<?php if($error!=""){ ?>
-<div class="err"><?php echo $error; ?></div>
-<?php } ?>
-
-<form method="POST">
-
+<div class="formStep is-active" id="step1">
 <div class="subSection">
-<div class="infoText">لینک اشتراک</div>
-
+<div class="fieldLabel">لینک اشتراک</div>
 <?php if(count($userSubscriptions) > 0){ ?>
-<select id="subSelect" onchange="pickSubscription()">
+<select id="subSelect">
 <option value="">انتخاب از اشتراک‌های من</option>
-<?php foreach($userSubscriptions as $item){ ?>
-<option value="<?php echo htmlspecialchars($item['link'], ENT_QUOTES, 'UTF-8'); ?>">
-<?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?>
-</option>
+<?php foreach($userSubscriptions as $item){
+    $linkVal = trim((string)($item['link'] ?? ''));
+?>
+<option
+    value="<?php echo $h($linkVal); ?>"
+    data-link="<?php echo $h($linkVal); ?>"
+    data-time-category="<?php echo $h($item['time_category'] ?? 'unknown'); ?>"
+><?php echo $h($item['name']); ?></option>
 <?php } ?>
 <option value="__other__">لینک دیگر</option>
 </select>
+<div class="subPickedLink" id="subPickedLink" hidden></div>
 <?php } ?>
-
-<input
-type="text"
-name="sub"
-id="subInput"
-placeholder="لینک اشتراک را وارد کنید"
-required>
+<input type="text" id="subInput" name="sub" placeholder="لینک اشتراک را وارد کنید" required>
 </div>
 
-<select name="plan" id="planSelect" required>
+<div class="sectionTitle">نوع پلن را انتخاب کنید</div>
+<div class="catGrid">
+<button type="button" class="catCard" data-cat="unlimited">
+<span class="catCheck">✓</span><span class="catIcon">∞</span>
+<span class="catTitle">نامحدود زمانی</span>
+<span class="catDesc">بدون محدودیت در زمان استفاده</span>
+</button>
+<button type="button" class="catCard" data-cat="limited">
+<span class="catCheck">✓</span><span class="catIcon">⏱</span>
+<span class="catTitle">محدود زمانی</span>
+<span class="catDesc">مدت مشخص (روز / ماه)</span>
+</button>
+</div>
 
-<option value="">
-انتخاب پلن
-</option>
+<div class="planBlock" id="planBlock">
+<div class="sectionTitle" id="planListTitle">حجم را انتخاب کنید</div>
+<div class="planEmpty" id="planEmpty">در این دسته پلنی تعریف نشده است</div>
+<div class="planGrid" id="planGrid"></div>
+</div>
+<input type="hidden" id="planSelect" value="">
+<button type="button" class="btnNext" id="toStep2" disabled>ادامه ←</button>
+</div>
 
-<?php
-
-function formatPrice($price){
-
-$price = intval($price);
-
-if($price < 1000){
-
-return
-number_format($price)
-.
-" هزار تومان";
-
-}
-
-$million =
-$price / 1000;
-
-$million =
-rtrim(
-rtrim(
-number_format($million,3),
-'0'
-),
-'.'
-);
-
-return
-$million
-.
-" میلیون تومان";
-
-}
-
-foreach($plans as $plan){
-
-$priceText =
-formatPrice($plan['price']);
-
-$value =
-$plan['name']
-.
-" - "
-.
-$priceText;
-
-?>
-
-<option value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>" data-price="<?php echo (int)$plan['price']; ?>">
-
-<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>
-
-</option>
-
-<?php } ?>
-
-</select>
+<div class="formStep" id="step2">
+<div class="planSummary" id="planSummary"></div>
 
 <div class="couponSection">
 <label class="couponToggle">
-<input type="checkbox" name="has_coupon" id="hasCouponCheck" value="1">
+<input type="checkbox" id="hasCouponCheck" value="1">
 <span>کد تخفیف دارید؟</span>
 </label>
 <div class="couponBox" id="couponBox">
-<div class="couponRow">
-<input type="text" name="coupon_code" id="couponCode" placeholder="کد را وارد کنید" autocomplete="off">
-</div>
+<input type="text" id="couponCode" placeholder="کد را وارد کنید" autocomplete="off">
 <div class="couponResult" id="couponResult"></div>
 </div>
 </div>
 
-<div class="infoText">
-
-انتخاب شماره کارت جهت پرداخت
-
+<div class="destCardSection">
+<div class="destCardTitle">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg>
+<span>کارت مقصد</span>
 </div>
+<div class="cardTabs" id="cardTabs" role="tablist" aria-label="انتخاب کارت"></div>
+<input type="hidden" id="selectedCard" value="">
+<input type="hidden" id="selectedCardName" value="">
 
-<select id="cardSelect"
-onchange="showCard()">
-
-<option value="">
-انتخاب کارت
-</option>
-
-<?php foreach($cards as $card){ ?>
-
-<option value="<?php echo $card['card']; ?>">
-
-<?php echo $card['name']; ?>
-
-</option>
-
-<?php } ?>
-
-</select>
-
-<div id="cardBox"
-class="cardbox">
-
-<div id="cardNumber"></div>
-
-<button type="button"
-onclick="copyCard()"
-class="copybtn">
-
-کپی شماره کارت
-
+<div class="payCardBox" id="payCardBox" hidden>
+<div class="payCardHead">
+<img class="payCardIcon" id="payCardIcon" src="" alt="" hidden>
+<div class="payCardMeta">
+<div class="payCardBank" id="payCardBank">—</div>
+<div class="payCardOwner" id="payCardOwner">—</div>
+</div>
+</div>
+<div class="payCardNumberRow">
+<div class="payCardNumber" id="payCardNumber">—</div>
+<button type="button" class="iconCopyBtn" id="copyCardBtn" title="کپی شماره کارت" aria-label="کپی شماره کارت">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
 </button>
-
+</div>
+</div>
 </div>
 
-<div class="infoText">
+<div class="payCreating" id="payCreating">در حال ایجاد مبلغ پرداخت…</div>
 
-لطفا پس از پرداخت، اطلاعات پرداخت خود را ثبت کنيد
-
+<div class="instantPay" id="instantPay" hidden>
+<div class="instantPayTop">
+<div class="instantPayHead" id="instantPayHead">مهلت پرداخت</div>
+<div class="instantTimer" id="instantTimer">۳۰:۰۰</div>
 </div>
 
-<input type="text"
-name="tracking"
-placeholder="شماره پیگیری"
-required>
-
-<input type="text"
-id="time"
-name="time"
-placeholder="ساعت"
-maxlength="5"
-required>
-
-<input type="text"
-id="date"
-name="date"
-placeholder="1405/01/01"
-maxlength="10"
-required>
-
-<div class="helper">
-
-لطفا در ثبت اطلاعات پرداخت خود دقت فرمایید
-
-</div>
-
-<button type="submit">
-
-ثبت درخواست تمدید
-
+<div class="instantAmountLabel">مبلغ قابل پرداخت</div>
+<div class="instantAmountRow">
+<div class="instantAmount" id="instantAmount">—</div>
+<button type="button" class="iconCopyBtn" id="copyAmountBtn" title="کپی مبلغ" aria-label="کپی مبلغ">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
 </button>
+</div>
+<div class="instantAmountToman" id="instantAmountToman"></div>
+<div class="instantExactHint">دقیقاً همین مبلغ را واریز کنید</div>
+
+<div class="instantStatus" id="instantStatus" hidden></div>
+<div class="instantApproved" id="instantApproved" hidden>
+<div class="instantDoneTitle">پرداخت شما تأیید شد ✅</div>
+<div class="instantStatus">تمدید آماده است. برای مشاهده روی ادامه بزنید.</div>
+<button type="button" class="btnNext" id="toStep3">ادامه ←</button>
+</div>
+</div>
+</div>
+
+<div class="formStep" id="step3">
+<div class="resultCard">
+<div class="resultTitle">تمدید انجام شد</div>
+<div class="resultInfoCard" id="resultInfoCard">
+<div class="resultInfoIcon" aria-hidden="true">↻</div>
+<div class="resultInfoText">
+<div class="resultInfoPlan" id="resultInfoPlan">—</div>
+<div class="resultInfoConfig" id="resultInfoConfig"></div>
+</div>
+</div>
+<div class="resultLinkWrap">
+<div class="fieldLabel">لینک اشتراک تمدیدشده</div>
+<div class="resultLinkRow">
+<div class="resultLink" id="resultLink">—</div>
+<button type="button" class="resultLinkCopy" id="copyLinkBtn" aria-label="کپی لینک">
+<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 18H8V7h11v16z"/></svg>
+</button>
+</div>
+</div>
+<div class="resultQrWrap" id="resultQrWrap">
+<div class="resultQrFrame">
+<img id="resultQrImg" src="" alt="QR Code لینک اشتراک">
+</div>
+</div>
+<a class="btnGhost btnGhost--compact" href="subscriptions.php">اشتراک‌های من</a>
+<a class="btnGhost btnGhost--compact" href="buy.php">خرید اشتراک جدید</a>
+</div>
+</div>
 
 </form>
+</div>
 
-<a href="dashboard.php"
-class="back">
+<div class="catLockModal" id="catLockModal" aria-hidden="true">
+<div class="catLockBackdrop" data-close="1"></div>
+<div class="catLockCard" role="dialog" aria-modal="true" aria-labelledby="catLockText">
+<p id="catLockText"></p>
+<button type="button" class="catLockClose" data-close="1">متوجه شدم</button>
+</div>
+</div>
 
-بازگشت
-
-</a>
-
+<div class="catLockModal" id="payGuideModal" aria-hidden="true">
+<div class="catLockBackdrop" id="payGuideBackdrop"></div>
+<div class="catLockCard" role="dialog" aria-modal="true" aria-labelledby="payGuideText">
+<p id="payGuideText"></p>
+<button type="button" class="catLockClose is-primary" id="payGuideBtn">ادامه</button>
+</div>
 </div>
 
 <script>
-
-function pickSubscription(){
-
-const select = document.getElementById('subSelect');
-const input = document.getElementById('subInput');
-
-if(!select){
-    return;
-}
-
-const value = select.value;
-
-if(value === ''){
-    input.value = '';
-    return;
-}
-
-if(value === '__other__'){
-    input.value = '';
-    input.focus();
-    return;
-}
-
-input.value = value;
-}
-
-function showCard(){
-
-let select =
-document.getElementById("cardSelect");
-
-let value = select.value;
-
-if(value == ""){
-
-document.getElementById("cardBox").style.display = "none";
-
-return;
-
-}
-
-document.getElementById("cardBox").style.display = "block";
-
-document.getElementById("cardNumber").innerText =
-value;
-
-}
-
-function copyCard(){
-
-let text =
-document.getElementById("cardNumber").innerText;
-
-navigator.clipboard.writeText(text);
-
-alert("شماره کارت کپی شد");
-
-}
-
-document.getElementById("time").addEventListener("input", function(e){
-
-let v = e.target.value.replace(/\D/g,'');
-
-if(v.length >= 1){
-
-let h1 = parseInt(v.charAt(0));
-
-if(h1 > 2){
-v = "2";
-}
-
-}
-
-if(v.length >= 2){
-
-let hh = parseInt(v.substring(0,2));
-
-if(hh > 23){
-v = "23";
-}
-
-}
-
-if(v.length >= 3){
-
-let m1 = parseInt(v.charAt(2));
-
-if(m1 > 5){
-
-v = v.substring(0,2) + "5";
-
-}
-
-}
-
-if(v.length >= 4){
-
-let mm = parseInt(v.substring(2,4));
-
-if(mm > 59){
-
-v = v.substring(0,2) + "59";
-
-}
-
-}
-
-if(v.length >= 3){
-
-v = v.substring(0,2) + ":" + v.substring(2,4);
-
-}
-
-e.target.value = v.substring(0,5);
-
-});
-
-function setTehranTime(){
-
-const now = new Date();
-
-const tehran = new Date(
-now.toLocaleString(
-"en-US",
-{
-timeZone: "Asia/Tehran"
-}
-)
-);
-
-let hh = tehran.getHours()
-.toString()
-.padStart(2,'0');
-
-let mm = tehran.getMinutes()
-.toString()
-.padStart(2,'0');
-
-document.getElementById("time").value =
-hh + ":" + mm;
-
-}
-
-setTehranTime();
-
-function setPersianDate(){
-
-const now = new Date();
-
-const formatter =
-new Intl.DateTimeFormat(
-'en-CA-u-ca-persian',
-{
-year:'numeric',
-month:'2-digit',
-day:'2-digit'
-}
-);
-
-const parts = formatter.formatToParts(now);
-
-let year = '';
-let month = '';
-let day = '';
-
-parts.forEach(p => {
-
-if(p.type === 'year'){
-year = p.value;
-}
-
-if(p.type === 'month'){
-month = p.value;
-}
-
-if(p.type === 'day'){
-day = p.value;
-}
-
-});
-
-document.getElementById("date").value =
-year + "/" + month + "/" + day;
-
-}
-
-setPersianDate();
-
+const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
+const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const planSelect = document.getElementById('planSelect');
+const planGrid = document.getElementById('planGrid');
+const planEmpty = document.getElementById('planEmpty');
+const planListTitle = document.getElementById('planListTitle');
+const planSummary = document.getElementById('planSummary');
+const toStep2Btn = document.getElementById('toStep2');
+const toStep3Btn = document.getElementById('toStep3');
+const step1 = document.getElementById('step1');
+const step2 = document.getElementById('step2');
+const step3 = document.getElementById('step3');
+const stepTab1 = document.getElementById('stepTab1');
+const stepTab2 = document.getElementById('stepTab2');
+const stepTab3 = document.getElementById('stepTab3');
+const stepLine1 = document.getElementById('stepLine1');
+const stepLine2 = document.getElementById('stepLine2');
 const couponBox = document.getElementById('couponBox');
 const couponResult = document.getElementById('couponResult');
 const couponCodeInput = document.getElementById('couponCode');
 const hasCouponCheck = document.getElementById('hasCouponCheck');
-let couponTimer = null;
+const cardTabs = document.getElementById('cardTabs');
+const selectedCardInput = document.getElementById('selectedCard');
+const selectedCardNameInput = document.getElementById('selectedCardName');
+const payCardBox = document.getElementById('payCardBox');
+const payCardIcon = document.getElementById('payCardIcon');
+const payCardBank = document.getElementById('payCardBank');
+const payCardOwner = document.getElementById('payCardOwner');
+const payCardNumber = document.getElementById('payCardNumber');
+const payCreating = document.getElementById('payCreating');
+let selectedCardMeta = null;
+const instantPay = document.getElementById('instantPay');
+const instantPayHead = document.getElementById('instantPayHead');
+const instantTimer = document.getElementById('instantTimer');
+const instantAmount = document.getElementById('instantAmount');
+const instantStatus = document.getElementById('instantStatus');
+const instantApproved = document.getElementById('instantApproved');
+const resultInfoPlan = document.getElementById('resultInfoPlan');
+const resultInfoConfig = document.getElementById('resultInfoConfig');
+const resultLink = document.getElementById('resultLink');
+const resultQrWrap = document.getElementById('resultQrWrap');
+const resultQrImg = document.getElementById('resultQrImg');
 
-function resetCouponResult(){
-    couponResult.className = 'couponResult';
-    couponResult.textContent = '';
+function showResultQr(link){
+    link = String(link || '').trim();
+    if(!resultQrWrap || !resultQrImg) return;
+    if(!link || link === '—' || link.indexOf('/sub/') === -1){
+        resultQrWrap.classList.remove('is-visible');
+        resultQrImg.removeAttribute('src');
+        return;
+    }
+    resultQrImg.src = 'sub-qr.php?u=' + encodeURIComponent(link) + '&t=' + Date.now();
+    resultQrWrap.classList.add('is-visible');
 }
 
-function validateCoupon(){
-    const plan = planSelect.value;
-    const code = couponCodeInput.value.trim();
+let couponTimer = null;
+let selectedCategory = '';
+let selectedPlan = null;
+let payPollTimer = null;
+let payTickTimer = null;
+let currentPay = null;
+let payCreateInFlight = false;
+let subTimeCategory = 'unknown'; // unlimited | limited | unknown
+const catLockModal = document.getElementById('catLockModal');
+const catLockText = document.getElementById('catLockText');
+const subMetaByLink = <?php
+$metaMap = [];
+foreach($userSubscriptions as $item){
+    $metaMap[strtolower((string)($item['link'] ?? ''))] = [
+        'time_category' => $item['time_category'] ?? 'unknown',
+        'name' => $item['name'] ?? ''
+    ];
+}
+echo json_encode($metaMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+?>;
 
-    if(!hasCouponCheck.checked){
-        resetCouponResult();
+function lockMessageFor(cat){
+    if(subTimeCategory === 'unlimited' && cat === 'limited'){
+        return 'این اشتراک <b>نامحدود زمانی</b> است و نمی‌توان آن را با پلن <b>زمان‌دار</b> تمدید کرد. در صورت نیاز <a href="buy.php">خرید اشتراک جدید</a> را بزنید.';
+    }
+    if(subTimeCategory === 'limited' && cat === 'unlimited'){
+        return 'این اشتراک <b>زمان‌دار</b> است و نمی‌توان آن را با پلن <b>نامحدود زمانی</b> تمدید کرد. در صورت نیاز <a href="buy.php">خرید اشتراک جدید</a> را بزنید.';
+    }
+    return 'این نوع پلن برای تمدید این اشتراک قابل انتخاب نیست. در صورت نیاز <a href="buy.php">خرید اشتراک جدید</a> را بزنید.';
+}
+
+function showCatLockHint(cat){
+    if(!catLockModal || !catLockText) return;
+    catLockText.innerHTML = lockMessageFor(cat);
+    catLockModal.classList.add('is-open');
+    catLockModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function hideCatLockHint(){
+    if(!catLockModal) return;
+    catLockModal.classList.remove('is-open');
+    catLockModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
+
+if(catLockModal){
+    catLockModal.addEventListener('click', function(e){
+        if(e.target && e.target.getAttribute('data-close') === '1'){
+            hideCatLockHint();
+        }
+    });
+}
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') hideCatLockHint();
+});
+
+function resolveSubTimeCategory(link){
+    link = String(link || '').trim().toLowerCase();
+    if(!link) return 'unknown';
+    if(subMetaByLink[link] && subMetaByLink[link].time_category){
+        return subMetaByLink[link].time_category;
+    }
+    // match by sub id suffix
+    var keys = Object.keys(subMetaByLink || {});
+    for(var i = 0; i < keys.length; i++){
+        var k = keys[i];
+        if(k && (link.indexOf(k) !== -1 || k.indexOf(link) !== -1)){
+            return subMetaByLink[k].time_category || 'unknown';
+        }
+        try{
+            var a = new URL(k);
+            var b = new URL(link, window.location.origin);
+            var pa = (a.pathname || '').split('/').pop();
+            var pb = (b.pathname || '').split('/').pop();
+            if(pa && pb && pa === pb) return subMetaByLink[k].time_category || 'unknown';
+        }catch(err){}
+    }
+    return 'unknown';
+}
+
+function syncCategoryLocks(){
+    document.querySelectorAll('.catCard').forEach(function(card){
+        var cat = card.getAttribute('data-cat');
+        var locked = false;
+        if(subTimeCategory === 'unlimited' && cat === 'limited') locked = true;
+        if(subTimeCategory === 'limited' && cat === 'unlimited') locked = true;
+        card.classList.toggle('is-locked', locked);
+        if(locked && card.classList.contains('is-active')){
+            card.classList.remove('is-active');
+            if(selectedCategory === cat){
+                selectedCategory = '';
+                selectedPlan = null;
+                if(planSelect) planSelect.value = '';
+            }
+        }
+    });
+    if(selectedCategory){
+        var activeCard = document.querySelector('.catCard[data-cat="' + selectedCategory + '"]');
+        if(activeCard && activeCard.classList.contains('is-locked')){
+            selectedCategory = '';
+            selectedPlan = null;
+            if(planSelect) planSelect.value = '';
+            hideCatLockHint();
+        }
+    }
+    // اگر نوع مشخص است، دسته سازگار را خودکار باز کن
+    if((subTimeCategory === 'unlimited' || subTimeCategory === 'limited') && !selectedCategory){
+        selectedCategory = subTimeCategory;
+        document.querySelectorAll('.catCard').forEach(function(el){
+            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+        });
+    }
+    try{ renderPlans(); }catch(err){ console && console.warn && console.warn(err); }
+    try{ updateContinueState(); }catch(err){}
+}
+
+function setSubInputMode(mode, link){
+    // mode: 'picked' | 'manual' | 'empty'
+    const box = document.getElementById('subPickedLink');
+    const select = document.getElementById('subSelect');
+    const input = document.getElementById('subInput');
+    link = String(link || '').trim();
+
+    if(box){
+        if(mode === 'picked' && link){
+            box.hidden = false;
+            box.textContent = link;
+        } else {
+            box.hidden = true;
+            box.textContent = '';
+        }
+    }
+
+    if(select){
+        select.classList.toggle('has-picked', mode === 'picked');
+    }
+
+    if(input){
+        // وقتی از لیست انتخاب شده فقط یک نمایشگر لینک کافی است
+        input.classList.toggle('is-hidden-input', mode === 'picked');
+        if(mode === 'picked'){
+            input.value = link;
+        } else if(mode === 'manual' && link === ''){
+            // لینک دیگر: فیلد خالی برای ورود دستی
+        }
+    }
+}
+
+function pickSubscription(){
+    const select = document.getElementById('subSelect');
+    const input = document.getElementById('subInput');
+    if(!select || !input) return;
+
+    const opt = select.options[select.selectedIndex];
+    const value = String((opt && (opt.getAttribute('data-link') || opt.value)) || select.value || '').trim();
+
+    if(value === '' || value === '__other__'){
+        if(value === '__other__'){
+            input.value = '';
+            setSubInputMode('manual', '');
+            input.focus();
+            subTimeCategory = 'unknown';
+        } else {
+            // ریست انتخاب از لیست — اگر قبلاً دستی بوده همان بماند
+            const current = String(input.value || '').trim();
+            setSubInputMode(current ? 'manual' : 'empty', current);
+            subTimeCategory = resolveSubTimeCategory(current);
+        }
+        hideCatLockHint();
+        syncCategoryLocks();
         return;
     }
 
-    if(plan === ''){
-        couponResult.className = 'couponResult is-error';
-        couponResult.textContent = 'ابتدا پلن را انتخاب کنید';
+    setSubInputMode('picked', value);
+    subTimeCategory = (opt && opt.getAttribute('data-time-category')) || resolveSubTimeCategory(value) || 'unknown';
+    hideCatLockHint();
+    selectedPlan = null;
+    if(planSelect) planSelect.value = '';
+    syncCategoryLocks();
+}
+window.pickSubscription = pickSubscription;
+
+function updateContinueState(){
+    if(!toStep2Btn) return;
+    const locked = selectedCategory && (
+        (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
+        (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
+    );
+    const hasPlan = !!(selectedCategory && selectedPlan && planSelect && planSelect.value);
+    toStep2Btn.disabled = !!(locked || !hasPlan);
+}
+
+function renderPlans(){
+    planGrid.innerHTML = '';
+    planEmpty.classList.remove('is-visible');
+    const planBlock = document.getElementById('planBlock');
+    if(!selectedCategory){
+        if(planBlock) planBlock.classList.remove('is-visible');
+        updateContinueState();
         return;
     }
-
-    if(code === ''){
-        resetCouponResult();
-        return;
+    const categoryLocked = (
+        (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
+        (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
+    );
+    if(planBlock) planBlock.classList.add('is-visible');
+    const list = (plansData || []).filter(function(p){ return p.category === selectedCategory; });
+    const isLimited = selectedCategory === 'limited';
+    if(planListTitle) planListTitle.textContent = isLimited ? 'حجم و مدت را انتخاب کنید' : 'حجم را انتخاب کنید';
+    if(list.length === 0){
+        planEmpty.classList.add('is-visible');
+        selectedPlan = null; planSelect.value = '';
+        updateContinueState(); return;
     }
+    list.forEach(function(plan){
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'planChip' + (isLimited ? ' planChip--limited' : '')
+            + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '')
+            + (categoryLocked ? ' is-locked' : '');
+        btn.innerHTML = '<span class="planCheck">✓</span><span class="planName"></span><span class="planPrice"></span>' + (isLimited ? '<span class="planDays"></span>' : '');
+        btn.querySelector('.planName').textContent = plan.name;
+        btn.querySelector('.planPrice').textContent = plan.price_text;
+        if(isLimited){
+            const d = btn.querySelector('.planDays');
+            if(d) d.textContent = 'مدت: ' + (plan.days_label || '—');
+        }
+        btn.addEventListener('click', function(){
+            if(categoryLocked){
+                showCatLockHint(selectedCategory);
+                return;
+            }
+            hideCatLockHint();
+            selectedPlan = plan;
+            planSelect.value = plan.value;
+            planSelect.dispatchEvent(new Event('change'));
+            renderPlans();
+            updateContinueState();
+        });
+        planGrid.appendChild(btn);
+    });
+    updateContinueState();
+}
 
-    fetch('coupon-api.php?plan=' + encodeURIComponent(plan) + '&code=' + encodeURIComponent(code), {
-        credentials: 'same-origin'
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-        if(!data.ok){
-            couponResult.className = 'couponResult is-error';
-            couponResult.textContent = data.error || 'کد تخفیف معتبر نیست';
+document.querySelectorAll('.catCard').forEach(function(card){
+    card.addEventListener('click', function(){
+        const cat = card.getAttribute('data-cat');
+        const locked = (
+            (subTimeCategory === 'unlimited' && cat === 'limited') ||
+            (subTimeCategory === 'limited' && cat === 'unlimited')
+        );
+        if(locked){
+            showCatLockHint(cat);
             return;
         }
+        hideCatLockHint();
+        selectedCategory = cat;
+        document.querySelectorAll('.catCard').forEach(function(el){ el.classList.remove('is-active'); });
+        card.classList.add('is-active');
+        selectedPlan = null; planSelect.value = '';
+        planSelect.dispatchEvent(new Event('change'));
+        renderPlans();
+    });
+});
 
-        couponResult.className = 'couponResult is-ok';
-        couponResult.innerHTML =
-            'تخفیف ' + data.percent + '٪ اعمال شد<br>' +
-            'مبلغ پلن: ' + data.original_text + '<br>' +
-            '<b>اینقدر باید پرداخت کنید: ' + data.final_text + '</b>';
-    })
-    .catch(function(){
-        couponResult.className = 'couponResult is-error';
-        couponResult.textContent = 'خطا در بررسی کد تخفیف';
+const subSelectEl = document.getElementById('subSelect');
+if(subSelectEl){
+    subSelectEl.addEventListener('change', pickSubscription);
+    subSelectEl.addEventListener('input', pickSubscription);
+}
+
+const subInputEl = document.getElementById('subInput');
+if(subInputEl){
+    subInputEl.addEventListener('change', function(){
+        if(subInputEl.classList.contains('is-hidden-input')) return;
+        subTimeCategory = resolveSubTimeCategory(subInputEl.value);
+        hideCatLockHint();
+        syncCategoryLocks();
+    });
+    subInputEl.addEventListener('blur', function(){
+        if(subInputEl.classList.contains('is-hidden-input')) return;
+        subTimeCategory = resolveSubTimeCategory(subInputEl.value);
+        syncCategoryLocks();
     });
 }
 
-hasCouponCheck.addEventListener('change', function(){
-    if(this.checked){
-        couponBox.classList.add('is-open');
-        couponCodeInput.focus();
+function showStep(step){
+    step1.classList.toggle('is-active', step === 1);
+    step2.classList.toggle('is-active', step === 2);
+    step3.classList.toggle('is-active', step === 3);
+    stepTab1.classList.toggle('is-active', step === 1);
+    stepTab2.classList.toggle('is-active', step === 2);
+    stepTab3.classList.toggle('is-active', step === 3);
+    stepTab1.classList.toggle('is-done', step > 1);
+    stepTab2.classList.toggle('is-done', step > 2);
+    if(stepLine1) stepLine1.classList.toggle('is-active', step > 1);
+    if(stepLine2) stepLine2.classList.toggle('is-active', step > 2);
+    document.body.classList.toggle('planStep--result', step === 3);
+    if(step === 2 && selectedPlan){
+        planSummary.classList.add('is-visible');
+        let html = 'پلن: <b>' + selectedPlan.name + '</b> — ' + selectedPlan.price_text;
+        html += '<br>نوع: ' + (selectedCategory === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی');
+        if(selectedCategory === 'limited') html += '<br>مدت: <b>' + (selectedPlan.days_label || '—') + '</b>';
+        const sub = document.getElementById('subInput').value.trim();
+        if(sub) html += '<br>اشتراک: <b style="word-break:break-all">' + sub + '</b>';
+        planSummary.innerHTML = html;
+        syncCardBox();
         validateCoupon();
-    } else {
-        couponBox.classList.remove('is-open');
-        couponCodeInput.value = '';
-        resetCouponResult();
+        ensureInstantPay();
     }
+}
+
+function formatCardDisplay(num){
+    num = String(num || '').replace(/\D+/g, '');
+    return num.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+}
+
+function selectCardMeta(card){
+    selectedCardMeta = card || null;
+    selectedCardInput.value = (card && card.card) || '';
+    selectedCardNameInput.value = (card && card.name) || '';
+    syncCardBox();
+}
+
+function renderCardTabs(){
+    if(!cardTabs) return;
+    cardTabs.innerHTML = '';
+    const list = Array.isArray(cardsData) ? cardsData : [];
+    if(list.length === 0){
+        cardTabs.innerHTML = '<div class="cardTabsEmpty">کارتی تعریف نشده است. از پنل ادمین کارت اضافه کنید.</div>';
+        return;
+    }
+    let preferred = 0;
+    list.forEach(function(c, idx){
+        if((c.bank || '') === 'post' || /پست/.test(c.bank_label || c.name || '')) preferred = idx;
+    });
+    list.forEach(function(card, idx){
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cardTab' + (idx === preferred ? ' is-active' : '');
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('data-idx', String(idx));
+        btn.textContent = card.bank_label || card.name || 'کارت';
+        btn.addEventListener('click', function(){
+            cardTabs.querySelectorAll('.cardTab').forEach(function(el){ el.classList.remove('is-active'); });
+            btn.classList.add('is-active');
+            selectCardMeta(card);
+            ensureInstantPay(true);
+        });
+        cardTabs.appendChild(btn);
+    });
+    selectCardMeta(list[preferred] || list[0]);
+}
+
+function syncCardBox(){
+    const card = selectedCardMeta;
+    const number = (card && card.card) || (selectedCardInput && selectedCardInput.value) || '';
+    if(!number){
+        payCardBox.hidden = true;
+        return;
+    }
+    payCardBox.hidden = false;
+    if(payCardBank){
+        payCardBank.textContent = (card && (card.bank_label || card.name)) || 'بانک';
+    }
+    if(payCardOwner){
+        payCardOwner.textContent = (card && (card.holder || card.name)) || '—';
+    }
+    if(payCardIcon){
+        if(card && card.icon){
+            payCardIcon.src = card.icon;
+            payCardIcon.alt = (card.bank_label || '') + '';
+            payCardIcon.hidden = false;
+        } else {
+            payCardIcon.removeAttribute('src');
+            payCardIcon.hidden = true;
+        }
+    }
+    payCardNumber.textContent = formatCardDisplay(number);
+}
+
+renderCardTabs();
+syncCardBox();
+
+toStep2Btn.addEventListener('click', function(){
+    const subInput = document.getElementById('subInput');
+    if(subInput && !subInput.checkValidity()){ subInput.reportValidity(); return; }
+    if(!planSelect.value){ alert('لطفا پلن را انتخاب کنید'); return; }
+    showStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+function cancelPayBeacon(id){
+    id = String(id || '').trim();
+    if(!id) return;
+    const body = new URLSearchParams();
+    body.set('action', 'cancel');
+    body.set('id', id);
+    const payload = body.toString();
+    try{
+        if(navigator.sendBeacon){
+            const blob = new Blob([payload], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
+            if(navigator.sendBeacon('instant-pay-api.php', blob)) return;
+        }
+    }catch(e){}
+    fetch('instant-pay-api.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: payload
+    }).catch(function(){});
+}
+
+const userBackLink = document.querySelector('.userBack');
+if(userBackLink){
+    userBackLink.addEventListener('click', function(){
+        // مبلغ کدگذاری‌شده بلافاصله منقضی/لغو شود
+        resetPaySession();
+    });
+}
+function formatResultPlanLine(planText){
+    const plan = String(planText || '—').trim();
+    const parts = plan.split(/\s*-\s*/);
+
+    if(parts.length >= 2){
+        return '<span class="resultInfoAccent">' + parts[0].trim() + '</span> — ' + parts.slice(1).join(' - ');
+    }
+
+    return plan;
+}
+
+toStep3Btn.addEventListener('click', function(){
+    if(!currentPay || currentPay.status !== 'paid') return;
+    const sub = document.getElementById('subInput').value.trim();
+    resultInfoPlan.innerHTML = formatResultPlanLine(currentPay.plan || '—');
+    resultInfoConfig.textContent = sub ? ('اشتراک: ' + sub) : '';
+    const link = currentPay.link || sub || '—';
+    resultLink.textContent = link;
+    showResultQr(link);
+    showStep(3);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+function resetCouponResult(){ couponResult.className = 'couponResult'; couponResult.textContent = ''; }
+function validateCoupon(){
+    const plan = planSelect.value; const code = couponCodeInput.value.trim();
+    if(!hasCouponCheck.checked){ resetCouponResult(); return; }
+    if(plan === ''){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'ابتدا پلن را انتخاب کنید'; return; }
+    if(code === ''){ resetCouponResult(); return; }
+    fetch('coupon-api.php?plan=' + encodeURIComponent(plan) + '&code=' + encodeURIComponent(code), { credentials: 'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if(!data.ok){ couponResult.className = 'couponResult is-error'; couponResult.textContent = data.error || 'کد تخفیف معتبر نیست'; return; }
+        couponResult.className = 'couponResult is-ok';
+        couponResult.innerHTML = 'تخفیف ' + data.percent + '٪<br>مبلغ پلن: ' + data.original_text + '<br><b>قابل پرداخت تقریبی: ' + data.final_text + '</b>';
+    })
+    .catch(function(){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'خطا در بررسی کد'; });
+}
+hasCouponCheck.addEventListener('change', function(){
+    if(this.checked){ couponBox.classList.add('is-open'); couponCodeInput.focus(); validateCoupon(); }
+    else { couponBox.classList.remove('is-open'); couponCodeInput.value=''; resetCouponResult(); }
+    if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
+});
 couponCodeInput.addEventListener('input', function(){
     clearTimeout(couponTimer);
-    couponTimer = setTimeout(validateCoupon, 400);
+    couponTimer = setTimeout(function(){
+        validateCoupon();
+        if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
+    }, 450);
 });
-
 planSelect.addEventListener('change', validateCoupon);
 
+function formatRemain(sec){ sec = Math.max(0, parseInt(sec,10)||0); return String(Math.floor(sec/60)).padStart(2,'0') + ':' + String(sec%60).padStart(2,'0'); }
+function stopPayWatchers(){ if(payPollTimer){clearInterval(payPollTimer);payPollTimer=null;} if(payTickTimer){clearInterval(payTickTimer);payTickTimer=null;} }
+
+function resetPaySession(){
+    stopPayWatchers();
+    const cancelId = currentPay && currentPay.id ? currentPay.id : '';
+    currentPay = null;
+    payCreateInFlight = false;
+    if(payCreating) payCreating.classList.remove('is-visible');
+    if(instantPay){ instantPay.hidden = true; }
+    if(instantApproved){ instantApproved.hidden = true; }
+    if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
+    if(instantAmount){ instantAmount.textContent = '—'; }
+    const amountTomanEl = document.getElementById('instantAmountToman');
+    if(amountTomanEl){ amountTomanEl.textContent = ''; }
+    if(instantTimer){ instantTimer.textContent = '۳۰:۰۰'; }
+    if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
+    const restartBtn = document.getElementById('restartPayBtn');
+    if(restartBtn) restartBtn.hidden = true;
+    if(cancelId){
+        cancelPayBeacon(cancelId);
+    }
+}
+
+function renderPay(item){
+    currentPay = item;
+    if(payCreating) payCreating.classList.remove('is-visible');
+    instantPay.hidden = false;
+    instantAmount.textContent = item.amount_text || '—';
+    const amountTomanEl = document.getElementById('instantAmountToman');
+    if(amountTomanEl){
+        amountTomanEl.textContent = item.amount_toman_text || '';
+    }
+    instantTimer.textContent = formatRemain(item.remaining);
+    if(item.status === 'processing'){
+        instantPayHead.textContent = 'در حال آماده‌سازی';
+        instantStatus.hidden = false;
+        instantStatus.textContent = 'واریز دیده شد؛ در حال تمدید اشتراک…';
+        instantApproved.hidden = true; return;
+    }
+    if(item.status === 'paid'){
+        stopPayWatchers();
+        instantPayHead.textContent = 'پرداخت تأیید شد';
+        instantTimer.textContent = '✓';
+        instantStatus.hidden = true;
+        instantApproved.hidden = false;
+        const sub = document.getElementById('subInput').value.trim();
+        resultInfoPlan.innerHTML = formatResultPlanLine(item.plan || '—');
+        resultInfoConfig.textContent = sub ? ('اشتراک: ' + sub) : '';
+        const link = item.link || sub || '—';
+        resultLink.textContent = link;
+        showResultQr(link);
+        showStep(3);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+    }
+    if(item.status === 'expired'){
+        // تایمر UI تمام شده؛ تا ۱۰ دقیقهٔ grace هنوز مچ می‌شود
+        if(payTickTimer){ clearInterval(payTickTimer); payTickTimer = null; }
+        instantTimer.textContent = '۰۰:۰۰';
+        instantPayHead.textContent = 'مهلت تمام شد';
+        instantStatus.hidden = false;
+        instantStatus.textContent = 'مهلت ۳۰ دقیقه‌ای تمام شد. اگر همین الان واریز کرده‌اید تا ۱۰ دقیقه دیگر بررسی می‌شود؛ در غیر این صورت مبلغ جدید بسازید.';
+        instantApproved.hidden = true;
+        let restartBtn = document.getElementById('restartPayBtn');
+        if(!restartBtn && instantPay){
+            restartBtn = document.createElement('button');
+            restartBtn.type = 'button';
+            restartBtn.id = 'restartPayBtn';
+            restartBtn.className = 'btnNext';
+            restartBtn.style.marginTop = '12px';
+            restartBtn.textContent = 'ساخت مبلغ جدید';
+            restartBtn.addEventListener('click', function(){ ensureInstantPay(true); });
+            instantPay.appendChild(restartBtn);
+        }
+        if(restartBtn) restartBtn.hidden = false;
+        if(!payPollTimer && item.id){
+            payPollTimer = setInterval(function(){ pollPayStatus(item.id); }, 2000);
+        }
+        return;
+    }
+    if(item.status === 'failed'){
+        stopPayWatchers();
+        instantStatus.hidden = false;
+        instantStatus.textContent = item.message || 'خطا در تمدید';
+        instantApproved.hidden = true; return;
+    }
+    instantPayHead.textContent = 'مهلت پرداخت';
+    instantStatus.hidden = true;
+    instantStatus.textContent = '';
+    instantApproved.hidden = true;
+    const restartBtn = document.getElementById('restartPayBtn');
+    if(restartBtn) restartBtn.hidden = true;
+}
+
+function pollPayStatus(id){
+    fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials:'same-origin' })
+    .then(function(r){return r.json();})
+    .then(function(data){ if(data && data.ok && data.item) renderPay(data.item); })
+    .catch(function(){});
+}
+
+function startPayWatchers(id){
+    stopPayWatchers();
+    payTickTimer = setInterval(function(){
+        if(!currentPay || currentPay.status !== 'waiting') return;
+        currentPay.remaining = Math.max(0, (currentPay.remaining||0)-1);
+        instantTimer.textContent = formatRemain(currentPay.remaining);
+    }, 1000);
+    payPollTimer = setInterval(function(){ pollPayStatus(id); }, 2000);
+    pollPayStatus(id);
+    document.addEventListener('visibilitychange', function(){
+        if(!document.hidden && currentPay && currentPay.id === id && currentPay.status !== 'paid'){
+            pollPayStatus(id);
+        }
+    });
+}
+
+function showPayCreateError(msg){
+    if(payCreating){
+        payCreating.classList.add('is-visible', 'is-error');
+        payCreating.textContent = msg || 'ساخت مبلغ ناموفق بود';
+    }
+    if(instantPay) instantPay.hidden = true;
+}
+
+function ensureInstantPay(forceRestart){
+    const card = selectedCardInput ? selectedCardInput.value.trim() : '';
+    const cardName = selectedCardNameInput ? selectedCardNameInput.value.trim() : '';
+    const sub = document.getElementById('subInput').value.trim();
+
+    if(!planSelect.value){
+        showPayCreateError('ابتدا پلن را انتخاب کنید');
+        return;
+    }
+    if(!card){
+        showPayCreateError('کارت مقصد را از تب بانک‌ها انتخاب کنید');
+        return;
+    }
+    if(!sub){
+        showPayCreateError('لینک اشتراک را وارد کنید');
+        return;
+    }
+    if(!forceRestart && currentPay && (currentPay.status === 'waiting' || currentPay.status === 'processing')){
+        if(String(currentPay.card || '') === card){
+            return;
+        }
+    }
+    if(payCreateInFlight) return;
+    payCreateInFlight = true;
+
+    if(payCreating){
+        payCreating.classList.add('is-visible');
+        payCreating.classList.remove('is-error');
+        payCreating.textContent = 'در حال ایجاد مبلغ پرداخت…';
+    }
+    if(instantPay){
+        instantPay.hidden = false;
+        if(instantAmount) instantAmount.textContent = '…';
+        if(instantTimer) instantTimer.textContent = '۳۰:۰۰';
+        if(instantPayHead) instantPayHead.textContent = 'مهلت پرداخت';
+        const amountTomanEl = document.getElementById('instantAmountToman');
+        if(amountTomanEl) amountTomanEl.textContent = '';
+        if(instantStatus){ instantStatus.hidden = true; instantStatus.textContent = ''; }
+        if(instantApproved) instantApproved.hidden = true;
+    }
+
+    const prevId = currentPay && currentPay.id ? currentPay.id : '';
+    stopPayWatchers();
+    currentPay = null;
+
+    const startCreate = function(){
+        const body = new URLSearchParams();
+        body.set('action', 'create');
+        body.set('type', 'تمدید');
+        body.set('plan', planSelect.value);
+        body.set('sub', sub);
+        body.set('card', card);
+        body.set('card_name', cardName);
+        if(hasCouponCheck.checked){
+            body.set('has_coupon', '1');
+            body.set('coupon_code', couponCodeInput.value.trim());
+        }
+        fetch('instant-pay-api.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: body.toString()
+        })
+        .then(function(r){
+            return r.text().then(function(t){
+                var data = null;
+                try{ data = JSON.parse(t); }catch(e){ data = null; }
+                if(!r.ok){
+                    throw new Error((data && data.error) || ('خطای سرور ' + r.status));
+                }
+                return data;
+            });
+        })
+        .then(function(data){
+            payCreateInFlight = false;
+            if(!data || !data.ok || !data.item){
+                showPayCreateError((data && data.error) || 'ساخت مبلغ ناموفق بود');
+                return;
+            }
+            if(payCreating){
+                payCreating.classList.remove('is-visible', 'is-error');
+                payCreating.textContent = 'در حال ایجاد مبلغ پرداخت…';
+            }
+            renderPay(data.item);
+            startPayWatchers(data.item.id);
+        })
+        .catch(function(err){
+            payCreateInFlight = false;
+            showPayCreateError((err && err.message) || 'خطا در ارتباط با سرور');
+        });
+    };
+
+    if(prevId){
+        const body = new URLSearchParams();
+        body.set('action', 'cancel');
+        body.set('id', prevId);
+        fetch('instant-pay-api.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: body.toString()
+        }).finally(startCreate);
+    } else {
+        startCreate();
+    }
+}
+
+function copyText(t, msg, opts){
+    if(!t) return Promise.resolve(false);
+    opts = opts || {};
+    return navigator.clipboard.writeText(String(t)).then(function(){
+        if(msg && !opts.silent){ alert(msg); }
+        return true;
+    }).catch(function(){ return false; });
+}
+
+const PAY_GUIDE_KEY = 'pnv_pay_guide_seen_v1';
+const payGuideModal = document.getElementById('payGuideModal');
+const payGuideText = document.getElementById('payGuideText');
+const payGuideBtn = document.getElementById('payGuideBtn');
+let payGuideStep = 1;
+const payGuidePages = [
+    'روند خرید و تمدید را <b>خودکار</b> کردیم؛ شما کار خاصی لازم نیست انجام دهید. فقط مبلغ را <b>دقیقاً مطابق همین عدد</b> پرداخت کنید. چند ثانیه بعد پرداختتان تأیید می‌شود و اشتراک به‌صورت خودکار تمدید یا ایجاد می‌شود.',
+    'حتی اگر صفحه را ببندید مشکلی نیست؛ خرید یا تمدید تأیید می‌شود. می‌توانید از داشبورد، <b>اشتراک‌های من</b> را بزنید و نتیجه را ببینید.'
+];
+
+function openPayGuide(){
+    if(!payGuideModal || !payGuideText || !payGuideBtn) return;
+    payGuideStep = 1;
+    renderPayGuideStep();
+    payGuideModal.classList.add('is-open');
+    payGuideModal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function renderPayGuideStep(){
+    if(!payGuideText || !payGuideBtn) return;
+    payGuideText.innerHTML = payGuidePages[payGuideStep - 1] || '';
+    if(payGuideStep === 1){
+        payGuideBtn.textContent = 'ادامه';
+        payGuideBtn.classList.add('is-primary');
+    } else {
+        payGuideBtn.textContent = 'متوجه شدم';
+        payGuideBtn.classList.remove('is-primary');
+    }
+}
+
+function closePayGuide(){
+    if(!payGuideModal) return;
+    payGuideModal.classList.remove('is-open');
+    payGuideModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    try{ localStorage.setItem(PAY_GUIDE_KEY, '1'); }catch(e){}
+}
+
+if(payGuideBtn){
+    payGuideBtn.addEventListener('click', function(){
+        if(payGuideStep === 1){
+            payGuideStep = 2;
+            renderPayGuideStep();
+            return;
+        }
+        closePayGuide();
+    });
+}
+
+document.getElementById('copyCardBtn').addEventListener('click', function(){
+    const raw = (selectedCardInput && selectedCardInput.value) || payCardNumber.textContent.replace(/\s+/g, '');
+    copyText(String(raw).replace(/\D+/g, ''), 'شماره کارت کپی شد');
+});
+document.getElementById('copyAmountBtn').addEventListener('click', function(){
+    if(!currentPay) return;
+    var seen = false;
+    try{ seen = localStorage.getItem(PAY_GUIDE_KEY) === '1'; }catch(e){}
+    copyText(currentPay.amount, seen ? 'مبلغ کپی شد' : '', { silent: !seen }).then(function(){
+        if(!seen) openPayGuide();
+    });
+});
+document.getElementById('copyLinkBtn').addEventListener('click', function(){ copyText(resultLink.textContent.trim(), 'لینک کپی شد'); });
+
+// Prefill from subscriptions list: renew.php?sub=LINK&name=CONFIG
+(function prefillSubFromQuery(){
+    var params = new URLSearchParams(window.location.search || '');
+    var sub = (params.get('sub') || params.get('link') || '').trim();
+    var name = (params.get('name') || '').trim();
+    if(!sub && !name){
+        syncCategoryLocks();
+        return;
+    }
+
+    var select = document.getElementById('subSelect');
+    var input = document.getElementById('subInput');
+    if(!input) return;
+
+    if(select && select.options && select.options.length){
+        var found = -1;
+        for(var i = 0; i < select.options.length; i++){
+            var opt = select.options[i];
+            var val = (opt.value || '').trim();
+            var label = (opt.textContent || '').trim();
+            if(sub && val && val.toLowerCase() === sub.toLowerCase()){ found = i; break; }
+            if(name && label && label === name){ found = i; break; }
+        }
+        if(found >= 0){
+            select.selectedIndex = found;
+            pickSubscription();
+            return;
+        }
+    }
+
+    if(sub){
+        input.value = sub;
+        var matched = false;
+        if(select){
+            for(var j = 0; j < select.options.length; j++){
+                var ov = (select.options[j].getAttribute('data-link') || select.options[j].value || '').trim();
+                if(ov && ov.toLowerCase() === sub.toLowerCase()){
+                    select.selectedIndex = j;
+                    matched = true;
+                    break;
+                }
+            }
+            if(!matched){
+                for(var k = 0; k < select.options.length; k++){
+                    if(select.options[k].value === '__other__'){ select.selectedIndex = k; break; }
+                }
+            }
+        }
+        setSubInputMode(matched ? 'picked' : 'manual', sub);
+        subTimeCategory = resolveSubTimeCategory(sub);
+        syncCategoryLocks();
+    }
+})();
 </script>
-
 </body>
-
 </html>
