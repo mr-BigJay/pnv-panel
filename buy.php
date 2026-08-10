@@ -39,7 +39,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=20">
+<link rel="stylesheet" href="plan_step_ui.css?v=21">
 </head>
 <body>
 <div class="box">
@@ -164,9 +164,23 @@ $h = static function($v){
 
 <!-- STEP 3 -->
 <div class="formStep" id="step3">
-<div class="resultCard">
-<div class="resultTitle">اشتراک شما آماده است</div>
-<div class="resultMeta" id="resultMeta"></div>
+<div class="resultScreen">
+<div class="resultSuccessBanner">
+<span class="resultSuccessTick" aria-hidden="true">✅</span>
+<div class="resultSuccessText">
+<strong>اشتراک شما با موفقیت فعال شد</strong>
+<span>لینک و QR آماده است</span>
+</div>
+</div>
+<div class="resultPlanSummary planSummary is-visible">
+<div class="planSummaryCard">
+<div class="planSummaryBody">
+<div class="planSummaryLine1" id="resultPlanLine1">پلن: —</div>
+<div class="planSummaryLine2" id="resultPlanLine2">نام کانفیگ: —</div>
+</div>
+<div class="planSummaryIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg></div>
+</div>
+</div>
 <div class="resultLinkWrap">
 <div class="fieldLabel">لینک اشتراک</div>
 <div class="resultLink" id="resultLink">—</div>
@@ -177,9 +191,11 @@ $h = static function($v){
 <div class="resultQrFrame">
 <img id="resultQrImg" src="" alt="QR Code لینک اشتراک">
 </div>
-<div class="resultQrHint">با اسکن این کد، لینک اشتراک وارد اپ می‌شود</div>
+<div class="resultQrHint">QR را با اپ VPN اسکن کنید</div>
 </div>
+<div class="resultActions">
 <a class="btnGhost" href="subscriptions.php">اشتراک‌های من</a>
+</div>
 </div>
 </div>
 
@@ -234,7 +250,8 @@ const instantTimer = document.getElementById('instantTimer');
 const instantAmount = document.getElementById('instantAmount');
 const instantStatus = document.getElementById('instantStatus');
 const instantApproved = document.getElementById('instantApproved');
-const resultMeta = document.getElementById('resultMeta');
+const resultPlanLine1 = document.getElementById('resultPlanLine1');
+const resultPlanLine2 = document.getElementById('resultPlanLine2');
 const resultLink = document.getElementById('resultLink');
 const resultQrWrap = document.getElementById('resultQrWrap');
 const resultQrImg = document.getElementById('resultQrImg');
@@ -498,9 +515,24 @@ function showResultQr(link){
     resultQrWrap.classList.add('is-visible');
 }
 
+function parsePlanForSummary(planText){
+    const plan = String(planText || '—').trim();
+    if(plan.indexOf(' - ') >= 0){
+        const parts = plan.split(' - ', 2);
+        return { size: parts[0], price: parts[1], raw: plan };
+    }
+    return { size: plan, price: '', raw: plan };
+}
+
 function fillResult(item){
     const name = document.getElementById('subnameInput').value.trim();
-    resultMeta.innerHTML = 'نام کانفیگ: <b>' + name + '</b><br>پلن: <b>' + (item.plan || '—') + '</b>';
+    const planParts = parsePlanForSummary(item.plan);
+    if(planParts.price){
+        resultPlanLine1.innerHTML = 'پلن: <span class="planSummaryHighlight">' + escapeHtml(planParts.size) + '</span> — ' + escapeHtml(planParts.price);
+    }else{
+        resultPlanLine1.innerHTML = 'پلن: <span class="planSummaryHighlight">' + escapeHtml(planParts.raw) + '</span>';
+    }
+    resultPlanLine2.innerHTML = 'نام کانفیگ: <span class="planSummaryHighlight">' + escapeHtml(name || '—') + '</span>';
     const link = item.link || '—';
     resultLink.textContent = link;
     showResultQr(link);
