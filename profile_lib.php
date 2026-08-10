@@ -409,4 +409,199 @@ if(!function_exists('profileUsersPath')){
         ];
     }
 
+    function profileAdminsPath(){
+        return __DIR__ . '/db/admins.json';
+    }
+
+    function profileLoadAdmins(){
+        $path = profileAdminsPath();
+
+        if(!file_exists($path)){
+            return [];
+        }
+
+        $data = json_decode(file_get_contents($path), true);
+        return is_array($data) ? $data : [];
+    }
+
+    function profileSaveAdmins($admins){
+        file_put_contents(
+            profileAdminsPath(),
+            json_encode(
+                $admins,
+                JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT
+            ),
+            LOCK_EX
+        );
+    }
+
+    function profileFindAdminIndex($admins, $username){
+        foreach($admins as $i => $admin){
+            if(strcasecmp(trim($admin['username'] ?? ''), trim($username)) === 0){
+                return $i;
+            }
+        }
+
+        return -1;
+    }
+
+    function profileResolveAvatarPath($avatar){
+        $avatar = trim((string)$avatar);
+
+        if($avatar === ''){
+            return '';
+        }
+
+        $path = __DIR__ . '/' . ltrim($avatar, '/');
+
+        if(file_exists($path)){
+            return $avatar;
+        }
+
+        return '';
+    }
+
+    function profileGetAdminAvatar($username){
+        $admins = profileLoadAdmins();
+        $index = profileFindAdminIndex($admins, $username);
+
+        if($index < 0){
+            return '';
+        }
+
+        return profileResolveAvatarPath($admins[$index]['avatar'] ?? '');
+    }
+
+    function profileGetSupportAdminAvatar(){
+        $admins = profileLoadAdmins();
+
+        foreach($admins as $admin){
+            $avatar = profileResolveAvatarPath($admin['avatar'] ?? '');
+
+            if($avatar !== ''){
+                return $avatar;
+            }
+        }
+
+        return '';
+    }
+
+    function profileUploadAdminAvatar($username, $file){
+        $tmpName = (string)($file['tmp_name'] ?? '');
+        $uploadError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+
+        if($tmpName === ''){
+            return ['ok' => false, 'error' => profileUploadErrorMessage($uploadError)];
+        }
+
+        if($uploadError !== UPLOAD_ERR_OK){
+            return ['ok' => false, 'error' => profileUploadErrorMessage($uploadError)];
+        }
+
+        if(($file['size'] ?? 0) > 5 * 1024 * 1024){
+            return ['ok' => false, 'error' => 'حجم عکس باید حداکثر 5 مگابایت باشد'];
+        }
+
+        $mime = '';
+
+        if(function_exists('finfo_open')){
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+
+            if($finfo){
+                $mime = (string)finfo_file($finfo, $tmpName);
+                finfo_close($finfo);
+            }
+        }
+
+        if($mime === '' && function_exists('mime_content_type')){
+            $mime = (string)@mime_content_type($tmpName);
+        }
+
+        $ext = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+
+        if($mime === 'image/jpeg' || $ext === 'jpg' || $ext === 'jpeg'){
+            $ext = 'jpg';
+        }
+        elseif($mime === 'image/png' || $ext === 'png'){
+            $ext = 'png';
+        }
+        elseif($mime === 'image/webp' || $ext === 'webp'){
+            $ext = 'webp';
+        }
+        elseif(!in_array($ext, $allowed, true)){
+            return ['ok' => false, 'error' => 'فقط فرمت‌های JPG، PNG و WEBP مجاز هستند'];
+        }
+
+        $info = @getimagesize($tmpName);
+
+        if($info === false){
+            return ['ok' => false, 'error' => 'فایل انتخاب‌شده یک تصویر معتبر نیست'];
+        }
+
+        $admins = profileLoadAdmins();
+        $index = profileFindAdminIndex($admins, $username);
+
+        if($index < 0){
+            return ['ok' => false, 'error' => 'ادمین پیدا نشد'];
+        }
+
+        if(!profileEnsureAvatarsDir()){
+            return ['ok' => false, 'error' => 'پوشه ذخیره عکس در دسترس نیست. دسترسی uploads/avatars را بررسی کنید.'];
+        }
+
+        $safeBase = 'admin_' . preg_replace('/[^a-zA-Z0-9._-]+/', '_', $username);
+        $filename = $safeBase . '_' . time() . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
+        $destAbs = profileAvatarsDir() . '/' . $filename;
+        $destRel = 'uploads/avatars/' . $filename;
+
+        if(!profileSaveUploadedImage($tmpName, $destAbs)){
+            return ['ok' => false, 'error' => 'ذخیره عکس انجام نشد. دسترسی پوشه uploads/avatars را بررسی کنید.'];
+        }
+
+        @chmod($destAbs, 0644);
+
+        $oldAvatar = trim((string)($admins[$index]['avatar'] ?? ''));
+
+        if($oldAvatar !== ''){
+            $oldPath = __DIR__ . '/' . ltrim($oldAvatar, '/');
+
+            if(is_file($oldPath)){
+                @unlink($oldPath);
+            }
+        }
+
+        $admins[$index]['avatar'] = $destRel;
+        profileSaveAdmins($admins);
+
+        return [
+            'ok' => true,
+            'avatar' => $destRel
+        ];
+    }
+
+    function profileRemoveAdminAvatar($username){
+        $admins = profileLoadAdmins();
+        $index = profileFindAdminIndex($admins, $username);
+
+        if($index < 0){
+            return ['ok' => false, 'error' => 'ادمین پیدا نشد'];
+        }
+
+        $oldAvatar = trim((string)($admins[$index]['avatar'] ?? ''));
+
+        if($oldAvatar !== ''){
+            $oldPath = __DIR__ . '/' . ltrim($oldAvatar, '/');
+
+            if(is_file($oldPath)){
+                @unlink($oldPath);
+            }
+        }
+
+        unset($admins[$index]['avatar']);
+        profileSaveAdmins($admins);
+
+        return ['ok' => true];
+    }
+
 }

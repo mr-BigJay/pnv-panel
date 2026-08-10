@@ -163,6 +163,15 @@ exit;
 
 $page = $_GET['page'] ?? 'dashboard';
 
+require_once __DIR__ . '/../profile_lib.php';
+
+$adminProfileUser = pnvAdminUser();
+$adminProfileAvatar = profileGetAdminAvatar($adminProfileUser);
+$adminProfileInitial = function_exists('mb_substr')
+    ? mb_strtoupper(mb_substr($adminProfileUser, 0, 1, 'UTF-8'), 'UTF-8')
+    : strtoupper(substr($adminProfileUser, 0, 1));
+$adminProfileApiUrl = pnvAdminUrl('profile-api.php');
+
 $supportActionResult = null;
 
 if($page === 'support'){
@@ -672,6 +681,156 @@ opacity:1;
 
 }
 
+.adminProfileCard{
+background:#1e293b;
+padding:14px;
+border-radius:12px;
+margin:18px 0 12px;
+display:flex;
+align-items:center;
+gap:12px;
+}
+
+.adminProfileAvatar{
+width:48px;
+height:48px;
+border-radius:50%;
+background:linear-gradient(135deg,#22c55e,#16a34a);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:18px;
+font-weight:bold;
+flex-shrink:0;
+overflow:hidden;
+}
+
+.adminProfileAvatar img{
+width:100%;
+height:100%;
+object-fit:cover;
+display:block;
+}
+
+.adminProfileMeta{
+flex:1;
+min-width:0;
+}
+
+.adminProfileName{
+font-size:14px;
+font-weight:bold;
+margin-bottom:4px;
+word-break:break-all;
+}
+
+.adminProfileBtn{
+display:inline-block;
+margin-top:6px;
+padding:6px 10px;
+border:none;
+border-radius:8px;
+background:#334155;
+color:#fff;
+font-family:tahoma;
+font-size:12px;
+cursor:pointer;
+}
+
+.adminProfileModal{
+position:fixed;
+inset:0;
+background:rgba(0,0,0,.65);
+display:none;
+align-items:center;
+justify-content:center;
+z-index:9999;
+padding:16px;
+}
+
+.adminProfileModal.is-open{
+display:flex;
+}
+
+.adminProfileModalBox{
+width:100%;
+max-width:360px;
+background:#1e293b;
+border-radius:16px;
+padding:20px;
+color:#fff;
+}
+
+.adminProfileModalBox h3{
+margin:0 0 12px;
+font-size:17px;
+}
+
+.adminProfileModalPreview{
+width:88px;
+height:88px;
+border-radius:50%;
+margin:0 auto 14px;
+background:linear-gradient(135deg,#22c55e,#16a34a);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:28px;
+font-weight:bold;
+overflow:hidden;
+}
+
+.adminProfileModalPreview img{
+width:100%;
+height:100%;
+object-fit:cover;
+display:block;
+}
+
+.adminProfileModalBox input[type=file]{
+width:100%;
+margin:10px 0;
+color:#cbd5e1;
+}
+
+.adminProfileModalActions{
+display:flex;
+gap:8px;
+flex-wrap:wrap;
+}
+
+.adminProfileModalActions button{
+flex:1;
+min-width:120px;
+padding:10px 12px;
+border:none;
+border-radius:10px;
+cursor:pointer;
+font-family:tahoma;
+}
+
+.adminProfileSave{
+background:#22c55e;
+color:#052e16;
+}
+
+.adminProfileRemove{
+background:#ef4444;
+color:#fff;
+}
+
+.adminProfileClose{
+background:#334155;
+color:#fff;
+}
+
+.adminProfileFlash{
+margin-top:10px;
+font-size:13px;
+color:#fca5a5;
+min-height:18px;
+}
+
 .statsGrid{
 display:grid;
 grid-template-columns:repeat(2,1fr);
@@ -849,6 +1008,20 @@ class="supportMenu">
 آپلود فایل کاربران سرورها
 
 </a>
+
+<div class="adminProfileCard">
+<div class="adminProfileAvatar" id="adminSidebarAvatar">
+<?php if($adminProfileAvatar !== ''){ ?>
+<img src="<?php echo htmlspecialchars('/' . ltrim($adminProfileAvatar, '/'), ENT_QUOTES, 'UTF-8'); ?>" alt="">
+<?php } else { ?>
+<?php echo htmlspecialchars($adminProfileInitial, ENT_QUOTES, 'UTF-8'); ?>
+<?php } ?>
+</div>
+<div class="adminProfileMeta">
+<div class="adminProfileName"><?php echo htmlspecialchars($adminProfileUser, ENT_QUOTES, 'UTF-8'); ?></div>
+<button type="button" class="adminProfileBtn" id="adminProfileOpenBtn">تغییر عکس پروفایل</button>
+</div>
+</div>
 
 <a
 href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?logout=1'), ENT_QUOTES, 'UTF-8'); ?>"
@@ -1031,6 +1204,169 @@ name="uploadcsv">
 <?php } ?>
 
 </div>
+
+<div class="adminProfileModal" id="adminProfileModal">
+<div class="adminProfileModalBox">
+<h3>عکس پروفایل ادمین</h3>
+<div class="adminProfileModalPreview" id="adminProfilePreview">
+<?php if($adminProfileAvatar !== ''){ ?>
+<img src="<?php echo htmlspecialchars('/' . ltrim($adminProfileAvatar, '/'), ENT_QUOTES, 'UTF-8'); ?>" alt="">
+<?php } else { ?>
+<?php echo htmlspecialchars($adminProfileInitial, ENT_QUOTES, 'UTF-8'); ?>
+<?php } ?>
+</div>
+<form id="adminProfileForm" enctype="multipart/form-data">
+<input type="file" name="avatar" id="adminProfileFile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required>
+<div class="adminProfileModalActions">
+<button type="submit" class="adminProfileSave">ذخیره عکس</button>
+<?php if($adminProfileAvatar !== ''){ ?>
+<button type="button" class="adminProfileRemove" id="adminProfileRemoveBtn">حذف عکس</button>
+<?php } ?>
+<button type="button" class="adminProfileClose" id="adminProfileCloseBtn">بستن</button>
+</div>
+<div class="adminProfileFlash" id="adminProfileFlash"></div>
+</form>
+</div>
+</div>
+
+<script>
+(function(){
+    const openBtn = document.getElementById('adminProfileOpenBtn');
+    const modal = document.getElementById('adminProfileModal');
+    const closeBtn = document.getElementById('adminProfileCloseBtn');
+    const form = document.getElementById('adminProfileForm');
+    const fileInput = document.getElementById('adminProfileFile');
+    const preview = document.getElementById('adminProfilePreview');
+    const sidebarAvatar = document.getElementById('adminSidebarAvatar');
+    const flash = document.getElementById('adminProfileFlash');
+    const removeBtn = document.getElementById('adminProfileRemoveBtn');
+    const apiUrl = <?php echo json_encode($adminProfileApiUrl, JSON_UNESCAPED_UNICODE); ?>;
+    const initial = <?php echo json_encode($adminProfileInitial, JSON_UNESCAPED_UNICODE); ?>;
+
+    if(!openBtn || !modal || !form){
+        return;
+    }
+
+    function setFlash(text){
+        if(flash){
+            flash.textContent = text || '';
+        }
+    }
+
+    function renderAvatar(target, avatarUrl){
+        if(!target){
+            return;
+        }
+
+        if(avatarUrl){
+            target.innerHTML = '<img src="' + avatarUrl + '" alt="">';
+            return;
+        }
+
+        target.textContent = initial;
+    }
+
+    function openModal(){
+        modal.classList.add('is-open');
+        setFlash('');
+    }
+
+    function closeModal(){
+        modal.classList.remove('is-open');
+        setFlash('');
+        form.reset();
+    }
+
+    openBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e){
+        if(e.target === modal){
+            closeModal();
+        }
+    });
+
+    fileInput.addEventListener('change', function(){
+        const file = fileInput.files && fileInput.files[0];
+
+        if(!file){
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(){
+            preview.innerHTML = '<img src="' + reader.result + '" alt="">';
+        };
+        reader.readAsDataURL(file);
+    });
+
+    form.addEventListener('submit', function(e){
+        e.preventDefault();
+        setFlash('');
+
+        const file = fileInput.files && fileInput.files[0];
+
+        if(!file){
+            setFlash('لطفاً یک عکس انتخاب کنید');
+            return;
+        }
+
+        const body = new FormData();
+        body.append('setavatar', '1');
+        body.append('avatar', file);
+
+        fetch(apiUrl, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin'
+        })
+        .then(function(res){ return res.json(); })
+        .then(function(data){
+            if(!data || !data.ok){
+                setFlash((data && data.error) ? data.error : 'ذخیره عکس انجام نشد');
+                return;
+            }
+
+            const avatarUrl = '/' + String(data.avatar || '').replace(/^\/+/, '');
+            renderAvatar(preview, avatarUrl);
+            renderAvatar(sidebarAvatar, avatarUrl);
+            closeModal();
+            location.reload();
+        })
+        .catch(function(){
+            setFlash('خطا در ارتباط با سرور');
+        });
+    });
+
+    if(removeBtn){
+        removeBtn.addEventListener('click', function(){
+            if(!confirm('عکس پروفایل حذف شود؟')){
+                return;
+            }
+
+            const body = new FormData();
+            body.append('removeavatar', '1');
+
+            fetch(apiUrl, {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin'
+            })
+            .then(function(res){ return res.json(); })
+            .then(function(data){
+                if(!data || !data.ok){
+                    setFlash((data && data.error) ? data.error : 'حذف عکس انجام نشد');
+                    return;
+                }
+
+                location.reload();
+            })
+            .catch(function(){
+                setFlash('خطا در ارتباط با سرور');
+            });
+        });
+    }
+})();
+</script>
 
 <script>
 (function(){
