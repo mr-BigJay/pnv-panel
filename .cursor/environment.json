@@ -2,11 +2,11 @@
   "name": "pnv-panel",
   "user": "ubuntu",
   "install": "sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y php-cli php-sqlite3 php-gd php-mbstring php-curl && mkdir -p temp phpqrcode/cache",
-  "start": "mkdir -p temp phpqrcode/cache",
   "terminals": [
     {
       "name": "PHP Server",
-      "command": "php -S 0.0.0.0:8080 -t ."
+      "command": "mkdir -p temp phpqrcode/cache && php -S 0.0.0.0:8080 -t .",
+      "description": "PHP built-in dev server for pnv-panel on port 8080. Recreates the untracked temp/ and phpqrcode/cache/ dirs before serving so QR generation stays warning-free."
     }
   ],
   "ports": [
