@@ -48,8 +48,11 @@ if(isset($_POST['test'])){
         $sent = [];
 
         foreach(telegramAdminChatIds($config) as $chatId){
-            telegramShowHome($chatId, $config, null);
-            $sent[] = ['ok' => true];
+            $screenId = telegramShowHome($chatId, $config, null);
+            $sent[] = [
+                'ok' => $screenId > 0,
+                'description' => $screenId > 0 ? '' : ('ارسال به چت ' . $chatId . ' ناموفق بود')
+            ];
         }
 
         $failed = false;
@@ -63,7 +66,7 @@ if(isset($_POST['test'])){
         }
 
         if($failed || count($sent) === 0){
-            $error = 'فرمان‌های بات ثبت شد، اما پیام آزمایشی ارسال نشد.';
+            $error = 'Reply Keyboard فعال شد، اما پیام آزمایشی ارسال نشد.';
             if(count($details) > 0){
                 $error .= ' ' . implode(' | ', $details);
             }
@@ -72,7 +75,7 @@ if(isset($_POST['test'])){
             }
         }
         else{
-            $message = 'فرمان‌ها ثبت و پیام آزمایشی ارسال شد.';
+            $message = 'Reply Keyboard فعال شد و پیام آزمایشی ارسال شد.';
         }
     }
 }
@@ -135,7 +138,7 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 
 <label for="admin_chat_ids">شناسه چت مدیران</label>
 <input type="text" id="admin_chat_ids" name="admin_chat_ids" value="<?php echo htmlspecialchars($config['admin_chat_ids'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="مثال: 123456789 یا -1001234567890">
-<div class="hint">برای چند مدیر یا گروه، شناسه‌ها را با ویرگول جدا کنید. فقط همین شناسه‌ها می‌توانند منوی بات را استفاده کنند. قبل از تست، حتماً در بات /start بزنید.</div>
+<div class="hint">برای چند مدیر یا گروه، شناسه‌ها را با ویرگول جدا کنید. منو فقط Reply Keyboard (دکمه‌های پایین) است — Command Menu ندارد. بعد از «پاک کردن تاریخچه» تلگرام دکمه START را نشان نمی‌دهد؛ /start بزنید یا دکمه «ارسال پیام آزمایشی» را بزنید.</div>
 
 <label for="local_proxy_urls">آدرس پراکسی محلی Xray (هر خط یک مورد)</label>
 <textarea id="local_proxy_urls" name="local_proxy_urls" placeholder="socks5h://127.0.0.1:10808"><?php echo telegramTextAreaValue($config['local_proxy_urls'] ?? []); ?></textarea>
@@ -146,7 +149,7 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <div class="hint">این لینک‌ها برای ثبت و مدیریت پراکسی‌های اختصاصی بات هستند. راه‌اندازی سرویس Xray محلی از آن‌ها باید یک‌بار روی سرور انجام شود؛ صرف ذخیره لینک، پراکسی را فعال نمی‌کند.</div>
 
 <button type="submit" name="save">ذخیره تنظیمات</button>
-<button type="submit" name="test" class="test">ارسال پیام آزمایشی و ثبت منوی بات</button>
+<button type="submit" name="test" class="test">ارسال پیام آزمایشی و فعال‌سازی Reply Keyboard</button>
 </form>
 
 <a class="back" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php', ENT_QUOTES, 'UTF-8'); ?>">بازگشت به مدیریت</a>

@@ -6,7 +6,7 @@ if(file_exists(__DIR__ . '/telegram_xui.php')){
 
 if(!function_exists('telegramConfigPath')){
 
-    define('TELEGRAM_UI_VERSION', 5);
+    define('TELEGRAM_UI_VERSION', 6);
 
     function telegramConfigPath(){
         return __DIR__ . '/db/telegram.json';
@@ -622,12 +622,6 @@ if(!function_exists('telegramConfigPath')){
     }
 
     function telegramEnsureBottomMenu($chatId, $config = null){
-        $session = telegramGetSession($chatId);
-
-        if(is_array($session) && !empty($session['bottom_menu_set'])){
-            return;
-        }
-
         telegramRefreshBottomMenu($chatId, $config);
     }
 
@@ -922,7 +916,9 @@ if(!function_exists('telegramConfigPath')){
             '',
             '⌨️ Reply Keyboard فعال (v' . TELEGRAM_UI_VERSION . ')',
             '',
-            'اگر دکمه‌های پایین نیست: /start بزنید'
+            '⚠️ بعد از «پاک کردن تاریخچه» تلگرام دکمه START را نشان نمی‌دهد.',
+            'برای بازگشت منو: /start را تایپ و ارسال کنید.',
+            'یا از پنل ادمین «ارسال پیام آزمایشی» را بزنید.'
         ];
 
         return implode("\n", $lines);
@@ -2106,7 +2102,18 @@ if(!function_exists('telegramConfigPath')){
     function telegramIsStartCommand($text){
         $text = trim((string)$text);
 
-        return $text === '/start' || strpos($text, '/start ') === 0 || strpos($text, '/start@') === 0;
+        if($text === ''){
+            return false;
+        }
+
+        if($text === '/start' || strpos($text, '/start ') === 0 || strpos($text, '/start@') === 0){
+            return true;
+        }
+
+        $normalized = telegramNormalizeMenuText($text);
+        $lower = function_exists('mb_strtolower') ? mb_strtolower($normalized, 'UTF-8') : strtolower($normalized);
+
+        return in_array($lower, ['start', 'شروع', 'استارت', '▶️ شروع', '▶️ start'], true);
     }
 
     function telegramHandleAdminText($chatId, $text, $config = null){
@@ -2115,10 +2122,7 @@ if(!function_exists('telegramConfigPath')){
         $messageId = is_array($session) ? (intval($session['screen_message_id'] ?? 0) ?: null) : null;
 
         if(telegramIsStartCommand($text)){
-            telegramUpdateSessionScreen($chatId, [
-                'bottom_menu_set' => false,
-                'screen_message_id' => 0
-            ]);
+            telegramClearSession($chatId);
             telegramShowHome($chatId, $config, null);
             return;
         }
@@ -2320,6 +2324,7 @@ if(!function_exists('telegramConfigPath')){
             return;
         }
 
-        // متن‌های آزاد خارج از حالت پاسخ نادیده گرفته می‌شوند
+        // بعد از پاک کردن تاریخچه، کیبورد پایین از بین می‌رود — هر پیام ناشناخته منو را برمی‌گرداند
+        telegramShowHome($chatId, $config, null);
     }
 }
