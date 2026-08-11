@@ -1,11 +1,9 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/admin_nav.php';
 
-if(!isset($_SESSION['admin'])){
-header("Location:index.php");
-exit;
-}
+pnvAdminRequireAuth();
 
 $dir = __DIR__ . "/../down";
 
@@ -72,7 +70,7 @@ if(file_exists($path)){
 unlink($path);
 }
 
-header("Location:downloads.php");
+header("Location: " . pnvAdminUrl('downloads.php'));
 exit;
 
 }
@@ -295,6 +293,8 @@ text-align:center;
 </head>
 
 <body>
+<?php adminQuickNavStyles(); adminQuickNav('downloads'); ?>
+
 
 <div class="box">
 
@@ -392,7 +392,7 @@ onclick="return confirm('فایل حذف شود؟')">
 <?php } ?>
 
 <a
-href="index.php"
+href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>"
 class="back">
 
 بازگشت
