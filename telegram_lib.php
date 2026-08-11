@@ -492,27 +492,28 @@ if(!function_exists('telegramConfigPath')){
         ], JSON_UNESCAPED_UNICODE);
     }
 
-    function telegramRefreshBottomMenu($chatId, $config = null){
-        $sent = telegramSendMessage($chatId, telegramInvisiblePadChar(), [
-            'reply_markup' => telegramBottomMenuKeyboard(),
-            'disable_notification' => true
-        ], $config);
+    function telegramBottomMenuMarkupArray(){
+        $decoded = json_decode(telegramBottomMenuKeyboard(), true);
 
-        $messageId = intval($sent['result']['message_id'] ?? 0);
+        return is_array($decoded) ? $decoded : [];
+    }
 
-        if($messageId > 0){
-            telegramApiRequest('deleteMessage', [
-                'chat_id' => $chatId,
-                'message_id' => $messageId
-            ], [], $config);
-        }
-
+    function telegramApplyMenuButton($chatId, $config = null){
         telegramApiRequest('setChatMenuButton', [
             'chat_id' => $chatId,
             'menu_button' => [
                 'type' => 'commands'
             ]
         ], [], $config);
+    }
+
+    function telegramRefreshBottomMenu($chatId, $config = null){
+        telegramApplyMenuButton($chatId, $config);
+
+        telegramSendMessage($chatId, telegramInvisiblePadChar(), [
+            'reply_markup' => telegramBottomMenuMarkupArray(),
+            'disable_notification' => true
+        ], $config);
 
         telegramUpdateSessionScreen($chatId, [
             'bottom_menu_set' => true,
@@ -972,6 +973,8 @@ if(!function_exists('telegramConfigPath')){
                 telegramDeleteMessage($chatId, $oldScreenId, $config);
             }
 
+            telegramEnsureBottomMenu($chatId, $config);
+
             return $editedId;
         }
 
@@ -983,6 +986,8 @@ if(!function_exists('telegramConfigPath')){
                 if($messageId > 0){
                     telegramDeleteMessage($chatId, $messageId, $config);
                 }
+
+                telegramEnsureBottomMenu($chatId, $config);
 
                 return $editedId;
             }
@@ -1552,28 +1557,69 @@ if(!function_exists('telegramConfigPath')){
 
     function telegramShowHome($chatId, $config = null, $messageId = null){
         $session = telegramGetSession($chatId);
+        $oldScreenId = is_array($session) ? intval($session['screen_message_id'] ?? 0) : 0;
 
         if(!$messageId && is_array($session)){
             $messageId = intval($session['screen_message_id'] ?? 0) ?: null;
         }
 
-        $id = telegramShowPage(
-            $chatId,
-            telegramHomeText(),
-            telegramInline([]),
-            $config,
-            $messageId
-        );
+        $messageId = $messageId ? intval($messageId) : 0;
+        $text = telegramHomeText();
+        $menuMarkup = telegramBottomMenuMarkupArray();
+
+        telegramApplyMenuButton($chatId, $config);
+
+        $screenId = 0;
+        $editCandidates = array_values(array_unique(array_filter([$messageId, $oldScreenId])));
+
+        foreach($editCandidates as $editId){
+            $edited = telegramEditMessage($chatId, $editId, $text, [], $config);
+
+            if(empty($edited['ok'])){
+                continue;
+            }
+
+            telegramApiRequest('editMessageReplyMarkup', [
+                'chat_id' => $chatId,
+                'message_id' => intval($editId),
+                'reply_markup' => ['inline_keyboard' => []]
+            ], [], $config);
+
+            $screenId = intval($editId);
+            break;
+        }
+
+        if($screenId <= 0){
+            $sent = telegramSendMessage($chatId, $text, [
+                'reply_markup' => $menuMarkup
+            ], $config);
+            $screenId = intval($sent['result']['message_id'] ?? 0);
+        }
+        else{
+            telegramRefreshBottomMenu($chatId, $config);
+        }
+
+        foreach($editCandidates as $obsoleteId){
+            if($obsoleteId > 0 && $obsoleteId !== $screenId){
+                telegramDeleteMessage($chatId, $obsoleteId, $config);
+            }
+        }
+
+        if($screenId <= 0){
+            telegramRefreshBottomMenu($chatId, $config);
+            $session = telegramGetSession($chatId);
+            $screenId = is_array($session) ? intval($session['screen_message_id'] ?? 0) : 0;
+        }
 
         telegramSetSession($chatId, [
             'screen' => 'home',
-            'screen_message_id' => $id,
-            'updated_at' => time()
+            'screen_message_id' => $screenId,
+            'updated_at' => time(),
+            'bottom_menu_set' => true,
+            'bottom_menu_at' => time()
         ]);
 
-        telegramRefreshBottomMenu($chatId, $config);
-
-        return $id;
+        return $screenId;
     }
 
     function telegramShowMessages($chatId, $config = null, $messageId = null){

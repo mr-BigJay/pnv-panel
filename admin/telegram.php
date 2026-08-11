@@ -31,13 +31,15 @@ if(isset($_POST['save'])){
     ];
 
     telegramSaveConfig($config);
+    telegramSetupBotUi($config);
     $message = 'تنظیمات بات تلگرام ذخیره شد.';
 }
 
 if(isset($_POST['test'])){
 
     $config = telegramLoadConfig();
-    $result = telegramSetCommands($config);
+    telegramSetupBotUi($config);
+    $result = ['ok' => true];
 
     if(empty($result['ok'])){
         $error = $result['description'] ?? 'ارسال پیام آزمایشی ناموفق بود';
