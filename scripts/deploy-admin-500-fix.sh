@@ -23,8 +23,17 @@ for rel in "${files[@]}"; do
   mkdir -p "$(dirname "$dest")"
   echo "-> ${dest}"
   if ! curl -fsSL "$url" -o "$dest"; then
-    echo "WARNING: could not fetch ${rel} (404?) — skipping"
-    rm -f "$dest"
+    if [[ "$rel" == "bigjay_controller/downloads.php" ]]; then
+      echo "   (creating local wrapper for downloads.php)"
+      cat > "$dest" <<'PHP'
+<?php
+
+require dirname(__DIR__) . '/admin/' . basename(__FILE__);
+PHP
+    else
+      echo "ERROR: could not fetch ${rel}"
+      exit 1
+    fi
   fi
 done
 
