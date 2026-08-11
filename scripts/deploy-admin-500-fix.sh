@@ -22,7 +22,10 @@ for rel in "${files[@]}"; do
   dest="${ROOT}/${rel}"
   mkdir -p "$(dirname "$dest")"
   echo "-> ${dest}"
-  curl -fsSL "$url" -o "$dest"
+  if ! curl -fsSL "$url" -o "$dest"; then
+    echo "WARNING: could not fetch ${rel} (404?) — skipping"
+    rm -f "$dest"
+  fi
 done
 
 echo ""
