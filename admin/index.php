@@ -27,7 +27,7 @@ foreach($__pnvFuncCandidates as $__pnvBootFile){
     }
 }
 
-if(!function_exists('pnvJalaliToday')){
+if(!function_exists('pnvIsTodayTehran')){
     foreach([
         __DIR__ . '/../pnv_date_bootstrap.php',
         dirname(__DIR__) . '/pnv_date_bootstrap.php',
