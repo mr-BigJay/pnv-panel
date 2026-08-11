@@ -6,7 +6,7 @@ if(file_exists(__DIR__ . '/telegram_xui.php')){
 
 if(!function_exists('telegramConfigPath')){
 
-    define('TELEGRAM_UI_VERSION', 4);
+    define('TELEGRAM_UI_VERSION', 5);
 
     function telegramConfigPath(){
         return __DIR__ . '/db/telegram.json';
@@ -469,30 +469,12 @@ if(!function_exists('telegramConfigPath')){
         return '';
     }
 
-    function telegramBottomMenuKeyboard(){
-        $labels = telegramBottomMenuLabels();
+    function telegramReplyButton($text, $fullWidth = false){
+        return ['text' => telegramBottomMenuButton($text, $fullWidth)];
+    }
 
-        return json_encode([
-            'keyboard' => [
-                [['text' => telegramBottomMenuButton($labels['messages'], true)]],
-                [
-                    ['text' => telegramBottomMenuButton($labels['buys'])],
-                    ['text' => telegramBottomMenuButton($labels['renews'])]
-                ],
-                [
-                    ['text' => telegramBottomMenuButton($labels['buyreport'])],
-                    ['text' => telegramBottomMenuButton($labels['renewreport'])]
-                ],
-                [
-                    ['text' => telegramBottomMenuButton($labels['settings'])],
-                    ['text' => telegramBottomMenuButton($labels['home'])]
-                ]
-            ],
-            'resize_keyboard' => true,
-            'is_persistent' => true,
-            'one_time_keyboard' => false,
-            'input_field_placeholder' => 'پیام بنویسید یا از منو انتخاب کنید...'
-        ], JSON_UNESCAPED_UNICODE);
+    function telegramBottomMenuKeyboard(){
+        return json_encode(telegramMainReplyKeyboard(), JSON_UNESCAPED_UNICODE);
     }
 
     function telegramReplyKeyboard($rows, $placeholder = 'پیام بنویسید یا از منو انتخاب کنید...'){
@@ -509,18 +491,18 @@ if(!function_exists('telegramConfigPath')){
         $labels = telegramBottomMenuLabels();
 
         return [
-            [[telegramBottomMenuButton($labels['messages'], true)]],
+            [telegramReplyButton($labels['messages'], true)],
             [
-                [telegramBottomMenuButton($labels['buys'])],
-                [telegramBottomMenuButton($labels['renews'])]
+                telegramReplyButton($labels['buys']),
+                telegramReplyButton($labels['renews'])
             ],
             [
-                [telegramBottomMenuButton($labels['buyreport'])],
-                [telegramBottomMenuButton($labels['renewreport'])]
+                telegramReplyButton($labels['buyreport']),
+                telegramReplyButton($labels['renewreport'])
             ],
             [
-                [telegramBottomMenuButton($labels['settings'])],
-                [telegramBottomMenuButton($labels['home'])]
+                telegramReplyButton($labels['settings']),
+                telegramReplyButton($labels['home'])
             ]
         ];
     }
@@ -535,11 +517,11 @@ if(!function_exists('telegramConfigPath')){
         foreach(array_slice($items, 0, 8) as $item){
             $name = trim((string)($item['username'] ?? '-'));
             $label = (!empty($item['unread']) ? '● ' : '') . $name;
-            $rows[] = [[telegramBottomMenuButton(telegramLimitText($label, 36), true)]];
+            $rows[] = [telegramReplyButton(telegramLimitText($label, 36), true)];
         }
 
         $labels = telegramBottomMenuLabels();
-        $rows[] = [[telegramBottomMenuButton($labels['home'], true)]];
+        $rows[] = [telegramReplyButton($labels['home'], true)];
 
         return telegramReplyKeyboard(
             $rows,
@@ -552,13 +534,13 @@ if(!function_exists('telegramConfigPath')){
 
         foreach(array_slice($items, 0, 6) as $item){
             $label = trim(($item['username'] ?? '-') . ' | ' . telegramLimitText($item['plan'] ?? '', 18));
-            $rows[] = [[telegramBottomMenuButton(telegramLimitText($label, 36), true)]];
+            $rows[] = [telegramReplyButton(telegramLimitText($label, 36), true)];
         }
 
         $labels = telegramBottomMenuLabels();
         $rows[] = [
-            [telegramBottomMenuButton($kind === 'تمدید' ? $labels['renewreport'] : $labels['buyreport'])],
-            [telegramBottomMenuButton($labels['home'])]
+            telegramReplyButton($kind === 'تمدید' ? $labels['renewreport'] : $labels['buyreport']),
+            telegramReplyButton($labels['home'])
         ];
 
         return telegramReplyKeyboard(
@@ -573,12 +555,12 @@ if(!function_exists('telegramConfigPath')){
 
         return telegramReplyKeyboard([
             [
-                [telegramBottomMenuButton('✅ تایید')],
-                [telegramBottomMenuButton('⛔ رد')]
+                telegramReplyButton('✅ تایید'),
+                telegramReplyButton('⛔ رد')
             ],
             [
-                [telegramBottomMenuButton($backLabel)],
-                [telegramBottomMenuButton($labels['home'])]
+                telegramReplyButton($backLabel),
+                telegramReplyButton($labels['home'])
             ]
         ], 'تایید یا رد را از کیبورد پایین بزنید...');
     }
@@ -588,10 +570,10 @@ if(!function_exists('telegramConfigPath')){
         $user = telegramLimitText(trim((string)$username), 24);
 
         return telegramReplyKeyboard([
-            [[telegramBottomMenuButton('✍️ پاسخ به ' . $user, true)]],
+            [telegramReplyButton('✍️ پاسخ به ' . $user, true)],
             [
-                [telegramBottomMenuButton($labels['messages'])],
-                [telegramBottomMenuButton($labels['home'])]
+                telegramReplyButton($labels['messages']),
+                telegramReplyButton($labels['home'])
             ]
         ], 'گفتگو را در چت می‌بینید؛ اقدام از کیبورد پایین...');
     }
@@ -600,8 +582,8 @@ if(!function_exists('telegramConfigPath')){
         $labels = telegramBottomMenuLabels();
 
         return telegramReplyKeyboard([
-            [[telegramBottomMenuButton('↩️ انصراف')]],
-            [[telegramBottomMenuButton($labels['home'], true)]]
+            [telegramReplyButton('↩️ انصراف')],
+            [telegramReplyButton($labels['home'], true)]
         ], 'پاسخ را بنویسید و ارسال کنید...');
     }
 
@@ -938,7 +920,9 @@ if(!function_exists('telegramConfigPath')){
             '♻️ تمدیدهای جدید: ' . $renewCount,
             '📨 پیام کاربران: ' . $msgCount,
             '',
-            '⌨️ فقط Reply Keyboard — بدون Command Menu (v' . TELEGRAM_UI_VERSION . ')'
+            '⌨️ Reply Keyboard فعال (v' . TELEGRAM_UI_VERSION . ')',
+            '',
+            'اگر دکمه‌های پایین نیست: /start بزنید'
         ];
 
         return implode("\n", $lines);
@@ -1209,7 +1193,7 @@ if(!function_exists('telegramConfigPath')){
         foreach(array_slice($items, 0, 6) as $item){
             $icon = telegramReportStatusIcon($item['status'] ?? '');
             $label = $icon . ' ' . ($item['username'] ?? '-') . ' | ' . telegramLimitText($item['plan'] ?? '', 16);
-            $rows[] = [[telegramBottomMenuButton(telegramLimitText($label, 36), true)]];
+            $rows[] = [telegramReplyButton(telegramLimitText($label, 36), true)];
         }
 
         $page = intval($pageData['page'] ?? 0);
@@ -1217,11 +1201,11 @@ if(!function_exists('telegramConfigPath')){
         $nav = [];
 
         if($page > 0){
-            $nav[] = telegramBottomMenuButton('◀️ قبلی');
+            $nav[] = telegramReplyButton('◀️ قبلی');
         }
 
         if($page < $pages - 1){
-            $nav[] = telegramBottomMenuButton('بعدی ▶️');
+            $nav[] = telegramReplyButton('بعدی ▶️');
         }
 
         if(count($nav) > 0){
@@ -1229,8 +1213,8 @@ if(!function_exists('telegramConfigPath')){
         }
 
         $rows[] = [
-            [telegramBottomMenuButton($backLabel)],
-            [telegramBottomMenuButton($labels['home'])]
+            telegramReplyButton($backLabel),
+            telegramReplyButton($labels['home'])
         ];
 
         return telegramReplyKeyboard($rows, 'گزارش را از کیبورد پایین انتخاب کنید...');
@@ -1241,8 +1225,8 @@ if(!function_exists('telegramConfigPath')){
         $backLabel = $kind === 'تمدید' ? $labels['renewreport'] : $labels['buyreport'];
 
         return telegramReplyKeyboard([
-            [[telegramBottomMenuButton($backLabel, true)]],
-            [[telegramBottomMenuButton($labels['home'], true)]]
+            [telegramReplyButton($backLabel, true)],
+            [telegramReplyButton($labels['home'], true)]
         ]);
     }
 
@@ -2119,15 +2103,23 @@ if(!function_exists('telegramConfigPath')){
         }
     }
 
+    function telegramIsStartCommand($text){
+        $text = trim((string)$text);
+
+        return $text === '/start' || strpos($text, '/start ') === 0 || strpos($text, '/start@') === 0;
+    }
+
     function telegramHandleAdminText($chatId, $text, $config = null){
         $text = trim((string)$text);
         $session = telegramGetSession($chatId);
         $messageId = is_array($session) ? (intval($session['screen_message_id'] ?? 0) ?: null) : null;
 
-        telegramEnsureBottomMenu($chatId, $config);
-
-        if($text === '/start'){
-            telegramShowHome($chatId, $config, $messageId);
+        if(telegramIsStartCommand($text)){
+            telegramUpdateSessionScreen($chatId, [
+                'bottom_menu_set' => false,
+                'screen_message_id' => 0
+            ]);
+            telegramShowHome($chatId, $config, null);
             return;
         }
 
