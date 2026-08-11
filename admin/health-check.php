@@ -64,6 +64,21 @@ if(is_file($authStub)){
     ob_end_clean();
 }
 
+$profileLib = $root . '/profile_lib.php';
+if(is_file($profileLib)){
+    ob_start();
+    try {
+        require_once $profileLib;
+        hc('profile_lib.php loads', function_exists('profileGetAdminAvatar'), 'profileGetAdminAvatar');
+    } catch(Throwable $e) {
+        hc('profile_lib.php loads', false, $e->getMessage());
+    }
+    ob_end_clean();
+}
+else{
+    hc('profile_lib.php loads', false, 'file missing');
+}
+
 echo "=== OK ===\n";
 foreach($ok as $line){
     echo "[OK] $line\n";
