@@ -5,41 +5,101 @@ BR="${BR:-cursor/fix-admin-500-error-b94c}"
 BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/${BR}"
 ROOT="${ROOT:-/var/www/html}"
 
-echo "Deploy admin 500 fixes from branch: ${BR}"
-echo "Target root: ${ROOT}"
+echo "=== Deploy full admin panel fix (branch: ${BR}) ==="
+echo "Target: ${ROOT}"
+echo ""
 
-files=(
+mkdir -p "${ROOT}/admin" "${ROOT}/bigjay_controller"
+
+# Core admin PHP
+admin_files=(
+  "admin/index.php"
+  "admin/auth.php"
+  "admin/functions.php"
+  "admin/payments.php"
+  "admin/renews.php"
   "admin/downloads.php"
+)
+
+# bigjay_controller wrappers (nginx blocks /admin/ direct access)
+wrapper_files=(
   "bigjay_controller/index.php"
   "bigjay_controller/auth.php"
   "bigjay_controller/functions.php"
-  "bigjay_controller/sw-cleanup.js"
+  "bigjay_controller/payments.php"
+  "bigjay_controller/renews.php"
   "bigjay_controller/downloads.php"
+  "bigjay_controller/sw-cleanup.js"
 )
 
-for rel in "${files[@]}"; do
-  url="${BASE}/${rel}"
+# Date bootstrap (prevents 500 if auth.php date helpers missing)
+root_files=(
+  "pnv_date_bootstrap.php"
+  "date_lib.php"
+)
+
+fetch_file(){
+  local rel="$1"
+  local dest="${ROOT}/${rel}"
+  mkdir -p "$(dirname "$dest")"
+  echo "-> ${dest}"
+  curl -fsSL "${BASE}/${rel}" -o "${dest}"
+}
+
+for rel in "${root_files[@]}" "${admin_files[@]}"; do
+  fetch_file "$rel"
+done
+
+for rel in "${wrapper_files[@]}"; do
   dest="${ROOT}/${rel}"
   mkdir -p "$(dirname "$dest")"
   echo "-> ${dest}"
-  if ! curl -fsSL "$url" -o "$dest"; then
-    if [[ "$rel" == "bigjay_controller/downloads.php" ]]; then
-      echo "   (creating local wrapper for downloads.php)"
-      cat > "$dest" <<'PHP'
+  if ! curl -fsSL "${BASE}/${rel}" -o "${dest}" 2>/dev/null; then
+    case "$rel" in
+      bigjay_controller/index.php|bigjay_controller/auth.php|bigjay_controller/functions.php|bigjay_controller/payments.php|bigjay_controller/renews.php|bigjay_controller/downloads.php)
+        echo "   (inline wrapper fallback)"
+        cat > "$dest" <<PHP
 <?php
 
 require dirname(__DIR__) . '/admin/' . basename(__FILE__);
 PHP
-    else
-      echo "ERROR: could not fetch ${rel}"
-      exit 1
-    fi
+        ;;
+      bigjay_controller/sw-cleanup.js)
+        echo "   (inline JS fallback)"
+        cat > "$dest" <<'JS'
+(function(){
+  if(!('serviceWorker' in navigator)){return;}
+  navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();});});
+  if(window.caches&&caches.keys){caches.keys().then(function(k){k.forEach(function(x){caches.delete(x);});});}
+})();
+JS
+        ;;
+      *)
+        echo "ERROR: missing ${rel}"
+        exit 1
+        ;;
+    esac
   fi
 done
 
 echo ""
-echo "PHP syntax check (downloads.php):"
+echo "=== Syntax checks ==="
+php -l "${ROOT}/admin/index.php"
 php -l "${ROOT}/admin/downloads.php"
+php -l "${ROOT}/bigjay_controller/index.php"
 
 echo ""
-echo "Done. Test: https://panel.ticketin.ir/bigjay_controller/"
+echo "=== Verify auth stubs are not empty ==="
+for f in "${ROOT}/bigjay_controller/auth.php" "${ROOT}/bigjay_controller/functions.php"; do
+  size=$(wc -c < "$f" | tr -d ' ')
+  if [[ "$size" -lt 10 ]]; then
+    echo "ERROR: $f is empty (${size} bytes) — this causes HTTP 500"
+    exit 1
+  fi
+  echo "OK ${f} (${size} bytes)"
+done
+
+echo ""
+echo "=== Done ==="
+echo "Open: https://panel.ticketin.ir/bigjay_controller/"
+echo "If still 500, run: php ${ROOT}/admin/health-check.php"

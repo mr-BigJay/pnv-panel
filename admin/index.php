@@ -1,39 +1,129 @@
 <?php
 
-session_start();
+// bigjay_controller اغلب auth/functions را کنار index ندارد؛ soft-load کن
+$__pnvBootCandidates = [
+    __DIR__ . '/auth.php',
+    __DIR__ . '/../admin/auth.php',
+];
+foreach($__pnvBootCandidates as $__pnvBootFile){
+    if(is_file($__pnvBootFile)){
+        require_once $__pnvBootFile;
+        if(function_exists('pnvAdminIsLoggedIn')){
+            break;
+        }
+    }
+}
 
-require_once "functions.php";
+$__pnvFuncCandidates = [
+    __DIR__ . '/functions.php',
+    __DIR__ . '/../admin/functions.php',
+];
+foreach($__pnvFuncCandidates as $__pnvBootFile){
+    if(is_file($__pnvBootFile)){
+        require_once $__pnvBootFile;
+        if(function_exists('pnvAdminInclude') || function_exists('getUserMobile')){
+            break;
+        }
+    }
+}
 
-$adminUser = "BigJay";
-$adminPass = "603240@BigJayX";
+if(!function_exists('pnvJalaliToday')){
+    foreach([
+        __DIR__ . '/../pnv_date_bootstrap.php',
+        dirname(__DIR__) . '/pnv_date_bootstrap.php',
+    ] as $__pnvDateBoot){
+        if(is_file($__pnvDateBoot)){
+            require_once $__pnvDateBoot;
+            break;
+        }
+    }
+}
+
+if(!function_exists('pnvAdminInclude')){
+    function pnvAdminInclude($fileName){
+        $name = ltrim((string)$fileName, '/');
+        foreach([
+            __DIR__ . '/' . $name,
+            __DIR__ . '/../admin/' . $name,
+        ] as $path){
+            if(is_file($path)){
+                extract($GLOBALS, EXTR_SKIP);
+                include $path;
+                return true;
+            }
+        }
+        echo '<div class="box" style="padding:20px;color:#fecaca;background:#7f1d1d;border-radius:12px;margin:12px 0;">'
+            . 'فایل «' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '» یافت نشد.'
+            . '</div>';
+        return false;
+    }
+}
+
+if(!function_exists('pnvAdminIsLoggedIn')){
+    if(session_status() === PHP_SESSION_NONE){
+        session_start();
+    }
+    if(!defined('PNV_ADMIN_BASE')){
+        define('PNV_ADMIN_BASE', '/bigjay_controller');
+    }
+    function pnvAdminIsLoggedIn(){
+        $ok = !empty($_SESSION['pnv_admin']['user']) && !empty($_SESSION['pnv_admin']['token']);
+        if($ok){
+            $_SESSION['admin'] = true;
+        }
+        return $ok || !empty($_SESSION['admin']);
+    }
+    function pnvAdminLogout(){
+        unset($_SESSION['pnv_admin'], $_SESSION['admin']);
+    }
+    function pnvAdminValidateLogin($u, $p){ return null; }
+    function pnvAdminLogin($admin){ $_SESSION['admin'] = true; }
+    function pnvAdminEntryUrl(){ return rtrim(PNV_ADMIN_BASE, '/') . '/'; }
+    function pnvAdminUrl($path = 'index.php'){
+        $base = rtrim(PNV_ADMIN_BASE, '/');
+        if($path === '' || $path === 'index.php'){ return $base . '/'; }
+        return $base . '/' . ltrim($path, '/');
+    }
+    function pnvAdminRequireAuth(){
+        if(!pnvAdminIsLoggedIn()){
+            header('Location: ' . pnvAdminEntryUrl());
+            exit;
+        }
+    }
+}
+
+if(!function_exists('statusColor')){
+    function statusColor($status){
+        if($status=='تایید شد'){ return '#22c55e'; }
+        if($status=='رد شد'){ return '#ef4444'; }
+        return '#eab308';
+    }
+}
 
 if(isset($_GET['logout'])){
 
-session_destroy();
+pnvAdminLogout();
 
-header("Location: index.php");
+header("Location: " . pnvAdminEntryUrl());
 
 exit;
 
 }
 
-if(!isset($_SESSION['admin'])){
+if(!pnvAdminIsLoggedIn()){
 
 if($_SERVER['REQUEST_METHOD']=="POST"){
 
-if(
+$admin = pnvAdminValidateLogin(
+trim($_POST['username'] ?? ''),
+$_POST['password'] ?? ''
+);
 
-$_POST['username']==$adminUser
+if($admin){
 
-&&
+pnvAdminLogin($admin);
 
-$_POST['password']==$adminPass
-
-){
-
-$_SESSION['admin']=true;
-
-header("Location: index.php");
+header("Location: " . pnvAdminEntryUrl());
 
 exit;
 
@@ -54,13 +144,17 @@ $error="اطلاعات ورود اشتباه است";
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 
 <title>
 
 ورود مدیریت
 
 </title>
+
+<script src="<?php echo htmlspecialchars(pnvAdminUrl('sw-cleanup.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+
+<link rel="stylesheet" href="/fonts.css">
 
 <style>
 
@@ -168,10 +262,38 @@ exit;
 
 $page = $_GET['page'] ?? 'dashboard';
 
+$supportActionResult = null;
+
+if($page === 'support' && file_exists(__DIR__ . '/../support_lib.php')){
+
+require_once __DIR__ . '/../support_lib.php';
+
+if($_SERVER['REQUEST_METHOD'] === 'POST'){
+
+$supportActionResult =
+supportProcessAdminActions(
+'../db/support.json',
+true
+);
+
+if($supportActionResult['redirect']){
+
+header('Location: ' . $supportActionResult['redirect']);
+
+exit;
+
+}
+
+}
+
+}
+
 $plansFile = '../db/plans.json';
 $cardsFile = '../db/cards.json';
 $usersFile = '../db/users.json';
 $paymentsFile = '../invoices/payments.csv';
+
+require_once __DIR__ . '/../instant_pay_lib.php';
 
 $plans = file_exists($plansFile)
 ? json_decode(file_get_contents($plansFile),true)
@@ -197,69 +319,20 @@ if(!is_array($users)){
 $users=[];
 }
 
-$payments=[];
-
-if(file_exists($paymentsFile)){
-
-$f=fopen($paymentsFile,'r');
-
-while(($d=fgetcsv($f))!==FALSE){
-
-$payments[]=$d;
-
-}
-
-fclose($f);
-
-}
+$payments = instantPayPurgeAndReloadPaymentsCsv($paymentsFile);
 
 $supportFile =
 "../db/support.json";
 
 $hasUnreadSupport = false;
 
-if(file_exists($supportFile)){
+if(file_exists($supportFile) && file_exists(__DIR__ . '/../support_lib.php')){
 
-$supportData =
-json_decode(
-file_get_contents($supportFile),
-true
-);
+require_once __DIR__ . '/../support_lib.php';
 
-if(is_array($supportData)){
+$supportData = supportLoad($supportFile);
 
-foreach($supportData as $ticket){
-
-if(isset($ticket['messages'])){
-
-foreach($ticket['messages'] as $msg){
-
-if(
-
-isset($msg['sender'])
-&&
-
-$msg['sender']=='user'
-
-&&
-
-empty($msg['seen_by_admin'])
-
-){
-
-$hasUnreadSupport = true;
-
-break 2;
-
-}
-
-}
-
-}
-
-}
-
-}
+$hasUnreadSupport = supportAdminHasUnread($supportData);
 
 }
 
@@ -277,9 +350,9 @@ trim($pay[9] ?? '');
 if(
 ($type == 'خرید' || $type == '')
 &&
-$status != 'تایید شد'
+function_exists('instantPayIsAdminPendingPayment')
 &&
-$status != 'رد شد'
+instantPayIsAdminPendingPayment($pay)
 ){
 
 $hasNewPayments = true;
@@ -289,9 +362,9 @@ $hasNewPayments = true;
 if(
 $type == 'تمدید'
 &&
-$status != 'تایید شد'
+function_exists('instantPayIsAdminPendingPayment')
 &&
-$status != 'رد شد'
+instantPayIsAdminPendingPayment($pay)
 ){
 
 $hasNewRenews = true;
@@ -329,7 +402,7 @@ $todayPayments = 0;
 $totalRenews = 0;
 $todayRenews = 0;
 
-$todayShamsi = date('Y/m/d');
+$todayShamsi = function_exists('pnvJalaliToday') ? pnvJalaliToday('/') : date('Y/m/d');
 
 foreach($payments as $pay){
 
@@ -385,6 +458,37 @@ count($renews);
 
 }
 
+$telegramEnabled = false;
+$telegramConfigured = false;
+$xuiEnabled = false;
+$xuiConfigured = false;
+
+if(file_exists(__DIR__ . '/../telegram_lib.php')){
+    require_once __DIR__ . '/../telegram_lib.php';
+    if(function_exists('telegramLoadConfig')){
+        $tgConfig = telegramLoadConfig();
+        $telegramConfigured = trim((string)($tgConfig['bot_token'] ?? '')) !== '';
+        $telegramEnabled = !empty($tgConfig['enabled']) && $telegramConfigured;
+    }
+}
+
+if(file_exists(__DIR__ . '/../xui_lib.php')){
+    require_once __DIR__ . '/../xui_lib.php';
+    if(function_exists('xuiLoadConfig')){
+        $xuiConfig = xuiLoadConfig();
+        $hasToken = false;
+        foreach(($xuiConfig['servers'] ?? []) as $server){
+            $token = trim((string)($server['api_token'] ?? ''));
+            if($token !== '' && strpos($token, 'REPLACE_TOKEN_') !== 0){
+                $hasToken = true;
+                break;
+            }
+        }
+        $xuiConfigured = $hasToken;
+        $xuiEnabled = (function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])) && $hasToken;
+    }
+}
+
 if(isset($_POST['add_plan'])){
 
 $plans[]=[
@@ -401,7 +505,15 @@ JSON_PRETTY_PRINT
 )
 );
 
-header('Location: index.php?page=plans');
+header('Location: ' . pnvAdminUrl('plans.php'));
+
+exit;
+
+}
+
+if($page === 'plans'){
+
+header('Location: ' . pnvAdminUrl('plans.php'));
 
 exit;
 
@@ -428,7 +540,7 @@ JSON_PRETTY_PRINT
 
 }
 
-header('Location: index.php?page=plans');
+header('Location: ' . pnvAdminUrl('plans.php'));
 
 exit;
 
@@ -450,7 +562,7 @@ JSON_PRETTY_PRINT
 )
 );
 
-header('Location: index.php?page=cards');
+header('Location: ' . pnvAdminUrl('index.php?page=cards'));
 
 exit;
 
@@ -477,7 +589,7 @@ JSON_PRETTY_PRINT
 
 }
 
-header('Location: index.php?page=cards');
+header('Location: ' . pnvAdminUrl('index.php?page=cards'));
 
 exit;
 
@@ -492,7 +604,7 @@ $_FILES['csv']['tmp_name'],
 '../db/'.$server.'.csv'
 );
 
-header('Location: index.php?page=upload');
+header('Location: ' . pnvAdminUrl('index.php?page=upload'));
 
 exit;
 
@@ -509,13 +621,17 @@ exit;
 <meta charset="UTF-8">
 
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 
 <title>
 
 پنل مدیریت
 
 </title>
+
+<script src="<?php echo htmlspecialchars(pnvAdminUrl('sw-cleanup.js?v=1'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+
+<link rel="stylesheet" href="/fonts.css">
 
 <style>
 
@@ -537,6 +653,8 @@ bottom:0;
 overflow:auto;
 padding:20px;
 box-sizing:border-box;
+z-index:40;
+transition:transform .2s ease;
 }
 
 .sidebar a{
@@ -548,6 +666,30 @@ margin-bottom:10px;
 text-decoration:none;
 color:white;
 position:relative;
+}
+
+.adminMenuBtn{
+display:none;
+position:fixed;
+top:12px;
+right:12px;
+z-index:50;
+width:44px;
+height:44px;
+border:0;
+border-radius:12px;
+background:#22c55e;
+color:#fff;
+font-size:22px;
+cursor:pointer;
+}
+
+.adminSidebarOverlay{
+display:none;
+position:fixed;
+inset:0;
+background:rgba(0,0,0,.45);
+z-index:35;
 }
 
 .content{
@@ -606,19 +748,19 @@ text-decoration:none;
 display:inline-block;
 }
 
-table{
+table:not(.payTable){
 width:100%;
 border-collapse:collapse;
 }
 
-th,
-td{
+table:not(.payTable) th,
+table:not(.payTable) td{
 padding:12px;
 border-bottom:1px solid #334155;
 text-align:center;
 }
 
-th{
+table:not(.payTable) th{
 background:#334155;
 }
 
@@ -702,16 +844,58 @@ font-weight:bold;
 color:#22c55e;
 }
 
+.content-support{
+margin-right:280px;
+padding:0;
+height:100vh;
+overflow:hidden;
+background:#0b1220;
+}
+
 @media(max-width:768px){
 
+body.adminPageSupport{
+overflow:hidden;
+height:100dvh;
+}
+
+.adminMenuBtn{display:flex;align-items:center;justify-content:center}
+
 .sidebar{
-position:relative;
-width:100%;
-height:auto;
+position:fixed;
+width:min(86vw,280px);
+height:100%;
+transform:translateX(110%);
+}
+
+body.adminSidebarOpen .sidebar{
+transform:translateX(0);
+}
+
+body.adminSidebarOpen .adminSidebarOverlay{
+display:block;
 }
 
 .content{
 margin-right:0;
+padding-top:64px;
+}
+
+.content-support{
+margin-right:0;
+height:100%;
+max-height:100dvh;
+min-height:0;
+padding-top:56px;
+}
+
+.content-support input,
+.content-support select,
+.content-support button,
+.content-support textarea{
+width:auto !important;
+max-width:none !important;
+margin:0 !important;
 }
 
 input,
@@ -731,9 +915,12 @@ grid-template-columns:1fr;
 
 </head>
 
-<body>
+<body class="<?php echo $page === 'support' ? 'adminPageSupport' : ''; ?>">
 
-<div class="sidebar">
+<button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
+<div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
+
+<div class="sidebar" id="adminSidebar">
 
 <h2>
 
@@ -741,14 +928,15 @@ grid-template-columns:1fr;
 
 </h2>
 
-<a href="index.php">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>">
 
 داشبورد
 
 </a>
 
-<a href="support.php"
-class="supportMenu">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=support'), ENT_QUOTES, 'UTF-8'); ?>"
+class="supportMenu"
+id="adminSupportMenu">
 
 <?php if($hasUnreadSupport){ ?>
 
@@ -756,18 +944,18 @@ class="supportMenu">
 
 <?php } ?>
 
-پیام های کاربران
+پیام‌های کاربران
 
 </a>
 
-<a href="users.php">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('users.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 لیست کاربران
 
 </a>
 
 <a
-href="index.php?page=payments"
+href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=payments'), ENT_QUOTES, 'UTF-8'); ?>"
 class="supportMenu">
 
 <?php if($hasNewPayments){ ?>
@@ -781,7 +969,7 @@ class="supportMenu">
 </a>
 
 <a
-href="index.php?page=renews"
+href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=renews'), ENT_QUOTES, 'UTF-8'); ?>"
 class="supportMenu">
 
 <?php if($hasNewRenews){ ?>
@@ -794,32 +982,50 @@ class="supportMenu">
 
 </a>
 
-<a href="plans.php">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('plans.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت پلن ها
 
 </a>
 
-<a href="index.php?page=cards">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=cards'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت کارت ها
 
 </a>
 
-<a href="downloads.php">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('downloads.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت دانلودها
 
 </a>
 
-<a href="index.php?page=upload">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('telegram.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+تنظیمات بات تلگرام
+
+</a>
+
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('bale.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+بله — پرداخت آنی
+
+</a>
+
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('xui-servers.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+سرورهای 3x-ui
+
+</a>
+
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=upload'), ENT_QUOTES, 'UTF-8'); ?>">
 
 آپلود فایل کاربران سرورها
 
 </a>
 
 <a
-href="index.php?logout=1"
+href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?logout=1'), ENT_QUOTES, 'UTF-8'); ?>"
 class="red">
 
 خروج
@@ -828,23 +1034,32 @@ class="red">
 
 </div>
 
-<div class="content">
+<div class="content <?php echo $page=='support' ? 'content-support' : ''; ?>">
 
 <?php if($page=='dashboard'){ ?>
 
-<?php include "dashboard.php"; ?>
+<?php pnvAdminInclude('dashboard.php'); ?>
+
+<?php } ?>
+
+<?php if($page=='support'){ ?>
+
+<?php
+$supportEmbedded = true;
+pnvAdminInclude('support.php');
+?>
 
 <?php } ?>
 
 <?php if($page=='payments'){ ?>
 
-<?php include "payments.php"; ?>
+<?php pnvAdminInclude('payments.php'); ?>
 
 <?php } ?>
 
 <?php if($page=='renews'){ ?>
 
-<?php include "renews.php"; ?>
+<?php pnvAdminInclude('renews.php'); ?>
 
 <?php } ?>
 
@@ -915,7 +1130,7 @@ name="add_card">
 <td>
 
 <a
-href="index.php?page=cards&deletecard=<?php echo $i; ?>"
+href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=cards&deletecard=' . $i), ENT_QUOTES, 'UTF-8'); ?>"
 class="red">
 
 حذف
@@ -990,6 +1205,65 @@ name="uploadcsv">
 <?php } ?>
 
 </div>
+
+<script>
+(function(){
+    const menuBtn = document.getElementById('adminMenuBtn');
+    const overlay = document.getElementById('adminSidebarOverlay');
+
+    function closeMenu(){
+        document.body.classList.remove('adminSidebarOpen');
+    }
+
+    function toggleMenu(){
+        document.body.classList.toggle('adminSidebarOpen');
+    }
+
+    if(menuBtn){
+        menuBtn.addEventListener('click', toggleMenu);
+    }
+
+    if(overlay){
+        overlay.addEventListener('click', closeMenu);
+    }
+
+    const menuLink = document.getElementById('adminSupportMenu');
+    if(!menuLink){
+        return;
+    }
+
+    const pollUrl = <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>;
+
+    function setUnreadDot(hasUnread){
+        let dot = menuLink.querySelector('.notifDot');
+
+        if(hasUnread){
+            if(!dot){
+                dot = document.createElement('span');
+                dot.className = 'notifDot';
+                menuLink.insertBefore(dot, menuLink.firstChild);
+            }
+            return;
+        }
+
+        if(dot){
+            dot.remove();
+        }
+    }
+
+    function checkUnread(){
+        fetch(pollUrl, {credentials:'same-origin'})
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                setUnreadDot(!!data.has_unread);
+            })
+            .catch(function(){});
+    }
+
+    checkUnread();
+    setInterval(checkUnread, 10000);
+})();
+</script>
 
 </body>
 

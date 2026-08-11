@@ -1,6 +1,38 @@
 <?php
 
-if(!isset($_SESSION['admin'])){
+if(!function_exists('pnvAdminIsLoggedIn')){
+    foreach ([
+        __DIR__ . '/auth.php',
+        __DIR__ . '/../admin/auth.php',
+    ] as $paymentsBootFile) {
+        if (is_file($paymentsBootFile)) {
+            require_once $paymentsBootFile;
+            if(function_exists('pnvAdminIsLoggedIn')){
+                break;
+            }
+        }
+    }
+}
+
+if(!function_exists('getUserMobile')){
+    foreach ([
+        __DIR__ . '/functions.php',
+        __DIR__ . '/../admin/functions.php',
+    ] as $paymentsBootFile) {
+        if (is_file($paymentsBootFile)) {
+            require_once $paymentsBootFile;
+            if(function_exists('getUserMobile')){
+                break;
+            }
+        }
+    }
+}
+
+require_once __DIR__ . '/../xui_lib.php';
+require_once __DIR__ . '/../instant_pay_lib.php';
+
+if(!pnvAdminIsLoggedIn()){
+    header('Location: ' . pnvAdminEntryUrl());
     exit;
 }
 
@@ -28,6 +60,24 @@ if(file_exists($paymentsFile)){
     fclose($f);
 }
 
+if(function_exists('instantPayPurgeAndReloadPaymentsCsv')){
+    $payments = instantPayPurgeAndReloadPaymentsCsv($paymentsFile);
+}
+elseif(function_exists('instantPayPurgeStaleAdminRows')){
+    instantPayPurgeStaleAdminRows();
+    $payments = [];
+
+    if(file_exists($paymentsFile)){
+        $f = fopen($paymentsFile,'r');
+
+        while(($d = fgetcsv($f)) !== FALSE){
+            $payments[] = $d;
+        }
+
+        fclose($f);
+    }
+}
+
 if(!function_exists('getUserMobile')){
 
     function getUserMobile($username, $users){
@@ -52,13 +102,89 @@ if(!function_exists('getUserMobile')){
 
 }
 
+if(!function_exists('isValidSubscriptionLink')){
+
+    function isValidSubscriptionLink($link){
+
+        $link = trim($link);
+
+        if($link === ''){
+            return false;
+        }
+
+        if(!filter_var($link, FILTER_VALIDATE_URL)){
+            return false;
+        }
+
+        $validDomains = [
+            'vip.boozhaan.ir',
+            'vip2.boozhaan.ir',
+            'vip3.boozhaan.ir',
+            'vip4.boozhaan.ir'
+        ];
+
+        foreach($validDomains as $d){
+            if(stripos($link, $d) !== false){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+}
+
+$paymentMessage = '';
+$paymentError = '';
+
+if(isset($_SESSION['payment_message'])){
+    $paymentMessage = $_SESSION['payment_message'];
+    unset($_SESSION['payment_message']);
+}
+
+if(isset($_SESSION['payment_error'])){
+    $paymentError = $_SESSION['payment_error'];
+    unset($_SESSION['payment_error']);
+}
+
+$allowedPerPage = [20, 50, 100];
+
 // ==================== عملیات POST ====================
 
 if(isset($_POST['approve_payment'])){
 
     $index = intval($_POST['approve_index']);
 
-    $link = trim($_POST['approve_link']);
+    $link = trim($_POST['approve_link'] ?? '');
+    $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
+
+    if(!in_array($redirectPer, $allowedPerPage, true)){
+        $redirectPer = 20;
+    }
+
+    $xuiConfig = xuiLoadConfig();
+
+    if(function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])){
+
+        $result = xuiApprovePaymentIndex($index, 'خرید');
+
+        if(empty($result['ok'])){
+            $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
+            header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+            exit;
+        }
+
+        $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        exit;
+
+    }
+
+    if(!isValidSubscriptionLink($link)){
+        $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        exit;
+    }
 
     if(isset($payments[$index])){
 
@@ -78,7 +204,8 @@ if(isset($_POST['approve_payment'])){
 
     fclose($fp);
 
-    header('Location: index.php?page=payments');
+    $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
     exit;
 
@@ -89,6 +216,11 @@ if(isset($_POST['reject_payment'])){
     $index = intval($_POST['reject_index']);
 
     $reason = trim($_POST['reject_reason']);
+    $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
+
+    if(!in_array($redirectPer, $allowedPerPage, true)){
+        $redirectPer = 20;
+    }
 
     if(isset($payments[$index])){
 
@@ -108,7 +240,7 @@ if(isset($_POST['reject_payment'])){
 
     fclose($fp);
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
     exit;
 
@@ -136,7 +268,7 @@ if(isset($_GET['deletepayment'])){
 
     fclose($fp);
 
-    header('Location: index.php?page=payments');
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . intval($_GET['per'] ?? 20)));
 
     exit;
 
@@ -151,6 +283,10 @@ foreach($payments as $index => $pay){
     $type = trim($pay[9] ?? '');
 
     if($type == 'خرید' || $type == ''){
+
+        if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
+            continue;
+        }
 
         $buyPayments[] = [
 
@@ -172,80 +308,189 @@ if($currentPage < 1){
     $currentPage = 1;
 }
 
-$perPage = 50;
+$perPage = intval($_GET['per'] ?? 20);
+
+if(!in_array($perPage, $allowedPerPage, true)){
+    $perPage = 20;
+}
 
 $totalItems = count($buyPayments);
 
-$totalPages = ceil($totalItems / $perPage);
+$totalPages = max(1, (int)ceil($totalItems / $perPage));
+
+if($currentPage > $totalPages){
+    $currentPage = $totalPages;
+}
 
 $start = ($currentPage - 1) * $perPage;
 
-$buyPayments = array_slice($buyPayments, $start, $perPage);
+$buyPaymentsPage = array_slice($buyPayments, $start, $perPage);
+
+$rangeFrom = $totalItems > 0 ? $start + 1 : 0;
+$rangeTo = min($start + $perPage, $totalItems);
+
+function paymentsListUrl($page, $per){
+
+    return pnvAdminUrl(
+        'index.php?page=payments&p=' . intval($page) . '&per=' . intval($per)
+    );
+
+}
+
+function paymentsFormatPlanLines($plan){
+
+    $plan = trim((string)$plan);
+
+    if($plan === '' || $plan === '-'){
+        return ['-', ''];
+    }
+
+    if(strpos($plan, ' - ') !== false){
+
+        [$size, $price] = explode(' - ', $plan, 2);
+
+        $size = trim($size);
+        $price = trim($price);
+
+        if(preg_match('/(\d+)/u', $price, $match)){
+            $price = $match[1];
+        }
+
+        return [$size, $price];
+
+    }
+
+    return [$plan, ''];
+
+}
 
 ?>
 
 <style>
 
-.payTable{
-    width:100%;
-    border-collapse:collapse;
-    background:#1e293b;
-    border-radius:16px;
-    overflow:hidden;
+.payTableWrap{
+width:100%;
+max-width:100%;
+overflow-x:auto;
+-webkit-overflow-scrolling:touch;
 }
 
-.payTable th{
-    background:#334155;
-    padding:14px;
-    font-size:14px;
-    color:white;
+.paymentsPage .payTable{
+width:100% !important;
+max-width:100% !important;
+table-layout:fixed !important;
+border-collapse:collapse !important;
+background:#1e293b;
+border-radius:16px;
 }
 
-.payTable td{
-    padding:14px;
-    border-bottom:1px solid #334155;
-    font-size:13px;
-    text-align:center;
-    color:white;
-    vertical-align: middle;
+.paymentsPage .payTable th,
+.paymentsPage .payTable td{
+padding:10px 6px !important;
+border-bottom:1px solid #334155 !important;
+text-align:center !important;
+vertical-align:middle !important;
+color:white !important;
 }
 
-.status{
-    padding:8px 12px;
-    border-radius:10px;
-    font-size:12px;
-    display:inline-block;
-    color:white;
+.paymentsPage .payTable th{
+background:#334155 !important;
+font-size:13px !important;
+font-weight:600;
 }
 
-.greenStatus{
-    background:#22c55e;
+.paymentsPage .payTable td{
+font-size:12px !important;
 }
 
-.redStatus{
-    background:#ef4444;
+.paymentsPage .payTable .col-plan{
+text-align:center !important;
+vertical-align:middle !important;
 }
 
-.yellowStatus{
-    background:#facc15;
-    color:black;
+.paymentsPage .planCell{
+display:flex !important;
+flex-direction:column !important;
+align-items:center !important;
+justify-content:center !important;
+gap:3px !important;
+line-height:1.15 !important;
+}
+
+.paymentsPage .planSize{
+display:block !important;
+font-size:12px !important;
+font-weight:600 !important;
+}
+
+.paymentsPage .planPrice{
+display:block !important;
+font-size:15px !important;
+font-weight:700 !important;
+color:#f8fafc !important;
+}
+
+.paymentsPage .payTable .col-num{
+width:11%;
+}
+
+.paymentsPage .payTable .col-user{
+width:20%;
+word-break:break-word;
+line-height:1.35;
+}
+
+.paymentsPage .payTable .col-plan{
+width:36%;
+}
+
+.paymentsPage .payTable .col-status{
+width:10%;
+}
+
+.paymentsPage .payTable .col-actions{
+width:23%;
+}
+
+.statusDot{
+width:12px;
+height:12px;
+border-radius:50%;
+display:inline-block;
+flex-shrink:0;
+}
+
+.statusDot--green{
+background:#22c55e;
+box-shadow:0 0 0 2px rgba(34,197,94,.25);
+}
+
+.statusDot--red{
+background:#ef4444;
+box-shadow:0 0 0 2px rgba(239,68,68,.25);
+}
+
+.statusDot--yellow{
+background:#facc15;
+box-shadow:0 0 0 2px rgba(250,204,21,.25);
 }
 
 .menuWrap{
-    position:relative;
-    display:inline-block;
-    width:40px;
+position:relative;
+display:inline-block;
+width:34px;
 }
 
 .menuBtn{
-    width:40px;
-    height:40px;
-    border:none;
-    border-radius:10px;
-    background:#334155;
-    color:white;
-    font-size:20px;
-    cursor:pointer;
+width:34px;
+height:34px;
+border:none;
+border-radius:10px;
+background:#334155;
+color:white;
+font-size:18px;
+cursor:pointer;
+padding:0;
 }
 
 .dropdown{
@@ -371,43 +616,159 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
     background:#475569;
 }
 
-.pagination{
-    margin-top:25px;
-    text-align:center;
+.payPager{
+margin-top:18px;
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:12px;
+flex-wrap:wrap;
+background:#1e293b;
+border:1px solid #334155;
+border-radius:12px;
+padding:12px 14px;
 }
 
-.pagination a{
-    display:inline-block;
-    padding:10px 15px;
-    margin:5px;
-    background:#334155;
-    color:white;
-    border-radius:8px;
-    text-decoration:none;
+.payPagerSize{
+display:flex;
+align-items:center;
+gap:8px;
+font-size:13px;
+color:#cbd5e1;
 }
 
-.pagination a.active{
-    background:#22c55e;
+.payPerSelect{
+padding:8px 10px;
+border:1px solid #475569;
+border-radius:8px;
+background:#0f172a;
+color:white;
+font-family:inherit;
+font-size:13px;
+min-width:64px;
+}
+
+.payPagerNav{
+display:flex;
+align-items:center;
+gap:8px;
+}
+
+.payPagerInfo{
+font-size:13px;
+color:#cbd5e1;
+white-space:nowrap;
+}
+
+.payPagerBtn{
+min-width:36px;
+height:36px;
+padding:0 10px;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+border:1px solid #475569;
+border-radius:8px;
+background:#0f172a;
+color:white;
+text-decoration:none;
+font-size:14px;
+box-sizing:border-box;
+}
+
+.payPagerBtn.is-active{
+background:#2563eb;
+border-color:#2563eb;
+color:white;
+}
+
+.payPagerBtn.is-disabled{
+opacity:.45;
+pointer-events:none;
 }
 
 @media(max-width:900px){
 
-    .dropdown{
-        right:auto;
-        left:0;
-    }
+.dropdown{
+right:auto;
+left:0;
+}
 
 }
 
 @media(max-width:768px){
 
-    .dropdown{
-        width:180px;
-    }
+.box{
+padding:12px;
+overflow:hidden;
+}
+
+.paymentsPage .payTable th,
+.paymentsPage .payTable td{
+padding:7px 3px !important;
+font-size:10px !important;
+}
+
+.paymentsPage .payTable .col-num{
+width:9% !important;
+font-size:9px !important;
+}
+
+.paymentsPage .payTable .col-user{
+width:18% !important;
+font-size:10px !important;
+}
+
+.paymentsPage .payTable .col-plan{
+width:40% !important;
+}
+
+.paymentsPage .payTable .col-plan .planSize{
+font-size:11px !important;
+}
+
+.paymentsPage .payTable .col-plan .planPrice{
+font-size:13px !important;
+}
+
+.paymentsPage .payTable .col-status{
+width:9% !important;
+}
+
+.paymentsPage .payTable .col-actions{
+width:8% !important;
+}
+
+.menuWrap{
+width:30px;
+}
+
+.menuBtn{
+width:30px;
+height:30px;
+font-size:16px;
+}
+
+.payPager{
+flex-direction:column;
+align-items:stretch;
+gap:10px;
+}
+
+.payPagerNav{
+justify-content:space-between;
+width:100%;
+}
+
+.dropdown{
+width:180px;
+}
 
 }
 
 </style>
+
+<div class="paymentsPage" data-payments-ui="v3">
 
 <div class="box">
 
@@ -417,21 +778,30 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
 
     </h2>
 
+    <?php if($paymentMessage !== ''){ ?>
+    <div style="background:#14532d;color:#bbf7d0;padding:12px 14px;border-radius:12px;margin-bottom:14px;line-height:1.8"><?php echo htmlspecialchars($paymentMessage, ENT_QUOTES, 'UTF-8'); ?></div>
+    <?php } ?>
+    <?php if($paymentError !== ''){ ?>
+    <div style="background:#7f1d1d;color:#fecaca;padding:12px 14px;border-radius:12px;margin-bottom:14px;line-height:1.8"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
+    <?php } ?>
+
+    <div class="payTableWrap">
+
     <table class="payTable">
 
         <thead>
 
             <tr>
 
-                <th>شماره</th>
+                <th class="col-num">شماره</th>
 
-                <th>کاربر</th>
+                <th class="col-user">کاربر</th>
 
-                <th>پلن اشتراک</th>
+                <th class="col-plan">پلن اشتراک</th>
 
-                <th>وضعیت</th>
+                <th class="col-status">وضعیت</th>
 
-                <th>عملیات</th>
+                <th class="col-actions">عملیات</th>
 
             </tr>
 
@@ -439,22 +809,25 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
 
         <tbody>
 
-        <?php foreach($buyPayments as $row){
+        <?php foreach($buyPaymentsPage as $row){
 
             $i = $row['index'];
 
             $p = $row['data'];
 
-            $status = $p[6] ?? '';
+            $status = trim($p[6] ?? '');
 
-            $statusClass = 'yellowStatus';
+            $statusDotClass = 'statusDot--yellow';
+            $statusTitle = 'در حال بررسی';
 
-            if($status=='تایید شد'){
-                $statusClass='greenStatus';
+            if($status === 'تایید شد'){
+                $statusDotClass = 'statusDot--green';
+                $statusTitle = 'تایید شد';
             }
 
-            if($status=='رد شد'){
-                $statusClass='redStatus';
+            if($status === 'رد شد'){
+                $statusDotClass = 'statusDot--red';
+                $statusTitle = 'رد شد';
             }
 
             $mobile =
@@ -463,39 +836,44 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
                 $users
             );
 
+            [$planSize, $planPrice] = paymentsFormatPlanLines($p[2] ?? '');
+
         ?>
 
             <tr>
 
-                <td>
+                <td class="col-num">
 
-                    <?php echo $i+1; ?>
+                    <?php echo $i + 1; ?>
 
                 </td>
 
-                <td>
+                <td class="col-user">
 
                     <?php echo htmlspecialchars($p[0] ?? '-'); ?>
 
                 </td>
 
-                <td>
+                <td class="col-plan">
 
-                    <?php echo htmlspecialchars($p[2] ?? '-'); ?>
-
-                </td>
-
-                <td>
-
-                    <span class="status <?php echo $statusClass; ?>">
-
-                        <?php echo $status ?: 'درحال بررسی'; ?>
-
-                    </span>
+                    <div class="planCell">
+                        <span class="planSize"><?php echo htmlspecialchars($planSize, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php if($planPrice !== ''){ ?>
+                        <span class="planPrice"><?php echo htmlspecialchars($planPrice, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php } ?>
+                    </div>
 
                 </td>
 
-                <td>
+                <td class="col-status">
+
+                    <span
+                        class="statusDot <?php echo $statusDotClass; ?>"
+                        title="<?php echo htmlspecialchars($statusTitle, ENT_QUOTES, 'UTF-8'); ?>"></span>
+
+                </td>
+
+                <td class="col-actions">
 
                     <div class="menuWrap">
 
@@ -580,19 +958,76 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
 
     </table>
 
-    <div class="pagination">
+    </div>
 
-    <?php for($x=1; $x<=$totalPages; $x++){ ?>
+    <div class="payPager">
 
-        <a
-            href="index.php?page=payments&p=<?php echo $x; ?>"
-            class="<?php echo $x==$currentPage ? 'active' : ''; ?>">
+        <div class="payPagerSize">
+            <span>نمایش</span>
+            <select
+                class="payPerSelect"
+                onchange="window.location.href=this.value;">
 
-            <?php echo $x; ?>
+                <option
+                    value="<?php echo htmlspecialchars(paymentsListUrl(1, 20), ENT_QUOTES, 'UTF-8'); ?>"
+                    <?php echo $perPage === 20 ? 'selected' : ''; ?>>
 
-        </a>
+                    ۲۰
 
-    <?php } ?>
+                </option>
+
+                <option
+                    value="<?php echo htmlspecialchars(paymentsListUrl(1, 50), ENT_QUOTES, 'UTF-8'); ?>"
+                    <?php echo $perPage === 50 ? 'selected' : ''; ?>>
+
+                    ۵۰
+
+                </option>
+
+                <option
+                    value="<?php echo htmlspecialchars(paymentsListUrl(1, 100), ENT_QUOTES, 'UTF-8'); ?>"
+                    <?php echo $perPage === 100 ? 'selected' : ''; ?>>
+
+                    ۱۰۰
+
+                </option>
+
+            </select>
+            <span>مورد در هر صفحه</span>
+        </div>
+
+        <div class="payPagerNav">
+            <span class="payPagerInfo">
+                <?php echo number_format($rangeFrom); ?>-<?php echo number_format($rangeTo); ?>
+                از
+                <?php echo number_format($totalItems); ?>
+                مورد
+            </span>
+
+            <a
+                href="<?php echo htmlspecialchars(paymentsListUrl(max(1, $currentPage - 1), $perPage), ENT_QUOTES, 'UTF-8'); ?>"
+                class="payPagerBtn <?php echo $currentPage <= 1 ? 'is-disabled' : ''; ?>"
+                aria-label="صفحه قبل">
+
+                ‹
+
+            </a>
+
+            <span class="payPagerBtn is-active">
+
+                <?php echo number_format($currentPage); ?>
+
+            </span>
+
+            <a
+                href="<?php echo htmlspecialchars(paymentsListUrl(min($totalPages, $currentPage + 1), $perPage), ENT_QUOTES, 'UTF-8'); ?>"
+                class="payPagerBtn <?php echo $currentPage >= $totalPages ? 'is-disabled' : ''; ?>"
+                aria-label="صفحه بعد">
+
+                ›
+
+            </a>
+        </div>
 
     </div>
 
@@ -604,7 +1039,12 @@ $buyPayments = array_slice($buyPayments, $start, $perPage);
 
 </div>
 
+</div>
+
 <script>
+
+const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments'), JSON_UNESCAPED_UNICODE); ?>;
+const paymentsPerPage = <?php echo (int)$perPage; ?>;
 
 function toggleMenu(id){
 
@@ -851,6 +1291,8 @@ function showAction(
 
             <form method="POST">
 
+                <input type="hidden" name="per" value="${paymentsPerPage}">
+
                 <input
                     type="hidden"
                     name="approve_index"
@@ -889,6 +1331,8 @@ function showAction(
             <hr style="margin:20px 0;border-color:#334155;">
 
             <form method="POST">
+
+                <input type="hidden" name="per" value="${paymentsPerPage}">
 
                 <input
                     type="hidden"
@@ -1013,9 +1457,11 @@ function confirmDelete(id){
     if(confirm('مطمئن هستید؟')){
 
         location.href =
-        'index.php?page=payments&deletepayment='
-        +
-        id;
+        paymentsListBase
+        + '&deletepayment='
+        + id
+        + '&per='
+        + paymentsPerPage;
 
     }
 
