@@ -138,7 +138,7 @@ if(!function_exists('telegramXuiActionKeyboard')){
         }
 
         if(function_exists('telegramShowPage')){
-            telegramShowPage($chatId, $text, $keyboard, $config, $messageId);
+            telegramShowPage($chatId, $text, telegramMainReplyKeyboard(), $config, null);
             return true;
         }
 

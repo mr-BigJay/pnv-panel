@@ -5,6 +5,9 @@ if(file_exists(__DIR__ . '/telegram_xui.php')){
 }
 
 if(!function_exists('telegramConfigPath')){
+
+    define('TELEGRAM_UI_VERSION', 3);
+
     function telegramConfigPath(){
         return __DIR__ . '/db/telegram.json';
     }
@@ -944,7 +947,9 @@ if(!function_exists('telegramConfigPath')){
             'وضعیت امروز',
             '🛒 خریدهای جدید: ' . $buyCount,
             '♻️ تمدیدهای جدید: ' . $renewCount,
-            '📨 پیام کاربران: ' . $msgCount
+            '📨 پیام کاربران: ' . $msgCount,
+            '',
+            '⌨️ منو: کیبورد پایین صفحه (v' . TELEGRAM_UI_VERSION . ')'
         ];
 
         return implode("\n", $lines);
@@ -1089,50 +1094,45 @@ if(!function_exists('telegramConfigPath')){
         telegramSetSession($chatId, array_merge($session, $patch, ['updated_at' => time()]));
     }
 
-    function telegramShowPage($chatId, $text, $replyKeyboard, $config = null, $messageId = null){
+    function telegramNormalizeReplyKeyboard($replyKeyboard){
         if(is_string($replyKeyboard)){
             $decoded = json_decode($replyKeyboard, true);
 
             if(is_array($decoded) && isset($decoded['inline_keyboard'])){
-                $replyKeyboard = telegramMainReplyKeyboard();
+                return telegramMainReplyKeyboard();
             }
-            elseif(is_array($decoded)){
-                $replyKeyboard = $decoded;
+
+            if(is_array($decoded)){
+                return $decoded;
             }
         }
 
         if(!is_array($replyKeyboard)){
-            $replyKeyboard = telegramMainReplyKeyboard();
+            return telegramMainReplyKeyboard();
         }
+
+        if(isset($replyKeyboard['inline_keyboard'])){
+            return telegramMainReplyKeyboard();
+        }
+
+        return $replyKeyboard;
+    }
+
+    function telegramShowPage($chatId, $text, $replyKeyboard, $config = null, $messageId = null){
+        $replyKeyboard = telegramNormalizeReplyKeyboard($replyKeyboard);
 
         $session = telegramGetSession($chatId);
         $oldScreenId = is_array($session) ? intval($session['screen_message_id'] ?? 0) : 0;
         $messageId = $messageId ? intval($messageId) : 0;
-        $screenId = 0;
-        $editCandidates = array_values(array_unique(array_filter([$messageId, $oldScreenId])));
 
-        foreach($editCandidates as $editId){
-            $edited = telegramEditMessage($chatId, $editId, $text, [], $config);
-
-            if(empty($edited['ok'])){
-                continue;
-            }
-
-            telegramClearInlineMarkup($chatId, $editId, $config);
-            $screenId = intval($editId);
-            break;
+        foreach(array_values(array_unique(array_filter([$oldScreenId, $messageId]))) as $obsoleteId){
+            telegramDeleteMessage($chatId, $obsoleteId, $config);
         }
 
-        if($screenId <= 0){
-            $sent = telegramSendMessage($chatId, $text, [], $config);
-            $screenId = intval($sent['result']['message_id'] ?? 0);
-        }
-
-        foreach($editCandidates as $obsoleteId){
-            if($obsoleteId > 0 && $obsoleteId !== $screenId){
-                telegramDeleteMessage($chatId, $obsoleteId, $config);
-            }
-        }
+        $sent = telegramSendMessage($chatId, $text, [
+            'reply_markup' => $replyKeyboard
+        ], $config);
+        $screenId = intval($sent['result']['message_id'] ?? 0);
 
         if($screenId > 0){
             telegramUpdateSessionScreen($chatId, [
@@ -1140,7 +1140,11 @@ if(!function_exists('telegramConfigPath')){
             ]);
         }
 
-        telegramSetReplyKeyboard($chatId, $replyKeyboard, $config);
+        telegramApplyMenuButton($chatId, $config);
+        telegramUpdateSessionScreen($chatId, [
+            'bottom_menu_set' => true,
+            'bottom_menu_at' => time()
+        ]);
 
         return $screenId;
     }
@@ -1152,7 +1156,7 @@ if(!function_exists('telegramConfigPath')){
             return $title . "\n\nمورد جدیدی برای بررسی نیست.\nاز دکمه گزارش می‌توانید سوابق را ببینید.";
         }
 
-        return $title . "\n\n" . count($items) . " مورد در انتظار بررسی\nیکی را انتخاب کنید:";
+        return $title . "\n\n" . count($items) . " مورد در انتظار بررسی\nاز کیبورد پایین یکی را انتخاب کنید:";
     }
 
     function telegramPaymentsListKeyboard($kind, $items){
