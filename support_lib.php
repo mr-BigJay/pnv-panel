@@ -138,15 +138,15 @@ if(!function_exists('supportLoad')){
 
     function supportMessageDisplayTime($message){
 
-        $timestamp = intval($message['timestamp'] ?? 0);
+        $timestamp = supportMessageTimestamp($message);
 
         if($timestamp > 0){
             return supportFormatFromTimestamp($timestamp);
         }
 
         return [
-            'date' => $message['date'] ?? '-',
-            'time' => $message['time'] ?? '-'
+            'date' => trim((string)($message['date'] ?? '')) ?: '-',
+            'time' => trim((string)($message['time'] ?? '')) ?: '-'
         ];
 
     }
@@ -154,8 +154,8 @@ if(!function_exists('supportLoad')){
     function supportMessageForApi($message, $options = []){
 
         $display = supportMessageDisplayTime($message);
-        $image = $message['image'] ?? '';
-        $sender = $message['sender'] ?? 'user';
+        $image = supportMessageImage($message);
+        $sender = supportNormalizeSender($message['sender'] ?? 'user');
         $avatarMeta = supportMessageAvatarMeta($sender, $options);
 
         if($image !== ''){
@@ -165,11 +165,11 @@ if(!function_exists('supportLoad')){
         return [
             'id' => $message['id'] ?? '',
             'sender' => $sender,
-            'text' => $message['text'] ?? '',
+            'text' => supportExtractMessageText($message),
             'image' => $image,
             'date' => $display['date'],
             'time' => $display['time'],
-            'timestamp' => intval($message['timestamp'] ?? 0),
+            'timestamp' => supportMessageTimestamp($message),
             'edited' => !empty($message['edited']),
             'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null,
             'avatar' => $avatarMeta['avatar'] !== '' ? '/' . ltrim($avatarMeta['avatar'], '/') : '',
@@ -178,13 +178,144 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportNormalizeSender($sender){
+
+        $sender = strtolower(trim((string)$sender));
+
+        if(in_array($sender, ['admin', 'support', 'staff', 'operator'], true)){
+            return 'admin';
+        }
+
+        return 'user';
+
+    }
+
+    function supportMessageIsFromUser($message){
+
+        if(!is_array($message)){
+            return false;
+        }
+
+        return supportNormalizeSender($message['sender'] ?? 'user') === 'user';
+
+    }
+
+    function supportExtractMessageText($message){
+
+        if(!is_array($message)){
+            return '';
+        }
+
+        foreach(['text', 'message', 'body', 'content', 'caption'] as $key){
+
+            if(!array_key_exists($key, $message)){
+                continue;
+            }
+
+            $value = $message[$key];
+
+            if(is_string($value)){
+                $text = trim($value);
+            }
+            elseif(is_scalar($value)){
+                $text = trim((string)$value);
+            }
+            else{
+                continue;
+            }
+
+            if($text !== ''){
+                return $text;
+            }
+
+        }
+
+        return '';
+
+    }
+
+    function supportMessageImage($message){
+
+        if(!is_array($message)){
+            return '';
+        }
+
+        foreach(['image', 'photo', 'attachment', 'file'] as $key){
+            $path = trim((string)($message[$key] ?? ''));
+
+            if($path !== ''){
+                return $path;
+            }
+        }
+
+        return '';
+
+    }
+
+    function supportMessageTimestamp($message){
+
+        if(!is_array($message)){
+            return 0;
+        }
+
+        foreach(['timestamp', 'ts', 'created_at', 'time_unix'] as $key){
+            $ts = intval($message[$key] ?? 0);
+
+            if($ts > 0){
+                return $ts;
+            }
+        }
+
+        $date = trim((string)($message['date'] ?? ''));
+        $time = trim((string)($message['time'] ?? ''));
+
+        if($date === '' && $time === ''){
+            return 0;
+        }
+
+        if(function_exists('pnvJalaliDateTimeToTimestamp')){
+            $ts = pnvJalaliDateTimeToTimestamp($date, $time);
+
+            if($ts > 0){
+                return $ts;
+            }
+        }
+
+        if(function_exists('pnvParseDateTimeToTimestamp')){
+            if($date !== '' && $time !== ''){
+                $ts = pnvParseDateTimeToTimestamp($date . ' ' . $time);
+
+                if($ts > 0){
+                    return $ts;
+                }
+            }
+
+            if($date !== ''){
+                $ts = pnvParseDateTimeToTimestamp($date);
+
+                if($ts > 0){
+                    return $ts;
+                }
+            }
+        }
+
+        return 0;
+
+    }
+
     function supportTicketLastMessage($ticket){
 
-        if(empty($ticket['messages'])){
+        if(empty($ticket['messages']) || !is_array($ticket['messages'])){
             return null;
         }
 
-        return end($ticket['messages']);
+        $messages = array_values($ticket['messages']);
+
+        if(count($messages) === 0){
+            return null;
+        }
+
+        return $messages[count($messages) - 1];
 
     }
 
@@ -197,7 +328,11 @@ if(!function_exists('supportLoad')){
         for($i = count($ticket['messages']) - 1; $i >= 0; $i--){
             $msg = $ticket['messages'][$i];
 
-            if(($msg['sender'] ?? '') === 'user'){
+            if(!is_array($msg)){
+                continue;
+            }
+
+            if(supportMessageIsFromUser($msg)){
                 return $msg;
             }
         }
@@ -206,21 +341,57 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportTicketPreviewMessage($ticket){
+
+        if(empty($ticket['messages']) || !is_array($ticket['messages'])){
+            return null;
+        }
+
+        for($i = count($ticket['messages']) - 1; $i >= 0; $i--){
+            $msg = $ticket['messages'][$i];
+
+            if(!is_array($msg) || !supportMessageIsFromUser($msg)){
+                continue;
+            }
+
+            if(
+                supportExtractMessageText($msg) !== ''
+                || supportMessageImage($msg) !== ''
+            ){
+                return $msg;
+            }
+        }
+
+        for($i = count($ticket['messages']) - 1; $i >= 0; $i--){
+            $msg = $ticket['messages'][$i];
+
+            if(!is_array($msg)){
+                continue;
+            }
+
+            if(
+                supportExtractMessageText($msg) !== ''
+                || supportMessageImage($msg) !== ''
+            ){
+                return $msg;
+            }
+        }
+
+        return supportTicketLastMessage($ticket);
+
+    }
+
     function supportTicketPreview($ticket, $maxLen = 80){
 
-        $last = supportTicketLastUserMessage($ticket);
-
-        if(!$last){
-            $last = supportTicketLastMessage($ticket);
-        }
+        $last = supportTicketPreviewMessage($ticket);
 
         if(!$last){
             return 'بدون پیام';
         }
 
-        $text = trim($last['text'] ?? '');
+        $text = supportExtractMessageText($last);
 
-        if($text === '' && !empty($last['image'])){
+        if($text === '' && supportMessageImage($last) !== ''){
             return '📷 تصویر';
         }
 
@@ -244,9 +415,53 @@ if(!function_exists('supportLoad')){
 
     function supportTicketLastTimestamp($ticket){
 
+        $preview = supportTicketPreviewMessage($ticket);
+
+        if($preview){
+            $ts = supportMessageTimestamp($preview);
+
+            if($ts > 0){
+                return $ts;
+            }
+        }
+
         $last = supportTicketLastMessage($ticket);
 
-        return intval($last['timestamp'] ?? 0);
+        if(!$last){
+            return 0;
+        }
+
+        return supportMessageTimestamp($last);
+
+    }
+
+    function supportTicketListTime($ticket){
+
+        $ts = supportTicketLastTimestamp($ticket);
+
+        if($ts > 0){
+            return supportRelativeTime($ts);
+        }
+
+        $preview = supportTicketPreviewMessage($ticket);
+
+        if(!$preview){
+            return '';
+        }
+
+        $display = supportMessageDisplayTime($preview);
+        $date = trim((string)($display['date'] ?? ''));
+        $time = trim((string)($display['time'] ?? ''));
+
+        if($date !== '' && $date !== '-'){
+            if($time !== '' && $time !== '-'){
+                return $time . ' - ' . $date;
+            }
+
+            return $date;
+        }
+
+        return '';
 
     }
 
@@ -289,7 +504,7 @@ if(!function_exists('supportLoad')){
         foreach($ticket['messages'] as $msg){
 
             if(
-                ($msg['sender'] ?? '') === 'user'
+                supportMessageIsFromUser($msg)
                 && empty($msg['seen_by_admin'])
             ){
                 $count++;
@@ -399,13 +614,13 @@ if(!function_exists('supportLoad')){
             $bTime = 0;
 
             if(!empty($a['messages'])){
-                $lastA = end($a['messages']);
-                $aTime = $lastA['timestamp'] ?? 0;
+                $lastA = supportTicketLastMessage($a);
+                $aTime = $lastA ? supportMessageTimestamp($lastA) : 0;
             }
 
             if(!empty($b['messages'])){
-                $lastB = end($b['messages']);
-                $bTime = $lastB['timestamp'] ?? 0;
+                $lastB = supportTicketLastMessage($b);
+                $bTime = $lastB ? supportMessageTimestamp($lastB) : 0;
             }
 
             return $bTime - $aTime;
@@ -425,7 +640,7 @@ if(!function_exists('supportLoad')){
         foreach($ticket['messages'] as $msg){
 
             if(
-                ($msg['sender'] ?? '') === 'user'
+                supportMessageIsFromUser($msg)
                 && empty($msg['seen_by_admin'])
             ){
                 return true;
@@ -454,7 +669,7 @@ if(!function_exists('supportLoad')){
             foreach($ticket['messages'] as $j => $msg){
 
                 if(
-                    ($msg['sender'] ?? '') === 'user'
+                    supportMessageIsFromUser($msg)
                     && empty($msg['seen_by_admin'])
                 ){
                     $data[$i]['messages'][$j]['seen_by_admin'] = true;
@@ -629,9 +844,9 @@ if(!function_exists('supportLoad')){
         foreach((array)$data as $ticket){
             foreach(($ticket['messages'] ?? []) as $msg){
                 if(($msg['id'] ?? '') === $replyId){
-                    $text = trim((string)($msg['text'] ?? ''));
+                    $text = supportExtractMessageText($msg);
 
-                    if($text === '' && !empty($msg['image'])){
+                    if($text === '' && supportMessageImage($msg) !== ''){
                         $text = '📷 تصویر';
                     }
 
@@ -867,7 +1082,7 @@ if(!function_exists('supportLoad')){
 
     function supportRenderMessageHtml($m, $options){
 
-        $sender = $m['sender'] ?? 'user';
+        $sender = supportNormalizeSender($m['sender'] ?? 'user');
         $class = ($sender === 'admin') ? 'is-admin admin' : 'is-user usermsg';
         $currentUser = $options['currentUser'] ?? '';
         $embedded = !empty($options['embedded']);
@@ -900,7 +1115,7 @@ if(!function_exists('supportLoad')){
             $canReply = !empty($options['ownUsername']);
         }
 
-        $image = $m['image'] ?? '';
+        $image = supportMessageImage($m);
 
         if($image !== ''){
             $image = '/' . ltrim($image, '/');
@@ -908,7 +1123,7 @@ if(!function_exists('supportLoad')){
 
         $display = supportMessageDisplayTime($m);
         $replyTo = is_array($m['reply_to'] ?? null) ? $m['reply_to'] : null;
-        $plainText = (string)($m['text'] ?? '');
+        $plainText = supportExtractMessageText($m);
         $chatUser = $currentUser !== '' ? $currentUser : ($options['ownUsername'] ?? '');
         $rowClass = ($sender === 'admin') ? 'msgRow msgRow--admin' : 'msgRow msgRow--user';
 
@@ -922,7 +1137,7 @@ if(!function_exists('supportLoad')){
         <div
             class="msgBubble msg <?php echo $class; ?>"
             data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-            data-timestamp="<?php echo intval($m['timestamp'] ?? 0); ?>"
+            data-timestamp="<?php echo supportMessageTimestamp($m); ?>"
             data-sender="<?php echo htmlspecialchars($sender, ENT_QUOTES, 'UTF-8'); ?>"
             data-own="<?php echo $isOwn ? '1' : '0'; ?>"
             data-can-edit="<?php echo $canEdit ? '1' : '0'; ?>"

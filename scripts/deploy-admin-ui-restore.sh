@@ -18,8 +18,7 @@ files=(
   "support_ui.css"
   "support_ui.js"
   "profile_lib.php"
-  "admin/index.php"
-  "admin/admin_nav.php"
+  "date_lib.php"
   "pnv_date_bootstrap.php"
 )
 

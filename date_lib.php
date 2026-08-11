@@ -11,6 +11,104 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         }
     }
 
+    function pnvJalaliToGregorian($jy, $jm, $jd){
+        $jy = intval($jy);
+        $jm = intval($jm);
+        $jd = intval($jd);
+
+        $jy -= 979;
+        $jm -= 1;
+        $jd -= 1;
+
+        $dayNo = 365 * $jy + intdiv($jy, 33) * 8 + intdiv(($jy % 33) + 3, 4);
+
+        for($i = 0; $i < $jm; ++$i){
+            $dayNo += ($i < 6) ? 31 : 30;
+        }
+
+        $dayNo += $jd;
+
+        $gy = 1600 + 400 * intdiv($dayNo, 146097);
+        $dayNo %= 146097;
+        $leap = true;
+
+        if($dayNo >= 36525){
+            $dayNo--;
+            $gy += 100 * intdiv($dayNo, 36524);
+            $dayNo %= 36524;
+
+            if($dayNo >= 365){
+                $dayNo++;
+            }
+            else{
+                $leap = false;
+            }
+        }
+
+        $gy += 4 * intdiv($dayNo, 1461);
+        $dayNo %= 1461;
+
+        if($dayNo >= 366){
+            $leap = false;
+            $dayNo--;
+            $gy += intdiv($dayNo, 365);
+            $dayNo %= 365;
+        }
+
+        $gd = $dayNo + 1;
+        $sal_a = [0, 31, ($leap ? 29 : 28), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        $gm = 0;
+
+        for($gm = 0; $gm < 13 && $gd > $sal_a[$gm]; $gm++){
+            $gd -= $sal_a[$gm];
+        }
+
+        return [$gy, $gm, $gd];
+    }
+
+    function pnvJalaliDateTimeToTimestamp($dateStr, $timeStr = ''){
+        pnvEnsureTehranTimezone();
+
+        $dateStr = trim(pnvDigitsToLatin((string)$dateStr));
+        $timeStr = trim(pnvDigitsToLatin((string)$timeStr));
+
+        if($dateStr === ''){
+            return 0;
+        }
+
+        if(!preg_match('/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/', $dateStr, $m)){
+            return pnvParseDateTimeToTimestamp(trim($dateStr . ' ' . $timeStr));
+        }
+
+        $y = intval($m[1]);
+        $mo = intval($m[2]);
+        $d = intval($m[3]);
+
+        if(pnvIsGregorianYear($y)){
+            $datePart = sprintf('%04d-%02d-%02d', $y, $mo, $d);
+        }
+        else{
+            [$gy, $gm, $gd] = pnvJalaliToGregorian($y, $mo, $d);
+            $datePart = sprintf('%04d-%02d-%02d', $gy, $gm, $gd);
+        }
+
+        if($timeStr !== '' && preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/', $timeStr, $tm)){
+            $datePart .= sprintf(
+                ' %02d:%02d:%02d',
+                intval($tm[1]),
+                intval($tm[2]),
+                intval($tm[3] ?? 0)
+            );
+        }
+        else{
+            $datePart .= ' 00:00:00';
+        }
+
+        $ts = strtotime($datePart);
+
+        return $ts ? intval($ts) : 0;
+    }
+
     function pnvGregorianToJalali($gy, $gm, $gd){
         $gy = intval($gy);
         $gm = intval($gm);

@@ -742,13 +742,15 @@ flex-shrink:0;
 font-size:12px;
 color:var(--msg-muted);
 overflow:hidden;
-display:-webkit-box;
--webkit-box-orient:vertical;
--webkit-line-clamp:2;
-line-clamp:2;
+text-overflow:ellipsis;
+display:block;
 line-height:1.45;
 max-height:2.9em;
 word-break:break-word;
+}
+
+.msgConvPreview:not(:empty){
+min-height:1.45em;
 }
 
 .msgConvPreview.unread{
