@@ -11,33 +11,260 @@ if(!function_exists('supportLoad')){
 
     }
 
-    function supportLoad($file){
+    function supportNormalizeTicketsList($data){
 
-        if(!file_exists($file)){
-            supportSave($file, []);
+        if(!is_array($data)){
             return [];
         }
 
-        $fp = fopen($file, 'c+');
-
-        if(!$fp){
+        if($data === []){
             return [];
         }
 
-        flock($fp, LOCK_SH);
+        $isList = array_keys($data) === range(0, count($data) - 1);
 
-        $content = stream_get_contents($fp);
+        if($isList){
+            $normalized = [];
 
-        flock($fp, LOCK_UN);
-        fclose($fp);
+            foreach($data as $ticket){
 
-        $data = json_decode($content, true);
+                if(!is_array($ticket)){
+                    continue;
+                }
 
-        return is_array($data) ? $data : [];
+                $normalized[] = $ticket;
+            }
+
+            return $normalized;
+        }
+
+        $normalized = [];
+
+        foreach($data as $key => $ticket){
+
+            if(!is_array($ticket)){
+                continue;
+            }
+
+            if(!isset($ticket['user']) && is_string($key) && $key !== ''){
+                $ticket['user'] = $key;
+            }
+
+            $normalized[] = $ticket;
+        }
+
+        return $normalized;
 
     }
 
-    function supportSave($file, $data){
+    function supportDecodeJsonPayload($content){
+
+        $content = trim((string)$content);
+
+        if($content === ''){
+            return null;
+        }
+
+        $data = json_decode($content, true);
+
+        if(!is_array($data)){
+            return null;
+        }
+
+        return supportNormalizeTicketsList($data);
+
+    }
+
+    function supportBackupCandidates($file){
+
+        $dir = dirname($file);
+        $base = basename($file);
+
+        return [
+            $file . '.bak',
+            $dir . '/' . $base . '.backup',
+            $dir . '/.' . $base . '.last-good',
+        ];
+
+    }
+
+    function supportReadTicketsFile($file){
+
+        if(!is_file($file) || !is_readable($file)){
+            return null;
+        }
+
+        $content = @file_get_contents($file);
+
+        if($content === false){
+            return null;
+        }
+
+        return supportDecodeJsonPayload($content);
+
+    }
+
+    function supportTicketCount($data){
+
+        return is_array($data) ? count(supportNormalizeTicketsList($data)) : 0;
+
+    }
+
+    function supportMergeTickets($base, $updates){
+
+        $base = supportNormalizeTicketsList($base);
+        $updates = supportNormalizeTicketsList($updates);
+        $byUser = [];
+
+        foreach($base as $ticket){
+
+            $user = trim((string)($ticket['user'] ?? ''));
+
+            if($user === ''){
+                continue;
+            }
+
+            $byUser[$user] = $ticket;
+        }
+
+        foreach($updates as $ticket){
+
+            $user = trim((string)($ticket['user'] ?? ''));
+
+            if($user === ''){
+                continue;
+            }
+
+            if(!isset($byUser[$user])){
+                $byUser[$user] = $ticket;
+                continue;
+            }
+
+            $existing = $byUser[$user];
+            $existingMessages = is_array($existing['messages'] ?? null) ? $existing['messages'] : [];
+            $incomingMessages = is_array($ticket['messages'] ?? null) ? $ticket['messages'] : [];
+            $seenIds = [];
+
+            foreach($existingMessages as $msg){
+
+                if(!is_array($msg)){
+                    continue;
+                }
+
+                $id = trim((string)($msg['id'] ?? ''));
+
+                if($id !== ''){
+                    $seenIds[$id] = true;
+                }
+            }
+
+            foreach($incomingMessages as $msg){
+
+                if(!is_array($msg)){
+                    continue;
+                }
+
+                $id = trim((string)($msg['id'] ?? ''));
+
+                if($id === '' || !isset($seenIds[$id])){
+                    $existingMessages[] = $msg;
+
+                    if($id !== ''){
+                        $seenIds[$id] = true;
+                    }
+                }
+            }
+
+            $existing['messages'] = array_values($existingMessages);
+
+            if(isset($ticket['status'])){
+                $existing['status'] = $ticket['status'];
+            }
+
+            $byUser[$user] = $existing;
+        }
+
+        return array_values($byUser);
+
+    }
+
+    function supportWriteBackup($file){
+
+        if(!is_file($file) || filesize($file) < 2){
+            return;
+        }
+
+        foreach(supportBackupCandidates($file) as $backupPath){
+            @copy($file, $backupPath);
+        }
+
+    }
+
+    function supportRecoverTickets($file){
+
+        foreach(supportBackupCandidates($file) as $backupPath){
+            $backupData = supportReadTicketsFile($backupPath);
+
+            if(is_array($backupData) && count($backupData) > 0){
+                return $backupData;
+            }
+        }
+
+        return null;
+
+    }
+
+    function supportLoad($file){
+
+        $data = supportReadTicketsFile($file);
+
+        if(is_array($data)){
+            return $data;
+        }
+
+        $recovered = supportRecoverTickets($file);
+
+        if(is_array($recovered) && count($recovered) > 0){
+            supportSave($file, $recovered, ['allow_shrink' => true]);
+            return $recovered;
+        }
+
+        if(!file_exists($file)){
+            supportSave($file, [], ['allow_shrink' => true]);
+            return [];
+        }
+
+        return [];
+
+    }
+
+    function supportSave($file, $data, $options = []){
+
+        if(!is_array($data)){
+            return false;
+        }
+
+        $allowShrink = !empty($options['allow_shrink']);
+        $data = supportNormalizeTicketsList($data);
+        $previous = supportReadTicketsFile($file);
+        $previousCount = supportTicketCount($previous);
+        $nextCount = count($data);
+
+        if(
+            !$allowShrink
+            && is_array($previous)
+            && $previousCount >= 5
+            && $nextCount > 0
+            && $nextCount < $previousCount
+            && $nextCount <= max(3, (int)floor($previousCount * 0.5))
+        ){
+            $data = supportMergeTickets($previous, $data);
+            $nextCount = count($data);
+        }
+
+        if(is_file($file) && filesize($file) > 2){
+            supportWriteBackup($file);
+        }
 
         $dir = dirname($file);
 
@@ -50,6 +277,10 @@ if(!function_exists('supportLoad')){
             JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT
         );
 
+        if($json === false){
+            return false;
+        }
+
         $fp = fopen($file, 'c+');
 
         if(!$fp){
@@ -59,10 +290,20 @@ if(!function_exists('supportLoad')){
         flock($fp, LOCK_EX);
         ftruncate($fp, 0);
         rewind($fp);
-        fwrite($fp, $json);
+        $written = fwrite($fp, $json);
         fflush($fp);
         flock($fp, LOCK_UN);
         fclose($fp);
+
+        if($written === false){
+            return false;
+        }
+
+        if($nextCount >= max(3, $previousCount)){
+            foreach(supportBackupCandidates($file) as $goodPath){
+                @copy($file, $goodPath);
+            }
+        }
 
         return true;
 

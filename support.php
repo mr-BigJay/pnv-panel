@@ -3,252 +3,157 @@
 session_start();
 
 if(!isset($_SESSION['user'])){
-header("Location: index.php");
-exit;
+    header("Location: index.php");
+    exit;
 }
+
+require_once __DIR__ . '/support_lib.php';
 
 $user = $_SESSION['user'];
-
-$file = "db/support.json";
-
-if(!file_exists($file)){
-file_put_contents($file,"[]");
-}
-
-$data = json_decode(
-file_get_contents($file),
-true
-);
-
-if(!is_array($data)){
-$data = [];
-}
+$file = __DIR__ . '/db/support.json';
+$data = supportLoad($file);
 
 if(isset($_GET['delete'])){
 
-$msgid = $_GET['delete'];
+    $msgid = $_GET['delete'];
 
-for($i=0;$i<count($data);$i++){
+    for($i = 0; $i < count($data); $i++){
 
-if($data[$i]['user']==$user){
+        if(($data[$i]['user'] ?? '') !== $user){
+            continue;
+        }
 
-for($j=0;$j<count($data[$i]['messages']);$j++){
+        for($j = 0; $j < count($data[$i]['messages']); $j++){
 
-$m = $data[$i]['messages'][$j];
+            $m = $data[$i]['messages'][$j];
 
-if(
-isset($m['id'])
-&&
-$m['id']==$msgid
-&&
-$m['sender']=='user'
-){
+            if(
+                isset($m['id'])
+                && $m['id'] == $msgid
+                && ($m['sender'] ?? '') == 'user'
+                && (time() - intval($m['timestamp'] ?? 0)) <= 60
+            ){
+                unset($data[$i]['messages'][$j]);
+                $data[$i]['messages'] = array_values($data[$i]['messages']);
+                supportSave($file, $data);
+            }
 
-if(
-time()-$m['timestamp'] <= 60
-){
+        }
 
-unset($data[$i]['messages'][$j]);
+    }
 
-$data[$i]['messages'] =
-array_values(
-$data[$i]['messages']
-);
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-}
-
-}
-
-}
-
-}
-
-}
-
-header("Location: support.php");
-exit;
+    header("Location: support.php");
+    exit;
 
 }
 
 if(isset($_POST['edit_id'])){
 
-$editid = $_POST['edit_id'];
+    $editid = $_POST['edit_id'];
+    $newtext = trim($_POST['edit_text'] ?? '');
 
-$newtext =
-trim($_POST['edit_text']);
+    for($i = 0; $i < count($data); $i++){
 
-for($i=0;$i<count($data);$i++){
+        if(($data[$i]['user'] ?? '') !== $user){
+            continue;
+        }
 
-if($data[$i]['user']==$user){
+        for($j = 0; $j < count($data[$i]['messages']); $j++){
 
-for($j=0;$j<count($data[$i]['messages']);$j++){
+            $m = &$data[$i]['messages'][$j];
 
-$m = &$data[$i]['messages'][$j];
+            if(
+                isset($m['id'])
+                && $m['id'] == $editid
+                && ($m['sender'] ?? '') == 'user'
+                && (time() - intval($m['timestamp'] ?? 0)) <= 3600
+            ){
+                $m['text'] = $newtext;
+                $m['edited'] = true;
+                supportSave($file, $data);
+            }
 
-if(
-isset($m['id'])
-&&
-$m['id']==$editid
-&&
-$m['sender']=='user'
-){
+        }
 
-if(
-time()-$m['timestamp'] <= 3600
-){
+    }
 
-$m['text'] = $newtext;
-
-$m['edited'] = true;
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-}
-
-}
-
-}
-
-}
-
-}
-
-header("Location: support.php");
-exit;
+    header("Location: support.php");
+    exit;
 
 }
 
 if(isset($_POST['message'])){
 
-$text =
-trim($_POST['message']);
+    $text = trim($_POST['message'] ?? '');
+    $image = '';
 
-$image = "";
+    if(
+        isset($_FILES['image'])
+        && intval($_FILES['image']['size'] ?? 0) > 0
+    ){
 
-if(
-isset($_FILES['image'])
-&&
-$_FILES['image']['size'] > 0
-){
+        $ext = strtolower(pathinfo((string)($_FILES['image']['name'] ?? ''), PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'webp'];
 
-$ext =
-strtolower(
-pathinfo(
-$_FILES['image']['name'],
-PATHINFO_EXTENSION
-)
-);
+        if(in_array($ext, $allowed, true)){
 
-$allowed = [
-'jpg',
-'jpeg',
-'png',
-'webp'
-];
+            if(!file_exists(__DIR__ . '/uploads/support')){
+                mkdir(__DIR__ . '/uploads/support', 0777, true);
+            }
 
-if(in_array($ext,$allowed)){
+            $image = 'uploads/support/' . time() . rand(1000, 9999) . '.' . $ext;
 
-if(!file_exists("uploads/support")){
-mkdir("uploads/support",0777,true);
-}
+            move_uploaded_file(
+                $_FILES['image']['tmp_name'],
+                __DIR__ . '/' . $image
+            );
 
-$image =
-"uploads/support/".
-time().
-rand(1000,9999).
-".".
-$ext;
+        }
 
-move_uploaded_file(
-$_FILES['image']['tmp_name'],
-$image
-);
+    }
 
-}
+    $ticketFound = false;
+    $meta = supportMessageMeta();
 
-}
+    $newmsg = [
+        'id' => uniqid(),
+        'sender' => 'user',
+        'text' => $text,
+        'image' => $image,
+        'date' => $meta['date'],
+        'time' => $meta['time'],
+        'timestamp' => $meta['timestamp'],
+        'seen_by_admin' => false
+    ];
 
-$ticketFound = false;
+    for($i = 0; $i < count($data); $i++){
 
-$newmsg = [
+        if(($data[$i]['user'] ?? '') === $user){
 
-'id'=>uniqid(),
+            $data[$i]['messages'][] = $newmsg;
+            $data[$i]['status'] = 'open';
+            $ticketFound = true;
+            break;
 
-'sender'=>'user',
+        }
 
-'text'=>$text,
+    }
 
-'image'=>$image,
+    if(!$ticketFound){
 
-'date'=>date('Y/m/d'),
+        $data[] = [
+            'id' => 'SUP-' . rand(1000, 9999),
+            'user' => $user,
+            'status' => 'open',
+            'messages' => [$newmsg]
+        ];
 
-'time'=>date('H:i'),
+    }
 
-'timestamp'=>time()
+    supportSave($file, $data);
 
-];
-
-for($i=0;$i<count($data);$i++){
-
-if($data[$i]['user']==$user){
-
-$data[$i]['messages'][] = $newmsg;
-
-$data[$i]['status']='open';
-
-$ticketFound = true;
-
-break;
-
-}
-
-}
-
-if(!$ticketFound){
-
-$data[] = [
-
-'id'=>'SUP-'.rand(1000,9999),
-
-'user'=>$user,
-
-'status'=>'open',
-
-'messages'=>[
-$newmsg
-]
-
-];
-
-}
-
-file_put_contents(
-$file,
-json_encode(
-$data,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
-
-header("Location: support.php");
-exit;
+    header("Location: support.php");
+    exit;
 
 }
 
@@ -256,17 +161,15 @@ $messages = [];
 
 foreach($data as $ticket){
 
-if($ticket['user']==$user){
+    if(($ticket['user'] ?? '') === $user){
 
-if(isset($ticket['messages'])){
+        if(isset($ticket['messages']) && is_array($ticket['messages'])){
+            $messages = $ticket['messages'];
+        }
 
-$messages = $ticket['messages'];
+        break;
 
-}
-
-break;
-
-}
+    }
 
 }
 
@@ -523,9 +426,9 @@ font-size:16px;
 
 <?php foreach(array_reverse($messages) as $m){ ?>
 
-<div class="msg <?php echo $m['sender']; ?>">
+<div class="msg <?php echo htmlspecialchars($m['sender'] ?? 'user', ENT_QUOTES, 'UTF-8'); ?>">
 
-<?php echo nl2br(htmlspecialchars($m['text'])); ?>
+<?php echo nl2br(htmlspecialchars(supportExtractMessageText($m), ENT_QUOTES, 'UTF-8')); ?>
 
 <?php if(isset($m['edited'])){ ?>
 
@@ -533,30 +436,30 @@ font-size:16px;
 
 <?php } ?>
 
-<?php if($m['image']!=""){ ?>
+<?php if(supportMessageImage($m) !== ''){ ?>
 
 <br>
 
-<img src="<?php echo $m['image']; ?>">
+<img src="<?php echo htmlspecialchars(supportMessageImage($m), ENT_QUOTES, 'UTF-8'); ?>">
 
 <?php } ?>
 
 <div class="time">
 
-<?php echo $m['date']; ?>
+<?php echo htmlspecialchars($m['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
 
 -
 
-<?php echo $m['time']; ?>
+<?php echo htmlspecialchars($m['time'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
 
 <?php if(
-$m['sender']=='user'
+($m['sender'] ?? '') == 'user'
 &&
-time()-$m['timestamp'] <= 3600
+(time() - intval($m['timestamp'] ?? 0)) <= 3600
 ){ ?>
 
 <a
-href="?edit=<?php echo $m['id']; ?>"
+href="?edit=<?php echo urlencode($m['id'] ?? ''); ?>"
 class="action">
 
 ✏️
@@ -566,13 +469,13 @@ class="action">
 <?php } ?>
 
 <?php if(
-$m['sender']=='user'
+($m['sender'] ?? '') == 'user'
 &&
-time()-$m['timestamp'] <= 60
+(time() - intval($m['timestamp'] ?? 0)) <= 60
 ){ ?>
 
 <a
-href="?delete=<?php echo $m['id']; ?>"
+href="?delete=<?php echo urlencode($m['id'] ?? ''); ?>"
 class="action">
 
 🗑
@@ -586,9 +489,9 @@ class="action">
 <?php if(
 isset($_GET['edit'])
 &&
-$_GET['edit']==$m['id']
+$_GET['edit'] == ($m['id'] ?? '')
 &&
-$m['sender']=='user'
+($m['sender'] ?? '') == 'user'
 ){ ?>
 
 <form method="POST"
@@ -596,12 +499,12 @@ class="editbox">
 
 <textarea
 name="edit_text"
-required><?php echo htmlspecialchars($m['text']); ?></textarea>
+required><?php echo htmlspecialchars(supportExtractMessageText($m), ENT_QUOTES, 'UTF-8'); ?></textarea>
 
 <input
 type="hidden"
 name="edit_id"
-value="<?php echo $m['id']; ?>">
+value="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
 
 <button
 type="submit"

@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=36';
+$cssHref = '../support_ui.css?v=37';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=36';
+$jsHref = '../support_ui.js?v=37';
 
 if(!$supportEmbedded){
 ?>
@@ -69,7 +69,7 @@ if(!$supportEmbedded){
 <div class="msgSidebarHead">
 <div class="msgSidebarHeadRow">
 <a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
-<h2>پیام‌های کاربران</h2>
+<h2>پیام‌های کاربران <?php if(count($data) > 0){ ?><span class="msgSidebarCount"><?php echo count($data); ?></span><?php } ?></h2>
 </div>
 <div class="msgSearchWrap">
 <input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
