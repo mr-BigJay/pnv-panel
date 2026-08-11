@@ -6,7 +6,7 @@ if(file_exists(__DIR__ . '/telegram_xui.php')){
 
 if(!function_exists('telegramConfigPath')){
 
-    define('TELEGRAM_UI_VERSION', 3);
+    define('TELEGRAM_UI_VERSION', 4);
 
     function telegramConfigPath(){
         return __DIR__ . '/db/telegram.json';
@@ -635,15 +635,6 @@ if(!function_exists('telegramConfigPath')){
         return telegramMainReplyKeyboard();
     }
 
-    function telegramApplyMenuButton($chatId, $config = null){
-        telegramApiRequest('setChatMenuButton', [
-            'chat_id' => $chatId,
-            'menu_button' => [
-                'type' => 'commands'
-            ]
-        ], [], $config);
-    }
-
     function telegramRefreshBottomMenu($chatId, $config = null){
         telegramSetReplyKeyboard($chatId, telegramMainReplyKeyboard(), $config);
     }
@@ -674,8 +665,6 @@ if(!function_exists('telegramConfigPath')){
         if(!is_array($markup)){
             $markup = telegramMainReplyKeyboard();
         }
-
-        telegramApplyMenuButton($chatId, $config);
 
         telegramSendMessage($chatId, telegramInvisiblePadChar(), [
             'reply_markup' => $markup,
@@ -949,7 +938,7 @@ if(!function_exists('telegramConfigPath')){
             '♻️ تمدیدهای جدید: ' . $renewCount,
             '📨 پیام کاربران: ' . $msgCount,
             '',
-            '⌨️ منو: کیبورد پایین صفحه (v' . TELEGRAM_UI_VERSION . ')'
+            '⌨️ فقط Reply Keyboard — بدون Command Menu (v' . TELEGRAM_UI_VERSION . ')'
         ];
 
         return implode("\n", $lines);
@@ -1140,7 +1129,6 @@ if(!function_exists('telegramConfigPath')){
             ]);
         }
 
-        telegramApplyMenuButton($chatId, $config);
         telegramUpdateSessionScreen($chatId, [
             'bottom_menu_set' => true,
             'bottom_menu_at' => time()
@@ -2020,28 +2008,18 @@ if(!function_exists('telegramConfigPath')){
         return telegramSendToAdmins($header, $extra);
     }
 
-    function telegramSetCommands($config = null){
-        return telegramApiRequest('setMyCommands', [
-            'commands' => [
-                ['command' => 'start', 'description' => '🏠 منوی اصلی'],
-                ['command' => 'messages', 'description' => '📨 پیام کاربران'],
-                ['command' => 'buys', 'description' => '🛒 خریدهای جدید'],
-                ['command' => 'renews', 'description' => '♻️ تمدید سرویس']
-            ]
-        ], [], $config);
-    }
-
-    function telegramSetMenuButton($config = null){
-        return telegramApiRequest('setChatMenuButton', [
+    function telegramDisableCommandMenu($config = null){
+        telegramApiRequest('deleteMyCommands', [], [], $config);
+        telegramApiRequest('setChatMenuButton', [
             'menu_button' => [
-                'type' => 'commands'
+                'type' => 'default'
             ]
         ], [], $config);
     }
 
+    /** @deprecated Command Menu استفاده نمی‌شود — فقط Reply Keyboard */
     function telegramSetupBotUi($config = null){
-        telegramSetCommands($config);
-        telegramSetMenuButton($config);
+        telegramDisableCommandMenu($config);
     }
 
     function telegramHandleCallback($callback, $config = null){

@@ -31,14 +31,14 @@ if(isset($_POST['save'])){
     ];
 
     telegramSaveConfig($config);
-    telegramSetupBotUi($config);
+    telegramDisableCommandMenu($config);
     $message = 'تنظیمات بات تلگرام ذخیره شد.';
 }
 
 if(isset($_POST['test'])){
 
     $config = telegramLoadConfig();
-    telegramSetupBotUi($config);
+    telegramDisableCommandMenu($config);
     $result = ['ok' => true];
 
     if(empty($result['ok'])){

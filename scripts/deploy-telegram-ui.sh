@@ -41,4 +41,4 @@ sleep 1
 pgrep -af "telegram_poll.php" || echo "WARNING: poll worker not running"
 
 echo ""
-echo "Done. In Telegram send /start — home text must include: منو: کیبورد پایین صفحه (v3)"
+echo "Done. In Telegram send /start — home text must include: Reply Keyboard (v4)"

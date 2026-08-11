@@ -14,7 +14,7 @@ if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === '
     exit("Telegram bot is disabled or not configured.\n");
 }
 
-telegramSetupBotUi($config);
+telegramDisableCommandMenu($config);
 
 $lockFile = __DIR__ . '/db/telegram_poll.lock';
 $lock = fopen($lockFile, 'c');
