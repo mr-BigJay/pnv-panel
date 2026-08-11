@@ -72,14 +72,28 @@ if(!function_exists('profileUsersPath')){
     }
 
     function profileLoadUsers(){
+        static $cached = null;
+        static $cachedMTime = null;
+
         $path = profileUsersPath();
 
         if(!file_exists($path)){
+            $cached = [];
+            $cachedMTime = null;
             return [];
         }
 
-        $data = json_decode(file_get_contents($path), true);
-        return is_array($data) ? $data : [];
+        $mtime = @filemtime($path);
+
+        if(is_array($cached) && $cachedMTime !== null && $mtime === $cachedMTime){
+            return $cached;
+        }
+
+        $data = json_decode((string)file_get_contents($path), true);
+        $cached = is_array($data) ? $data : [];
+        $cachedMTime = $mtime;
+
+        return $cached;
     }
 
     function profileSaveUsers($users){

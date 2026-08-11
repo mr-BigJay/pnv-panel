@@ -642,12 +642,8 @@ if(!function_exists('supportLoad')){
 
         $maxLen = max(20, intval($maxLen));
 
-        if(function_exists('mb_strlen') && mb_strlen($text) > $maxLen){
-            return mb_substr($text, 0, $maxLen) . '…';
-        }
-
-        if(strlen($text) > $maxLen){
-            return substr($text, 0, $maxLen) . '…';
+        if(supportMbLen($text) > $maxLen){
+            return supportMbSubstr($text, 0, $maxLen) . '…';
         }
 
         return $text;
@@ -757,19 +753,81 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportSafeHtml($value){
+
+        $value = (string)$value;
+
+        if($value === ''){
+            return '';
+        }
+
+        if(function_exists('mb_check_encoding') && !mb_check_encoding($value, 'UTF-8')){
+            if(function_exists('mb_convert_encoding')){
+                $value = @mb_convert_encoding($value, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+            }
+            else{
+                $value = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+                if($value === false){
+                    $value = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', (string)$value);
+                }
+            }
+        }
+
+        $flags = ENT_QUOTES;
+
+        if(defined('ENT_SUBSTITUTE')){
+            $flags |= ENT_SUBSTITUTE;
+        }
+
+        $html = htmlspecialchars($value, $flags, 'UTF-8');
+
+        return $html === false ? '' : $html;
+
+    }
+
+    function supportMbSubstr($value, $start, $length = null){
+
+        $value = (string)$value;
+
+        if(function_exists('mb_substr')){
+            return $length === null
+                ? mb_substr($value, $start, null, 'UTF-8')
+                : mb_substr($value, $start, $length, 'UTF-8');
+        }
+
+        return $length === null
+            ? substr($value, $start)
+            : substr($value, $start, $length);
+
+    }
+
+    function supportMbLen($value){
+
+        $value = (string)$value;
+
+        if(function_exists('mb_strlen')){
+            return mb_strlen($value, 'UTF-8');
+        }
+
+        return strlen($value);
+
+    }
+
     function supportUserInitial($username){
 
-        $username = trim($username);
+        $username = trim((string)$username);
 
         if($username === ''){
             return '?';
         }
 
-        if(function_exists('mb_substr')){
-            return mb_strtoupper(mb_substr($username, 0, 1, 'UTF-8'), 'UTF-8');
+        $initial = supportMbSubstr($username, 0, 1);
+
+        if(function_exists('mb_strtoupper')){
+            return mb_strtoupper($initial, 'UTF-8');
         }
 
-        return strtoupper(substr($username, 0, 1));
+        return strtoupper($initial);
 
     }
 
@@ -817,16 +875,81 @@ if(!function_exists('supportLoad')){
         require_once __DIR__ . '/profile_lib.php';
 
         $username = trim((string)$username);
-        $avatar = profileGetUserAvatar($username);
-        $initial = htmlspecialchars(supportUserInitial($username), ENT_QUOTES, 'UTF-8');
+        $avatar = '';
+
+        try{
+            $avatar = profileGetUserAvatar($username);
+        }catch(Throwable $e){
+            $avatar = '';
+        }
+
+        $initial = supportSafeHtml(supportUserInitial($username));
 
         if($avatar !== ''){
-            $src = htmlspecialchars('/' . ltrim($avatar, '/'), ENT_QUOTES, 'UTF-8');
+            $src = supportSafeHtml('/' . ltrim($avatar, '/'));
 
             return '<div class="msgAvatar msgAvatar--photo"><img src="' . $src . '" alt=""></div>';
         }
 
         return '<div class="msgAvatar">' . $initial . '</div>';
+
+    }
+
+    function supportRenderAdminConversationItem($ticket, $options = []){
+
+        if(!is_array($ticket)){
+            return '';
+        }
+
+        $ticketUser = trim((string)($ticket['user'] ?? ''));
+        $currentUser = (string)($options['currentUser'] ?? '');
+        $embedded = !empty($options['embedded']);
+        $isActive = ($currentUser !== '' && $currentUser === $ticketUser);
+
+        try{
+            $unread = supportAdminUnreadCount($ticket);
+            $preview = supportTicketPreview($ticket);
+            $listTime = supportTicketListTime($ticket);
+            $avatarHtml = supportRenderConvAvatarHtml($ticketUser);
+            $href = supportAdminUrl($ticketUser, $embedded);
+        }catch(Throwable $e){
+            $unread = 0;
+            $preview = 'پیام';
+            $listTime = '—';
+            $avatarHtml = '<div class="msgAvatar">' . supportSafeHtml(supportUserInitial($ticketUser)) . '</div>';
+            $href = supportAdminUrl($ticketUser, $embedded);
+        }
+
+        if($listTime === ''){
+            $listTime = '—';
+        }
+
+        if($preview === ''){
+            $preview = 'پیام';
+        }
+
+        $html =
+            '<a href="' . supportSafeHtml($href) . '"'
+            . ' class="msgConv' . ($isActive ? ' active' : '') . '"'
+            . ' data-username="' . supportSafeHtml($ticketUser) . '">'
+            . $avatarHtml
+            . '<div class="msgConvBody">'
+            . '<div class="msgConvTop">'
+            . '<span class="msgConvName">' . supportSafeHtml($ticketUser !== '' ? $ticketUser : 'کاربر') . '</span>'
+            . '<span class="msgConvTime">' . supportSafeHtml($listTime) . '</span>'
+            . '</div>'
+            . '<div class="msgConvPreview' . ($unread > 0 ? ' unread' : '') . '">'
+            . supportSafeHtml($preview)
+            . '</div>'
+            . '</div>';
+
+        if($unread > 0){
+            $html .= '<span class="msgBadge">' . ($unread > 9 ? '9+' : intval($unread)) . '</span>';
+        }
+
+        $html .= '</a>';
+
+        return $html;
 
     }
 
@@ -848,6 +971,12 @@ if(!function_exists('supportLoad')){
     }
 
     function supportSortTickets($data){
+
+        if(!is_array($data)){
+            return [];
+        }
+
+        $data = array_values(array_filter($data, 'is_array'));
 
         usort($data, function($a, $b){
 
@@ -1091,11 +1220,8 @@ if(!function_exists('supportLoad')){
                         $text = '📷 تصویر';
                     }
 
-                    if(function_exists('mb_substr')){
-                        $text = mb_substr($text, 0, 80, 'UTF-8');
-                    }
-                    else{
-                        $text = substr($text, 0, 80);
+                    if(supportMbLen($text) > 80){
+                        $text = supportMbSubstr($text, 0, 80);
                     }
 
                     return [
@@ -1230,7 +1356,9 @@ if(!function_exists('supportLoad')){
             return [];
         }
 
-        $queryLower = mb_strtolower($query);
+        $queryLower = function_exists('mb_strtolower')
+            ? mb_strtolower($query, 'UTF-8')
+            : strtolower($query);
         $queryDigits = preg_replace('/\D+/', '', $query);
         $results = [];
 
@@ -1248,8 +1376,14 @@ if(!function_exists('supportLoad')){
             }
 
             $match = false;
+            $usernameLower = function_exists('mb_strtolower')
+                ? mb_strtolower($username, 'UTF-8')
+                : strtolower($username);
 
-            if(mb_strpos(mb_strtolower($username), $queryLower) !== false){
+            if(
+                (function_exists('mb_strpos') && mb_strpos($usernameLower, $queryLower) !== false)
+                || strpos($usernameLower, $queryLower) !== false
+            ){
                 $match = true;
             }
 
