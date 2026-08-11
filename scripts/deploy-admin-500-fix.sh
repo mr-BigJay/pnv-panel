@@ -14,6 +14,7 @@ mkdir -p "${ROOT}/admin" "${ROOT}/bigjay_controller" "${ROOT}/uploads/avatars"
 # Core admin PHP
 admin_files=(
   "admin/index.php"
+  "admin/admin_nav.php"
   "admin/auth.php"
   "admin/functions.php"
   "admin/payments.php"

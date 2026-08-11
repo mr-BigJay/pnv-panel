@@ -261,6 +261,35 @@ exit;
 }
 
 $page = $_GET['page'] ?? 'dashboard';
+$pnvRootDir = dirname(__DIR__);
+
+foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $__navFile) {
+    if (is_file($__navFile)) {
+        require_once $__navFile;
+        break;
+    }
+}
+
+if(!function_exists('adminBottomNavStyles')){
+    function adminBottomNavStyles(){}
+    function adminBottomNav($options = []){}
+    function adminBottomNavScript(){}
+}
+
+$adminProfileUser = function_exists('pnvAdminUser') ? pnvAdminUser() : '';
+$adminProfileAvatar = '';
+$adminProfileInitial = function_exists('mb_substr')
+    ? mb_strtoupper(mb_substr($adminProfileUser, 0, 1, 'UTF-8'), 'UTF-8')
+    : strtoupper(substr($adminProfileUser, 0, 1));
+$adminProfileApiUrl = pnvAdminUrl('profile-api.php');
+
+if(is_file(__DIR__ . '/../profile_lib.php')){
+    require_once __DIR__ . '/../profile_lib.php';
+}
+
+if(function_exists('profileGetAdminAvatar')){
+    $adminProfileAvatar = profileGetAdminAvatar($adminProfileUser);
+}
 
 $supportActionResult = null;
 
@@ -272,7 +301,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
 $supportActionResult =
 supportProcessAdminActions(
-'../db/support.json',
+$pnvRootDir . '/db/support.json',
 true
 );
 
@@ -288,12 +317,10 @@ exit;
 
 }
 
-$plansFile = '../db/plans.json';
-$cardsFile = '../db/cards.json';
-$usersFile = '../db/users.json';
-$paymentsFile = '../invoices/payments.csv';
-
-require_once __DIR__ . '/../instant_pay_lib.php';
+$plansFile = $pnvRootDir . '/db/plans.json';
+$cardsFile = $pnvRootDir . '/db/cards.json';
+$usersFile = $pnvRootDir . '/db/users.json';
+$paymentsFile = $pnvRootDir . '/invoices/payments.csv';
 
 $plans = file_exists($plansFile)
 ? json_decode(file_get_contents($plansFile),true)
@@ -319,10 +346,24 @@ if(!is_array($users)){
 $users=[];
 }
 
-$payments = instantPayPurgeAndReloadPaymentsCsv($paymentsFile);
+$payments=[];
+
+if(file_exists($paymentsFile)){
+
+$f=fopen($paymentsFile,'r');
+
+while(($d=fgetcsv($f))!==FALSE){
+
+$payments[]=$d;
+
+}
+
+fclose($f);
+
+}
 
 $supportFile =
-"../db/support.json";
+$pnvRootDir . '/db/support.json';
 
 $hasUnreadSupport = false;
 
@@ -334,10 +375,14 @@ $supportData = supportLoad($supportFile);
 
 $hasUnreadSupport = supportAdminHasUnread($supportData);
 
+$supportUnreadCount = supportAdminUnreadTotal($supportData);
+
 }
 
 $hasNewPayments = false;
 $hasNewRenews = false;
+$pendingPaymentsCount = 0;
+$pendingRenewsCount = 0;
 
 foreach($payments as $pay){
 
@@ -350,43 +395,38 @@ trim($pay[9] ?? '');
 if(
 ($type == 'خرید' || $type == '')
 &&
-function_exists('instantPayIsAdminPendingPayment')
+$status != 'تایید شد'
 &&
-instantPayIsAdminPendingPayment($pay)
+$status != 'رد شد'
 ){
 
 $hasNewPayments = true;
+$pendingPaymentsCount++;
 
 }
 
 if(
 $type == 'تمدید'
 &&
-function_exists('instantPayIsAdminPendingPayment')
+$status != 'تایید شد'
 &&
-instantPayIsAdminPendingPayment($pay)
+$status != 'رد شد'
 ){
 
 $hasNewRenews = true;
+$pendingRenewsCount++;
 
 }
 
 }
 
-$today =
-date("Y-m-d");
+$supportUnreadCount = 0;
 
 $todayUsers = 0;
 
 foreach($users as $u){
 
-if(
-isset($u['created_at'])
-&&
-substr($u['created_at'],0,10)
-==
-$today
-){
+if(isset($u['created_at']) && pnvIsTodayTehran($u['created_at'])){
 
 $todayUsers++;
 
@@ -402,21 +442,18 @@ $todayPayments = 0;
 $totalRenews = 0;
 $todayRenews = 0;
 
-$todayShamsi = function_exists('pnvJalaliToday') ? pnvJalaliToday('/') : date('Y/m/d');
+$todayShamsi = pnvJalaliToday('/');
 
 foreach($payments as $pay){
 
     $type =
     trim($pay[9] ?? '');
 
-    $payDate =
-    trim($pay[4] ?? '');
-
     if($type == 'تمدید'){
 
         $totalRenews++;
 
-        if($payDate == $todayShamsi){
+        if(pnvPaymentRowIsToday($pay)){
 
             $todayRenews++;
 
@@ -426,7 +463,7 @@ foreach($payments as $pay){
 
         $totalPayments++;
 
-        if($payDate == $todayShamsi){
+        if(pnvPaymentRowIsToday($pay)){
 
             $todayPayments++;
 
@@ -439,7 +476,7 @@ foreach($payments as $pay){
 $renewsCount = 0;
 
 $renewFile =
-"../db/renews.json";
+$pnvRootDir . '/db/renews.json';
 
 if(file_exists($renewFile)){
 
@@ -601,7 +638,7 @@ $server = $_POST['server'];
 
 move_uploaded_file(
 $_FILES['csv']['tmp_name'],
-'../db/'.$server.'.csv'
+$pnvRootDir . '/db/' . $server . '.csv'
 );
 
 header('Location: ' . pnvAdminUrl('index.php?page=upload'));
@@ -859,7 +896,7 @@ overflow:hidden;
 height:100dvh;
 }
 
-.adminMenuBtn{display:flex;align-items:center;justify-content:center}
+.adminMenuBtn{display:none}
 
 .sidebar{
 position:fixed;
@@ -909,13 +946,148 @@ box-sizing:border-box;
 grid-template-columns:1fr;
 }
 
+.adminProfileCard{
+background:#1e293b;
+padding:14px;
+border-radius:12px;
+margin:18px 0 12px;
+display:flex;
+align-items:center;
+gap:12px;
+}
+
+.adminProfileAvatar{
+width:48px;
+height:48px;
+border-radius:50%;
+background:linear-gradient(135deg,#22c55e,#16a34a);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:18px;
+font-weight:bold;
+flex-shrink:0;
+overflow:hidden;
+}
+
+.adminProfileAvatar img{
+width:100%;
+height:100%;
+object-fit:cover;
+display:block;
+}
+
+.adminProfileMeta{
+flex:1;
+min-width:0;
+}
+
+.adminProfileName{
+font-size:14px;
+font-weight:bold;
+margin-bottom:4px;
+word-break:break-all;
+}
+
+.adminProfileBtn{
+display:inline-block;
+margin-top:6px;
+padding:6px 10px;
+border:none;
+border-radius:8px;
+background:#334155;
+color:#fff;
+font-family:tahoma;
+font-size:12px;
+cursor:pointer;
+}
+
+.adminProfileModal{
+position:fixed;
+inset:0;
+background:rgba(0,0,0,.65);
+display:none;
+align-items:center;
+justify-content:center;
+z-index:9999;
+padding:16px;
+}
+
+.adminProfileModal.is-open{
+display:flex;
+}
+
+.adminProfileModalBox{
+width:100%;
+max-width:360px;
+background:#1e293b;
+border-radius:16px;
+padding:20px;
+color:#fff;
+}
+
+.adminProfileModalBox h3{
+margin:0 0 12px;
+font-size:17px;
+}
+
+.adminProfileModalPreview{
+width:88px;
+height:88px;
+border-radius:50%;
+margin:0 auto 14px;
+background:linear-gradient(135deg,#22c55e,#16a34a);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:28px;
+font-weight:bold;
+overflow:hidden;
+}
+
+.adminProfileModalPreview img{
+width:100%;
+height:100%;
+object-fit:cover;
+display:block;
+}
+
+.adminProfileModalBox input[type=file]{
+width:100%;
+margin:10px 0;
+color:#cbd5e1;
+}
+
+.adminProfileModalActions{
+display:flex;
+gap:8px;
+flex-wrap:wrap;
+}
+
+.adminProfileModalActions button{
+flex:1;
+min-width:120px;
+padding:10px 12px;
+border:none;
+border-radius:10px;
+cursor:pointer;
+font-family:tahoma;
+}
+
+.adminProfileSave{background:#22c55e;color:#052e16}
+.adminProfileRemove{background:#ef4444;color:#fff}
+.adminProfileClose{background:#334155;color:#fff}
+.adminProfileFlash{margin-top:10px;font-size:13px;color:#fca5a5}
+
 }
 
 </style>
 
+<?php adminBottomNavStyles(); ?>
+
 </head>
 
-<body class="<?php echo $page === 'support' ? 'adminPageSupport' : ''; ?>">
+<body class="<?php echo $page === 'support' ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
 
 <button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
 <div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
@@ -1023,6 +1195,20 @@ class="supportMenu">
 آپلود فایل کاربران سرورها
 
 </a>
+
+<div class="adminProfileCard">
+<div class="adminProfileAvatar" id="adminSidebarAvatar">
+<?php if($adminProfileAvatar !== ''){ ?>
+<img src="<?php echo htmlspecialchars('/' . ltrim($adminProfileAvatar, '/'), ENT_QUOTES, 'UTF-8'); ?>" alt="">
+<?php } else { ?>
+<?php echo htmlspecialchars($adminProfileInitial, ENT_QUOTES, 'UTF-8'); ?>
+<?php } ?>
+</div>
+<div class="adminProfileMeta">
+<div class="adminProfileName"><?php echo htmlspecialchars($adminProfileUser, ENT_QUOTES, 'UTF-8'); ?></div>
+<button type="button" class="adminProfileBtn" id="adminProfileOpenBtn">تغییر عکس پروفایل</button>
+</div>
+</div>
 
 <a
 href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?logout=1'), ENT_QUOTES, 'UTF-8'); ?>"
@@ -1206,6 +1392,153 @@ name="uploadcsv">
 
 </div>
 
+<div class="adminProfileModal" id="adminProfileModal">
+<div class="adminProfileModalBox">
+<h3>عکس پروفایل ادمین</h3>
+<div class="adminProfileModalPreview" id="adminProfilePreview">
+<?php if($adminProfileAvatar !== ''){ ?>
+<img src="<?php echo htmlspecialchars('/' . ltrim($adminProfileAvatar, '/'), ENT_QUOTES, 'UTF-8'); ?>" alt="">
+<?php } else { ?>
+<?php echo htmlspecialchars($adminProfileInitial, ENT_QUOTES, 'UTF-8'); ?>
+<?php } ?>
+</div>
+<form id="adminProfileForm" enctype="multipart/form-data">
+<input type="file" name="avatar" id="adminProfileFile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required>
+<div class="adminProfileModalActions">
+<button type="submit" class="adminProfileSave">ذخیره عکس</button>
+<?php if($adminProfileAvatar !== ''){ ?>
+<button type="button" class="adminProfileRemove" id="adminProfileRemoveBtn">حذف عکس</button>
+<?php } ?>
+<button type="button" class="adminProfileClose" id="adminProfileCloseBtn">بستن</button>
+</div>
+<div class="adminProfileFlash" id="adminProfileFlash"></div>
+</form>
+</div>
+</div>
+
+<?php
+$adminBottomActive = in_array($page, ['support', 'renews', 'payments'], true) ? $page : '';
+adminBottomNav([
+    'active' => $adminBottomActive,
+    'more_mode' => 'sidebar',
+    'badges' => [
+        'support' => $supportUnreadCount,
+        'renews' => $pendingRenewsCount,
+        'payments' => $pendingPaymentsCount,
+    ],
+]);
+adminBottomNavScript();
+?>
+
+<script>
+(function(){
+    const openBtn = document.getElementById('adminProfileOpenBtn');
+    const modal = document.getElementById('adminProfileModal');
+    const closeBtn = document.getElementById('adminProfileCloseBtn');
+    const form = document.getElementById('adminProfileForm');
+    const fileInput = document.getElementById('adminProfileFile');
+    const preview = document.getElementById('adminProfilePreview');
+    const sidebarAvatar = document.getElementById('adminSidebarAvatar');
+    const flash = document.getElementById('adminProfileFlash');
+    const removeBtn = document.getElementById('adminProfileRemoveBtn');
+    const apiUrl = <?php echo json_encode($adminProfileApiUrl, JSON_UNESCAPED_UNICODE); ?>;
+    const initial = <?php echo json_encode($adminProfileInitial, JSON_UNESCAPED_UNICODE); ?>;
+
+    if(!openBtn || !modal || !form){
+        return;
+    }
+
+    function setFlash(text){
+        if(flash){
+            flash.textContent = text || '';
+        }
+    }
+
+    function renderAvatar(target, avatarUrl){
+        if(!target){
+            return;
+        }
+        if(avatarUrl){
+            target.innerHTML = '<img src="' + avatarUrl + '" alt="">';
+            return;
+        }
+        target.textContent = initial;
+    }
+
+    function closeModal(){
+        modal.classList.remove('is-open');
+        setFlash('');
+        form.reset();
+    }
+
+    openBtn.addEventListener('click', function(){
+        modal.classList.add('is-open');
+        setFlash('');
+    });
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e){
+        if(e.target === modal){
+            closeModal();
+        }
+    });
+
+    fileInput.addEventListener('change', function(){
+        const file = fileInput.files && fileInput.files[0];
+        if(!file){
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(){
+            preview.innerHTML = '<img src="' + reader.result + '" alt="">';
+        };
+        reader.readAsDataURL(file);
+    });
+
+    form.addEventListener('submit', function(e){
+        e.preventDefault();
+        setFlash('');
+        const file = fileInput.files && fileInput.files[0];
+        if(!file){
+            setFlash('لطفاً یک عکس انتخاب کنید');
+            return;
+        }
+        const body = new FormData();
+        body.append('setavatar', '1');
+        body.append('avatar', file);
+        fetch(apiUrl, {method:'POST', body:body, credentials:'same-origin'})
+            .then(function(res){ return res.json(); })
+            .then(function(data){
+                if(!data || !data.ok){
+                    setFlash((data && data.error) ? data.error : 'ذخیره عکس انجام نشد');
+                    return;
+                }
+                location.reload();
+            })
+            .catch(function(){ setFlash('خطا در ارتباط با سرور'); });
+    });
+
+    if(removeBtn){
+        removeBtn.addEventListener('click', function(){
+            if(!confirm('عکس پروفایل حذف شود؟')){
+                return;
+            }
+            const body = new FormData();
+            body.append('removeavatar', '1');
+            fetch(apiUrl, {method:'POST', body:body, credentials:'same-origin'})
+                .then(function(res){ return res.json(); })
+                .then(function(data){
+                    if(!data || !data.ok){
+                        setFlash((data && data.error) ? data.error : 'حذف عکس انجام نشد');
+                        return;
+                    }
+                    location.reload();
+                })
+                .catch(function(){ setFlash('خطا در ارتباط با سرور'); });
+        });
+    }
+})();
+</script>
+
 <script>
 (function(){
     const menuBtn = document.getElementById('adminMenuBtn');
@@ -1234,7 +1567,7 @@ name="uploadcsv">
 
     const pollUrl = <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>;
 
-    function setUnreadDot(hasUnread){
+    function setUnreadDot(hasUnread, unreadCount){
         let dot = menuLink.querySelector('.notifDot');
 
         if(hasUnread){
@@ -1243,11 +1576,17 @@ name="uploadcsv">
                 dot.className = 'notifDot';
                 menuLink.insertBefore(dot, menuLink.firstChild);
             }
+            if(typeof window.adminBottomNavSetBadge === 'function'){
+                window.adminBottomNavSetBadge('support', unreadCount || 1);
+            }
             return;
         }
 
         if(dot){
             dot.remove();
+        }
+        if(typeof window.adminBottomNavSetBadge === 'function'){
+            window.adminBottomNavSetBadge('support', 0);
         }
     }
 
@@ -1255,7 +1594,7 @@ name="uploadcsv">
         fetch(pollUrl, {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(data){
-                setUnreadDot(!!data.has_unread);
+                setUnreadDot(!!data.has_unread, data.unread_count || 0);
             })
             .catch(function(){});
     }
