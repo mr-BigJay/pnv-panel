@@ -389,12 +389,81 @@ if(!function_exists('telegramConfigPath')){
     }
 
     function telegramBottomMenuLabels(){
+        $buyCount = count(telegramLoadPendingPayments('خرید', 50));
+        $renewCount = count(telegramLoadPendingPayments('تمدید', 50));
+        $msgCount = count(telegramUnreadTickets(50));
+
         return [
-            'messages' => '📨 پیام کاربران',
-            'buys' => '🛒 خریدهای جدید',
-            'renews' => '♻️ تمدیدهای جدید',
+            'messages' => '📨 پیام کاربران' . ($msgCount ? " ({$msgCount})" : ''),
+            'buys' => '🛒 خریدهای جدید' . ($buyCount ? " ({$buyCount})" : ''),
+            'renews' => '♻️ تمدید سرویس' . ($renewCount ? " ({$renewCount})" : ''),
+            'buyreport' => '📊 گزارش خریدها',
+            'renewreport' => '📈 گزارش تمدیدها',
+            'settings' => '⚙️ تنظیمات',
             'home' => '🏠 منوی اصلی'
         ];
+    }
+
+    function telegramBottomMenuButton($text, $fullWidth = false){
+        $text = (string)$text;
+        $width = telegramHomeMenuWidth();
+
+        if($fullWidth){
+            return telegramVisualPad('• ' . $text . ' •', $width);
+        }
+
+        return telegramVisualPad($text, intdiv($width, 2) + 3);
+    }
+
+    function telegramNormalizeMenuText($text){
+        $text = (string)$text;
+        $text = str_replace(telegramInvisiblePadChar(), '', $text);
+        $text = str_replace('•', '', $text);
+
+        return trim(preg_replace('/\s+/u', ' ', $text));
+    }
+
+    function telegramBottomMenuAction($text){
+        $normalized = telegramNormalizeMenuText($text);
+        $labels = telegramBottomMenuLabels();
+
+        foreach($labels as $action => $label){
+            $plain = telegramNormalizeMenuText($label);
+
+            if($normalized === $plain){
+                return $action;
+            }
+        }
+
+        if(strpos($normalized, 'پیام کاربران') !== false){
+            return 'messages';
+        }
+
+        if(strpos($normalized, 'خرید') !== false && strpos($normalized, 'گزارش') === false){
+            return 'buys';
+        }
+
+        if(strpos($normalized, 'تمدید') !== false && strpos($normalized, 'گزارش') === false){
+            return 'renews';
+        }
+
+        if(strpos($normalized, 'گزارش خرید') !== false){
+            return 'buyreport';
+        }
+
+        if(strpos($normalized, 'گزارش تمدید') !== false){
+            return 'renewreport';
+        }
+
+        if(strpos($normalized, 'تنظیمات') !== false){
+            return 'settings';
+        }
+
+        if(strpos($normalized, 'منوی اصلی') !== false || $normalized === '🏠'){
+            return 'home';
+        }
+
+        return '';
     }
 
     function telegramBottomMenuKeyboard(){
@@ -402,28 +471,29 @@ if(!function_exists('telegramConfigPath')){
 
         return json_encode([
             'keyboard' => [
-                [['text' => $labels['messages']]],
+                [['text' => telegramBottomMenuButton($labels['messages'], true)]],
                 [
-                    ['text' => $labels['buys']],
-                    ['text' => $labels['renews']]
+                    ['text' => telegramBottomMenuButton($labels['buys'])],
+                    ['text' => telegramBottomMenuButton($labels['renews'])]
                 ],
-                [['text' => $labels['home']]]
+                [
+                    ['text' => telegramBottomMenuButton($labels['buyreport'])],
+                    ['text' => telegramBottomMenuButton($labels['renewreport'])]
+                ],
+                [
+                    ['text' => telegramBottomMenuButton($labels['settings'])],
+                    ['text' => telegramBottomMenuButton($labels['home'])]
+                ]
             ],
             'resize_keyboard' => true,
             'is_persistent' => true,
             'one_time_keyboard' => false,
-            'input_field_placeholder' => 'پیام یا انتخاب از منو...'
+            'input_field_placeholder' => 'پیام بنویسید یا از منو انتخاب کنید...'
         ], JSON_UNESCAPED_UNICODE);
     }
 
-    function telegramEnsureBottomMenu($chatId, $config = null){
-        $session = telegramGetSession($chatId);
-
-        if(is_array($session) && !empty($session['bottom_menu_set'])){
-            return;
-        }
-
-        $sent = telegramSendMessage($chatId, '📋', [
+    function telegramRefreshBottomMenu($chatId, $config = null){
+        $sent = telegramSendMessage($chatId, telegramInvisiblePadChar(), [
             'reply_markup' => telegramBottomMenuKeyboard(),
             'disable_notification' => true
         ], $config);
@@ -437,7 +507,27 @@ if(!function_exists('telegramConfigPath')){
             ], [], $config);
         }
 
-        telegramUpdateSessionScreen($chatId, ['bottom_menu_set' => true]);
+        telegramApiRequest('setChatMenuButton', [
+            'chat_id' => $chatId,
+            'menu_button' => [
+                'type' => 'commands'
+            ]
+        ], [], $config);
+
+        telegramUpdateSessionScreen($chatId, [
+            'bottom_menu_set' => true,
+            'bottom_menu_at' => time()
+        ]);
+    }
+
+    function telegramEnsureBottomMenu($chatId, $config = null){
+        $session = telegramGetSession($chatId);
+
+        if(is_array($session) && !empty($session['bottom_menu_set'])){
+            return;
+        }
+
+        telegramRefreshBottomMenu($chatId, $config);
     }
 
     // فاصله نامرئی برای پهن‌تر و وسط‌چین شدن دکمه‌ها/متن در کادر تلگرام
@@ -1470,7 +1560,7 @@ if(!function_exists('telegramConfigPath')){
         $id = telegramShowPage(
             $chatId,
             telegramHomeText(),
-            telegramHomeKeyboard(),
+            telegramInline([]),
             $config,
             $messageId
         );
@@ -1481,7 +1571,7 @@ if(!function_exists('telegramConfigPath')){
             'updated_at' => time()
         ]);
 
-        telegramEnsureBottomMenu($chatId, $config);
+        telegramRefreshBottomMenu($chatId, $config);
 
         return $id;
     }
@@ -1786,20 +1876,20 @@ if(!function_exists('telegramConfigPath')){
 
     function telegramSetCommands($config = null){
         return telegramApiRequest('setMyCommands', [
-            'commands' => json_encode([
+            'commands' => [
                 ['command' => 'start', 'description' => '🏠 منوی اصلی'],
                 ['command' => 'messages', 'description' => '📨 پیام کاربران'],
                 ['command' => 'buys', 'description' => '🛒 خریدهای جدید'],
-                ['command' => 'renews', 'description' => '♻️ تمدیدهای جدید']
-            ], JSON_UNESCAPED_UNICODE)
+                ['command' => 'renews', 'description' => '♻️ تمدید سرویس']
+            ]
         ], [], $config);
     }
 
     function telegramSetMenuButton($config = null){
         return telegramApiRequest('setChatMenuButton', [
-            'menu_button' => json_encode([
+            'menu_button' => [
                 'type' => 'commands'
-            ], JSON_UNESCAPED_UNICODE)
+            ]
         ], [], $config);
     }
 
@@ -1907,38 +1997,70 @@ if(!function_exists('telegramConfigPath')){
 
     function telegramHandleAdminText($chatId, $text, $config = null){
         $text = trim((string)$text);
-        $labels = telegramBottomMenuLabels();
         $session = telegramGetSession($chatId);
         $messageId = is_array($session) ? (intval($session['screen_message_id'] ?? 0) ?: null) : null;
 
         telegramEnsureBottomMenu($chatId, $config);
 
-        if($text === '/start' || $text === $labels['home']){
+        if($text === '/start'){
             telegramShowHome($chatId, $config, $messageId);
             return;
         }
 
-        if(
-            $text === '/messages'
-            || $text === 'پیام کاربران'
-            || $text === $labels['messages']
-        ){
+        if($text === '/messages' || $text === 'پیام کاربران'){
             telegramShowMessages($chatId, $config, $messageId);
             return;
         }
 
-        if($text === '/buys' || $text === $labels['buys']){
+        if($text === '/buys'){
             telegramShowPayments($chatId, 'خرید', $config, $messageId);
             return;
         }
 
-        if($text === '/renews' || $text === $labels['renews']){
+        if($text === '/renews'){
             telegramShowPayments($chatId, 'تمدید', $config, $messageId);
             return;
         }
 
         if($text === '/cancel' || $text === 'انصراف'){
             telegramShowMessages($chatId, $config, $messageId);
+            return;
+        }
+
+        $menuAction = telegramBottomMenuAction($text);
+
+        if($menuAction === 'home'){
+            telegramShowHome($chatId, $config, $messageId);
+            return;
+        }
+
+        if($menuAction === 'messages'){
+            telegramShowMessages($chatId, $config, $messageId);
+            return;
+        }
+
+        if($menuAction === 'buys'){
+            telegramShowPayments($chatId, 'خرید', $config, $messageId);
+            return;
+        }
+
+        if($menuAction === 'renews'){
+            telegramShowPayments($chatId, 'تمدید', $config, $messageId);
+            return;
+        }
+
+        if($menuAction === 'buyreport'){
+            telegramShowPaymentReports($chatId, 'خرید', 0, $config, $messageId);
+            return;
+        }
+
+        if($menuAction === 'renewreport'){
+            telegramShowPaymentReports($chatId, 'تمدید', 0, $config, $messageId);
+            return;
+        }
+
+        if($menuAction === 'settings'){
+            telegramShowSettings($chatId, $config, $messageId);
             return;
         }
 
