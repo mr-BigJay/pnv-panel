@@ -34,6 +34,8 @@ $target
 
 echo "OK";
 
+exit;
+
 }else{
 
 echo "<pre>";
@@ -49,6 +51,8 @@ echo "<br>";
 echo "TMP: " . $_FILES['file']['tmp_name'];
 
 exit;
+
+}
 
 }
 
