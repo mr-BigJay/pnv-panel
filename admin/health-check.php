@@ -29,6 +29,7 @@ $files = [
     'bigjay_controller/index.php',
     'bigjay_controller/auth.php',
     'bigjay_controller/functions.php',
+    'profile_lib.php',
     'db/admins.json',
 ];
 

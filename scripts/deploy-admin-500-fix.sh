@@ -9,7 +9,7 @@ echo "=== Deploy full admin panel fix (branch: ${BR}) ==="
 echo "Target: ${ROOT}"
 echo ""
 
-mkdir -p "${ROOT}/admin" "${ROOT}/bigjay_controller"
+mkdir -p "${ROOT}/admin" "${ROOT}/bigjay_controller" "${ROOT}/uploads/avatars"
 
 # Core admin PHP
 admin_files=(
@@ -20,6 +20,7 @@ admin_files=(
   "admin/renews.php"
   "admin/downloads.php"
   "admin/health-check.php"
+  "admin/profile-api.php"
 )
 
 # bigjay_controller wrappers (nginx blocks /admin/ direct access)
@@ -31,6 +32,7 @@ wrapper_files=(
   "bigjay_controller/renews.php"
   "bigjay_controller/downloads.php"
   "bigjay_controller/health-check.php"
+  "bigjay_controller/profile-api.php"
   "bigjay_controller/sw-cleanup.js"
 )
 
@@ -38,6 +40,7 @@ wrapper_files=(
 root_files=(
   "pnv_date_bootstrap.php"
   "date_lib.php"
+  "profile_lib.php"
 )
 
 fetch_file(){
@@ -58,7 +61,7 @@ for rel in "${wrapper_files[@]}"; do
   echo "-> ${dest}"
   if ! curl -fsSL "${BASE}/${rel}" -o "${dest}" 2>/dev/null; then
     case "$rel" in
-      bigjay_controller/index.php|bigjay_controller/auth.php|bigjay_controller/functions.php|bigjay_controller/payments.php|bigjay_controller/renews.php|bigjay_controller/downloads.php|bigjay_controller/health-check.php)
+      bigjay_controller/index.php|bigjay_controller/auth.php|bigjay_controller/functions.php|bigjay_controller/payments.php|bigjay_controller/renews.php|bigjay_controller/downloads.php|bigjay_controller/health-check.php|bigjay_controller/profile-api.php)
         echo "   (inline wrapper fallback)"
         cat > "$dest" <<PHP
 <?php
