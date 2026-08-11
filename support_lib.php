@@ -1006,6 +1006,7 @@ if(!function_exists('supportLoad')){
                     $text = trim($_POST['message'] ?? '');
                 }
                 $user = $_POST['user'] ?? '';
+                $edited = false;
 
                 foreach($data as $i => $ticket){
 
@@ -1018,14 +1019,18 @@ if(!function_exists('supportLoad')){
                         if(($msg['id'] ?? '') === $id){
                             $data[$i]['messages'][$j]['text'] = $text;
                             $data[$i]['messages'][$j]['edited'] = true;
+                            $edited = true;
                         }
 
                     }
 
                 }
 
-                supportSave($file, $data);
-                $redirect = supportAdminUrl($user, $embedded);
+                if($edited){
+                    supportSave($file, $data);
+                    $redirect = supportAdminUrl($user, $embedded);
+                }
+
             }
 
         }

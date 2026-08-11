@@ -88,6 +88,36 @@
         });
     }
 
+    function bindComposerFocus(textarea, form){
+        if(!textarea){ return; }
+
+        function focusComposer(){
+            setTimeout(function(){
+                textarea.focus();
+                const len = textarea.value.length;
+                try{
+                    textarea.setSelectionRange(len, len);
+                }catch(err){}
+            }, 0);
+        }
+
+        try{
+            if(sessionStorage.getItem('pnvSupportFocusComposer') === '1'){
+                sessionStorage.removeItem('pnvSupportFocusComposer');
+            }
+        }catch(err){}
+
+        focusComposer();
+
+        if(form){
+            form.addEventListener('submit', function(){
+                try{
+                    sessionStorage.setItem('pnvSupportFocusComposer', '1');
+                }catch(err){}
+            });
+        }
+    }
+
     function ensureOverlay(){
         let root = document.getElementById('supportUiOverlay');
         if(root){ return root; }
@@ -428,12 +458,97 @@
             form.insertBefore(replyChip, form.firstChild);
         }
 
+        let editInput = form.querySelector('input[name="edit_id"]');
+        if(!editInput){
+            editInput = document.createElement('input');
+            editInput.type = 'hidden';
+            editInput.name = 'edit_id';
+            form.appendChild(editInput);
+        }
+
+        let editTextInput = form.querySelector('input[name="edit_text"]');
+        if(!editTextInput){
+            editTextInput = document.createElement('input');
+            editTextInput.type = 'hidden';
+            editTextInput.name = 'edit_text';
+            form.appendChild(editTextInput);
+        }
+
+        let editChip = form.querySelector('.supportEditChip');
+        if(!editChip){
+            editChip = document.createElement('div');
+            editChip.className = 'supportEditChip';
+            editChip.hidden = true;
+            form.insertBefore(editChip, replyChip.nextSibling || form.firstChild);
+        }
+
+        const composerTextarea = form.querySelector('textarea');
+        let editingBubble = null;
+
         function closeSheet(){
             sheet.hidden = true;
             sheet.innerHTML = '';
         }
 
+        function clearEditHighlight(){
+            if(editingBubble){
+                editingBubble.classList.remove('is-editing');
+                editingBubble = null;
+            }
+        }
+
+        function clearEdit(clearTextarea){
+            editInput.value = '';
+            editTextInput.value = '';
+            editChip.hidden = true;
+            editChip.innerHTML = '';
+            clearEditHighlight();
+            if(clearTextarea && composerTextarea){
+                composerTextarea.value = '';
+                composerTextarea.dispatchEvent(new Event('input', {bubbles:true}));
+            }
+        }
+
+        function setEdit(msgId, text){
+            setReply('', '');
+            if(!msgId){
+                clearEdit(true);
+                return;
+            }
+
+            editInput.value = msgId;
+            editTextInput.value = '';
+            clearEditHighlight();
+
+            editChip.hidden = false;
+            editChip.innerHTML =
+                '<div><small>در حال ویرایش</small><div>'+escapeHtml(text || '')+'</div></div>' +
+                '<button type="button" class="supportEditClear">×</button>';
+            editChip.querySelector('.supportEditClear').onclick = function(){
+                clearEdit(true);
+                if(composerTextarea){ composerTextarea.focus(); }
+            };
+
+            const bubble = chatEl.querySelector('[data-msg-id="'+CSS.escape(msgId)+'"]');
+            if(bubble){
+                bubble.classList.add('is-editing');
+                editingBubble = bubble;
+                bubble.scrollIntoView({block:'nearest', behavior:'smooth'});
+            }
+
+            if(composerTextarea){
+                composerTextarea.value = text || '';
+                composerTextarea.dispatchEvent(new Event('input', {bubbles:true}));
+                composerTextarea.focus();
+                const len = composerTextarea.value.length;
+                try{
+                    composerTextarea.setSelectionRange(len, len);
+                }catch(err){}
+            }
+        }
+
         function setReply(msgId, preview){
+            clearEdit(false);
             replyInput.value = msgId || '';
             if(!msgId){
                 replyChip.hidden = true;
@@ -514,18 +629,8 @@
                         return;
                     }
                     if(act === 'edit'){
-                        const next = window.prompt('متن جدید پیام:', text);
-                        if(next === null){ return; }
-                        const f = document.createElement('form');
-                        f.method = 'POST';
-                        f.innerHTML =
-                            '<input type="hidden" name="csrf" value="'+escapeHtml(getCsrf(form))+'">' +
-                            '<input type="hidden" name="edit_id" value="'+escapeHtml(msgId)+'">' +
-                            '<input type="hidden" name="user" value="'+escapeHtml((form.querySelector('input[name="user"]')||{}).value || '')+'">' +
-                            '<input type="hidden" name="edit_text" value="">';
-                        f.querySelector('input[name="edit_text"]').value = next;
-                        document.body.appendChild(f);
-                        f.submit();
+                        setEdit(msgId, text || '');
+                        return;
                     }
                 };
             });
@@ -580,6 +685,22 @@
         sheet.addEventListener('click', function(e){
             if(e.target === sheet){ closeSheet(); }
         });
+
+        form.addEventListener('submit', function(){
+            if((editInput.value || '').trim() && composerTextarea){
+                editTextInput.value = (composerTextarea.value || '').trim();
+            }
+        });
+
+        if(composerTextarea){
+            composerTextarea.addEventListener('keydown', function(e){
+                if(e.key === 'Escape' && (editInput.value || '').trim()){
+                    e.preventDefault();
+                    clearEdit(true);
+                    composerTextarea.focus();
+                }
+            });
+        }
     }
 
     function buildAvatarNode(msg){
@@ -708,6 +829,7 @@
         bindTextareaGrow: bindTextareaGrow,
         bindEnterToSend: bindEnterToSend,
         bindFormGuard: bindFormGuard,
+        bindComposerFocus: bindComposerFocus,
         bindImageAttach: bindImageAttach,
         bindMessageActions: bindMessageActions,
         initPolling: initPolling,

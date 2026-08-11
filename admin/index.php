@@ -182,7 +182,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
 $supportActionResult =
 supportProcessAdminActions(
-'../db/support.json',
+__DIR__ . '/../db/support.json',
 true
 );
 
@@ -244,7 +244,7 @@ fclose($f);
 }
 
 $supportFile =
-"../db/support.json";
+__DIR__ . '/../db/support.json';
 
 $hasUnreadSupport = false;
 
