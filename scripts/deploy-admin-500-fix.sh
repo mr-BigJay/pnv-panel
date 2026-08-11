@@ -49,7 +49,13 @@ fetch_file(){
   local dest="${ROOT}/${rel}"
   mkdir -p "$(dirname "$dest")"
   echo "-> ${dest}"
-  curl -fsSL "${BASE}/${rel}" -o "${dest}"
+  if ! curl -fsSL "${BASE}/${rel}" -o "${dest}" 2>/dev/null; then
+    echo "WARNING: could not fetch ${rel} — keeping existing file if present"
+    if [[ ! -f "$dest" ]]; then
+      echo "ERROR: ${rel} missing and no local copy"
+      exit 1
+    fi
+  fi
 }
 
 for rel in "${root_files[@]}" "${admin_files[@]}"; do
