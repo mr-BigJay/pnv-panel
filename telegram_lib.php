@@ -492,10 +492,144 @@ if(!function_exists('telegramConfigPath')){
         ], JSON_UNESCAPED_UNICODE);
     }
 
-    function telegramBottomMenuMarkupArray(){
-        $decoded = json_decode(telegramBottomMenuKeyboard(), true);
+    function telegramReplyKeyboard($rows, $placeholder = 'پیام بنویسید یا از منو انتخاب کنید...'){
+        return [
+            'keyboard' => $rows,
+            'resize_keyboard' => true,
+            'is_persistent' => true,
+            'one_time_keyboard' => false,
+            'input_field_placeholder' => $placeholder
+        ];
+    }
 
-        return is_array($decoded) ? $decoded : [];
+    function telegramMainMenuRows(){
+        $labels = telegramBottomMenuLabels();
+
+        return [
+            [[telegramBottomMenuButton($labels['messages'], true)]],
+            [
+                [telegramBottomMenuButton($labels['buys'])],
+                [telegramBottomMenuButton($labels['renews'])]
+            ],
+            [
+                [telegramBottomMenuButton($labels['buyreport'])],
+                [telegramBottomMenuButton($labels['renewreport'])]
+            ],
+            [
+                [telegramBottomMenuButton($labels['settings'])],
+                [telegramBottomMenuButton($labels['home'])]
+            ]
+        ];
+    }
+
+    function telegramMainReplyKeyboard(){
+        return telegramReplyKeyboard(telegramMainMenuRows());
+    }
+
+    function telegramMessagesReplyKeyboard($items){
+        $rows = [];
+
+        foreach(array_slice($items, 0, 8) as $item){
+            $name = trim((string)($item['username'] ?? '-'));
+            $label = (!empty($item['unread']) ? '● ' : '') . $name;
+            $rows[] = [[telegramBottomMenuButton(telegramLimitText($label, 36), true)]];
+        }
+
+        $labels = telegramBottomMenuLabels();
+        $rows[] = [[telegramBottomMenuButton($labels['home'], true)]];
+
+        return telegramReplyKeyboard(
+            $rows,
+            count($items) > 0 ? 'کاربر را از کیبورد پایین انتخاب کنید...' : 'از منوی پایین استفاده کنید...'
+        );
+    }
+
+    function telegramPaymentsReplyKeyboard($items, $kind){
+        $rows = [];
+
+        foreach(array_slice($items, 0, 6) as $item){
+            $label = trim(($item['username'] ?? '-') . ' | ' . telegramLimitText($item['plan'] ?? '', 18));
+            $rows[] = [[telegramBottomMenuButton(telegramLimitText($label, 36), true)]];
+        }
+
+        $labels = telegramBottomMenuLabels();
+        $rows[] = [
+            [telegramBottomMenuButton($kind === 'تمدید' ? $labels['renewreport'] : $labels['buyreport'])],
+            [telegramBottomMenuButton($labels['home'])]
+        ];
+
+        return telegramReplyKeyboard(
+            $rows,
+            count($items) > 0 ? 'مورد را از کیبورد پایین انتخاب کنید...' : 'از منوی پایین استفاده کنید...'
+        );
+    }
+
+    function telegramPaymentDetailReplyKeyboard($kind){
+        $labels = telegramBottomMenuLabels();
+        $backLabel = $kind === 'تمدید' ? $labels['renews'] : $labels['buys'];
+
+        return telegramReplyKeyboard([
+            [
+                [telegramBottomMenuButton('✅ تایید')],
+                [telegramBottomMenuButton('⛔ رد')]
+            ],
+            [
+                [telegramBottomMenuButton($backLabel)],
+                [telegramBottomMenuButton($labels['home'])]
+            ]
+        ], 'تایید یا رد را از کیبورد پایین بزنید...');
+    }
+
+    function telegramChatReplyKeyboard($username){
+        $labels = telegramBottomMenuLabels();
+        $user = telegramLimitText(trim((string)$username), 24);
+
+        return telegramReplyKeyboard([
+            [[telegramBottomMenuButton('✍️ پاسخ به ' . $user, true)]],
+            [
+                [telegramBottomMenuButton($labels['messages'])],
+                [telegramBottomMenuButton($labels['home'])]
+            ]
+        ], 'گفتگو را در چت می‌بینید؛ اقدام از کیبورد پایین...');
+    }
+
+    function telegramReplyModeReplyKeyboard($username){
+        $labels = telegramBottomMenuLabels();
+
+        return telegramReplyKeyboard([
+            [[telegramBottomMenuButton('↩️ انصراف')]],
+            [[telegramBottomMenuButton($labels['home'], true)]]
+        ], 'پاسخ را بنویسید و ارسال کنید...');
+    }
+
+    function telegramMatchListSelection($text, $items, $labelBuilder){
+        $normalized = telegramNormalizeMenuText($text);
+
+        if($normalized === ''){
+            return -1;
+        }
+
+        foreach($items as $index => $item){
+            $label = telegramNormalizeMenuText($labelBuilder($item, $index));
+
+            if($normalized === $label || strpos($normalized, $label) !== false){
+                return $index;
+            }
+        }
+
+        foreach($items as $index => $item){
+            $username = trim((string)($item['username'] ?? ''));
+
+            if($username !== '' && strpos($normalized, $username) !== false){
+                return $index;
+            }
+        }
+
+        return -1;
+    }
+
+    function telegramBottomMenuMarkupArray(){
+        return telegramMainReplyKeyboard();
     }
 
     function telegramApplyMenuButton($chatId, $config = null){
@@ -508,17 +642,7 @@ if(!function_exists('telegramConfigPath')){
     }
 
     function telegramRefreshBottomMenu($chatId, $config = null){
-        telegramApplyMenuButton($chatId, $config);
-
-        telegramSendMessage($chatId, telegramInvisiblePadChar(), [
-            'reply_markup' => telegramBottomMenuMarkupArray(),
-            'disable_notification' => true
-        ], $config);
-
-        telegramUpdateSessionScreen($chatId, [
-            'bottom_menu_set' => true,
-            'bottom_menu_at' => time()
-        ]);
+        telegramSetReplyKeyboard($chatId, telegramMainReplyKeyboard(), $config);
     }
 
     function telegramEnsureBottomMenu($chatId, $config = null){
@@ -529,6 +653,36 @@ if(!function_exists('telegramConfigPath')){
         }
 
         telegramRefreshBottomMenu($chatId, $config);
+    }
+
+    function telegramClearInlineMarkup($chatId, $messageId, $config = null){
+        if(intval($messageId) <= 0){
+            return;
+        }
+
+        telegramApiRequest('editMessageReplyMarkup', [
+            'chat_id' => $chatId,
+            'message_id' => intval($messageId),
+            'reply_markup' => ['inline_keyboard' => []]
+        ], [], $config);
+    }
+
+    function telegramSetReplyKeyboard($chatId, $markup, $config = null){
+        if(!is_array($markup)){
+            $markup = telegramMainReplyKeyboard();
+        }
+
+        telegramApplyMenuButton($chatId, $config);
+
+        telegramSendMessage($chatId, telegramInvisiblePadChar(), [
+            'reply_markup' => $markup,
+            'disable_notification' => true
+        ], $config);
+
+        telegramUpdateSessionScreen($chatId, [
+            'bottom_menu_set' => true,
+            'bottom_menu_at' => time()
+        ]);
     }
 
     // فاصله نامرئی برای پهن‌تر و وسط‌چین شدن دکمه‌ها/متن در کادر تلگرام
@@ -853,7 +1007,7 @@ if(!function_exists('telegramConfigPath')){
         $id = telegramShowPage(
             $chatId,
             telegramSettingsText(),
-            telegramSettingsKeyboard(),
+            telegramMainReplyKeyboard(),
             $config,
             $messageId
         );
@@ -872,7 +1026,7 @@ if(!function_exists('telegramConfigPath')){
         }
 
         if($source === 'unread'){
-            return "📨 پیام کاربران\n\n" . count($items) . " پیام خوانده‌نشده\nکاربر را انتخاب کنید:";
+            return "📨 پیام کاربران\n\n" . count($items) . " پیام خوانده‌نشده\nاز کیبورد پایین کاربر را انتخاب کنید:";
         }
 
         return "📨 پیام کاربران\n\nپیام خوانده‌نشده‌ای نیست.\nآخرین گفتگوها:";
@@ -935,89 +1089,60 @@ if(!function_exists('telegramConfigPath')){
         telegramSetSession($chatId, array_merge($session, $patch, ['updated_at' => time()]));
     }
 
-    function telegramShowPage($chatId, $text, $keyboard, $config = null, $messageId = null){
-        $extra = ['reply_markup' => $keyboard];
+    function telegramShowPage($chatId, $text, $replyKeyboard, $config = null, $messageId = null){
+        if(is_string($replyKeyboard)){
+            $decoded = json_decode($replyKeyboard, true);
+
+            if(is_array($decoded) && isset($decoded['inline_keyboard'])){
+                $replyKeyboard = telegramMainReplyKeyboard();
+            }
+            elseif(is_array($decoded)){
+                $replyKeyboard = $decoded;
+            }
+        }
+
+        if(!is_array($replyKeyboard)){
+            $replyKeyboard = telegramMainReplyKeyboard();
+        }
+
         $session = telegramGetSession($chatId);
         $oldScreenId = is_array($session) ? intval($session['screen_message_id'] ?? 0) : 0;
         $messageId = $messageId ? intval($messageId) : 0;
+        $screenId = 0;
+        $editCandidates = array_values(array_unique(array_filter([$messageId, $oldScreenId])));
 
-        $tryEdit = function($editId) use ($chatId, $text, $extra, $keyboard, $config){
-            if($editId <= 0){
-                return 0;
-            }
-
-            $edited = telegramEditMessage($chatId, $editId, $text, $extra, $config);
+        foreach($editCandidates as $editId){
+            $edited = telegramEditMessage($chatId, $editId, $text, [], $config);
 
             if(empty($edited['ok'])){
-                return 0;
+                continue;
             }
 
-            telegramApiRequest('editMessageReplyMarkup', [
-                'chat_id' => $chatId,
-                'message_id' => intval($editId),
-                'reply_markup' => $keyboard
-            ], [], $config);
-
-            telegramUpdateSessionScreen($chatId, [
-                'screen_message_id' => intval($editId)
-            ]);
-
-            return intval($editId);
-        };
-
-        // اول همان پیام فعلی را ویرایش کن تا منوی قبلی بالای چت نماند
-        $editedId = $tryEdit($messageId);
-
-        if($editedId > 0){
-            if($oldScreenId > 0 && $oldScreenId !== $editedId){
-                telegramDeleteMessage($chatId, $oldScreenId, $config);
-            }
-
-            telegramEnsureBottomMenu($chatId, $config);
-
-            return $editedId;
+            telegramClearInlineMarkup($chatId, $editId, $config);
+            $screenId = intval($editId);
+            break;
         }
 
-        // اگر پیام callback قابل ویرایش نبود، صفحه فعال قبلی را جایگزین کن
-        if($oldScreenId > 0 && $oldScreenId !== $messageId){
-            $editedId = $tryEdit($oldScreenId);
-
-            if($editedId > 0){
-                if($messageId > 0){
-                    telegramDeleteMessage($chatId, $messageId, $config);
-                }
-
-                telegramEnsureBottomMenu($chatId, $config);
-
-                return $editedId;
-            }
+        if($screenId <= 0){
+            $sent = telegramSendMessage($chatId, $text, [], $config);
+            $screenId = intval($sent['result']['message_id'] ?? 0);
         }
 
-        $sent = telegramSendMessage($chatId, $text, $extra, $config);
-        $newId = intval($sent['result']['message_id'] ?? 0);
-
-        telegramEnsureBottomMenu($chatId, $config);
-
-        // منو/صفحه قبلی را حذف کن تا ربات شلوغ نشود
-        foreach([$oldScreenId, $messageId] as $obsoleteId){
-            if($obsoleteId > 0 && $obsoleteId !== $newId){
+        foreach($editCandidates as $obsoleteId){
+            if($obsoleteId > 0 && $obsoleteId !== $screenId){
                 telegramDeleteMessage($chatId, $obsoleteId, $config);
             }
         }
 
-        if($newId > 0){
+        if($screenId > 0){
             telegramUpdateSessionScreen($chatId, [
-                'screen_message_id' => $newId
+                'screen_message_id' => $screenId
             ]);
-
-            telegramApiRequest('editMessageReplyMarkup', [
-                'chat_id' => $chatId,
-                'message_id' => $newId,
-                'reply_markup' => $keyboard
-            ], [], $config);
         }
 
-        return $newId;
+        telegramSetReplyKeyboard($chatId, $replyKeyboard, $config);
+
+        return $screenId;
     }
 
     function telegramPaymentsListText($kind, $items){
@@ -1084,40 +1209,49 @@ if(!function_exists('telegramConfigPath')){
         return '•';
     }
 
-    function telegramReportListKeyboard($kind, $pageData){
-        $key = $kind === 'تمدید' ? 'renew' : 'buy';
-        $backMenu = $kind === 'تمدید' ? 'menu:renews' : 'menu:buys';
-        $page = intval($pageData['page'] ?? 0);
-        $pages = intval($pageData['pages'] ?? 1);
-        $items = $pageData['items'] ?? [];
-        $rows = [telegramBackRow($backMenu)];
+    function telegramReportsReplyKeyboard($items, $kind, $pageData){
+        $rows = [];
+        $labels = telegramBottomMenuLabels();
+        $backLabel = $kind === 'تمدید' ? $labels['renews'] : $labels['buys'];
 
-        foreach($items as $i => $item){
+        foreach(array_slice($items, 0, 6) as $item){
             $icon = telegramReportStatusIcon($item['status'] ?? '');
-            $label = $icon . ' ' . ($item['username'] ?? '-') . ' | ' . telegramLimitText($item['plan'] ?? '', 20);
-            $rows[] = [[
-                'text' => telegramLimitText($label, 60),
-                'callback_data' => 'ritem:' . $key . ':' . $i
-            ]];
+            $label = $icon . ' ' . ($item['username'] ?? '-') . ' | ' . telegramLimitText($item['plan'] ?? '', 16);
+            $rows[] = [[telegramBottomMenuButton(telegramLimitText($label, 36), true)]];
         }
 
+        $page = intval($pageData['page'] ?? 0);
+        $pages = intval($pageData['pages'] ?? 1);
         $nav = [];
 
         if($page > 0){
-            $nav[] = ['text' => '◀️ قبلی', 'callback_data' => 'rlist:' . $key . ':' . ($page - 1)];
+            $nav[] = telegramBottomMenuButton('◀️ قبلی');
         }
 
         if($page < $pages - 1){
-            $nav[] = ['text' => 'بعدی ▶️', 'callback_data' => 'rlist:' . $key . ':' . ($page + 1)];
+            $nav[] = telegramBottomMenuButton('بعدی ▶️');
         }
 
         if(count($nav) > 0){
             $rows[] = $nav;
         }
 
-        $rows[] = telegramBackRow($backMenu);
+        $rows[] = [
+            [telegramBottomMenuButton($backLabel)],
+            [telegramBottomMenuButton($labels['home'])]
+        ];
 
-        return telegramInline($rows);
+        return telegramReplyKeyboard($rows, 'گزارش را از کیبورد پایین انتخاب کنید...');
+    }
+
+    function telegramReportDetailReplyKeyboard($kind){
+        $labels = telegramBottomMenuLabels();
+        $backLabel = $kind === 'تمدید' ? $labels['renewreport'] : $labels['buyreport'];
+
+        return telegramReplyKeyboard([
+            [[telegramBottomMenuButton($backLabel, true)]],
+            [[telegramBottomMenuButton($labels['home'], true)]]
+        ]);
     }
 
     function telegramReportDetailKeyboard($kind, $page = 0){
@@ -1144,7 +1278,7 @@ if(!function_exists('telegramConfigPath')){
         $id = telegramShowPage(
             $chatId,
             telegramPaymentsListText($kind, $items),
-            telegramPaymentsListKeyboard($kind, $items),
+            telegramPaymentsReplyKeyboard($items, $kind),
             $config,
             $messageId
         );
@@ -1171,7 +1305,7 @@ if(!function_exists('telegramConfigPath')){
         $id = telegramShowPage(
             $chatId,
             telegramReportListText($kind, $pageData),
-            telegramReportListKeyboard($kind, $pageData),
+            telegramReportsReplyKeyboard($pageData['items'] ?? [], $kind, $pageData),
             $config,
             $messageId
         );
@@ -1214,7 +1348,7 @@ if(!function_exists('telegramConfigPath')){
         $id = telegramShowPage(
             $chatId,
             telegramFormatPaymentDetail($items[$index], $kind, true),
-            telegramReportDetailKeyboard($kind, $page),
+            telegramReportDetailReplyKeyboard($kind),
             $config,
             $messageId
         );
@@ -1255,7 +1389,7 @@ if(!function_exists('telegramConfigPath')){
         $id = telegramShowPage(
             $chatId,
             telegramFormatPaymentDetail($items[$index], $kind),
-            telegramPaymentDetailKeyboard($kind, $csvIndex),
+            telegramPaymentDetailReplyKeyboard($kind),
             $config,
             $messageId
         );
@@ -1265,6 +1399,8 @@ if(!function_exists('telegramConfigPath')){
             'screen_message_id' => $id,
             'payment_kind' => $kind,
             'payment_items' => $items,
+            'payment_index' => $index,
+            'payment_csv_index' => $csvIndex,
             'updated_at' => time()
         ]);
 
@@ -1557,69 +1693,28 @@ if(!function_exists('telegramConfigPath')){
 
     function telegramShowHome($chatId, $config = null, $messageId = null){
         $session = telegramGetSession($chatId);
-        $oldScreenId = is_array($session) ? intval($session['screen_message_id'] ?? 0) : 0;
 
         if(!$messageId && is_array($session)){
             $messageId = intval($session['screen_message_id'] ?? 0) ?: null;
         }
 
-        $messageId = $messageId ? intval($messageId) : 0;
-        $text = telegramHomeText();
-        $menuMarkup = telegramBottomMenuMarkupArray();
-
-        telegramApplyMenuButton($chatId, $config);
-
-        $screenId = 0;
-        $editCandidates = array_values(array_unique(array_filter([$messageId, $oldScreenId])));
-
-        foreach($editCandidates as $editId){
-            $edited = telegramEditMessage($chatId, $editId, $text, [], $config);
-
-            if(empty($edited['ok'])){
-                continue;
-            }
-
-            telegramApiRequest('editMessageReplyMarkup', [
-                'chat_id' => $chatId,
-                'message_id' => intval($editId),
-                'reply_markup' => ['inline_keyboard' => []]
-            ], [], $config);
-
-            $screenId = intval($editId);
-            break;
-        }
-
-        if($screenId <= 0){
-            $sent = telegramSendMessage($chatId, $text, [
-                'reply_markup' => $menuMarkup
-            ], $config);
-            $screenId = intval($sent['result']['message_id'] ?? 0);
-        }
-        else{
-            telegramRefreshBottomMenu($chatId, $config);
-        }
-
-        foreach($editCandidates as $obsoleteId){
-            if($obsoleteId > 0 && $obsoleteId !== $screenId){
-                telegramDeleteMessage($chatId, $obsoleteId, $config);
-            }
-        }
-
-        if($screenId <= 0){
-            telegramRefreshBottomMenu($chatId, $config);
-            $session = telegramGetSession($chatId);
-            $screenId = is_array($session) ? intval($session['screen_message_id'] ?? 0) : 0;
-        }
+        $id = telegramShowPage(
+            $chatId,
+            telegramHomeText(),
+            telegramMainReplyKeyboard(),
+            $config,
+            $messageId
+        );
 
         telegramSetSession($chatId, [
             'screen' => 'home',
-            'screen_message_id' => $screenId,
+            'screen_message_id' => $id,
             'updated_at' => time(),
             'bottom_menu_set' => true,
             'bottom_menu_at' => time()
         ]);
 
-        return $screenId;
+        return $id;
     }
 
     function telegramShowMessages($chatId, $config = null, $messageId = null){
@@ -1640,7 +1735,7 @@ if(!function_exists('telegramConfigPath')){
         $id = telegramShowPage(
             $chatId,
             telegramMessagesText($items, $source),
-            telegramMessagesKeyboard($items),
+            telegramMessagesReplyKeyboard($items),
             $config,
             $messageId
         );
@@ -1648,6 +1743,7 @@ if(!function_exists('telegramConfigPath')){
         telegramSetSession($chatId, [
             'screen' => 'messages',
             'screen_message_id' => $id,
+            'message_items' => $items,
             'updated_at' => time()
         ]);
 
@@ -1666,7 +1762,7 @@ if(!function_exists('telegramConfigPath')){
         $id = telegramShowPage(
             $chatId,
             $pageText,
-            telegramChatKeyboard($username),
+            telegramChatReplyKeyboard($username),
             $config,
             $messageId
         );
@@ -1690,8 +1786,8 @@ if(!function_exists('telegramConfigPath')){
 
         $id = telegramShowPage(
             $chatId,
-            "✍️ پاسخ به {$username}\n\nمتن پاسخ را همین‌جا بنویسید.",
-            telegramReplyPageKeyboard($username),
+            "✍️ پاسخ به {$username}\n\nمتن پاسخ را بنویسید و ارسال کنید.",
+            telegramReplyModeReplyKeyboard($username),
             $config,
             $messageId
         );
@@ -2068,7 +2164,7 @@ if(!function_exists('telegramConfigPath')){
             return;
         }
 
-        if($text === '/cancel' || $text === 'انصراف'){
+        if($text === '/cancel'){
             telegramShowMessages($chatId, $config, $messageId);
             return;
         }
@@ -2111,6 +2207,111 @@ if(!function_exists('telegramConfigPath')){
         }
 
         $session = telegramGetSession($chatId);
+        $screen = is_array($session) ? ($session['screen'] ?? '') : '';
+        $normalized = telegramNormalizeMenuText($text);
+
+        if($normalized === '↩️ انصراف' || $text === '/cancel' || $text === 'انصراف'){
+            if($screen === 'reply'){
+                $username = trim((string)($session['username'] ?? ''));
+                if($username !== ''){
+                    telegramShowChat($chatId, $username, $config, $messageId);
+                    return;
+                }
+            }
+
+            telegramShowMessages($chatId, $config, $messageId);
+            return;
+        }
+
+        if(strpos($normalized, '✍️ پاسخ') === 0){
+            $username = trim((string)($session['username'] ?? ''));
+
+            if($username === '' && preg_match('/✍️\s*پاسخ به\s+(.+)$/u', $normalized, $m)){
+                $username = trim($m[1]);
+            }
+
+            if($username !== ''){
+                telegramShowReply($chatId, $username, $config, $messageId);
+                return;
+            }
+        }
+
+        if($screen === 'messages'){
+            $items = is_array($session['message_items'] ?? null) ? $session['message_items'] : [];
+            $index = telegramMatchListSelection($text, $items, function($item){
+                $name = trim((string)($item['username'] ?? '-'));
+                return (!empty($item['unread']) ? '● ' : '') . $name;
+            });
+
+            if($index >= 0){
+                telegramShowChat($chatId, trim((string)($items[$index]['username'] ?? '')), $config, $messageId);
+                return;
+            }
+        }
+
+        if($screen === 'buys' || $screen === 'renews'){
+            $items = is_array($session['payment_items'] ?? null) ? $session['payment_items'] : [];
+            $kind = ($screen === 'renews') ? 'تمدید' : 'خرید';
+            $index = telegramMatchListSelection($text, $items, function($item){
+                return trim(($item['username'] ?? '-') . ' | ' . ($item['plan'] ?? ''));
+            });
+
+            if($index >= 0){
+                telegramShowPaymentDetail($chatId, $kind, $index, $config, $messageId);
+                return;
+            }
+        }
+
+        if($screen === 'buy_report' || $screen === 'renew_report'){
+            $items = is_array($session['report_items'] ?? null) ? $session['report_items'] : [];
+            $kind = ($screen === 'renew_report') ? 'تمدید' : 'خرید';
+            $page = intval($session['report_page'] ?? 0);
+
+            if(strpos($normalized, 'قبلی') !== false){
+                telegramShowPaymentReports($chatId, $kind, max(0, $page - 1), $config, $messageId);
+                return;
+            }
+
+            if(strpos($normalized, 'بعدی') !== false){
+                telegramShowPaymentReports($chatId, $kind, $page + 1, $config, $messageId);
+                return;
+            }
+
+            $index = telegramMatchListSelection($text, $items, function($item){
+                $icon = telegramReportStatusIcon($item['status'] ?? '');
+                return $icon . ' ' . ($item['username'] ?? '-') . ' | ' . ($item['plan'] ?? '');
+            });
+
+            if($index >= 0){
+                telegramShowPaymentReportDetail($chatId, $kind, $index, $config, $messageId);
+                return;
+            }
+        }
+
+        if($screen === 'payment_detail'){
+            $kind = ($session['payment_kind'] ?? 'خرید');
+            $csvIndex = intval($session['payment_csv_index'] ?? -1);
+            $prefix = ($kind === 'تمدید') ? 'renew' : 'buy';
+
+            if(strpos($normalized, 'تایید') !== false && function_exists('telegramHandleXuiCallback')){
+                telegramHandleXuiCallback('xuiok:' . $prefix . ':' . $csvIndex, $chatId, intval($messageId ?? 0), $config);
+                return;
+            }
+
+            if(strpos($normalized, 'رد') !== false && function_exists('telegramHandleXuiCallback')){
+                telegramHandleXuiCallback('xuino:' . $prefix . ':' . $csvIndex, $chatId, intval($messageId ?? 0), $config);
+                return;
+            }
+        }
+
+        if($screen === 'chat'){
+            $username = trim((string)($session['username'] ?? ''));
+
+            if($username !== '' && strpos($normalized, 'پاسخ') !== false){
+                telegramShowReply($chatId, $username, $config, $messageId);
+                return;
+            }
+        }
 
         if(is_array($session) && (($session['mode'] ?? '') === 'reply' || ($session['screen'] ?? '') === 'reply')){
             $username = trim((string)($session['username'] ?? ''));
@@ -2121,7 +2322,7 @@ if(!function_exists('telegramConfigPath')){
                 telegramShowPage(
                     $chatId,
                     'ثبت پاسخ ناموفق بود: ' . ($result['error'] ?? 'خطای نامشخص'),
-                    telegramReplyPageKeyboard($username),
+                    telegramReplyModeReplyKeyboard($username),
                     $config,
                     $messageId
                 );
@@ -2131,7 +2332,7 @@ if(!function_exists('telegramConfigPath')){
             telegramShowPage(
                 $chatId,
                 "✅ پاسخ برای {$username} ثبت شد.",
-                telegramChatKeyboard($username),
+                telegramChatReplyKeyboard($username),
                 $config,
                 $messageId
             );
