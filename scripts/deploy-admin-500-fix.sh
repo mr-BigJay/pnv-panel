@@ -19,6 +19,7 @@ admin_files=(
   "admin/payments.php"
   "admin/renews.php"
   "admin/downloads.php"
+  "admin/health-check.php"
 )
 
 # bigjay_controller wrappers (nginx blocks /admin/ direct access)
@@ -29,6 +30,7 @@ wrapper_files=(
   "bigjay_controller/payments.php"
   "bigjay_controller/renews.php"
   "bigjay_controller/downloads.php"
+  "bigjay_controller/health-check.php"
   "bigjay_controller/sw-cleanup.js"
 )
 
@@ -56,7 +58,7 @@ for rel in "${wrapper_files[@]}"; do
   echo "-> ${dest}"
   if ! curl -fsSL "${BASE}/${rel}" -o "${dest}" 2>/dev/null; then
     case "$rel" in
-      bigjay_controller/index.php|bigjay_controller/auth.php|bigjay_controller/functions.php|bigjay_controller/payments.php|bigjay_controller/renews.php|bigjay_controller/downloads.php)
+      bigjay_controller/index.php|bigjay_controller/auth.php|bigjay_controller/functions.php|bigjay_controller/payments.php|bigjay_controller/renews.php|bigjay_controller/downloads.php|bigjay_controller/health-check.php)
         echo "   (inline wrapper fallback)"
         cat > "$dest" <<PHP
 <?php
