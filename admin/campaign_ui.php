@@ -87,6 +87,7 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignItemMessage{font-size:12px;color:#94a3b8;line-height:1.8;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .campaignItemBadges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 @media(max-width:640px){body.campaignAdmin{padding:12px 10px 24px}.campaignGrid2{grid-template-columns:1fr}.campaignItemMeta{grid-template-columns:1fr}}
+body.campaignAdmin.adminHasBottomNav{padding-bottom:calc(84px + env(safe-area-inset-bottom,0))}
 .campaignDateInput{cursor:pointer}
 .jdp-container{z-index:1000}
 body.campaignAdmin .jdp-container{background:#1f2937;border:1px solid #334155;border-radius:16px;color:#f8fafc;box-shadow:0 16px 40px rgba(0,0,0,.35);font-family:tahoma,system-ui,sans-serif}
@@ -206,6 +207,22 @@ jalaliDatepicker.startWatch({
             . '" value="'
             . htmlspecialchars($value, ENT_QUOTES, 'UTF-8')
             . '" autocomplete="off" inputmode="numeric">';
+    }
+
+    function campaignAdminBottomNavHead(){
+        if(function_exists('adminBottomNavStyles')){
+            adminBottomNavStyles();
+        }
+    }
+
+    function campaignAdminBottomNavFoot(){
+        if(function_exists('adminBottomNav')){
+            adminBottomNav(['active' => 'campaigns', 'more_mode' => 'sheet']);
+        }
+
+        if(function_exists('adminBottomNavScript')){
+            adminBottomNavScript();
+        }
     }
 
 }
