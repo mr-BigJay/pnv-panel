@@ -351,9 +351,25 @@ if(!function_exists('supportLoad')){
             ];
         }
 
+        supportEnsureTehranTimezone();
+
+        if(function_exists('pnvFormatJalaliDate')){
+            $date = pnvFormatJalaliDate($timestamp, '/');
+        }
+        else{
+            $date = date('Y/m/d', $timestamp);
+        }
+
+        if(function_exists('pnvFormatTehranTime')){
+            $time = pnvFormatTehranTime($timestamp, false);
+        }
+        else{
+            $time = date('H:i', $timestamp);
+        }
+
         return [
-            'date' => pnvFormatJalaliDate($timestamp, '/'),
-            'time' => pnvFormatTehranTime($timestamp, false)
+            'date' => $date,
+            'time' => $time
         ];
     }
 

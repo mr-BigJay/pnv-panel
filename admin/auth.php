@@ -119,3 +119,5 @@ function pnvAdminUrl($path = 'index.php'){
     return $base . '/' . ltrim($path, '/');
 
 }
+
+require_once dirname(__DIR__) . '/pnv_date_bootstrap.php';

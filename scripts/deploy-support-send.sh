@@ -9,6 +9,7 @@ echo "=== Deploy support stack (branch: ${BR}) ==="
 echo "Target: ${ROOT}"
 
 files=(
+  "admin/auth.php"
   "admin/index.php"
   "admin/support.php"
   "admin/support-api.php"

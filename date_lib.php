@@ -11,6 +11,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         }
     }
 
+}
+
+if(!function_exists('pnvGregorianToJalali')){
+
     function pnvGregorianToJalali($gy, $gm, $gd){
         $gy = intval($gy);
         $gm = intval($gm);
@@ -41,6 +45,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         return [$jy, $jm, $jd];
     }
 
+}
+
+if(!function_exists('pnvDigitsToLatin')){
+
     function pnvDigitsToLatin($value){
         return strtr((string)$value, [
             '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
@@ -49,6 +57,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
             '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
         ]);
     }
+
+}
+
+if(!function_exists('pnvFormatJalaliDate')){
 
     function pnvFormatJalaliDate($timestamp = null, $separator = '/'){
         pnvEnsureTehranTimezone();
@@ -73,6 +85,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         return sprintf('%04d%s%02d%s%02d', $jy, $separator, $jm, $separator, $jd);
     }
 
+}
+
+if(!function_exists('pnvFormatTehranTime')){
+
     function pnvFormatTehranTime($timestamp = null, $withSeconds = false){
         pnvEnsureTehranTimezone();
 
@@ -90,9 +106,17 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         return date($withSeconds ? 'H:i:s' : 'H:i', $timestamp);
     }
 
+}
+
+if(!function_exists('pnvJalaliToday')){
+
     function pnvJalaliToday($separator = '/'){
         return pnvFormatJalaliDate(time(), $separator);
     }
+
+}
+
+if(!function_exists('pnvNowParts')){
 
     function pnvNowParts(){
         pnvEnsureTehranTimezone();
@@ -105,6 +129,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
             'datetime' => pnvFormatJalaliDate($now, '/') . ' ' . pnvFormatTehranTime($now, false),
         ];
     }
+
+}
+
+if(!function_exists('pnvParseDateTimeToTimestamp')){
 
     function pnvParseDateTimeToTimestamp($value){
         pnvEnsureTehranTimezone();
@@ -122,9 +150,17 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         return $ts ? intval($ts) : 0;
     }
 
+}
+
+if(!function_exists('pnvIsGregorianYear')){
+
     function pnvIsGregorianYear($year){
         return intval($year) >= 1700;
     }
+
+}
+
+if(!function_exists('pnvFormatStoredDate')){
 
     function pnvFormatStoredDate($dateStr, $timestamp = 0){
         $timestamp = intval($timestamp);
@@ -155,6 +191,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         return $dateStr;
     }
 
+}
+
+if(!function_exists('pnvFormatStoredTime')){
+
     function pnvFormatStoredTime($timeStr, $timestamp = 0){
         $timestamp = intval($timestamp);
 
@@ -165,6 +205,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         $timeStr = trim(pnvDigitsToLatin((string)$timeStr));
         return $timeStr !== '' ? $timeStr : '-';
     }
+
+}
+
+if(!function_exists('pnvFormatPaymentRowDateTime')){
 
     function pnvFormatPaymentRowDateTime($row){
         if(!is_array($row)){
@@ -178,6 +222,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
             'time' => pnvFormatStoredTime($row[5] ?? '', $timestamp),
         ];
     }
+
+}
+
+if(!function_exists('pnvFormatUserCreatedAt')){
 
     function pnvFormatUserCreatedAt($value){
         $value = trim((string)$value);
@@ -194,6 +242,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
 
         return pnvFormatStoredDate($value);
     }
+
+}
+
+if(!function_exists('pnvIsTodayTehran')){
 
     function pnvIsTodayTehran($timestampOrString){
         pnvEnsureTehranTimezone();
@@ -212,6 +264,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         return date('Y-m-d', $ts) === date('Y-m-d');
     }
 
+}
+
+if(!function_exists('pnvPaymentRowIsToday')){
+
     function pnvPaymentRowIsToday($row){
         if(!is_array($row)){
             return false;
@@ -227,5 +283,6 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         return ($formatted['date'] ?? '') === pnvJalaliToday('/');
     }
 
-    pnvEnsureTehranTimezone();
 }
+
+pnvEnsureTehranTimezone();
