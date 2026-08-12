@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>منوی بیشتر موبایل — تک‌ستونه چپ</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px 12px 36px;background:#0b1220;font-family:tahoma,system-ui,sans-serif;color:#e2e8f0;direction:rtl}
+.intro{text-align:center;margin-bottom:24px}
+.intro h1{margin:0 0 8px;font-size:20px}
+.intro p{margin:0;font-size:13px;color:#94a3b8;line-height:1.9}
+.grid{display:flex;flex-direction:column;gap:28px;max-width:390px;margin:0 auto}
+.mockLabel{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.mockLabel span{display:inline-flex;padding:4px 10px;border-radius:999px;background:rgba(52,211,153,.14);color:#6ee7b7;font-size:11px;font-weight:700}
+.mockLabel small{font-size:11px;color:#64748b}
+.mockTitle{margin:0 0 4px;font-size:15px;font-weight:700}
+.mockDesc{margin:0 0 12px;font-size:12px;color:#94a3b8;line-height:1.7}
+
+/* phone frame */
+.phone{background:#171f2e;border:1px solid #334155;border-radius:32px;padding:10px 8px 8px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.notch{width:36%;height:5px;background:#334155;border-radius:999px;margin:0 auto 8px}
+.screen{position:relative;background:#0f172a;border-radius:24px;overflow:hidden;height:640px}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:4}
+.contentGhost{position:absolute;inset:0;padding:16px 16px 70px;opacity:.25;z-index:1}
+.ghost{height:12px;background:#334155;border-radius:8px;margin-bottom:10px}
+.ghost.w70{width:70%}.ghost.w50{width:50%}.ghost.w90{width:90%}
+
+/* left drawer — mobile single column */
+.drawer{position:absolute;top:0;bottom:0;left:0;width:min(82vw,320px);background:#1e293b;border-right:1px solid #334155;box-shadow:10px 0 40px rgba(0,0,0,.5);z-index:10;display:flex;flex-direction:column;animation:slideIn .35s ease}
+@keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+.head{flex-shrink:0;padding:16px 16px 12px;border-bottom:1px solid #334155;background:#1a2332}
+.headRow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.head h2{margin:0;font-size:16px;font-weight:700;color:#f8fafc}
+.head p{margin:6px 0 0;font-size:11px;color:#64748b;line-height:1.6}
+.closeBtn{width:36px;height:36px;border:none;border-radius:12px;background:#242d3d;color:#cbd5e1;font-size:20px;line-height:1}
+.scroll{flex:1;overflow-y:auto;padding:8px 12px 12px;-webkit-overflow-scrolling:touch}
+.scroll::-webkit-scrollbar{width:3px}
+.scroll::-webkit-scrollbar-thumb{background:#475569;border-radius:999px}
+.foot{flex-shrink:0;padding:10px 12px 14px;border-top:1px solid #334155;background:#1a2332}
+
+.bottomNav{position:absolute;left:0;right:0;bottom:0;height:58px;background:#111827;border-top:1px solid #334155;display:flex;z-index:2}
+.bn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;color:#94a3b8}
+.bn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+.bnMore{width:26%;border-right:1px solid #1e293b;color:#34d399;font-weight:700}
+
+/* A: icon row single column */
+.row{display:flex;align-items:center;gap:12px;width:100%;padding:13px 12px;margin-bottom:6px;border-radius:14px;background:#141b26;border:1px solid #334155;text-decoration:none;color:#f8fafc}
+.row svg{width:20px;height:20px;stroke:#34d399;fill:none;stroke-width:1.8;flex-shrink:0}
+.row span{font-size:14px;font-weight:600;flex:1;text-align:right}
+.row .chev{color:#64748b;font-size:16px}
+.row.is-active{border-color:#34d399;background:rgba(52,211,153,.1);color:#6ee7b7}
+.row.is-danger{border-color:#7f1d1d;background:#450a0a;color:#fecaca}
+.row.is-danger svg{stroke:#fca5a5}
+.section{font-size:11px;color:#64748b;font-weight:700;padding:10px 6px 6px}
+
+/* B: taller rows with subtitle */
+.rowT{display:block;width:100%;padding:14px 14px;margin-bottom:8px;border-radius:16px;background:#141b26;border:1px solid #334155;text-decoration:none;color:#f8fafc}
+.rowT strong{display:block;font-size:14px;margin-bottom:4px}
+.rowT em{display:block;font-style:normal;font-size:11px;color:#64748b;line-height:1.5}
+.rowT.is-active{border-color:#34d399;background:rgba(52,211,153,.08)}
+.rowT.is-danger{background:#450a0a;border-color:#7f1d1d}.rowT.is-danger strong{color:#fecaca}
+
+/* C: minimal line list */
+.line{display:block;width:100%;padding:14px 10px;border-bottom:1px solid #243044;text-decoration:none;color:#e2e8f0;font-size:14px;font-weight:500}
+.line.is-active{color:#34d399;font-weight:700;background:rgba(52,211,153,.06)}
+.line.is-danger{color:#fca5a5}
+.logoutBtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:14px;background:#450a0a;border:1px solid #7f1d1d;color:#fecaca;font-size:14px;font-weight:700;text-decoration:none}
+
+.scrollHint{text-align:center;font-size:10px;color:#64748b;padding:8px 0;border-bottom:1px dashed #334155;margin-bottom:4px}
+.fade{position:absolute;bottom:58px;left:0;width:min(82vw,320px);height:28px;background:linear-gradient(transparent,#1e293b);pointer-events:none;z-index:11}
+</style>
+</head>
+<body>
+
+<div class="intro">
+<h1>منوی «بیشتر» — موبایل تک‌ستونه</h1>
+<p>با کلیک «بیشتر»، ستون از <strong>سمت چپ</strong> باز می‌شود.<br>همه آیتم‌ها <strong>تک‌ستون</strong> و لیست <strong>اسکرول</strong> دارد.</p>
+</div>
+
+<div class="grid">
+
+<!-- A -->
+<section>
+<div class="mockLabel"><span>طرح A</span><small>موبایل</small></div>
+<h3 class="mockTitle">ردیف آیکون + عنوان</h3>
+<p class="mockDesc">ساده و سریع — هر آیتم یک ردیف تمام‌عرض با آیکون سبز.</p>
+<div class="phone"><div class="notch"></div><div class="screen">
+<div class="contentGhost"><div class="ghost w70"></div><div class="ghost w90"></div><div class="ghost w50"></div></div>
+<div class="dim"></div>
+<div class="drawer">
+<div class="head"><div class="headRow"><div><h2>منوی بیشتر</h2><p>تک‌ستون · اسکرول</p></div><button class="closeBtn">×</button></div></div>
+<div class="scroll">
+<p class="section">مدیریت</p>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3"/></svg><span>داشبورد</span><span class="chev">‹</span></a>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>کاربران</span><span class="chev">‹</span></a>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg><span>پلن‌ها</span><span class="chev">‹</span></a>
+<a class="row is-active" href="#"><svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 010 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 010-4V9z"/></svg><span>کمپین‌ها</span><span class="chev">‹</span></a>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/></svg><span>کارت‌ها</span><span class="chev">‹</span></a>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/></svg><span>دانلودها</span><span class="chev">‹</span></a>
+<p class="section">ابزار</p>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>تلگرام</span><span class="chev">‹</span></a>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>بله</span><span class="chev">‹</span></a>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>3x-ui</span><span class="chev">‹</span></a>
+<a class="row" href="#"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/></svg><span>آپلود CSV</span><span class="chev">‹</span></a>
+</div>
+<div class="foot"><a class="logoutBtn" href="#">خروج از پنل</a></div>
+</div>
+<div class="fade"></div>
+<div class="bottomNav"><div class="bn"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg>پیام‌ها</div><div class="bn"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-3-6.7"/></svg>تمدید</div><div class="bn"><svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/></svg>خرید</div><div class="bnMore"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>بیشتر</div></div>
+</div></div>
+</section>
+
+<!-- B -->
+<section>
+<div class="mockLabel"><span>طرح B</span><small>موبایل</small></div>
+<h3 class="mockTitle">ردیف بلند + زیرنویس</h3>
+<p class="mockDesc">هر آیتم یک کارت تمام‌عرض با توضیح کوتاه — برای راهنمایی بهتر.</p>
+<div class="phone"><div class="notch"></div><div class="screen">
+<div class="dim"></div>
+<div class="drawer">
+<div class="head"><div class="headRow"><div><h2>منوی بیشتر</h2><p>لیست تک‌ستونه</p></div><button class="closeBtn">×</button></div></div>
+<div class="scroll">
+<div class="scrollHint">▼ برای دیدن همه، اسکرول کنید</div>
+<a class="rowT" href="#"><strong>داشبورد</strong><em>آمار کلی پنل مدیریت</em></a>
+<a class="rowT" href="#"><strong>کاربران</strong><em>لیست و مدیریت حساب‌ها</em></a>
+<a class="rowT" href="#"><strong>پلن‌ها</strong><em>تعرفه و محدودیت حجم</em></a>
+<a class="rowT is-active" href="#"><strong>کمپین‌ها</strong><em>کد تخفیف و پیام داشبورد</em></a>
+<a class="rowT" href="#"><strong>کارت‌ها</strong><em>کارت‌های بانکی دریافت</em></a>
+<a class="rowT" href="#"><strong>دانلودها</strong><em>فایل‌ها و لینک‌ها</em></a>
+<a class="rowT" href="#"><strong>تلگرام</strong><em>ربات و اعلان پرداخت</em></a>
+<a class="rowT" href="#"><strong>بله</strong><em>ربات پیام‌رسان بله</em></a>
+<a class="rowT" href="#"><strong>3x-ui</strong><em>مدیریت سرورها</em></a>
+<a class="rowT" href="#"><strong>آپلود CSV</strong><em>ورود دسته‌ای کاربر</em></a>
+<a class="rowT is-danger" href="#"><strong>خروج</strong><em>پایان نشست مدیریت</em></a>
+</div>
+</div>
+<div class="bottomNav"><div class="bn">پیام‌ها</div><div class="bn">تمدید</div><div class="bn">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</section>
+
+<!-- C -->
+<section>
+<div class="mockLabel"><span>طرح C</span><small>موبایل</small></div>
+<h3 class="mockTitle">لیست مینیمال خطی</h3>
+<p class="mockDesc">ساده‌ترین حالت — فقط متن تک‌ستونه، خروج ثابت پایین.</p>
+<div class="phone"><div class="notch"></div><div class="screen">
+<div class="dim"></div>
+<div class="drawer">
+<div class="head"><div class="headRow"><div><h2>بخش‌های پنل</h2></div><button class="closeBtn">×</button></div></div>
+<div class="scroll">
+<a class="line" href="#">داشبورد</a>
+<a class="line" href="#">کاربران</a>
+<a class="line" href="#">پلن‌ها</a>
+<a class="line is-active" href="#">کمپین‌ها</a>
+<a class="line" href="#">کارت‌ها</a>
+<a class="line" href="#">دانلودها</a>
+<a class="line" href="#">تلگرام</a>
+<a class="line" href="#">بله</a>
+<a class="line" href="#">3x-ui</a>
+<a class="line" href="#">آپلود CSV</a>
+</div>
+<div class="foot"><a class="logoutBtn" href="#">خروج</a></div>
+</div>
+<div class="bottomNav"><div class="bn">پیام‌ها</div><div class="bn">تمدید</div><div class="bn">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</section>
+
+</div>
+</body>
+</html>
