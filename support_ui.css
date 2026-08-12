@@ -717,15 +717,19 @@ overflow:hidden;
 }
 
 .supportChatTop{
+flex:0 0 auto;
 flex-shrink:0;
-position:relative;
-z-index:6;
+position:sticky;
+top:0;
+z-index:12;
 background:var(--msg-panel);
 border-bottom:1px solid var(--msg-border);
+padding-top:env(safe-area-inset-top,0);
 }
 
 .supportChatTop .msgHeader{
 border-bottom:none;
+flex-shrink:0;
 }
 
 .supportProfileBar{
@@ -1178,6 +1182,12 @@ display:none;
 
 .supportPage.chat-active .supportChatbox{
 display:flex;
+min-height:0;
+overflow:hidden;
+}
+
+.supportChatbox .supportChatTop{
+width:100%;
 }
 
 .supportBackBtn{
