@@ -14,13 +14,17 @@ files=(
   "admin/support-api.php"
   "admin/support-users-api.php"
   "admin/support-diagnose.php"
+  "admin/support-debug.php"
   "support_lib.php"
   "support_ui.css"
   "support_ui.js"
   "profile_lib.php"
+  "bigjay_controller/index.php"
+  "bigjay_controller/support.php"
   "bigjay_controller/support-api.php"
   "bigjay_controller/support-users-api.php"
   "bigjay_controller/support-diagnose.php"
+  "bigjay_controller/support-debug.php"
 )
 
 for rel in "${files[@]}"; do
@@ -57,3 +61,4 @@ echo "1) Hard refresh: Ctrl+F5"
 echo "2) Open: https://panel.ticketin.ir/bigjay_controller/index.php?page=support"
 echo "3) Diagnose: https://panel.ticketin.ir/bigjay_controller/support-diagnose.php"
 echo "4) Force merge: https://panel.ticketin.ir/bigjay_controller/support-diagnose.php?merge=1"
+echo "5) Deep debug: https://panel.ticketin.ir/bigjay_controller/support-debug.php"
