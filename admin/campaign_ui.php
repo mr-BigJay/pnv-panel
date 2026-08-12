@@ -76,6 +76,16 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignMoreBtn svg{display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:4px}
 .campaignHidden{display:none}
 .campaignBack{display:block;margin-top:8px;padding:14px;border-radius:14px;background:#242d3d;color:#fff;text-decoration:none;text-align:center;font-size:14px}
+.campaignPreviewBox{margin-top:10px;padding:14px;border:1px solid #334155;border-radius:14px;background:#141b26;line-height:1.9}
+.campaignPreviewBox strong{display:block;margin-bottom:6px;font-size:15px;color:#f8fafc}
+.campaignPreviewBox.is-info{border-color:#38bdf8}.campaignPreviewBox.is-success{border-color:#34d399}
+.campaignPreviewBox.is-warning{border-color:#f59e0b}.campaignPreviewBox.is-special{border-color:#a855f7}
+.campaignBadge.is-info{background:rgba(56,189,248,.16);color:#7dd3fc}
+.campaignBadge.is-success{background:rgba(52,211,153,.16);color:#6ee7b7}
+.campaignBadge.is-warning{background:rgba(245,158,11,.16);color:#fcd34d}
+.campaignBadge.is-special{background:rgba(168,85,247,.16);color:#d8b4fe}
+.campaignItemMessage{font-size:12px;color:#94a3b8;line-height:1.8;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.campaignItemBadges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 @media(max-width:640px){body.campaignAdmin{padding:12px 10px 24px}.campaignGrid2{grid-template-columns:1fr}.campaignItemMeta{grid-template-columns:1fr}}
 .campaignDateInput{cursor:pointer}
 .jdp-container{z-index:1000}
@@ -132,6 +142,10 @@ body.campaignAdmin .jdp-container .jdp-icon-plus,body.campaignAdmin .jdp-contain
 
     function campaignIconSearch(){
         return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+    }
+
+    function campaignIconMessage(){
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/></svg>';
     }
 
     function campaignJalaliDatePickerHead(){
