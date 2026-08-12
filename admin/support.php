@@ -174,7 +174,13 @@ if(!$supportEmbedded){
 
 <header class="msgHeader">
 <button type="button" class="supportBackBtn" id="supportBackBtn">← لیست</button>
-<?php echo supportRenderConvAvatarHtml($currentUser); ?>
+<?php
+try{
+    echo supportRenderConvAvatarHtml($currentUser);
+}catch(Throwable $e){
+    echo '<div class="msgAvatar">' . supportSafeHtml(supportUserInitial($currentUser)) . '</div>';
+}
+?>
 <div class="msgHeaderInfo">
 <h2><?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?></h2>
 <p>پاسخ به کاربر</p>
