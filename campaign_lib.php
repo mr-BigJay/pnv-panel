@@ -20,18 +20,78 @@ if(!function_exists('campaignDataPath')){
     }
 
     function campaignJsonWrite($name, $data){
+        if(!campaignEnsureDataStore($name)){
+            return false;
+        }
+
+        $path = campaignDataPath($name);
+        $json = json_encode(array_values($data), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        if($json === false){
+            return false;
+        }
+
+        $tmp = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
+        $written = file_put_contents($tmp, $json, LOCK_EX);
+
+        if($written === false){
+            @unlink($tmp);
+            return false;
+        }
+
+        if(!@rename($tmp, $path)){
+            @unlink($tmp);
+            return false;
+        }
+
+        @chmod($path, 0664);
+        return true;
+    }
+
+    function campaignEnsureDataStore($name){
         $path = campaignDataPath($name);
         $dir = dirname($path);
 
         if(!is_dir($dir)){
-            mkdir($dir, 0755, true);
+            if(!@mkdir($dir, 0775, true) && !is_dir($dir)){
+                return false;
+            }
+            @chmod($dir, 0775);
         }
 
-        file_put_contents(
-            $path,
-            json_encode(array_values($data), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-            LOCK_EX
-        );
+        if(!is_file($path)){
+            if(@file_put_contents($path, "[]\n", LOCK_EX) === false){
+                return false;
+            }
+            @chmod($path, 0664);
+        }
+
+        if(is_writable($path)){
+            return true;
+        }
+
+        @chmod($path, 0664);
+
+        if(is_writable($path)){
+            return true;
+        }
+
+        return is_writable($dir);
+    }
+
+    function campaignJsonWriteErrorMessage($name){
+        $path = campaignDataPath($name);
+        $dir = dirname($path);
+
+        if(!is_dir($dir)){
+            return 'پوشه db وجود ندارد یا قابل ساخت نیست';
+        }
+
+        if(!is_writable($dir) && (!is_file($path) || !is_writable($path))){
+            return 'دسترسی نوشتن روی db/discount_codes.json وجود ندارد. مالکیت فایل را به کاربر وب‌سرور (مثلاً www-data) بدهید.';
+        }
+
+        return 'خطا در ذخیره‌سازی فایل داده';
     }
 
     function campaignJsonUpdateLocked($name, $mutator){
@@ -140,7 +200,7 @@ if(!function_exists('campaignDataPath')){
     }
 
     function campaignDiscountCodesSave($rows){
-        campaignJsonWrite('discount_codes', $rows);
+        return campaignJsonWrite('discount_codes', $rows);
     }
 
     function campaignDiscountUsagesLoad(){
@@ -148,7 +208,7 @@ if(!function_exists('campaignDataPath')){
     }
 
     function campaignDiscountUsagesSave($rows){
-        campaignJsonWrite('discount_code_usages', $rows);
+        return campaignJsonWrite('discount_code_usages', $rows);
     }
 
     function campaignFindDiscountById($rows, $id){

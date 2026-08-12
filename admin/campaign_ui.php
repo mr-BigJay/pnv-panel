@@ -46,6 +46,7 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignToggle input:checked + .campaignToggleTrack::after{transform:translateX(-20px)}
 .campaignSubmit{width:100%;margin-top:4px;padding:14px;border:none;border-radius:14px;background:#34d399;color:#052e16;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer}
 .campaignFlash{margin-bottom:12px;padding:12px 14px;border-radius:14px;background:#713f12;color:#fde68a;font-size:13px;line-height:1.7}
+.campaignFlash.is-success{background:#14532d;color:#bbf7d0}
 .campaignSearchRow{display:flex;gap:8px;margin-bottom:14px}
 .campaignSearchWrap{flex:1;position:relative}
 .campaignSearchWrap svg{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:#64748b}

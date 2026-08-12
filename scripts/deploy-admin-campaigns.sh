@@ -36,11 +36,19 @@ done
 
 for name in discount_codes discount_code_usages dashboard_announcements dashboard_announcement_reads; do
   dest="${ROOT}/db/${name}.json"
+  mkdir -p "${ROOT}/db"
   if [[ ! -f "$dest" ]]; then
     echo '[]' > "$dest"
     echo "  INIT db/${name}.json"
   fi
+  chmod 664 "$dest" 2>/dev/null || true
 done
+
+chmod 775 "${ROOT}/db" 2>/dev/null || true
+
+if id www-data >/dev/null 2>&1; then
+  chown www-data:www-data "${ROOT}/db" "${ROOT}/db/"*.json 2>/dev/null || true
+fi
 
 echo ""
 echo "Done. Admin: /bigjay_controller/campaigns.php"

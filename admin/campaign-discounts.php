@@ -7,8 +7,13 @@ require_once __DIR__ . '/../campaign_lib.php';
 
 pnvAdminRequireAuth();
 
+campaignEnsureDataStore('discount_codes');
+campaignEnsureDataStore('discount_code_usages');
+
 $codes = campaignDiscountCodesLoad();
 $flash = '';
+$flashOk = isset($_GET['saved']) && ($_GET['saved'] ?? '') === '1';
+$savedCode = trim((string)($_GET['code'] ?? ''));
 $editId = trim((string)($_GET['edit'] ?? ''));
 $editRow = null;
 
@@ -53,6 +58,12 @@ if(isset($_POST['save_discount'])){
 
     if($code === ''){
         $flash = 'کد الزامی است';
+    }
+    elseif($value <= 0){
+        $flash = 'مقدار تخفیف باید بیشتر از صفر باشد';
+    }
+    elseif($type === 'percent' && $value > 100){
+        $flash = 'درصد تخفیف نمی‌تواند بیشتر از ۱۰۰ باشد';
     }
     else{
         $codes = campaignDiscountCodesLoad();
@@ -109,9 +120,16 @@ if(isset($_POST['save_discount'])){
             }
 
             if($flash === ''){
-                campaignDiscountCodesSave($codes);
-                header('Location: ' . pnvAdminUrl('campaign-discounts.php'));
-                exit;
+                if(!campaignDiscountCodesSave($codes)){
+                    $flash = campaignJsonWriteErrorMessage('discount_codes');
+                }
+                else{
+                    header(
+                        'Location: '
+                        . pnvAdminUrl('campaign-discounts.php?saved=1&code=' . urlencode($code))
+                    );
+                    exit;
+                }
             }
         }
     }
@@ -137,9 +155,13 @@ if(isset($_GET['delete'])){
     $codes = array_values(array_filter(campaignDiscountCodesLoad(), function($row) use ($deleteId){
         return ($row['id'] ?? '') !== $deleteId;
     }));
-    campaignDiscountCodesSave($codes);
-    header('Location: ' . pnvAdminUrl('campaign-discounts.php'));
-    exit;
+    if(!campaignDiscountCodesSave($codes)){
+        $flash = campaignJsonWriteErrorMessage('discount_codes');
+    }
+    else{
+        header('Location: ' . pnvAdminUrl('campaign-discounts.php?deleted=1'));
+        exit;
+    }
 }
 
 $codes = campaignDiscountCodesLoad();
@@ -217,6 +239,7 @@ $isActive = ($editRow['status'] ?? 'active') === 'active';
 <span class="campaignCardIcon"><?php echo campaignIconTicket(); ?></span>
 </div>
 
+<?php if($flashOk){ ?><div class="campaignFlash is-success">کد <?php echo htmlspecialchars($savedCode !== '' ? $savedCode : 'تخفیف', ENT_QUOTES, 'UTF-8'); ?> با موفقیت ذخیره شد</div><?php } ?>
 <?php if($flash !== ''){ ?><div class="campaignFlash"><?php echo htmlspecialchars($flash, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
 
 <form method="POST" id="discountForm">
