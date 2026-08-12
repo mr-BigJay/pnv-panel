@@ -163,17 +163,12 @@ exit;
 
 $page = $_GET['page'] ?? 'dashboard';
 
-foreach([__DIR__ . '/admin_nav.php', dirname(__DIR__) . '/admin/admin_nav.php'] as $__navFile){
-    if(is_file($__navFile)){
-        require_once $__navFile;
-        break;
-    }
-}
+require_once __DIR__ . '/admin_nav.php';
 
-if(!function_exists('adminBottomNavStyles')){
-    function adminBottomNavStyles(){}
-    function adminBottomNav($options = []){}
-    function adminBottomNavScript(){}
+$adminBodyClass = ($page === 'support') ? 'adminPageSupport' : 'adminHasBottomNav';
+
+if($page === 'support' && trim((string)($_GET['user'] ?? '')) !== ''){
+    $adminBodyClass .= ' chat-active';
 }
 
 require_once __DIR__ . '/../profile_lib.php';
@@ -967,6 +962,38 @@ box-sizing:border-box;
 grid-template-columns:1fr;
 }
 
+.adminBottomNav{
+display:block !important;
+position:fixed;
+left:0;
+right:0;
+bottom:0;
+z-index:9999;
+background:#111827;
+border-top:1px solid #334155;
+padding-bottom:env(safe-area-inset-bottom,0);
+}
+
+body.adminHasBottomNav{
+padding-bottom:84px;
+}
+
+body.adminHasBottomNav .content{
+padding-bottom:84px;
+}
+
+body.adminPageSupport.chat-active .adminBottomNav{
+display:none !important;
+}
+
+body.adminPageSupport.chat-active{
+padding-bottom:0;
+}
+
+body.adminPageSupport:not(.chat-active) .adminBottomNav{
+display:block !important;
+}
+
 }
 
 </style>
@@ -975,7 +1002,8 @@ grid-template-columns:1fr;
 
 </head>
 
-<body class="<?php echo $page === 'support' ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
+<body class="<?php echo htmlspecialchars($adminBodyClass, ENT_QUOTES, 'UTF-8'); ?>">
+<!-- pnv-admin-nav-v4 -->
 
 <button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
 <div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>

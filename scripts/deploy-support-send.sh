@@ -25,6 +25,7 @@ files=(
   "support_ui.js"
   "profile_lib.php"
   "bigjay_controller/index.php"
+  "bigjay_controller/admin_nav.php"
   "bigjay_controller/support.php"
   "bigjay_controller/support-api.php"
   "bigjay_controller/support-users-api.php"
@@ -68,3 +69,4 @@ echo "2) Open: https://panel.ticketin.ir/bigjay_controller/index.php?page=suppor
 echo "3) Diagnose: https://panel.ticketin.ir/bigjay_controller/support-diagnose.php"
 echo "4) Force merge: https://panel.ticketin.ir/bigjay_controller/support-diagnose.php?merge=1"
 echo "5) Deep debug: https://panel.ticketin.ir/bigjay_controller/support-debug.php"
+echo "6) Bottom nav only: bash scripts/deploy-admin-nav.sh"

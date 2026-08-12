@@ -47,7 +47,7 @@ position:fixed;
 left:0;
 right:0;
 bottom:0;
-z-index:60;
+z-index:9999;
 background:#111827;
 border-top:1px solid #334155;
 padding-bottom:env(safe-area-inset-bottom,0);
@@ -198,12 +198,12 @@ border-color:#7f1d1d;
 color:#fecaca;
 }
 @media(max-width:768px){
-.adminBottomNav{display:block}
+.adminBottomNav{display:block !important}
 body.adminHasBottomNav{padding-bottom:84px}
 body.adminHasBottomNav .content{padding-bottom:84px !important}
-body.adminHasBottomNav .content-support{padding-bottom:0 !important}
-body.adminPageSupport .adminBottomNav{display:none}
-body.adminPageSupport{padding-bottom:0}
+body.adminPageSupport.chat-active .adminBottomNav{display:none !important}
+body.adminPageSupport.chat-active{padding-bottom:0}
+body.adminPageSupport:not(.chat-active) .adminBottomNav{display:block !important}
 }
 </style>';
     }
