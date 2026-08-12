@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/admin_nav.php';
+require_once __DIR__ . '/campaign_ui.php';
 require_once __DIR__ . '/../campaign_lib.php';
 
 pnvAdminRequireAuth();
@@ -107,12 +108,6 @@ usort($rows, function($a, $b){
     return intval($b['created_at'] ?? 0) <=> intval($a['created_at'] ?? 0);
 });
 
-function campaignInputDateTimeLocal($ts){
-    $ts = intval($ts);
-    if($ts <= 0){ return ''; }
-    return date('Y-m-d\TH:i', $ts);
-}
-
 function campaignAdminSharedStyles(){
     echo '<style>
 *{box-sizing:border-box}body{margin:0;padding:20px;background:#0f172a;font-family:tahoma;direction:rtl;color:#fff}
@@ -143,7 +138,7 @@ $previewType = $editRow['type'] ?? 'info';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>پیام‌های داشبورد</title>
-<?php campaignAdminSharedStyles(); ?>
+<?php campaignAdminSharedStyles(); campaignJalaliDatePickerHead(); ?>
 </head>
 <body>
 <div class="container">
@@ -173,8 +168,16 @@ $previewType = $editRow['type'] ?? 'info';
 <option value="active" <?php echo (($editRow['status'] ?? 'active') === 'active') ? 'selected' : ''; ?>>فعال</option>
 <option value="inactive" <?php echo (($editRow['status'] ?? '') === 'inactive') ? 'selected' : ''; ?>>غیرفعال</option>
 </select>
-<input name="starts_at" type="datetime-local" value="<?php echo htmlspecialchars(campaignInputDateTimeLocal($editRow['starts_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
-<input name="expires_at" type="datetime-local" value="<?php echo htmlspecialchars(campaignInputDateTimeLocal($editRow['expires_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
+<div class="formgrid" style="grid-column:1/-1">
+<div>
+<label style="display:block;margin-bottom:6px;font-size:12px;color:#94a3b8">تاریخ شروع (اختیاری — شمسی / وقت تهران)</label>
+<?php campaignJalaliDateTimeInput('starts_at', $editRow['starts_at'] ?? 0); ?>
+</div>
+<div>
+<label style="display:block;margin-bottom:6px;font-size:12px;color:#94a3b8">تاریخ پایان (اختیاری — شمسی / وقت تهران)</label>
+<?php campaignJalaliDateTimeInput('expires_at', $editRow['expires_at'] ?? 0); ?>
+</div>
+</div>
 </div>
 <textarea name="message" id="annMessage" placeholder="متن پیام" required><?php echo htmlspecialchars($editRow['message'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
 <div class="previewBox is-<?php echo htmlspecialchars($previewType, ENT_QUOTES, 'UTF-8'); ?>" id="annPreview">
@@ -232,5 +235,6 @@ $previewType = $editRow['type'] ?? 'info';
     type.addEventListener('change', sync);
 })();
 </script>
+<?php campaignJalaliDatePickerFoot(); ?>
 </body>
 </html>

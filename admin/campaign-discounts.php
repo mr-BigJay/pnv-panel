@@ -160,14 +160,6 @@ usort($codes, function($a, $b){
     return intval($b['created_at'] ?? 0) <=> intval($a['created_at'] ?? 0);
 });
 
-function campaignInputDateTimeLocal($ts){
-    $ts = intval($ts);
-    if($ts <= 0){
-        return '';
-    }
-    return date('Y-m-d\TH:i', $ts);
-}
-
 function campaignDiscountTypeLabel($row){
     if(($row['type'] ?? '') === 'fixed'){
         return 'ثابت ' . number_format(intval($row['value'] ?? 0) * 1000) . ' تومان';
@@ -212,7 +204,7 @@ $isActive = ($editRow['status'] ?? 'active') === 'active';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>کدهای تخفیف</title>
-<?php campaignAdminStyles(); ?>
+<?php campaignAdminStyles(); campaignJalaliDatePickerHead(); ?>
 </head>
 <body class="campaignAdmin">
 <div class="campaignShell">
@@ -293,14 +285,14 @@ $isActive = ($editRow['status'] ?? 'active') === 'active';
 <label class="campaignLabel">تاریخ شروع (اختیاری)</label>
 <div class="campaignInputWrap">
 <?php echo campaignIconCalendar(); ?>
-<input class="campaignInput" name="starts_at" type="datetime-local" value="<?php echo htmlspecialchars(campaignInputDateTimeLocal($editRow['starts_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
+<?php campaignJalaliDateTimeInput('starts_at', $editRow['starts_at'] ?? 0); ?>
 </div>
 </div>
 <div class="campaignField">
 <label class="campaignLabel">تاریخ پایان (اختیاری)</label>
 <div class="campaignInputWrap">
 <?php echo campaignIconCalendar(); ?>
-<input class="campaignInput" name="expires_at" type="datetime-local" value="<?php echo htmlspecialchars(campaignInputDateTimeLocal($editRow['expires_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
+<?php campaignJalaliDateTimeInput('expires_at', $editRow['expires_at'] ?? 0); ?>
 </div>
 </div>
 </div>
@@ -457,5 +449,6 @@ foreach($codes as $row){
     }
 })();
 </script>
+<?php campaignJalaliDatePickerFoot(); ?>
 </body>
 </html>

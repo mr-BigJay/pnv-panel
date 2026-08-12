@@ -77,6 +77,17 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignHidden{display:none}
 .campaignBack{display:block;margin-top:8px;padding:14px;border-radius:14px;background:#242d3d;color:#fff;text-decoration:none;text-align:center;font-size:14px}
 @media(max-width:640px){body.campaignAdmin{padding:12px 10px 24px}.campaignGrid2{grid-template-columns:1fr}.campaignItemMeta{grid-template-columns:1fr}}
+.campaignDateInput{cursor:pointer}
+.jdp-container{z-index:1000}
+body.campaignAdmin .jdp-container{background:#1f2937;border:1px solid #334155;border-radius:16px;color:#f8fafc;box-shadow:0 16px 40px rgba(0,0,0,.35);font-family:tahoma,system-ui,sans-serif}
+body.campaignAdmin .jdp-container .jdp-day-name,body.campaignAdmin .jdp-container .jdp-day{color:#e2e8f0}
+body.campaignAdmin .jdp-container .jdp-day:not(.disabled-day):hover{background:#334155}
+body.campaignAdmin .jdp-container .jdp-day.selected-day{background:#34d399;color:#052e16}
+body.campaignAdmin .jdp-container .jdp-day.today{background:#242d3d;color:#34d399}
+body.campaignAdmin .jdp-container .jdp-btn-today,body.campaignAdmin .jdp-container .jdp-btn-empty,body.campaignAdmin .jdp-container .jdp-btn-close{background:#242d3d;color:#e2e8f0;border:1px solid #334155;border-radius:10px}
+body.campaignAdmin .jdp-container .jdp-time-container select{background:#141b26;color:#f8fafc;border:1px solid #334155;border-radius:8px}
+body.campaignAdmin .jdp-container .jdp-month,body.campaignAdmin .jdp-container .jdp-year{color:#f8fafc}
+body.campaignAdmin .jdp-container .jdp-icon-plus,body.campaignAdmin .jdp-container .jdp-icon-minus{filter:invert(1)}
 </style>';
     }
 
@@ -121,6 +132,66 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 
     function campaignIconSearch(){
         return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+    }
+
+    function campaignJalaliDatePickerHead(){
+        static $done = false;
+
+        if($done){
+            return;
+        }
+
+        $done = true;
+
+        echo '<link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css">';
+        echo '<style>
+.campaignDateInput{cursor:pointer}
+.jdp-container{z-index:1000}
+.jdp-container{background:#1f2937;border:1px solid #334155;border-radius:16px;color:#f8fafc;box-shadow:0 16px 40px rgba(0,0,0,.35);font-family:tahoma,system-ui,sans-serif}
+.jdp-container .jdp-day-name,.jdp-container .jdp-day{color:#e2e8f0}
+.jdp-container .jdp-day:not(.disabled-day):hover{background:#334155}
+.jdp-container .jdp-day.selected-day{background:#34d399;color:#052e16}
+.jdp-container .jdp-day.today{background:#242d3d;color:#34d399}
+.jdp-container .jdp-btn-today,.jdp-container .jdp-btn-empty,.jdp-container .jdp-btn-close{background:#242d3d;color:#e2e8f0;border:1px solid #334155;border-radius:10px}
+.jdp-container .jdp-time-container select{background:#141b26;color:#f8fafc;border:1px solid #334155;border-radius:8px}
+.jdp-container .jdp-month,.jdp-container .jdp-year{color:#f8fafc}
+.jdp-container .jdp-icon-plus,.jdp-container .jdp-icon-minus{filter:invert(1)}
+</style>';
+    }
+
+    function campaignJalaliDatePickerFoot(){
+        static $done = false;
+
+        if($done){
+            return;
+        }
+
+        $done = true;
+
+        echo '<script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>';
+        echo '<script>
+jalaliDatepicker.startWatch({
+    time: true,
+    hasSecond: false,
+    autoShow: true,
+    autoHide: true,
+    hideAfterChange: true,
+    separatorChars: {date: "/", between: " ", time: ":"},
+    persianDigits: true
+});
+</script>';
+    }
+
+    function campaignJalaliDateTimeInput($name, $timestamp = 0, $placeholder = '۱۴۰۴/۰۵/۲۱ ۱۴:۳۰'){
+        $value = campaignInputJalaliDateTime($timestamp);
+
+        echo '<input class="campaignInput campaignDateInput" data-jdp data-jdp-has-second="false" name="'
+            . htmlspecialchars($name, ENT_QUOTES, 'UTF-8')
+            . '" placeholder="'
+            . htmlspecialchars($placeholder, ENT_QUOTES, 'UTF-8')
+            . '" value="'
+            . htmlspecialchars($value, ENT_QUOTES, 'UTF-8')
+            . '" autocomplete="off" inputmode="numeric">';
     }
 
 }

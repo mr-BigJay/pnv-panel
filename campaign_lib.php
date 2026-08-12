@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/pnv_date_bootstrap.php';
+
 if(!function_exists('campaignDataPath')){
 
     function campaignDataPath($name){
@@ -89,12 +91,34 @@ if(!function_exists('campaignDataPath')){
             return 0;
         }
 
+        if(function_exists('pnvParseJalaliDateTime')){
+            $ts = pnvParseJalaliDateTime($value);
+
+            if($ts > 0){
+                return $ts;
+            }
+        }
+
         if(function_exists('pnvParseDateTimeToTimestamp')){
             return pnvParseDateTimeToTimestamp($value);
         }
 
         $ts = strtotime($value);
         return $ts ? intval($ts) : 0;
+    }
+
+    function campaignInputJalaliDateTime($ts){
+        $ts = intval($ts);
+
+        if($ts <= 0){
+            return '';
+        }
+
+        if(function_exists('pnvFormatJalaliDate') && function_exists('pnvFormatTehranTime')){
+            return pnvFormatJalaliDate($ts, '/') . ' ' . pnvFormatTehranTime($ts, false);
+        }
+
+        return date('Y/m/d H:i', $ts);
     }
 
     function campaignFormatDateTime($ts){

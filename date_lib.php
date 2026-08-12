@@ -41,6 +41,43 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         return [$jy, $jm, $jd];
     }
 
+    function pnvJalaliToGregorian($jy, $jm, $jd){
+        $jy = intval($jy);
+        $jm = intval($jm);
+        $jd = intval($jd);
+        $jy += 1595;
+        $days = -355668 + (365 * $jy) + (intdiv($jy, 33) * 8) + intdiv(($jy % 33) + 3, 4) + $jd + (($jm < 7) ? ($jm - 1) * 31 : (($jm - 7) * 30 + 186));
+        $gy = 400 * intdiv($days, 146097);
+        $days %= 146097;
+
+        if($days > 36524){
+            $gy += 100 * intdiv(--$days, 36524);
+            $days %= 36524;
+
+            if($days >= 365){
+                $days++;
+            }
+        }
+
+        $gy += 4 * intdiv($days, 1461);
+        $days %= 1461;
+
+        if($days > 365){
+            $gy += intdiv($days - 1, 365);
+            $days = ($days - 1) % 365;
+        }
+
+        $gd = $days + 1;
+        $sal_a = [0, 31, (($gy % 4 === 0 && $gy % 100 !== 0) || ($gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        $gm = 0;
+
+        for($gm = 0; $gm < 13 && $gd > $sal_a[$gm]; $gm++){
+            $gd -= $sal_a[$gm];
+        }
+
+        return [$gy, $gm, $gd];
+    }
+
     function pnvDigitsToLatin($value){
         return strtr((string)$value, [
             '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
@@ -106,6 +143,42 @@ if(!function_exists('pnvEnsureTehranTimezone')){
         ];
     }
 
+    function pnvParseJalaliDateTime($value){
+        pnvEnsureTehranTimezone();
+        $value = trim(pnvDigitsToLatin($value));
+
+        if($value === ''){
+            return 0;
+        }
+
+        if(is_numeric($value)){
+            return intval($value);
+        }
+
+        if(!preg_match('/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/', $value, $m)){
+            return 0;
+        }
+
+        $year = intval($m[1]);
+        $month = intval($m[2]);
+        $day = intval($m[3]);
+        $hour = isset($m[4]) ? intval($m[4]) : 0;
+        $minute = isset($m[5]) ? intval($m[5]) : 0;
+        $second = isset($m[6]) ? intval($m[6]) : 0;
+
+        if(pnvIsGregorianYear($year)){
+            [$gy, $gm, $gd] = [$year, $month, $day];
+        }
+        else{
+            [$gy, $gm, $gd] = pnvJalaliToGregorian($year, $month, $day);
+        }
+
+        $dt = sprintf('%04d-%02d-%02d %02d:%02d:%02d', $gy, $gm, $gd, $hour, $minute, $second);
+        $ts = strtotime($dt);
+
+        return $ts ? intval($ts) : 0;
+    }
+
     function pnvParseDateTimeToTimestamp($value){
         pnvEnsureTehranTimezone();
         $value = trim(pnvDigitsToLatin($value));
@@ -116,6 +189,10 @@ if(!function_exists('pnvEnsureTehranTimezone')){
 
         if(is_numeric($value)){
             return intval($value);
+        }
+
+        if(preg_match('/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/', $value, $m) && !pnvIsGregorianYear($m[1])){
+            return pnvParseJalaliDateTime($value);
         }
 
         $ts = strtotime($value);
