@@ -15,6 +15,7 @@ files=(
   "admin/support-users-api.php"
   "admin/support-diagnose.php"
   "admin/support-debug.php"
+  "admin/support-ping.php"
   "support_lib.php"
   "pnv_date_bootstrap.php"
   "date_lib.php"
@@ -27,6 +28,7 @@ files=(
   "bigjay_controller/support-users-api.php"
   "bigjay_controller/support-diagnose.php"
   "bigjay_controller/support-debug.php"
+  "bigjay_controller/support-ping.php"
 )
 
 for rel in "${files[@]}"; do

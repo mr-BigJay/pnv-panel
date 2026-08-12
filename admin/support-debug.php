@@ -1,5 +1,35 @@
 <?php
 
+register_shutdown_function(function(){
+    $error = error_get_last();
+
+    if(
+        !$error
+        || !in_array($error['type'], [E_ERROR, E_PARSE, E_COMPILE_ERROR, E_CORE_ERROR], true)
+    ){
+        return;
+    }
+
+    if(!headers_sent()){
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+    }
+
+    echo "\n\n[FATAL ERROR]\n";
+    echo $error['message'] . "\n";
+    echo $error['file'] . ':' . $error['line'] . "\n";
+});
+
+set_error_handler(function($severity, $message, $file, $line){
+    if(!(error_reporting() & $severity)){
+        return false;
+    }
+
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
+
+try {
+
 require_once __DIR__ . '/auth.php';
 
 if(!pnvAdminIsLoggedIn()){
@@ -19,6 +49,7 @@ header('Content-Type: text/plain; charset=utf-8');
 $root = dirname(__DIR__);
 $file = $root . '/db/support.json';
 $user = trim($_GET['user'] ?? '');
+$runProbe = isset($_GET['probe']) && ($_GET['probe'] === '1' || $_GET['probe'] === 'true');
 
 echo "Support debug (detailed)\n";
 echo "========================\n\n";
@@ -157,7 +188,10 @@ foreach(array_slice($data, 0, 10) as $ticket){
     $u = $ticket['user'] ?? '?';
     $preview = supportTicketPreview($ticket);
     $msgCount = is_array($ticket['messages'] ?? null) ? count($ticket['messages']) : 0;
-    echo "  - {$u} ({$msgCount} msgs) preview: " . mb_substr($preview, 0, 40) . "\n";
+    $previewShort = function_exists('mb_substr')
+        ? mb_substr($preview, 0, 40)
+        : substr($preview, 0, 40);
+    echo "  - {$u} ({$msgCount} msgs) preview: " . $previewShort . "\n";
 }
 
 if($user !== ''){
@@ -218,6 +252,12 @@ if($user !== ''){
 }
 
 echo "\n[Live HTML probe]\n";
+
+if(!$runProbe){
+    echo "Skipped (add ?probe=1 to run — can trigger heavy render).\n";
+}
+else{
+
 ob_start();
 $supportEmbedded = true;
 $supportActionResult = [
@@ -258,8 +298,16 @@ if($includeOk){
     }
 }
 
+}
+
 echo "\n[Checks]\n";
 $checks = [];
+
+$checks[] = [
+    'pnvFormatJalaliDate',
+    function_exists('pnvFormatJalaliDate'),
+    'date_lib.php / pnv_date_bootstrap.php missing — run deploy'
+];
 
 $checks[] = [
     'bigjay index stub',
@@ -297,3 +345,17 @@ foreach($checks as [$name, $ok, $hint]){
 echo "\nUsage:\n";
 echo "- Chat test: ?user=Vahid1996\n";
 echo "- Diagnose: support-diagnose.php\n";
+echo "- Quick ping: support-ping.php\n";
+
+}
+catch(Throwable $e){
+    if(!headers_sent()){
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+    }
+
+    echo "\n[EXCEPTION]\n";
+    echo get_class($e) . ': ' . $e->getMessage() . "\n";
+    echo $e->getFile() . ':' . $e->getLine() . "\n";
+    echo "\nStack trace:\n" . $e->getTraceAsString() . "\n";
+}
