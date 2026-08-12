@@ -637,6 +637,171 @@
         return wrap;
     }
 
+    function bindMobileChatLayout(options){
+        options = options || {};
+
+        const vv = window.visualViewport;
+
+        if(!vv){
+            return;
+        }
+
+        const mobileQuery = window.matchMedia('(max-width: 768px)');
+
+        const container = options.containerEl
+            || document.querySelector('.content-support')
+            || document.getElementById('supportPage');
+
+        const messagesEl = options.messagesEl || document.getElementById('supportMessages');
+        const textarea = options.textareaEl || document.getElementById('supportMessage');
+        const chatTop = options.chatTopEl || document.getElementById('supportChatTop');
+
+        if(!container){
+            return;
+        }
+
+        let focusPending = false;
+        let syncFrame = 0;
+
+        function scrollMessagesToBottom(){
+            scrollToBottom(messagesEl, true);
+        }
+
+        function isKeyboardOpen(){
+            const layoutHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+            const visibleHeight = vv.height || layoutHeight;
+            const offsetTop = vv.offsetTop || 0;
+            return focusPending
+                || offsetTop > 0
+                || (layoutHeight > 0 && visibleHeight < layoutHeight - 80);
+        }
+
+        function syncLayout(){
+            if(syncFrame){
+                cancelAnimationFrame(syncFrame);
+            }
+
+            syncFrame = requestAnimationFrame(function(){
+                syncFrame = 0;
+
+                if(!mobileQuery.matches){
+                    resetLayout();
+                    return;
+                }
+
+                const top = Math.max(0, vv.offsetTop || 0);
+                const height = Math.max(0, vv.height || window.innerHeight);
+                const keyboardOpen = isKeyboardOpen();
+
+                container.style.position = 'fixed';
+                container.style.left = '0';
+                container.style.right = '0';
+                container.style.width = '100%';
+                container.style.top = top + 'px';
+                container.style.height = height + 'px';
+                container.style.maxHeight = height + 'px';
+                container.style.bottom = 'auto';
+
+                document.documentElement.classList.add('supportVvSync');
+                document.body.classList.add('supportVvSync');
+
+                document.body.classList.toggle('supportKeyboardOpen', keyboardOpen);
+
+                if(chatTop){
+                    chatTop.style.display = '';
+                    chatTop.style.visibility = 'visible';
+                }
+
+                if(window.scrollY !== 0){
+                    window.scrollTo(0, 0);
+                }
+
+                if(keyboardOpen){
+                    scrollMessagesToBottom();
+                }
+            });
+        }
+
+        function resetLayout(){
+            if(syncFrame){
+                cancelAnimationFrame(syncFrame);
+                syncFrame = 0;
+            }
+
+            container.style.position = '';
+            container.style.left = '';
+            container.style.right = '';
+            container.style.width = '';
+            container.style.top = '';
+            container.style.height = '';
+            container.style.maxHeight = '';
+            container.style.bottom = '';
+
+            document.documentElement.classList.remove('supportVvSync');
+            document.body.classList.remove('supportVvSync');
+            document.body.classList.remove('supportKeyboardOpen');
+        }
+
+        function onViewportChange(){
+            syncLayout();
+        }
+
+        function onMobileChange(){
+            if(mobileQuery.matches){
+                syncLayout();
+            }
+            else{
+                resetLayout();
+            }
+        }
+
+        vv.addEventListener('resize', onViewportChange);
+        vv.addEventListener('scroll', onViewportChange);
+        window.addEventListener('resize', onViewportChange);
+        window.addEventListener('orientationchange', function(){
+            focusPending = false;
+            setTimeout(onViewportChange, 120);
+            setTimeout(onViewportChange, 320);
+        });
+
+        if(typeof mobileQuery.addEventListener === 'function'){
+            mobileQuery.addEventListener('change', onMobileChange);
+        }
+        else if(typeof mobileQuery.addListener === 'function'){
+            mobileQuery.addListener(onMobileChange);
+        }
+
+        if(textarea){
+            textarea.addEventListener('touchstart', function(){
+                focusPending = true;
+                syncLayout();
+            }, {passive: true});
+
+            textarea.addEventListener('focus', function(){
+                focusPending = true;
+                window.scrollTo(0, 0);
+                syncLayout();
+                setTimeout(syncLayout, 50);
+                setTimeout(syncLayout, 160);
+                setTimeout(syncLayout, 320);
+                setTimeout(scrollMessagesToBottom, 360);
+            }, true);
+
+            textarea.addEventListener('blur', function(){
+                focusPending = false;
+                setTimeout(function(){
+                    if(document.activeElement !== textarea){
+                        syncLayout();
+                    }
+                }, 120);
+            });
+        }
+
+        if(mobileQuery.matches){
+            syncLayout();
+        }
+    }
+
     function initPolling(options){
         const chatEl = options.chatEl;
         const pollUrl = options.pollUrl;
@@ -684,6 +849,7 @@
         bindFormGuard: bindFormGuard,
         bindImageAttach: bindImageAttach,
         bindMessageActions: bindMessageActions,
+        bindMobileChatLayout: bindMobileChatLayout,
         initPolling: initPolling,
         submitComposerForm: submitComposerForm
     };

@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=36';
+$cssHref = '../support_ui.css?v=38';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=36';
+$jsHref = '../support_ui.js?v=38';
 
 if(!$supportEmbedded){
 ?>
@@ -55,7 +55,7 @@ if(!$supportEmbedded){
 <html lang="fa">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام‌های کاربران</title>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } else { ?>
@@ -486,6 +486,13 @@ if(!$hasMessages){
     }
 
     if(currentUser){
+        SupportUI.bindMobileChatLayout({
+            containerEl: document.querySelector('.content-support') || document.getElementById('supportPage'),
+            messagesEl: supportMessages,
+            textareaEl: supportMessage,
+            chatTopEl: document.getElementById('supportChatTop')
+        });
+
         SupportUI.initPolling({
             chatEl: supportMessages,
             pollUrl: pollUrl,
