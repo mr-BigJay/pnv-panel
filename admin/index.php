@@ -268,6 +268,18 @@ $supportUnreadCount = supportAdminUnreadTotal($supportData);
 
 }
 
+$telegramEnabled = false;
+$telegramConfigured = false;
+
+if(file_exists(__DIR__ . '/../telegram_lib.php')){
+    require_once __DIR__ . '/../telegram_lib.php';
+    if(function_exists('telegramLoadConfig')){
+        $tgConfig = telegramLoadConfig();
+        $telegramConfigured = trim((string)($tgConfig['bot_token'] ?? '')) !== '';
+        $telegramEnabled = !empty($tgConfig['enabled']) && $telegramConfigured;
+    }
+}
+
 $hasNewPayments = false;
 $hasNewRenews = false;
 $pendingPaymentsCount = 0;
