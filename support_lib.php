@@ -11,33 +11,85 @@ if(!function_exists('supportLoad')){
 
     }
 
-    function supportLoad($file){
+    function supportReadJsonFile($file){
 
-        if(!file_exists($file)){
-            supportSave($file, []);
-            return [];
+        if(!is_file($file) || !is_readable($file)){
+            return null;
         }
 
-        $fp = fopen($file, 'c+');
+        $content = trim((string)file_get_contents($file));
 
-        if(!$fp){
-            return [];
+        if($content === ''){
+            return null;
         }
-
-        flock($fp, LOCK_SH);
-
-        $content = stream_get_contents($fp);
-
-        flock($fp, LOCK_UN);
-        fclose($fp);
 
         $data = json_decode($content, true);
 
-        return is_array($data) ? $data : [];
+        return is_array($data) ? array_values($data) : null;
 
     }
 
-    function supportSave($file, $data){
+    function supportSafeHtml($value){
+
+        $value = (string)$value;
+
+        if($value === ''){
+            return '';
+        }
+
+        $flags = ENT_QUOTES;
+
+        if(defined('ENT_SUBSTITUTE')){
+            $flags |= ENT_SUBSTITUTE;
+        }
+
+        $html = htmlspecialchars($value, $flags, 'UTF-8');
+
+        return $html === false ? '' : $html;
+
+    }
+
+    function supportLoad($file){
+
+        $data = supportReadJsonFile($file);
+
+        if(!is_array($data)){
+            $data = [];
+        }
+
+        $backup = supportReadJsonFile($file . '.bak');
+
+        if(is_array($backup) && count($backup) > count($data)){
+            $data = $backup;
+            supportSave($file, $data, true);
+        }
+
+        if(!file_exists($file) && $data === []){
+            supportSave($file, [], true);
+        }
+
+        return $data;
+
+    }
+
+    function supportSave($file, $data, $force = false){
+
+        if(!is_array($data)){
+            return false;
+        }
+
+        $data = array_values($data);
+        $previous = supportReadJsonFile($file);
+        $previousCount = is_array($previous) ? count($previous) : 0;
+
+        if(
+            !$force
+            && $previousCount >= 3
+            && count($data) > 0
+            && count($data) < $previousCount
+        ){
+            return false;
+        }
 
         $dir = dirname($file);
 
@@ -45,10 +97,18 @@ if(!function_exists('supportLoad')){
             mkdir($dir, 0755, true);
         }
 
+        if(is_file($file) && filesize($file) > 2){
+            @copy($file, $file . '.bak');
+        }
+
         $json = json_encode(
             $data,
             JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT
         );
+
+        if($json === false){
+            return false;
+        }
 
         $fp = fopen($file, 'c+');
 
@@ -188,15 +248,37 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportTicketLastUserMessage($ticket){
+
+        if(empty($ticket['messages']) || !is_array($ticket['messages'])){
+            return null;
+        }
+
+        for($i = count($ticket['messages']) - 1; $i >= 0; $i--){
+            $msg = $ticket['messages'][$i];
+
+            if(($msg['sender'] ?? '') === 'user'){
+                return $msg;
+            }
+        }
+
+        return null;
+
+    }
+
     function supportTicketPreview($ticket){
 
-        $last = supportTicketLastMessage($ticket);
+        $last = supportTicketLastUserMessage($ticket);
+
+        if(!$last){
+            $last = supportTicketLastMessage($ticket);
+        }
 
         if(!$last){
             return 'بدون پیام';
         }
 
-        $text = trim($last['text'] ?? '');
+        $text = trim((string)($last['text'] ?? $last['message'] ?? $last['body'] ?? ''));
 
         if($text === '' && !empty($last['image'])){
             return '📷 تصویر';
@@ -220,7 +302,15 @@ if(!function_exists('supportLoad')){
 
     function supportTicketLastTimestamp($ticket){
 
-        $last = supportTicketLastMessage($ticket);
+        $last = supportTicketLastUserMessage($ticket);
+
+        if(!$last){
+            $last = supportTicketLastMessage($ticket);
+        }
+
+        if(!$last){
+            return 0;
+        }
 
         return intval($last['timestamp'] ?? 0);
 
