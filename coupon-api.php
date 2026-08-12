@@ -10,6 +10,7 @@ if(!isset($_SESSION['user'])){
 }
 
 require_once __DIR__ . '/coupon_lib.php';
+require_once __DIR__ . '/campaign_lib.php';
 
 $username = $_SESSION['user'];
 $code = trim($_GET['code'] ?? $_POST['code'] ?? '');
@@ -30,6 +31,6 @@ if($plan === ''){
     exit;
 }
 
-$result = couponCalculateForPlan($username, $code, $plan, $plans);
+$result = checkoutCalculateDiscountCode($username, $code, $plan, $plans);
 
 echo json_encode($result, JSON_UNESCAPED_UNICODE);

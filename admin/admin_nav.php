@@ -242,6 +242,7 @@ body.adminPageSupport{padding-bottom:0}
             ['key' => 'dashboard', 'label' => 'داشبورد', 'href' => pnvAdminUrl()],
             ['key' => 'users', 'label' => 'کاربران', 'href' => pnvAdminUrl('users.php')],
             ['key' => 'plans', 'label' => 'پلن‌ها', 'href' => pnvAdminUrl('plans.php')],
+            ['key' => 'campaigns', 'label' => 'کمپین‌ها', 'href' => pnvAdminUrl('campaigns.php')],
             ['key' => 'cards', 'label' => 'کارت‌ها', 'href' => pnvAdminUrl('index.php?page=cards')],
             ['key' => 'downloads', 'label' => 'دانلودها', 'href' => pnvAdminUrl('downloads.php')],
             ['key' => 'telegram', 'label' => 'تلگرام', 'href' => pnvAdminUrl('telegram.php')],

@@ -284,6 +284,23 @@ border-radius:50%;
 background:#ef4444;
 box-shadow:0 0 8px rgba(239,68,68,.7);
 }
+.dashAnnouncements{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.dashAnnouncementBanner{padding:12px 14px;border-radius:14px;border:1px solid #334155;background:#1e293b;line-height:1.8;font-size:13px}
+.dashAnnouncementBanner strong{display:block;margin-bottom:4px;font-size:14px}
+.dashAnnouncementBanner.is-info{border-color:#38bdf8}
+.dashAnnouncementBanner.is-success{border-color:#22c55e}
+.dashAnnouncementBanner.is-warning{border-color:#f59e0b}
+.dashAnnouncementBanner.is-special{border-color:#a855f7}
+.dashAnnouncementModal{position:fixed;inset:0;background:rgba(2,6,23,.72);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:16px;z-index:2000}
+.dashAnnouncementModal.is-open{display:flex}
+.dashAnnouncementCard{width:min(92vw,420px);background:#1e293b;border:1px solid #334155;border-radius:18px;padding:18px;color:#fff;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.dashAnnouncementCard h3{margin:0 0 10px;font-size:18px}
+.dashAnnouncementCard p{margin:0 0 16px;line-height:1.9;font-size:14px;color:#e2e8f0;white-space:pre-wrap}
+.dashAnnouncementCard button{width:100%;padding:12px;border:none;border-radius:12px;background:#22c55e;color:#052e16;font-family:tahoma;font-size:15px;font-weight:700;cursor:pointer}
+.dashAnnouncementCard.is-info{border-color:#38bdf8}
+.dashAnnouncementCard.is-success{border-color:#22c55e}
+.dashAnnouncementCard.is-warning{border-color:#f59e0b}
+.dashAnnouncementCard.is-special{border-color:#a855f7}
 @media(max-width:360px){
 .dashPrimary{height:108px}
 .dashPrimaryLabel{font-size:12px}
@@ -368,10 +385,84 @@ box-shadow:0 0 8px rgba(239,68,68,.7);
 </a>
 </div>
 
+<div class="dashAnnouncements" id="dashAnnouncements"></div>
+
+<div class="dashAnnouncementModal" id="dashAnnouncementModal" hidden>
+<div class="dashAnnouncementCard is-info" id="dashAnnouncementCard">
+<h3 id="dashAnnouncementTitle"></h3>
+<p id="dashAnnouncementMessage"></p>
+<button type="button" id="dashAnnouncementDismiss">متوجه شدم</button>
+</div>
+</div>
+
 <a class="dashLogout" href="logout.php">خروج</a>
 
 </div>
 </div>
+
+<script>
+(function(){
+    const modal = document.getElementById('dashAnnouncementModal');
+    const card = document.getElementById('dashAnnouncementCard');
+    const titleEl = document.getElementById('dashAnnouncementTitle');
+    const messageEl = document.getElementById('dashAnnouncementMessage');
+    const dismissBtn = document.getElementById('dashAnnouncementDismiss');
+    const bannerWrap = document.getElementById('dashAnnouncements');
+    let currentId = '';
+
+    function typeClass(type){
+        return 'is-' + (type || 'info');
+    }
+
+    function renderBanner(item){
+        const div = document.createElement('div');
+        div.className = 'dashAnnouncementBanner ' + typeClass(item.type);
+        div.innerHTML = '<strong>' + (item.title || '') + '</strong><div>' + (item.message || '') + '</div>';
+        return div;
+    }
+
+    function openModal(item){
+        currentId = item.id || '';
+        titleEl.textContent = item.title || '';
+        messageEl.textContent = item.message || '';
+        card.className = 'dashAnnouncementCard ' + typeClass(item.type);
+        modal.hidden = false;
+        modal.classList.add('is-open');
+    }
+
+    function closeModal(){
+        modal.classList.remove('is-open');
+        modal.hidden = true;
+        currentId = '';
+    }
+
+    dismissBtn.addEventListener('click', function(){
+        if(!currentId){ closeModal(); return; }
+        const body = new URLSearchParams();
+        body.set('action', 'dismiss');
+        body.set('id', currentId);
+        fetch('announcement-api.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body.toString()
+        }).finally(function(){
+            closeModal();
+        });
+    });
+
+    fetch('announcement-api.php?action=list', {credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(!data || !data.ok){ return; }
+            if(data.modal){ openModal(data.modal); }
+            (data.banners || []).forEach(function(item){
+                bannerWrap.appendChild(renderBanner(item));
+            });
+        })
+        .catch(function(){});
+})();
+</script>
 
 </body>
 </html>

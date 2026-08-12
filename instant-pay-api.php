@@ -11,6 +11,7 @@ if(!isset($_SESSION['user'])){
 
 require_once __DIR__ . '/instant_pay_lib.php';
 require_once __DIR__ . '/coupon_lib.php';
+require_once __DIR__ . '/campaign_lib.php';
 require_once __DIR__ . '/telegram_lib.php';
 
 $username = $_SESSION['user'];
@@ -69,6 +70,10 @@ if($action === 'create'){
     $hasCoupon = !empty($input['has_coupon']);
     $couponCode = trim((string)($input['coupon_code'] ?? ''));
     $discountPercent = 0;
+    $discountSource = '';
+    $discountFinalThousands = 0;
+    $discountType = '';
+    $discountValue = 0;
 
     if($hasCoupon){
         if($couponCode === ''){
@@ -76,14 +81,18 @@ if($action === 'create'){
             exit;
         }
 
-        $couponResult = couponCalculateForPlan($username, $couponCode, $plan, $plans);
+        $couponResult = checkoutCalculateDiscountCode($username, $couponCode, $plan, $plans);
 
         if(empty($couponResult['ok'])){
             echo json_encode(['ok' => false, 'error' => $couponResult['error'] ?? 'کد تخفیف معتبر نیست'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
-        $discountPercent = intval($couponResult['percent']);
+        $discountPercent = intval($couponResult['percent'] ?? 0);
+        $discountSource = (string)($couponResult['source'] ?? 'referral');
+        $discountFinalThousands = intval($couponResult['final'] ?? 0);
+        $discountType = (string)($couponResult['type'] ?? 'percent');
+        $discountValue = intval($couponResult['value'] ?? $discountPercent);
     }
 
     $result = instantPayCreate([
@@ -96,8 +105,34 @@ if($action === 'create'){
         'card_name' => $cardName,
         'plans' => $plans,
         'coupon_code' => $hasCoupon ? $couponCode : '',
-        'discount_percent' => $discountPercent
+        'discount_percent' => $discountPercent,
+        'discount_source' => $discountSource,
+        'discount_type' => $discountType,
+        'discount_value' => $discountValue,
+        'discount_final_thousands' => $discountFinalThousands,
     ]);
+
+    if(
+        !empty($result['ok'])
+        && !empty($result['item']['id'])
+        && $hasCoupon
+        && $discountSource === 'admin_discount'
+    ){
+        $reserve = campaignDiscountValidate(
+            $username,
+            $couponCode,
+            $plan,
+            $plans,
+            true,
+            (string)$result['item']['id']
+        );
+
+        if(empty($reserve['ok'])){
+            instantPayCancelUserWaiting($username, (string)$result['item']['id']);
+            echo json_encode(['ok' => false, 'error' => $reserve['error'] ?? 'رزرو کد تخفیف ناموفق بود'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
 
     echo json_encode($result, JSON_UNESCAPED_UNICODE);
     exit;

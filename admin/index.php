@@ -984,6 +984,12 @@ class="supportMenu">
 
 </a>
 
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaigns.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+کمپین‌ها
+
+</a>
+
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=cards'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت کارت ها

@@ -768,6 +768,12 @@ if(!function_exists('instantPayPath')){
             $items[$i]['cancelled_at'] = time();
             $changed = true;
 
+            if(!function_exists('checkoutReleaseDiscountOrder')){
+                require_once __DIR__ . '/campaign_lib.php';
+            }
+
+            checkoutReleaseDiscountOrder($items[$i]['id'] ?? '');
+
             instantPayDeleteAbandonedCsv($items[$i]);
             $items[$i]['csv_purged'] = true;
             $items[$i]['csv_index'] = -1;
@@ -866,6 +872,8 @@ if(!function_exists('instantPayPath')){
         $plans = $opts['plans'] ?? [];
         $couponCode = trim((string)($opts['coupon_code'] ?? ''));
         $discountPercent = intval($opts['discount_percent'] ?? 0);
+        $discountSource = trim((string)($opts['discount_source'] ?? ''));
+        $discountFinalThousands = intval($opts['discount_final_thousands'] ?? 0);
 
         if($username === '' || $planValue === '' || $card === ''){
             return ['ok' => false, 'error' => 'اطلاعات سفارش ناقص است'];
@@ -922,6 +930,8 @@ if(!function_exists('instantPayPath')){
             'card' => $card,
             'coupon_code' => $couponCode,
             'discount_percent' => $discountPercent,
+            'discount_source' => $discountSource,
+            'discount_final_thousands' => $discountFinalThousands,
         ];
 
         $reusable = instantPayFindReusableWaiting($username, $createOpts, $items);
@@ -945,7 +955,10 @@ if(!function_exists('instantPayPath')){
 
         $priceThousands = intval($plan['price'] ?? 0);
 
-        if($discountPercent > 0 && $discountPercent <= 100 && function_exists('couponApplyDiscountThousands')){
+        if($discountFinalThousands > 0 && $discountSource === 'admin_discount'){
+            $priceThousands = max(0, $discountFinalThousands);
+        }
+        elseif($discountPercent > 0 && $discountPercent <= 100 && function_exists('couponApplyDiscountThousands')){
             $priceThousands = couponApplyDiscountThousands($priceThousands, $discountPercent);
         }
 
@@ -1006,6 +1019,8 @@ if(!function_exists('instantPayPath')){
             'csv_index' => $csvIndex,
             'coupon_code' => $couponCode,
             'discount_percent' => $discountPercent,
+            'discount_source' => $discountSource,
+            'discount_final_thousands' => $discountFinalThousands,
             'link' => '',
             'message' => ''
         ];
@@ -1115,8 +1130,12 @@ if(!function_exists('instantPayPath')){
         $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
         instantPaySave($items);
 
-        if(!empty($found['coupon_code']) && function_exists('couponMarkUsed')){
-            couponMarkUsed($found['coupon_code'], $found['user']);
+        if(!empty($found['coupon_code']) || !empty($found['discount_source'])){
+            if(!function_exists('checkoutMarkDiscountPaid')){
+                require_once __DIR__ . '/campaign_lib.php';
+            }
+
+            checkoutMarkDiscountPaid($found);
         }
 
         // اطلاع‌رسانی تلگرام فقط بعد از تأیید نهایی
