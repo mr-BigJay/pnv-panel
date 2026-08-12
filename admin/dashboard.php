@@ -1,6 +1,17 @@
 <?php
+$telegramEnabled = false;
+$telegramConfigured = false;
 $baleEnabled = false;
 $baleConfigured = false;
+
+if(file_exists(__DIR__ . '/../telegram_lib.php')){
+    require_once __DIR__ . '/../telegram_lib.php';
+    if(function_exists('telegramLoadConfig')){
+        $tgConfig = telegramLoadConfig();
+        $telegramConfigured = trim((string)($tgConfig['bot_token'] ?? '')) !== '';
+        $telegramEnabled = !empty($tgConfig['enabled']) && $telegramConfigured;
+    }
+}
 
 if(file_exists(__DIR__ . '/../bale_lib.php')){
     require_once __DIR__ . '/../bale_lib.php';
@@ -12,59 +23,56 @@ if(file_exists(__DIR__ . '/../bale_lib.php')){
 }
 ?>
 
-<div class="statsGrid">
+<div class="statsSplitGrid">
 
-    <div class="statBox">
-        <div class="statTitle">
-            تعداد کل کاربران
+    <div class="statSplitCard">
+        <div class="statSplitHead">
+            <span class="statSplitIcon" aria-hidden="true">👥</span>
+            <span class="statSplitTitle">کاربران</span>
         </div>
-        <div class="statValue">
-            <?php echo number_format($totalUsers); ?>
+        <div class="statSplitBody">
+            <div class="statSplitHalf">
+                <div class="statSplitLabel">تعداد کل</div>
+                <div class="statSplitValue"><?php echo number_format($totalUsers); ?></div>
+            </div>
+            <div class="statSplitHalf">
+                <div class="statSplitLabel">ثبت‌نام امروز</div>
+                <div class="statSplitValue isToday"><?php echo number_format($todayUsers); ?></div>
+            </div>
         </div>
     </div>
 
-    <div class="statBox">
-        <div class="statTitle">
-            ثبت نام های امروز
+    <div class="statSplitCard">
+        <div class="statSplitHead">
+            <span class="statSplitIcon" aria-hidden="true">🛒</span>
+            <span class="statSplitTitle">خرید اشتراک</span>
         </div>
-        <div class="statValue">
-            <?php echo number_format($todayUsers); ?>
-        </div>
-    </div>
-
-    <div class="statBox">
-        <div class="statTitle">
-            تعداد کل خریدهای اشتراک
-        </div>
-        <div class="statValue">
-            <?php echo number_format($totalPayments); ?>
-        </div>
-    </div>
-
-    <div class="statBox">
-        <div class="statTitle">
-            تعداد خریدهای اشتراک امروز
-        </div>
-        <div class="statValue">
-            <?php echo number_format($todayPayments); ?>
+        <div class="statSplitBody">
+            <div class="statSplitHalf">
+                <div class="statSplitLabel">تعداد کل</div>
+                <div class="statSplitValue"><?php echo number_format($totalPayments); ?></div>
+            </div>
+            <div class="statSplitHalf">
+                <div class="statSplitLabel">خرید امروز</div>
+                <div class="statSplitValue isToday"><?php echo number_format($todayPayments); ?></div>
+            </div>
         </div>
     </div>
 
-    <div class="statBox">
-        <div class="statTitle">
-            تعداد کل تمدیدهای اشتراک
+    <div class="statSplitCard">
+        <div class="statSplitHead">
+            <span class="statSplitIcon" aria-hidden="true">🔄</span>
+            <span class="statSplitTitle">تمدید اشتراک</span>
         </div>
-        <div class="statValue">
-            <?php echo number_format($totalRenews); ?>
-        </div>
-    </div>
-
-    <div class="statBox">
-        <div class="statTitle">
-            تعداد تمدیدهای اشتراک امروز
-        </div>
-        <div class="statValue">
-            <?php echo number_format($todayRenews); ?>
+        <div class="statSplitBody">
+            <div class="statSplitHalf">
+                <div class="statSplitLabel">تعداد کل</div>
+                <div class="statSplitValue"><?php echo number_format($totalRenews); ?></div>
+            </div>
+            <div class="statSplitHalf">
+                <div class="statSplitLabel">تمدید امروز</div>
+                <div class="statSplitValue isToday"><?php echo number_format($todayRenews); ?></div>
+            </div>
         </div>
     </div>
 
@@ -105,6 +113,63 @@ if(file_exists(__DIR__ . '/../bale_lib.php')){
 </div>
 
 <style>
+.statsSplitGrid{
+display:flex;
+flex-direction:column;
+gap:12px;
+margin-bottom:20px;
+}
+.statSplitCard{
+background:#1e293b;
+border:1px solid #334155;
+border-radius:18px;
+overflow:hidden;
+}
+.statSplitHead{
+padding:12px 14px 0;
+font-size:14px;
+color:#94a3b8;
+display:flex;
+align-items:center;
+gap:8px;
+}
+.statSplitIcon{
+font-style:normal;
+font-size:16px;
+line-height:1;
+}
+.statSplitTitle{
+font-weight:700;
+color:#e2e8f0;
+}
+.statSplitBody{
+display:flex;
+min-height:88px;
+}
+.statSplitHalf{
+flex:1;
+padding:10px 14px 16px;
+text-align:center;
+}
+.statSplitHalf+.statSplitHalf{
+border-right:1px solid #334155;
+}
+.statSplitLabel{
+font-size:12px;
+color:#cbd5e1;
+margin-bottom:6px;
+line-height:1.6;
+}
+.statSplitValue{
+font-size:26px;
+font-weight:700;
+color:#22c55e;
+line-height:1.2;
+}
+.statSplitValue.isToday{
+font-size:22px;
+color:#86efac;
+}
 .setupGrid{
 display:grid;
 grid-template-columns:repeat(2,minmax(0,1fr));

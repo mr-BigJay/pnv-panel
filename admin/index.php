@@ -840,31 +840,6 @@ opacity:1;
 
 }
 
-.statsGrid{
-display:grid;
-grid-template-columns:repeat(2,1fr);
-gap:16px;
-margin-bottom:20px;
-}
-
-.statBox{
-background:#1e293b;
-padding:22px;
-border-radius:18px;
-text-align:center;
-}
-
-.statTitle{
-font-size:15px;
-color:#cbd5e1;
-margin-bottom:12px;
-}
-
-.statValue{
-font-size:30px;
-font-weight:bold;
-color:#22c55e;
-}
 
 .content-support{
 margin-right:280px;
@@ -882,6 +857,7 @@ height:100dvh;
 }
 
 .adminMenuBtn{display:none}
+
 
 .sidebar{
 position:fixed;
@@ -925,10 +901,6 @@ select,
 button{
 width:100%;
 box-sizing:border-box;
-}
-
-.statsGrid{
-grid-template-columns:1fr;
 }
 
 }
