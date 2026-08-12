@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=33';
+$cssHref = '../support_ui.css?v=34';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=33';
+$jsHref = '../support_ui.js?v=34';
 
 if(!$supportEmbedded){
 ?>
@@ -139,19 +139,27 @@ if(!$supportEmbedded){
 یک کاربر را از لیست انتخاب کنید
 </div>
 
-<?php } else { ?>
+<?php } else {
 
+$profileSummary = supportGetUserProfileSummary($currentUser);
+
+?>
+
+<div class="supportChatTop" id="supportChatTop">
 <header class="msgHeader">
 <button type="button" class="supportBackBtn" id="supportBackBtn">← لیست</button>
 <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($currentUser), ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="msgHeaderInfo">
 <h2><?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?></h2>
-<p>پاسخ به کاربر</p>
+<p><?php echo htmlspecialchars($profileSummary['mobile'] !== '-' ? $profileSummary['mobile'] : 'پاسخ به کاربر', ENT_QUOTES, 'UTF-8'); ?></p>
 </div>
 <div class="supportChatHeaderActions">
 <button type="button" class="viewSubsBtn" onclick="openUserSubscriptions()">اشتراک‌ها</button>
 </div>
 </header>
+
+<?php echo supportRenderProfileBarHtml($currentUser); ?>
+</div>
 
 <?php if($supportError){ ?>
 <div class="msgFlash"><?php echo htmlspecialchars($supportError, ENT_QUOTES, 'UTF-8'); ?></div>

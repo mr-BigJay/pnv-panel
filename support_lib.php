@@ -285,6 +285,149 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportFindUserRecord($username){
+
+        $username = trim($username);
+
+        if($username === ''){
+            return null;
+        }
+
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!is_file($usersFile)){
+            return null;
+        }
+
+        $users = json_decode((string)file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return null;
+        }
+
+        foreach($users as $user){
+
+            if(!is_array($user)){
+                continue;
+            }
+
+            if(strtolower(trim($user['username'] ?? '')) === strtolower($username)){
+                return $user;
+            }
+
+        }
+
+        return null;
+
+    }
+
+    function supportCountUserPurchases($username){
+
+        $username = trim($username);
+
+        if($username === ''){
+            return 0;
+        }
+
+        $paymentsFile = __DIR__ . '/invoices/payments.csv';
+
+        if(!is_file($paymentsFile)){
+            return 0;
+        }
+
+        $count = 0;
+        $fp = fopen($paymentsFile, 'r');
+
+        if(!$fp){
+            return 0;
+        }
+
+        while(($d = fgetcsv($fp)) !== false){
+
+            if(
+                !isset($d[0])
+                || strtolower(trim($d[0])) !== strtolower($username)
+            ){
+                continue;
+            }
+
+            $type = trim($d[9] ?? 'خرید');
+
+            if($type === 'تمدید'){
+                continue;
+            }
+
+            $configName = trim($d[1] ?? '');
+
+            if(
+                stripos($configName, 'https://vip.') !== false
+                || stripos($configName, 'https://vip2.') !== false
+                || stripos($configName, 'https://vip3.') !== false
+                || stripos($configName, 'https://vip4.') !== false
+            ){
+                continue;
+            }
+
+            $count++;
+
+        }
+
+        fclose($fp);
+
+        return $count;
+
+    }
+
+    function supportGetUserProfileSummary($username){
+
+        $username = trim($username);
+        $user = supportFindUserRecord($username);
+        $createdRaw = trim((string)($user['created_at'] ?? ''));
+        $createdLabel = '-';
+
+        if($createdRaw !== '' && function_exists('pnvFormatUserCreatedAt')){
+            $createdLabel = pnvFormatUserCreatedAt($createdRaw);
+        }
+        elseif($createdRaw !== ''){
+            $createdLabel = $createdRaw;
+        }
+
+        return [
+            'username' => $username,
+            'mobile' => trim((string)($user['mobile'] ?? '')) ?: '-',
+            'referrer' => trim((string)($user['referrer'] ?? '')) ?: '-',
+            'created_at' => $createdLabel,
+            'purchase_count' => supportCountUserPurchases($username),
+        ];
+
+    }
+
+    function supportRenderProfileBarHtml($username){
+
+        $username = trim($username);
+
+        if($username === ''){
+            return '';
+        }
+
+        $profile = supportGetUserProfileSummary($username);
+
+        ob_start();
+        ?>
+<div class="supportProfileBar" id="supportProfileBar">
+<div class="supportProfileGrid">
+<div class="supportProfileItem"><span>موبایل</span><strong><?php echo htmlspecialchars($profile['mobile'], ENT_QUOTES, 'UTF-8'); ?></strong></div>
+<div class="supportProfileItem"><span>معرف</span><strong><?php echo htmlspecialchars($profile['referrer'], ENT_QUOTES, 'UTF-8'); ?></strong></div>
+<div class="supportProfileItem"><span>تعداد خرید</span><strong><?php echo (int)$profile['purchase_count']; ?></strong></div>
+<div class="supportProfileItem"><span>تاریخ عضویت</span><strong><?php echo htmlspecialchars($profile['created_at'], ENT_QUOTES, 'UTF-8'); ?></strong></div>
+</div>
+<button type="button" class="supportProfileSubsBtn" onclick="openUserSubscriptions()">مشاهده اشتراک‌ها</button>
+</div>
+        <?php
+        return (string)ob_get_clean();
+
+    }
+
     function supportSortTickets($data){
 
         usort($data, function($a, $b){
