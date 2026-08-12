@@ -121,6 +121,73 @@ overflow:hidden;
 background:#1e293b;
 }
 
+.msgAvatar--header{
+border:none;
+padding:0;
+cursor:pointer;
+font:inherit;
+color:#fff;
+-webkit-tap-highlight-color:transparent;
+}
+
+.msgAvatar--header:focus-visible{
+outline:2px solid #3b82f6;
+outline-offset:2px;
+}
+
+.supportAvatarLightbox{
+position:fixed;
+inset:0;
+z-index:2500;
+display:flex;
+align-items:center;
+justify-content:center;
+padding:24px;
+box-sizing:border-box;
+}
+
+.supportAvatarLightbox[hidden]{
+display:none !important;
+}
+
+.supportAvatarLightbox__backdrop{
+position:absolute;
+inset:0;
+background:rgba(2,6,23,.58);
+backdrop-filter:blur(10px);
+-webkit-backdrop-filter:blur(10px);
+cursor:pointer;
+}
+
+.supportAvatarLightbox__card{
+position:relative;
+z-index:1;
+width:min(72vw,220px);
+height:min(72vw,220px);
+border-radius:50%;
+overflow:hidden;
+background:linear-gradient(135deg,#3b82f6,#8b5cf6);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:72px;
+font-weight:700;
+color:#fff;
+box-shadow:0 24px 64px rgba(0,0,0,.45);
+border:3px solid rgba(255,255,255,.18);
+}
+
+.supportAvatarLightbox__card img{
+width:100%;
+height:100%;
+object-fit:cover;
+display:block;
+}
+
+body.supportAvatarLightboxOpen{
+overflow:hidden;
+}
+
 .msgAvatar img,
 .msgRowAvatar img{
 width:100%;
@@ -138,37 +205,17 @@ margin-bottom:8px;
 }
 
 .msgRow--admin{
-margin-left:auto;
-margin-right:0;
-flex-direction:row-reverse;
-}
-
-.msgRow--user{
 margin-right:auto;
 margin-left:0;
 }
 
+.msgRow--user{
+margin-left:auto;
+margin-right:0;
+}
+
 .msgRowAvatar{
-width:34px;
-height:34px;
-border-radius:50%;
-background:linear-gradient(135deg,#3b82f6,#8b5cf6);
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:13px;
-font-weight:bold;
-flex-shrink:0;
-overflow:hidden;
-}
-
-.msgRow--admin .msgRowAvatar{
-background:linear-gradient(135deg,#22c55e,#16a34a);
-}
-
-.msgRowInitial{
-color:#fff;
-line-height:1;
+display:none !important;
 }
 
 .msgRow .msgBubble{
@@ -1017,8 +1064,8 @@ min-height:0;
 .supportPage .msg.usermsg{
 background:var(--msg-in);
 color:var(--msg-text);
-margin-right:auto;
-margin-left:0;
+margin-left:auto;
+margin-right:0;
 border-bottom-right-radius:4px;
 max-width:78%;
 }
@@ -1026,8 +1073,8 @@ max-width:78%;
 .supportPage .msg.admin{
 background:var(--msg-admin);
 color:#052e16;
-margin-left:auto;
-margin-right:0;
+margin-right:auto;
+margin-left:0;
 border-bottom-left-radius:4px;
 max-width:78%;
 }

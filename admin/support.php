@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '/support_ui.css?v=37';
+$cssHref = '/support_ui.css?v=38';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '/support_ui.js?v=37';
+$jsHref = '/support_ui.js?v=38';
 
 if(is_file(__DIR__ . '/../profile_lib.php')){
     require_once __DIR__ . '/../profile_lib.php';
@@ -176,9 +176,9 @@ if(!$supportEmbedded){
 <button type="button" class="supportBackBtn" id="supportBackBtn">← لیست</button>
 <?php
 try{
-    echo supportRenderConvAvatarHtml($currentUser);
+    echo supportRenderHeaderAvatarHtml($currentUser);
 }catch(Throwable $e){
-    echo '<div class="msgAvatar">' . supportSafeHtml(supportUserInitial($currentUser)) . '</div>';
+    echo '<button type="button" class="msgAvatar msgAvatar--header" id="supportHeaderAvatar" aria-label="نمایش عکس پروفایل">' . supportSafeHtml(supportUserInitial($currentUser)) . '</button>';
 }
 ?>
 <div class="msgHeaderInfo">
@@ -273,6 +273,11 @@ if(!$hasMessages){
 
 <div id="profileHost"></div>
 
+<div class="supportAvatarLightbox" id="supportAvatarLightbox" hidden aria-hidden="true">
+<div class="supportAvatarLightbox__backdrop" data-close="1"></div>
+<div class="supportAvatarLightbox__card" id="supportAvatarLightboxCard" aria-hidden="true"></div>
+</div>
+
 <script src="<?php echo htmlspecialchars($jsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
 (function(){
@@ -323,6 +328,48 @@ if(!$hasMessages){
         document.getElementById('profileHost').style.display = 'none';
         document.body.style.overflow = '';
     };
+
+    function closeSupportAvatarLightbox(){
+        const box = document.getElementById('supportAvatarLightbox');
+        const card = document.getElementById('supportAvatarLightboxCard');
+
+        if(!box){
+            return;
+        }
+
+        box.hidden = true;
+        box.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('supportAvatarLightboxOpen');
+
+        if(card){
+            card.innerHTML = '';
+        }
+    }
+
+    function initSupportHeaderAvatar(){
+        const btn = document.getElementById('supportHeaderAvatar');
+        const box = document.getElementById('supportAvatarLightbox');
+        const card = document.getElementById('supportAvatarLightboxCard');
+
+        if(!btn || !box || !card){
+            return;
+        }
+
+        btn.addEventListener('click', function(){
+            card.innerHTML = btn.innerHTML;
+            box.hidden = false;
+            box.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('supportAvatarLightboxOpen');
+        });
+
+        box.addEventListener('click', function(e){
+            if(e.target && e.target.getAttribute('data-close') === '1'){
+                closeSupportAvatarLightbox();
+            }
+        });
+    }
+
+    initSupportHeaderAvatar();
 
     window.copySub = function(button){
         const input = button.parentElement
@@ -384,6 +431,7 @@ if(!$hasMessages){
 
     document.addEventListener('keydown', function(e){
         if(e.key === 'Escape'){
+            closeSupportAvatarLightbox();
             closeProfileModal();
         }
     });

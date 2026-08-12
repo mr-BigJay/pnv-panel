@@ -730,33 +730,11 @@
         }
     }
 
-    function buildAvatarNode(msg){
-        const avatar = msg.avatar || '';
-        const initial = escapeHtml(msg.avatar_initial || (msg.sender === 'admin' ? 'پ' : '?'));
-        const avatarEl = document.createElement('div');
-        avatarEl.className = 'msgRowAvatar';
-
-        if(avatar){
-            const img = document.createElement('img');
-            img.src = avatar;
-            img.alt = '';
-            avatarEl.appendChild(img);
-        }else{
-            const span = document.createElement('span');
-            span.className = 'msgRowInitial';
-            span.textContent = initial;
-            avatarEl.appendChild(span);
-        }
-
-        return avatarEl;
-    }
-
     function buildBubbleNode(msg, classMap, actionMeta){
         const sender = msg.sender || 'user';
         let cls = classMap[sender] || classMap.user || 'user';
         const row = document.createElement('div');
         row.className = 'msgRow ' + (sender === 'admin' ? 'msgRow--admin' : 'msgRow--user');
-        row.appendChild(buildAvatarNode(msg));
 
         const wrap = document.createElement('div');
         wrap.className = 'msgBubble ' + cls + ' msg ' + cls;

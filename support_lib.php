@@ -654,6 +654,36 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportRenderHeaderAvatarHtml($username){
+
+        require_once __DIR__ . '/profile_lib.php';
+
+        $username = trim((string)$username);
+        $avatar = profileGetUserAvatar($username);
+        $initial = supportSafeHtml(supportUserInitial($username));
+        $photoClass = $avatar !== '' ? ' msgAvatar--photo' : '';
+
+        ob_start();
+        ?>
+
+        <button
+            type="button"
+            class="msgAvatar msgAvatar--header<?php echo $photoClass; ?>"
+            id="supportHeaderAvatar"
+            aria-label="نمایش عکس پروفایل"
+        >
+        <?php if($avatar !== ''){ ?>
+            <img src="<?php echo supportSafeHtml('/' . ltrim($avatar, '/')); ?>" alt="">
+        <?php } else { ?>
+            <?php echo $initial; ?>
+        <?php } ?>
+        </button>
+
+        <?php
+        return ob_get_clean();
+
+    }
+
     function supportSortTickets($data){
 
         usort($data, function($a, $b){
@@ -1179,8 +1209,6 @@ if(!function_exists('supportLoad')){
         ?>
 
         <div class="<?php echo $rowClass; ?>">
-
-        <?php echo supportRenderAvatarHtml($sender, ['chatUser' => $chatUser]); ?>
 
         <div
             class="msgBubble msg <?php echo $class; ?>"
