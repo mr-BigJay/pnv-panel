@@ -16,6 +16,7 @@ files=(
   "instant-pay-api.php"
   "instant_pay_lib.php"
   "dashboard.php"
+  "admin/campaign_ui.php"
   "admin/campaigns.php"
   "admin/campaign-discounts.php"
   "admin/campaign-announcements.php"

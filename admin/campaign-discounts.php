@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/admin_nav.php';
+require_once __DIR__ . '/campaign_ui.php';
 require_once __DIR__ . '/../campaign_lib.php';
 
 pnvAdminRequireAuth();
@@ -9,7 +10,15 @@ pnvAdminRequireAuth();
 $codes = campaignDiscountCodesLoad();
 $flash = '';
 $editId = trim((string)($_GET['edit'] ?? ''));
-$editRow = $editId !== '' ? campaignFindDiscountById($codes, $editId) : null;
+$editRow = null;
+
+foreach($codes as $row){
+    if(($row['id'] ?? '') === $editId){
+        $editRow = $row;
+        break;
+    }
+}
+
 $q = trim((string)($_GET['q'] ?? ''));
 $statusFilter = trim((string)($_GET['status'] ?? ''));
 
@@ -20,10 +29,12 @@ if(isset($_POST['save_discount'])){
     $value = max(0, intval($_POST['value'] ?? 0));
     $maxUses = max(0, intval($_POST['max_uses'] ?? 0));
     $perUserLimit = max(0, intval($_POST['per_user_limit'] ?? 0));
-    $minimum = max(0, intval($_POST['minimum_purchase_amount'] ?? 0));
-    $status = ($_POST['status'] ?? '') === 'inactive' ? 'inactive' : 'active';
+    $minimumTomans = max(0, intval($_POST['minimum_purchase_tomans'] ?? 0));
+    $minimum = $minimumTomans > 0 ? (int)ceil($minimumTomans / 1000) : 0;
+    $status = !empty($_POST['status_active']) ? 'active' : 'inactive';
     $startsAt = campaignParseDateTime($_POST['starts_at'] ?? '');
     $expiresAt = campaignParseDateTime($_POST['expires_at'] ?? '');
+    $description = trim((string)($_POST['description'] ?? ''));
     $planFilterRaw = trim((string)($_POST['plan_filter'] ?? ''));
     $planFilter = [];
 
@@ -34,6 +45,10 @@ if(isset($_POST['save_discount'])){
                 $planFilter[] = $part;
             }
         }
+    }
+
+    if($type === 'fixed'){
+        $value = $value > 0 ? (int)ceil($value / 1000) : 0;
     }
 
     if($code === ''){
@@ -63,6 +78,7 @@ if(isset($_POST['save_discount'])){
                 'per_user_limit' => $perUserLimit,
                 'minimum_purchase_amount' => $minimum,
                 'plan_filter' => $planFilter,
+                'description' => $description,
                 'starts_at' => $startsAt,
                 'expires_at' => $expiresAt,
                 'status' => $status,
@@ -144,124 +160,302 @@ usort($codes, function($a, $b){
     return intval($b['created_at'] ?? 0) <=> intval($a['created_at'] ?? 0);
 });
 
-function campaignAdminSharedStyles(){
-    echo '<style>
-*{box-sizing:border-box}body{margin:0;padding:20px;background:#0f172a;font-family:tahoma;direction:rtl;color:#fff}
-.container{max-width:1100px;margin:auto}.box{background:#1e293b;padding:20px;border-radius:20px;margin-bottom:20px}
-h2{margin-top:0;margin-bottom:16px;font-size:24px}.campNav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
-.campNav a{display:inline-flex;padding:8px 12px;border-radius:10px;background:#334155;color:#fff;text-decoration:none;font-size:13px}
-.campNav a.is-active{background:#22c55e;color:#052e16;font-weight:700}
-.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.formgrid--3{grid-template-columns:repeat(3,minmax(0,1fr))}
-input,select,textarea{width:100%;padding:12px;border:none;border-radius:12px;background:#0f172a;color:#fff;font-family:tahoma;font-size:14px}
-textarea{min-height:80px;resize:vertical}button,.btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 16px;border:none;border-radius:12px;background:#22c55e;color:#052e16;font-family:tahoma;font-size:14px;cursor:pointer;text-decoration:none}
-.btn--muted{background:#334155;color:#fff}.btn--danger{background:#dc2626;color:#fff}
-.tablebox{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:860px}th,td{padding:12px;text-align:center;font-size:13px;border-top:1px solid #334155}
-th{background:#334155}.badge{display:inline-flex;padding:4px 10px;border-radius:999px;font-size:11px;background:#334155}
-.badge.is-on{background:#14532d;color:#bbf7d0}.badge.is-off{background:#475569;color:#e2e8f0}
-.flash{background:#713f12;color:#fde68a;padding:12px;border-radius:12px;margin-bottom:12px}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.back{display:block;margin-top:20px;background:#334155;padding:14px;border-radius:14px;text-align:center;color:#fff;text-decoration:none}
-@media(max-width:768px){body{padding:10px}.formgrid,.formgrid--3{grid-template-columns:1fr}table{min-width:760px}}
-</style>';
-}
-
 function campaignInputDateTimeLocal($ts){
     $ts = intval($ts);
-    if($ts <= 0){ return ''; }
+    if($ts <= 0){
+        return '';
+    }
     return date('Y-m-d\TH:i', $ts);
 }
 
+function campaignDiscountTypeLabel($row){
+    if(($row['type'] ?? '') === 'fixed'){
+        return 'ثابت ' . number_format(intval($row['value'] ?? 0) * 1000) . ' تومان';
+    }
+    return intval($row['value'] ?? 0) . '٪ درصدی';
+}
+
+function campaignDiscountValidityText($row){
+    $start = intval($row['starts_at'] ?? 0);
+    $end = intval($row['expires_at'] ?? 0);
+
+    if($start <= 0 && $end <= 0){
+        return 'بدون محدودیت زمانی';
+    }
+
+    $parts = [];
+
+    if($start > 0){
+        $parts[] = 'از ' . campaignFormatDateTime($start);
+    }
+
+    if($end > 0){
+        $parts[] = 'تا ' . campaignFormatDateTime($end);
+    }
+
+    return implode(' ', $parts);
+}
+
+$editMinimumTomans = intval($editRow['minimum_purchase_amount'] ?? 0) * 1000;
+$editValue = intval($editRow['value'] ?? 0);
+
+if(($editRow['type'] ?? '') === 'fixed'){
+    $editValue = $editValue * 1000;
+}
+
+$isActive = ($editRow['status'] ?? 'active') === 'active';
+
 ?>
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>کدهای تخفیف</title>
-<?php campaignAdminSharedStyles(); ?>
+<?php campaignAdminStyles(); ?>
 </head>
-<body>
-<div class="container">
+<body class="campaignAdmin">
+<div class="campaignShell">
 
-<nav class="campNav">
-<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaigns.php'), ENT_QUOTES, 'UTF-8'); ?>">نمای کلی</a>
-<a class="is-active" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php'), ENT_QUOTES, 'UTF-8'); ?>">کدهای تخفیف</a>
-<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php'), ENT_QUOTES, 'UTF-8'); ?>">پیام‌های داشبورد</a>
-</nav>
+<?php campaignAdminNav('discounts'); ?>
 
-<div class="box">
-<h2><?php echo $editRow ? 'ویرایش کد تخفیف' : 'ایجاد کد تخفیف'; ?></h2>
-<?php if($flash !== ''){ ?><div class="flash"><?php echo htmlspecialchars($flash, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
-<form method="POST">
+<div class="campaignCard">
+<div class="campaignCardHead">
+<h2 class="campaignCardTitle"><?php echo $editRow ? 'ویرایش کد تخفیف' : 'ایجاد کد تخفیف'; ?></h2>
+<span class="campaignCardIcon"><?php echo campaignIconTicket(); ?></span>
+</div>
+
+<?php if($flash !== ''){ ?><div class="campaignFlash"><?php echo htmlspecialchars($flash, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
+
+<form method="POST" id="discountForm">
 <input type="hidden" name="save_discount" value="1">
 <input type="hidden" name="id" value="<?php echo htmlspecialchars($editRow['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-<div class="formgrid">
-<input name="code" placeholder="کد (مثلاً SUMMER30)" value="<?php echo htmlspecialchars($editRow['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
-<select name="type">
+
+<div class="campaignSection">
+<p class="campaignSectionTitle">اطلاعات اصلی</p>
+<div class="campaignField">
+<label class="campaignLabel">کد تخفیف</label>
+<div class="campaignInputWrap">
+<?php echo campaignIconTicket(); ?>
+<input class="campaignInput" name="code" placeholder="SUMMER30" value="<?php echo htmlspecialchars($editRow['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
+</div>
+</div>
+<div class="campaignGrid2">
+<div class="campaignField">
+<label class="campaignLabel">نوع تخفیف</label>
+<select class="campaignSelect" name="type" id="discountType">
 <option value="percent" <?php echo (($editRow['type'] ?? 'percent') === 'percent') ? 'selected' : ''; ?>>درصدی</option>
-<option value="fixed" <?php echo (($editRow['type'] ?? '') === 'fixed') ? 'selected' : ''; ?>>مبلغ ثابت (هزار تومان)</option>
+<option value="fixed" <?php echo (($editRow['type'] ?? '') === 'fixed') ? 'selected' : ''; ?>>مبلغ ثابت</option>
 </select>
-<input name="value" type="number" min="0" placeholder="مقدار (30 یا 150)" value="<?php echo (int)($editRow['value'] ?? 0); ?>" required>
-<input name="max_uses" type="number" min="0" placeholder="حداکثر استفاده (0=نامحدود)" value="<?php echo (int)($editRow['max_uses'] ?? 0); ?>">
-<input name="per_user_limit" type="number" min="0" placeholder="هر کاربر (0=نامحدود)" value="<?php echo (int)($editRow['per_user_limit'] ?? 0); ?>">
-<input name="minimum_purchase_amount" type="number" min="0" placeholder="حداقل مبلغ خرید (هزار تومان)" value="<?php echo (int)($editRow['minimum_purchase_amount'] ?? 0); ?>">
-<select name="status">
-<option value="active" <?php echo (($editRow['status'] ?? 'active') === 'active') ? 'selected' : ''; ?>>فعال</option>
-<option value="inactive" <?php echo (($editRow['status'] ?? '') === 'inactive') ? 'selected' : ''; ?>>غیرفعال</option>
-</select>
-<input name="starts_at" type="datetime-local" value="<?php echo htmlspecialchars(campaignInputDateTimeLocal($editRow['starts_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
-<input name="expires_at" type="datetime-local" value="<?php echo htmlspecialchars(campaignInputDateTimeLocal($editRow['expires_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
 </div>
-<textarea name="plan_filter" placeholder="محدودیت پلن (اختیاری) — هر خط یک نام پلن"><?php echo htmlspecialchars(implode("\n", (array)($editRow['plan_filter'] ?? [])), ENT_QUOTES, 'UTF-8'); ?></textarea>
-<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-<button type="submit"><?php echo $editRow ? 'ذخیره تغییرات' : '+ ایجاد کد تخفیف'; ?></button>
-<?php if($editRow){ ?><a class="btn btn--muted" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php'), ENT_QUOTES, 'UTF-8'); ?>">انصراف</a><?php } ?>
+<div class="campaignField">
+<label class="campaignLabel">مقدار تخفیف</label>
+<div class="campaignInputWrap hasSuffix" id="valueWrap">
+<span class="campaignSuffix" id="valueSuffix"><?php echo (($editRow['type'] ?? 'percent') === 'fixed') ? 'تومان' : '%'; ?></span>
+<input class="campaignInput" name="value" id="discountValue" type="number" min="0" placeholder="مثال: 30" value="<?php echo $editValue > 0 ? (int)$editValue : ''; ?>" required>
 </div>
+</div>
+</div>
+</div>
+
+<div class="campaignSection">
+<p class="campaignSectionTitle">محدودیت‌های استفاده</p>
+<div class="campaignGrid2">
+<div class="campaignField">
+<label class="campaignLabel">سقف استفاده</label>
+<div class="campaignInputWrap">
+<?php echo campaignIconUser(); ?>
+<input class="campaignInput" name="max_uses" type="number" min="0" placeholder="مثال: 100" value="<?php echo (int)($editRow['max_uses'] ?? 0) ?: ''; ?>">
+</div>
+</div>
+<div class="campaignField">
+<label class="campaignLabel">حداقل خرید (تومان)</label>
+<div class="campaignInputWrap">
+<?php echo campaignIconMoney(); ?>
+<input class="campaignInput" name="minimum_purchase_tomans" type="number" min="0" placeholder="مثال: 100000" value="<?php echo $editMinimumTomans > 0 ? (int)$editMinimumTomans : ''; ?>">
+</div>
+</div>
+</div>
+<div class="campaignField">
+<label class="campaignLabel">محدودیت هر کاربر</label>
+<div class="campaignInputWrap">
+<?php echo campaignIconUser(); ?>
+<input class="campaignInput" name="per_user_limit" type="number" min="0" placeholder="مثال: 1" value="<?php echo (int)($editRow['per_user_limit'] ?? 0) ?: ''; ?>">
+</div>
+<p class="campaignHint">۰ یا خالی یعنی بدون محدودیت برای هر کاربر</p>
+</div>
+</div>
+
+<div class="campaignSection">
+<p class="campaignSectionTitle">محدوده اعتبار</p>
+<div class="campaignGrid2">
+<div class="campaignField">
+<label class="campaignLabel">تاریخ شروع (اختیاری)</label>
+<div class="campaignInputWrap">
+<?php echo campaignIconCalendar(); ?>
+<input class="campaignInput" name="starts_at" type="datetime-local" value="<?php echo htmlspecialchars(campaignInputDateTimeLocal($editRow['starts_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
+</div>
+</div>
+<div class="campaignField">
+<label class="campaignLabel">تاریخ پایان (اختیاری)</label>
+<div class="campaignInputWrap">
+<?php echo campaignIconCalendar(); ?>
+<input class="campaignInput" name="expires_at" type="datetime-local" value="<?php echo htmlspecialchars(campaignInputDateTimeLocal($editRow['expires_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
+</div>
+</div>
+</div>
+</div>
+
+<div class="campaignSection">
+<p class="campaignSectionTitle">تنظیمات</p>
+<div class="campaignToggleRow">
+<div class="campaignToggleText">کد تخفیف در حال حاضر فعال است</div>
+<label class="campaignToggle">
+<input type="checkbox" name="status_active" value="1" <?php echo $isActive ? 'checked' : ''; ?>>
+<span class="campaignToggleTrack"></span>
+</label>
+</div>
+<div class="campaignField" style="margin-top:10px">
+<label class="campaignLabel">توضیحات (اختیاری)</label>
+<textarea class="campaignTextarea" name="description" placeholder="توضیحات داخلی برای مدیریت"><?php echo htmlspecialchars($editRow['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+</div>
+<input type="hidden" name="plan_filter" value="<?php echo htmlspecialchars(implode("\n", (array)($editRow['plan_filter'] ?? [])), ENT_QUOTES, 'UTF-8'); ?>">
+</div>
+
+<button class="campaignSubmit" type="submit"><?php echo $editRow ? 'ذخیره تغییرات' : '+ ایجاد کد تخفیف'; ?></button>
+<?php if($editRow){ ?>
+<a class="campaignBack" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php'), ENT_QUOTES, 'UTF-8'); ?>">انصراف از ویرایش</a>
+<?php } ?>
 </form>
 </div>
 
-<div class="box">
-<h2>لیست کدهای تخفیف</h2>
-<form class="toolbar" method="GET">
-<input name="q" placeholder="جستجوی کد..." value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
-<select name="status">
+<div class="campaignCard">
+<div class="campaignCardHead">
+<h2 class="campaignCardTitle">لیست کدهای تخفیف</h2>
+<span class="campaignCardIcon"><?php echo campaignIconList(); ?></span>
+</div>
+
+<form class="campaignSearchRow" method="GET" id="filterForm">
+<div class="campaignSearchWrap">
+<?php echo campaignIconSearch(); ?>
+<input name="q" placeholder="جستجو در کدها..." value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
+</div>
+<button class="campaignFilterBtn" type="button" id="filterToggleBtn">فیلتر</button>
+</form>
+
+<div class="campaignGrid2 campaignHidden" id="filterPanel" style="margin-bottom:12px">
+<select class="campaignSelect" name="status" form="filterForm">
 <option value="">همه وضعیت‌ها</option>
 <option value="active" <?php echo $statusFilter === 'active' ? 'selected' : ''; ?>>فعال</option>
 <option value="inactive" <?php echo $statusFilter === 'inactive' ? 'selected' : ''; ?>>غیرفعال</option>
 </select>
-<button type="submit">فیلتر</button>
-</form>
-<div class="tablebox">
-<table>
-<tr>
-<th>کد</th><th>نوع</th><th>مقدار</th><th>استفاده</th><th>اعتبار</th><th>وضعیت</th><th>عملیات</th>
-</tr>
-<?php foreach($codes as $row){
-    $counts = campaignDiscountUsageCounts($row['id']);
-    $maxUses = intval($row['max_uses'] ?? 0);
-    $useText = (int)$counts['confirmed'];
-    if($maxUses > 0){ $useText .= ' / ' . $maxUses; }
-    if($counts['pending'] > 0){ $useText .= ' (' . (int)$counts['pending'] . ' رزرو)'; }
-    $valueText = (($row['type'] ?? '') === 'fixed') ? number_format((int)($row['value'] ?? 0)) . ' هزار' : (int)($row['value'] ?? 0) . '٪';
-?>
-<tr>
-<td><strong><?php echo htmlspecialchars($row['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></strong></td>
-<td><?php echo ($row['type'] ?? '') === 'fixed' ? 'ثابت' : 'درصدی'; ?></td>
-<td><?php echo htmlspecialchars($valueText, ENT_QUOTES, 'UTF-8'); ?></td>
-<td><?php echo htmlspecialchars($useText, ENT_QUOTES, 'UTF-8'); ?></td>
-<td><?php echo htmlspecialchars(campaignFormatDateTime($row['starts_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?><br>تا <?php echo htmlspecialchars(campaignFormatDateTime($row['expires_at'] ?? 0), ENT_QUOTES, 'UTF-8'); ?></td>
-<td><span class="badge <?php echo ($row['status'] ?? '') === 'active' ? 'is-on' : 'is-off'; ?>"><?php echo ($row['status'] ?? '') === 'active' ? 'فعال' : 'غیرفعال'; ?></span></td>
-<td>
-<a class="btn btn--muted" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php?edit=' . urlencode($row['id'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>">ویرایش</a>
-<a class="btn btn--muted" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php?toggle=' . urlencode($row['id'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>">تغییر وضعیت</a>
-<a class="btn btn--danger" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php?delete=' . urlencode($row['id'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>" onclick="return confirm('حذف شود؟');">حذف</a>
-</td>
-</tr>
-<?php } ?>
-</table>
-</div>
+<button class="campaignFilterBtn" type="submit" form="filterForm">اعمال فیلتر</button>
 </div>
 
-<a class="back" href="<?php echo htmlspecialchars(pnvAdminUrl('campaigns.php'), ENT_QUOTES, 'UTF-8'); ?>">بازگشت</a>
+<div class="campaignList" id="discountList">
+<?php
+$index = 0;
+foreach($codes as $row){
+    $index++;
+    $hiddenClass = $index > 3 ? ' campaignHidden campaignListExtra' : '';
+    $counts = campaignDiscountUsageCounts($row['id']);
+    $maxUses = intval($row['max_uses'] ?? 0);
+    $used = (int)$counts['confirmed'];
+    $percent = ($maxUses > 0) ? min(100, (int)round(($used / $maxUses) * 100)) : 0;
+    $useLabel = $maxUses > 0 ? ($used . ' / ' . $maxUses) : ($used . ' / ∞');
+    $minTomans = intval($row['minimum_purchase_amount'] ?? 0) * 1000;
+    $isRowActive = ($row['status'] ?? '') === 'active';
+    $rowId = urlencode($row['id'] ?? '');
+?>
+<div class="campaignListItem<?php echo $hiddenClass; ?>">
+<div class="campaignMenu">
+<button type="button" class="campaignMenuBtn" data-menu-btn aria-label="عملیات">⋯</button>
+<div class="campaignMenuPanel">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php?edit=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">ویرایش</a>
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php?toggle=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">تغییر وضعیت</a>
+<a class="is-danger" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php?delete=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>" onclick="return confirm('حذف شود؟');">حذف</a>
 </div>
+</div>
+<div>
+<div class="campaignItemTop">
+<div>
+<div class="campaignItemCode"><?php echo htmlspecialchars($row['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
+<span class="campaignBadge <?php echo $isRowActive ? 'is-active' : 'is-inactive'; ?>"><?php echo $isRowActive ? 'فعال' : 'غیرفعال'; ?></span>
+</div>
+</div>
+<div class="campaignItemType"><?php echo htmlspecialchars(campaignDiscountTypeLabel($row), ENT_QUOTES, 'UTF-8'); ?></div>
+<div class="campaignProgressWrap">
+<div class="campaignProgressMeta"><span>مصرف</span><span><?php echo htmlspecialchars($useLabel, ENT_QUOTES, 'UTF-8'); ?><?php echo $maxUses > 0 ? ' (' . $percent . '%)' : ''; ?></span></div>
+<div class="campaignProgress"><div class="campaignProgressBar" style="width:<?php echo $maxUses > 0 ? $percent : min(100, $used * 10); ?>%"></div></div>
+</div>
+<div class="campaignItemMeta">
+<div><strong>اعتبار</strong><?php echo htmlspecialchars(campaignDiscountValidityText($row), ENT_QUOTES, 'UTF-8'); ?></div>
+<div><strong>حداقل خرید</strong><?php echo $minTomans > 0 ? number_format($minTomans) . ' تومان' : 'بدون محدودیت'; ?></div>
+</div>
+</div>
+</div>
+<?php } ?>
+</div>
+
+<?php if(count($codes) > 3){ ?>
+<button type="button" class="campaignMoreBtn" id="showMoreBtn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6"/></svg>
+مشاهده بیشتر
+</button>
+<?php } ?>
+</div>
+
+<a class="campaignBack" href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>">بازگشت به داشبورد</a>
+</div>
+
+<script>
+(function(){
+    const typeEl = document.getElementById('discountType');
+    const suffixEl = document.getElementById('valueSuffix');
+    const valueEl = document.getElementById('discountValue');
+    function syncType(){
+        if(!typeEl || !suffixEl || !valueEl) return;
+        const isFixed = typeEl.value === 'fixed';
+        suffixEl.textContent = isFixed ? 'تومان' : '%';
+        valueEl.placeholder = isFixed ? 'مثال: 100000' : 'مثال: 30';
+    }
+    if(typeEl){ typeEl.addEventListener('change', syncType); syncType(); }
+
+    document.querySelectorAll('[data-menu-btn]').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+            e.stopPropagation();
+            const panel = btn.parentElement.querySelector('.campaignMenuPanel');
+            document.querySelectorAll('.campaignMenuPanel.is-open').forEach(function(open){
+                if(open !== panel) open.classList.remove('is-open');
+            });
+            if(panel) panel.classList.toggle('is-open');
+        });
+    });
+    document.addEventListener('click', function(){
+        document.querySelectorAll('.campaignMenuPanel.is-open').forEach(function(panel){
+            panel.classList.remove('is-open');
+        });
+    });
+
+    const filterBtn = document.getElementById('filterToggleBtn');
+    const filterPanel = document.getElementById('filterPanel');
+    if(filterBtn && filterPanel){
+        filterBtn.addEventListener('click', function(){
+            filterPanel.classList.toggle('campaignHidden');
+        });
+        <?php if($statusFilter !== ''){ ?>filterPanel.classList.remove('campaignHidden');<?php } ?>
+    }
+
+    const showMoreBtn = document.getElementById('showMoreBtn');
+    if(showMoreBtn){
+        showMoreBtn.addEventListener('click', function(){
+            document.querySelectorAll('.campaignListExtra').forEach(function(item){
+                item.classList.remove('campaignHidden');
+            });
+            showMoreBtn.classList.add('campaignHidden');
+        });
+    }
+})();
+</script>
 </body>
 </html>
