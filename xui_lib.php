@@ -202,6 +202,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $catalog = xuiLoadPlansCatalog();
+        $priceK = xuiParsePlanPriceThousands($planText);
         $strLen = function_exists('mb_strlen') ? 'mb_strlen' : 'strlen';
         $strIpos = function_exists('mb_stripos') ? 'mb_stripos' : 'stripos';
         usort($catalog, static function($a, $b) use ($strLen){
@@ -219,14 +220,14 @@ if(!function_exists('xuiConfigPath')){
                 continue;
             }
 
-            $days = trim((string)($plan['days'] ?? ''));
-
-            if($days === '' || $days === 'نامحدود' || strcasecmp($days, 'unlimited') === 0){
-                return 0;
+            if($priceK > 0 && intval($plan['price'] ?? 0) !== $priceK){
+                continue;
             }
 
-            if(preg_match('/^\d+$/', $days)){
-                return max(0, intval($days));
+            $days = xuiCatalogPlanDays($plan);
+
+            if($days > 0){
+                return $days;
             }
         }
 
@@ -236,6 +237,123 @@ if(!function_exists('xuiConfigPath')){
 
         if(preg_match('/(\d+)\s*روز/u', $planText, $m)){
             return max(0, intval($m[1]));
+        }
+
+        return xuiParsePlanDaysFromCatalog($planText, false);
+    }
+
+    function xuiParsePlanPriceThousands($planText){
+        $planText = trim((string)$planText);
+
+        if($planText === ''){
+            return 0;
+        }
+
+        if(preg_match('/(\d[\d,]*)\s*هزار/u', $planText, $m)){
+            return max(0, intval(str_replace(',', '', $m[1])));
+        }
+
+        if(preg_match('/([\d.]+)\s*میلیون/u', $planText, $m)){
+            return max(0, (int)round(floatval($m[1]) * 1000));
+        }
+
+        return 0;
+    }
+
+    function xuiCatalogPlanDays($plan){
+        if(!is_array($plan)){
+            return 0;
+        }
+
+        $days = trim((string)($plan['days'] ?? ''));
+
+        if($days === '' || $days === 'نامحدود' || strcasecmp($days, 'unlimited') === 0){
+            return 0;
+        }
+
+        if(preg_match('/^\d+$/', $days)){
+            return max(0, intval($days));
+        }
+
+        return 0;
+    }
+
+    function xuiParsePlanDaysFromCatalog($planText, $preferLimited = false){
+        $planText = trim((string)$planText);
+
+        if($planText === ''){
+            return 0;
+        }
+
+        $catalog = xuiLoadPlansCatalog();
+        $priceK = xuiParsePlanPriceThousands($planText);
+        $strIpos = function_exists('mb_stripos') ? 'mb_stripos' : 'stripos';
+        $matches = [];
+
+        foreach($catalog as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $name = trim((string)($plan['name'] ?? ''));
+
+            if($name === '' || $strIpos($planText, $name) === false){
+                continue;
+            }
+
+            if($priceK > 0 && intval($plan['price'] ?? 0) !== $priceK){
+                continue;
+            }
+
+            $matches[] = $plan;
+        }
+
+        $pick = static function($list, $limitedOnly){
+            foreach($list as $plan){
+                $days = xuiCatalogPlanDays($plan);
+
+                if($days <= 0){
+                    continue;
+                }
+
+                if($limitedOnly || $days > 0){
+                    return $days;
+                }
+            }
+
+            return 0;
+        };
+
+        if($preferLimited){
+            $days = $pick($matches, true);
+
+            if($days > 0){
+                return $days;
+            }
+        }
+
+        return $pick($matches, false);
+    }
+
+    function xuiResolveRenewPlanDays($planText, $client = null){
+        if(function_exists('pnvPlanDaysFromValue')){
+            $plans = xuiLoadPlansCatalog();
+            $preferLimited = is_array($client) && xuiClientExpiryMs($client) > 0;
+            $days = pnvPlanDaysFromValue($planText, $plans, $preferLimited);
+
+            if($days > 0){
+                return $days;
+            }
+        }
+
+        $days = xuiParsePlanDays($planText);
+
+        if($days > 0){
+            return $days;
+        }
+
+        if(is_array($client) && xuiClientExpiryMs($client) > 0){
+            return xuiParsePlanDaysFromCatalog($planText, true);
         }
 
         return 0;
@@ -1162,7 +1280,7 @@ if(!function_exists('xuiConfigPath')){
     }
 
     /**
-     * انقضای جدید بعد از تمدید پلن زمان‌دار: planDays روز از لحظه تمدید.
+     * انقضای جدید بعد از تمدید پلن زمان‌دار: planDays روز به max(الان، انقضای فعلی) اضافه می‌شود.
      */
     function xuiComputeRenewExpiryMs($client, $planDays){
         $planDays = max(0, intval($planDays));
@@ -1172,8 +1290,10 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $nowMs = (int)round(microtime(true) * 1000);
+        $currentMs = xuiClientExpiryMs($client);
+        $baseMs = max($nowMs, $currentMs);
 
-        return $nowMs + ($planDays * 86400000);
+        return $baseMs + ($planDays * 86400000);
     }
 
     function xuiComputeBuyExpiryMs($planDays){
@@ -1184,6 +1304,219 @@ if(!function_exists('xuiConfigPath')){
         }
 
         return (time() + ($planDays * 86400)) * 1000;
+    }
+
+    function xuiSetClientExpiry($server, $email, $expiryMs, $client = null){
+        $email = trim((string)$email);
+        $expiryMs = max(0, intval($expiryMs));
+
+        if($email === '' || $expiryMs <= 0){
+            return ['ok' => false, 'error' => 'اطلاعات انقضا ناقص است'];
+        }
+
+        $record = is_array($client) ? $client : null;
+
+        if($record === null || trim((string)($record['email'] ?? '')) === ''){
+            $full = xuiApiRequest($server, 'GET', '/panel/api/clients/get/' . rawurlencode($email));
+
+            if(!empty($full['success']) && is_array($full['obj'] ?? null)){
+                $record = xuiNormalizeClientRecord($full['obj']['client'] ?? $full['obj']);
+            }
+        }
+        else{
+            $record = xuiHydrateClientByEmail($server, $record);
+        }
+
+        if(!is_array($record) || trim((string)($record['email'] ?? '')) === ''){
+            return ['ok' => false, 'error' => 'کلاینت برای بروزرسانی انقضا پیدا نشد'];
+        }
+
+        $record['expiryTime'] = $expiryMs;
+        $record['enable'] = true;
+
+        $update = xuiApiRequest(
+            $server,
+            'POST',
+            '/panel/api/clients/update/' . rawurlencode($email),
+            $record
+        );
+
+        if(!empty($update['success'])){
+            return [
+                'ok' => true,
+                'method' => 'clients/update',
+                'expiry_ms' => $expiryMs,
+                'raw' => $update
+            ];
+        }
+
+        if(!empty($record['id'])){
+            $legacyClient['expiryTime'] = $expiryMs;
+            $legacyClient['enable'] = true;
+            $clientId = trim((string)($legacyClient['id'] ?? ''));
+            $inboundId = intval($legacyClient['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
+
+            if($clientId !== '' && $inboundId > 0){
+                unset($legacyClient['_inbound_id']);
+                $legacyUpdate = xuiApiRequest($server, 'POST', '/panel/api/inbounds/updateClient/' . rawurlencode($clientId), [
+                    'id' => $inboundId,
+                    'settings' => json_encode([
+                        'clients' => [$legacyClient]
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                ]);
+
+                if(!empty($legacyUpdate['success'])){
+                    return [
+                        'ok' => true,
+                        'method' => 'updateClient-expiry',
+                        'expiry_ms' => $expiryMs,
+                        'raw' => $legacyUpdate
+                    ];
+                }
+            }
+        }
+
+        return [
+            'ok' => false,
+            'error' => $update['msg'] ?? 'بروزرسانی انقضا ناموفق بود'
+        ];
+    }
+
+    function xuiBulkAdjustSkippedExpiry($result){
+        if(!is_array($result)){
+            return false;
+        }
+
+        $obj = $result['obj'] ?? $result['raw']['obj'] ?? null;
+
+        if(!is_array($obj)){
+            return false;
+        }
+
+        foreach(($obj['skipped'] ?? []) as $row){
+            if(!is_array($row)){
+                continue;
+            }
+
+            $reason = strtolower(trim((string)($row['reason'] ?? '')));
+
+            if(strpos($reason, 'unlimited expiry') !== false){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function xuiRenewClient($server, $email, $addGb, $planDays, $client = null){
+        $bytes = xuiGbToBytes($addGb);
+        $email = trim((string)$email);
+        $planDays = max(0, intval($planDays));
+        $errors = [];
+        $trafficOk = false;
+        $expiryOk = false;
+        $methods = [];
+
+        if($email !== ''){
+            $trafficResult = xuiApiRequest($server, 'POST', '/panel/api/clients/bulkAdjust', [
+                'emails' => [$email],
+                'addDays' => 0,
+                'addBytes' => $bytes
+            ]);
+
+            if(!empty($trafficResult['success'])){
+                $trafficOk = true;
+                $methods[] = 'bulkAdjust-bytes';
+            }
+            else{
+                $errors[] = 'bulkAdjust-bytes: ' . ($trafficResult['msg'] ?? 'ناموفق');
+            }
+        }
+
+        if($planDays <= 0){
+            if($trafficOk){
+                return ['ok' => true, 'method' => implode('+', $methods), 'add_days' => 0];
+            }
+
+            if(is_array($client)){
+                $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb, 0);
+
+                if(!empty($legacy['ok'])){
+                    return $legacy;
+                }
+
+                $errors[] = 'updateClient-bytes: ' . ($legacy['error'] ?? 'ناموفق');
+            }
+
+            return [
+                'ok' => false,
+                'error' => count($errors) > 0 ? implode(' | ', $errors) : 'افزایش ترافیک ناموفق بود'
+            ];
+        }
+
+        $targetExpiryMs = xuiComputeRenewExpiryMs(is_array($client) ? $client : [], $planDays);
+        $currentExpiryMs = is_array($client) ? xuiClientExpiryMs($client) : 0;
+
+        if($email !== ''){
+            $daysResult = xuiApiRequest($server, 'POST', '/panel/api/clients/bulkAdjust', [
+                'emails' => [$email],
+                'addDays' => $planDays,
+                'addBytes' => 0
+            ]);
+
+            if(!empty($daysResult['success']) && !xuiBulkAdjustSkippedExpiry($daysResult)){
+                $expiryOk = true;
+                $methods[] = 'bulkAdjust-days';
+            }
+            else{
+                if(!empty($daysResult['success']) && xuiBulkAdjustSkippedExpiry($daysResult)){
+                    $errors[] = 'bulkAdjust-days: skipped (unlimited expiry)';
+                }
+                else{
+                    $errors[] = 'bulkAdjust-days: ' . ($daysResult['msg'] ?? 'ناموفق');
+                }
+            }
+        }
+
+        if(!$expiryOk && $targetExpiryMs > 0){
+            $expiryUpdate = xuiSetClientExpiry($server, $email, $targetExpiryMs, $client);
+
+            if(!empty($expiryUpdate['ok'])){
+                $expiryOk = true;
+                $methods[] = $expiryUpdate['method'] ?? 'clients/update';
+            }
+            else{
+                $errors[] = 'expiry: ' . ($expiryUpdate['error'] ?? 'ناموفق');
+            }
+        }
+
+        if(is_array($client) && (!$trafficOk || ($planDays > 0 && !$expiryOk))){
+            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb, $planDays);
+
+            if(!empty($legacy['ok'])){
+                return array_merge($legacy, [
+                    'add_days' => $planDays,
+                    'expiry_ms' => $targetExpiryMs
+                ]);
+            }
+
+            $errors[] = 'updateClient: ' . ($legacy['error'] ?? 'ناموفق');
+        }
+
+        if($trafficOk && ($planDays <= 0 || $expiryOk)){
+            return [
+                'ok' => true,
+                'method' => implode('+', $methods),
+                'add_days' => $planDays,
+                'expiry_ms' => $targetExpiryMs,
+                'previous_expiry_ms' => $currentExpiryMs
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'error' => count($errors) > 0 ? implode(' | ', $errors) : 'تمدید ناموفق بود'
+        ];
     }
 
     function xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays = 0){
@@ -1203,7 +1536,11 @@ if(!function_exists('xuiConfigPath')){
         unset($updated['_inbound_id']);
 
         $currentTotal = xuiClientTotalBytes($client);
-        $updated['totalGB'] = $currentTotal + $addBytes;
+
+        if($addGb > 0){
+            $updated['totalGB'] = $currentTotal + $addBytes;
+        }
+
         $updated['enable'] = true;
 
         if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
@@ -1360,7 +1697,14 @@ if(!function_exists('xuiConfigPath')){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
         }
 
-        $planDays = xuiParsePlanDays($planText);
+        $planDays = xuiResolveRenewPlanDays($planText, $client);
+
+        if($planDays <= 0 && xuiClientExpiryMs($client) > 0){
+            return [
+                'ok' => false,
+                'error' => 'تعداد روز پلن زمان‌دار تشخیص داده نشد. plans.json یا متن پلن را بررسی کنید: ' . $planText
+            ];
+        }
 
         $parsed = xuiParseSubLink($subLink);
 
@@ -1392,7 +1736,7 @@ if(!function_exists('xuiConfigPath')){
             return ['ok' => false, 'error' => 'ایمیل کلاینت خالی است'];
         }
 
-        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $planDays);
+        $adjusted = xuiRenewClient($server, $email, $gb, $planDays, $client);
 
         if(empty($adjusted['ok'])){
             return $adjusted;
@@ -1405,7 +1749,9 @@ if(!function_exists('xuiConfigPath')){
             'sub_id' => $parsed['sub_id'],
             'server_id' => $server['id'] ?? '',
             'gb' => $gb,
-            'days' => $planDays
+            'days' => $planDays,
+            'expiry_ms' => $adjusted['expiry_ms'] ?? 0,
+            'renew_method' => $adjusted['method'] ?? ''
         ];
     }
 

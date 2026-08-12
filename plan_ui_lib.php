@@ -71,8 +71,120 @@ if(!function_exists('pnvFormatPlanPrice')){
     function pnvPlanOptionValue($plan){
         $name = trim((string)($plan['name'] ?? ''));
         $priceText = pnvFormatPlanPrice($plan['price'] ?? 0);
+        $value = $name . ' - ' . $priceText;
 
-        return $name . ' - ' . $priceText;
+        if(!pnvPlanIsUnlimited($plan)){
+            $daysLabel = pnvPlanDaysLabel($plan);
+
+            if($daysLabel !== '' && $daysLabel !== '—' && $daysLabel !== 'نامحدود زمانی'){
+                $value .= ' - ' . $daysLabel;
+            }
+        }
+
+        return $value;
+    }
+
+    function pnvFindPlanByValue($planValue, $plans){
+        $planValue = trim((string)$planValue);
+
+        if($planValue === '' || !is_array($plans)){
+            return null;
+        }
+
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            if(pnvPlanOptionValue($plan) === $planValue){
+                return $plan;
+            }
+        }
+
+        // سازگاری با فاکتورهای قدیمی بدون برچسب روز
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $legacy = trim((string)($plan['name'] ?? ''));
+
+            if($legacy === ''){
+                continue;
+            }
+
+            $priceText = pnvFormatPlanPrice($plan['price'] ?? 0);
+            $legacyValue = $legacy . ' - ' . $priceText;
+
+            if($legacyValue === $planValue || strpos($planValue, $legacyValue) === 0){
+                return $plan;
+            }
+        }
+
+        return null;
+    }
+
+    function pnvPlanDaysFromValue($planValue, $plans, $preferLimited = false){
+        if(function_exists('xuiParsePlanDays')){
+            $days = xuiParsePlanDays($planValue);
+
+            if($days > 0){
+                return $days;
+            }
+        }
+
+        if(!is_array($plans)){
+            $plans = function_exists('xuiLoadPlansCatalog') ? xuiLoadPlansCatalog() : [];
+        }
+
+        $matches = [];
+
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            if(pnvFindPlanByValue($planValue, [$plan])){
+                $matches[] = $plan;
+            }
+        }
+
+        $pickDays = static function($list){
+            foreach($list as $plan){
+                if(pnvPlanIsUnlimited($plan)){
+                    continue;
+                }
+
+                $days = trim((string)($plan['days'] ?? ''));
+
+                if(preg_match('/^\d+$/', $days) && intval($days) > 0){
+                    return intval($days);
+                }
+            }
+
+            return 0;
+        };
+
+        if($preferLimited){
+            $days = $pickDays($matches);
+
+            if($days > 0){
+                return $days;
+            }
+        }
+        else{
+            $days = $pickDays($matches);
+
+            if($days > 0){
+                return $days;
+            }
+        }
+
+        if(function_exists('xuiParsePlanDaysFromCatalog')){
+            return xuiParsePlanDaysFromCatalog($planValue, $preferLimited);
+        }
+
+        return 0;
     }
 
     function pnvPlansForStepUi($plans){
@@ -246,6 +358,10 @@ if(!function_exists('pnvFormatPlanPrice')){
                 $selectedPlan = $plan;
                 break;
             }
+        }
+
+        if(!$selectedPlan){
+            $selectedPlan = pnvFindPlanByValue($planValue, $plans);
         }
 
         if(!$selectedPlan){

@@ -297,6 +297,14 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayFindPlan($planValue, $plans){
+        if(function_exists('pnvFindPlanByValue')){
+            $plan = pnvFindPlanByValue($planValue, $plans);
+
+            if($plan){
+                return $plan;
+            }
+        }
+
         foreach($plans as $plan){
             if(!is_array($plan)){
                 continue;
