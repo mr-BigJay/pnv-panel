@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=38';
+$cssHref = '../support_ui.css?v=39';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=38';
+$jsHref = '../support_ui.js?v=39';
 
 if(!$supportEmbedded){
 ?>
@@ -486,6 +486,10 @@ if(!$hasMessages){
     }
 
     if(currentUser){
+        if('scrollRestoration' in history){
+            history.scrollRestoration = 'manual';
+        }
+
         SupportUI.bindMobileChatLayout({
             containerEl: document.querySelector('.content-support') || document.getElementById('supportPage'),
             messagesEl: supportMessages,
@@ -503,6 +507,10 @@ if(!$hasMessages){
             actionMeta: {isAdmin: true, ownSender: 'admin'},
             interval: 5000
         });
+
+        if(supportMessages){
+            SupportUI.scrollToBottomOnOpen(supportMessages);
+        }
     }
 })();
 </script>

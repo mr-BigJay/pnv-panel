@@ -1004,6 +1004,7 @@ flex-direction:column;
 gap:8px;
 min-height:0;
 overscroll-behavior:contain;
+overflow-anchor:none;
 position:relative;
 z-index:1;
 }

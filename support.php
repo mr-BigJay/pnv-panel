@@ -40,7 +40,7 @@ foreach($data as $ticket){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="support_ui.css?v=33">
+<link rel="stylesheet" href="support_ui.css?v=39">
 <link rel="stylesheet" href="fonts.css">
 <style>
 html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overflow:hidden;}

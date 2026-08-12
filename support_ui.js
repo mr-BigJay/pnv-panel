@@ -8,6 +8,46 @@
         }
     }
 
+    function scrollToBottomOnOpen(el){
+        if(!el){ return; }
+
+        function doScroll(){
+            el.scrollTop = el.scrollHeight;
+        }
+
+        doScroll();
+
+        requestAnimationFrame(function(){
+            doScroll();
+            requestAnimationFrame(doScroll);
+        });
+
+        [0, 50, 120, 250, 500, 900].forEach(function(ms){
+            setTimeout(doScroll, ms);
+        });
+
+        el.querySelectorAll('img').forEach(function(img){
+            if(img.complete){
+                return;
+            }
+            img.addEventListener('load', doScroll, {once: true});
+            img.addEventListener('error', doScroll, {once: true});
+        });
+
+        if(typeof ResizeObserver === 'function'){
+            let ticks = 0;
+            const observer = new ResizeObserver(function(){
+                doScroll();
+                ticks += 1;
+                if(ticks >= 4){
+                    observer.disconnect();
+                }
+            });
+            observer.observe(el);
+            setTimeout(function(){ observer.disconnect(); }, 1200);
+        }
+    }
+
     function escapeHtml(text){
         return String(text)
             .replace(/&/g, '&amp;')
@@ -839,11 +879,12 @@
         }
 
         setInterval(poll, interval);
-        scrollToBottom(chatEl, true);
+        scrollToBottomOnOpen(chatEl);
     }
 
     global.SupportUI = {
         scrollToBottom: scrollToBottom,
+        scrollToBottomOnOpen: scrollToBottomOnOpen,
         bindTextareaGrow: bindTextareaGrow,
         bindEnterToSend: bindEnterToSend,
         bindFormGuard: bindFormGuard,
