@@ -11,33 +11,102 @@ if(!function_exists('supportLoad')){
 
     }
 
-    function supportLoad($file){
+    function supportReadJsonFile($file){
 
-        if(!file_exists($file)){
-            supportSave($file, []);
-            return [];
+        if(!is_file($file) || !is_readable($file)){
+            return null;
         }
 
-        $fp = fopen($file, 'c+');
+        $content = trim((string)file_get_contents($file));
 
-        if(!$fp){
-            return [];
+        if($content === ''){
+            return null;
         }
-
-        flock($fp, LOCK_SH);
-
-        $content = stream_get_contents($fp);
-
-        flock($fp, LOCK_UN);
-        fclose($fp);
 
         $data = json_decode($content, true);
 
-        return is_array($data) ? $data : [];
+        return is_array($data) ? array_values($data) : null;
 
     }
 
-    function supportSave($file, $data){
+    function supportBackupPath($file){
+        return $file . '.bak';
+    }
+
+    function supportWriteBackup($file){
+
+        if(!is_file($file) || filesize($file) < 2){
+            return;
+        }
+
+        @copy($file, supportBackupPath($file));
+
+    }
+
+    function supportRecoverFromBackup($file){
+
+        $backup = supportBackupPath($file);
+
+        if(!is_file($backup)){
+            return null;
+        }
+
+        return supportReadJsonFile($backup);
+
+    }
+
+    function supportLoad($file){
+
+        $data = supportReadJsonFile($file);
+
+        if(!is_array($data)){
+            $data = supportRecoverFromBackup($file);
+            if(is_array($data) && count($data) > 0){
+                supportSave($file, $data, ['force' => true]);
+            }
+            else{
+                if(!file_exists($file)){
+                    supportSave($file, [], ['force' => true]);
+                }
+                return [];
+            }
+        }
+
+        $backup = supportRecoverFromBackup($file);
+
+        if(
+            is_array($backup)
+            && count($backup) > count($data)
+            && count($backup) >= 3
+        ){
+            $data = $backup;
+            supportSave($file, $data, ['force' => true]);
+        }
+
+        return $data;
+
+    }
+
+    function supportSave($file, $data, $options = []){
+
+        if(!is_array($data)){
+            return false;
+        }
+
+        $force = !empty($options['force']);
+        $data = array_values($data);
+        $previous = supportReadJsonFile($file);
+        $previousCount = is_array($previous) ? count($previous) : 0;
+        $nextCount = count($data);
+
+        if(
+            !$force
+            && $previousCount >= 3
+            && $nextCount > 0
+            && $nextCount < $previousCount
+        ){
+            return false;
+        }
 
         $dir = dirname($file);
 
@@ -45,10 +114,18 @@ if(!function_exists('supportLoad')){
             mkdir($dir, 0755, true);
         }
 
+        if(is_file($file) && filesize($file) > 2){
+            supportWriteBackup($file);
+        }
+
         $json = json_encode(
             $data,
             JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT
         );
+
+        if($json === false){
+            return false;
+        }
 
         $fp = fopen($file, 'c+');
 
@@ -188,15 +265,68 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportTicketLastUserMessage($ticket){
+
+        if(empty($ticket['messages']) || !is_array($ticket['messages'])){
+            return null;
+        }
+
+        for($i = count($ticket['messages']) - 1; $i >= 0; $i--){
+            $msg = $ticket['messages'][$i];
+
+            if(($msg['sender'] ?? '') === 'user'){
+                return $msg;
+            }
+        }
+
+        return null;
+
+    }
+
+    function supportMessageTimestamp($message){
+
+        if(!is_array($message)){
+            return 0;
+        }
+
+        $ts = intval($message['timestamp'] ?? 0);
+
+        if($ts > 0){
+            return $ts;
+        }
+
+        $date = trim((string)($message['date'] ?? ''));
+        $time = trim((string)($message['time'] ?? ''));
+
+        if($date === '' && $time === ''){
+            return 0;
+        }
+
+        if(function_exists('pnvJalaliDateTimeToTimestamp')){
+            return intval(pnvJalaliDateTimeToTimestamp($date, $time));
+        }
+
+        if(function_exists('pnvParseDateTimeToTimestamp')){
+            return intval(pnvParseDateTimeToTimestamp(trim($date . ' ' . $time)));
+        }
+
+        return 0;
+
+    }
+
     function supportTicketPreview($ticket){
 
-        $last = supportTicketLastMessage($ticket);
+        $last = supportTicketLastUserMessage($ticket);
+
+        if(!$last){
+            $last = supportTicketLastMessage($ticket);
+        }
 
         if(!$last){
             return 'بدون پیام';
         }
 
-        $text = trim($last['text'] ?? '');
+        $text = trim((string)($last['text'] ?? $last['message'] ?? ''));
 
         if($text === '' && !empty($last['image'])){
             return '📷 تصویر';
@@ -220,9 +350,17 @@ if(!function_exists('supportLoad')){
 
     function supportTicketLastTimestamp($ticket){
 
-        $last = supportTicketLastMessage($ticket);
+        $last = supportTicketLastUserMessage($ticket);
 
-        return intval($last['timestamp'] ?? 0);
+        if(!$last){
+            $last = supportTicketLastMessage($ticket);
+        }
+
+        if(!$last){
+            return 0;
+        }
+
+        return supportMessageTimestamp($last);
 
     }
 

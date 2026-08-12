@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '/support_ui.css?v=40';
+$cssHref = '/support_ui.css?v=41';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '/support_ui.js?v=40';
+$jsHref = '/support_ui.js?v=41';
 
 if(!$supportEmbedded){
 ?>
@@ -69,7 +69,7 @@ if(!$supportEmbedded){
 <div class="msgSidebarHead">
 <div class="msgSidebarHeadRow">
 <a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
-<h2>پیام‌های کاربران</h2>
+<h2>پیام‌های کاربران <span class="msgSidebarCount"><?php echo count($data); ?></span></h2>
 </div>
 <div class="msgSearchWrap">
 <input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
@@ -89,11 +89,32 @@ if(!$supportEmbedded){
 
 <?php foreach($data as $ticket){
 
-    $ticketUser = $ticket['user'] ?? '';
-    $isActive = $currentUser === $ticketUser;
-    $unread = supportAdminUnreadCount($ticket);
-    $preview = supportTicketPreview($ticket);
-    $lastTs = supportTicketLastTimestamp($ticket);
+    if(!is_array($ticket)){
+        continue;
+    }
+
+    $ticketUser = trim((string)($ticket['user'] ?? ''));
+
+    if($ticketUser === ''){
+        continue;
+    }
+
+    try{
+        $isActive = $currentUser === $ticketUser;
+        $unread = supportAdminUnreadCount($ticket);
+        $preview = supportTicketPreview($ticket);
+        $lastTs = supportTicketLastTimestamp($ticket);
+        $listTime = supportRelativeTime($lastTs);
+
+        if($listTime === ''){
+            $listTime = '—';
+        }
+    }catch(Throwable $e){
+        $isActive = false;
+        $unread = 0;
+        $preview = 'پیام';
+        $listTime = '—';
+    }
 
 ?>
 
@@ -102,12 +123,18 @@ if(!$supportEmbedded){
     class="msgConv <?php echo $isActive ? 'active' : ''; ?>"
     data-username="<?php echo htmlspecialchars($ticketUser, ENT_QUOTES, 'UTF-8'); ?>">
 
-    <?php echo supportRenderConvAvatarHtml($ticketUser); ?>
+    <?php
+    try{
+        echo supportRenderConvAvatarHtml($ticketUser);
+    }catch(Throwable $e){
+        echo '<div class="msgAvatar">' . htmlspecialchars(supportUserInitial($ticketUser), ENT_QUOTES, 'UTF-8') . '</div>';
+    }
+    ?>
 
     <div class="msgConvBody">
         <div class="msgConvTop">
             <span class="msgConvName"><?php echo htmlspecialchars($ticketUser, ENT_QUOTES, 'UTF-8'); ?></span>
-            <span class="msgConvTime"><?php echo htmlspecialchars(supportRelativeTime($lastTs), ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="msgConvTime"><?php echo htmlspecialchars($listTime, ENT_QUOTES, 'UTF-8'); ?></span>
         </div>
         <div class="msgConvPreview <?php echo $unread > 0 ? 'unread' : ''; ?>">
             <?php echo htmlspecialchars($preview, ENT_QUOTES, 'UTF-8'); ?>
