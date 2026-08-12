@@ -204,9 +204,9 @@ $isActive = ($editRow['status'] ?? 'active') === 'active';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>کدهای تخفیف</title>
-<?php campaignAdminStyles(); campaignJalaliDatePickerHead(); campaignAdminBottomNavHead(); ?>
+<?php campaignAdminPageHead(true); ?>
 </head>
-<body class="campaignAdmin">
+<body class="<?php echo campaignAdminBodyClass(); ?>">
 <div class="campaignShell">
 
 <?php campaignAdminNav('discounts'); ?>
@@ -397,7 +397,6 @@ foreach($codes as $row){
 <?php } ?>
 </div>
 
-<a class="campaignBack" href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>">بازگشت به داشبورد</a>
 </div>
 
 <script>
@@ -449,6 +448,6 @@ foreach($codes as $row){
     }
 })();
 </script>
-<?php campaignJalaliDatePickerFoot(); campaignAdminBottomNavFoot(); ?>
+<?php campaignAdminPageFoot(true); ?>
 </body>
 </html>

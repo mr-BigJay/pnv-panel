@@ -16,7 +16,7 @@ $stats = campaignOverviewStats();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>کمپین‌ها</title>
-<?php campaignAdminStyles(); campaignAdminBottomNavHead(); ?>
+<?php campaignAdminPageHead(); ?>
 <style>
 .campaignStats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .campaignStat{background:#141b26;border:1px solid #334155;border-radius:16px;padding:14px;text-align:center}
@@ -29,7 +29,7 @@ $stats = campaignOverviewStats();
 @media(max-width:640px){.campaignStats,.campaignLinks{grid-template-columns:1fr}}
 </style>
 </head>
-<body class="campaignAdmin">
+<body class="<?php echo campaignAdminBodyClass(); ?>">
 <div class="campaignShell">
 
 <?php campaignAdminNav('overview'); ?>
@@ -57,9 +57,7 @@ $stats = campaignOverviewStats();
 </a>
 </div>
 </div>
-
-<a class="campaignBack" href="<?php echo htmlspecialchars(pnvAdminUrl(), ENT_QUOTES, 'UTF-8'); ?>">بازگشت به داشبورد</a>
 </div>
-<?php campaignAdminBottomNavFoot(); ?>
+<?php campaignAdminPageFoot(); ?>
 </body>
 </html>
