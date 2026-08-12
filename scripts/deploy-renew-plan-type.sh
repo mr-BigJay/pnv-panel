@@ -28,7 +28,7 @@ echo ""
 echo "Verify on server:"
 grep -c "xuiParsePlanDays" "${ROOT}/xui_lib.php" || true
 grep -c "pnvResolveSubTimeCategory" "${ROOT}/plan_ui_lib.php" || true
-grep -c "pnvValidateRenewPlanCategory" "${ROOT}/instant_pay_lib.php" || true
-grep -c "pnvResolveSubTimeCategory" "${ROOT}/renew.php" || true
+grep -c "xuiComputeRenewExpiryMs" "${ROOT}/xui_lib.php" || true
+grep -c "addDays" "${ROOT}/xui_lib.php" || true
 echo ""
 echo "Done. Hard-refresh renew.php (Ctrl+Shift+R) and test jbkbgxf — should lock نامحدود زمانی."
