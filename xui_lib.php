@@ -179,6 +179,124 @@ if(!function_exists('xuiConfigPath')){
         return 0;
     }
 
+    function xuiLoadPlansCatalog(){
+        $file = __DIR__ . '/db/plans.json';
+
+        if(!file_exists($file)){
+            return [];
+        }
+
+        $plans = json_decode((string)file_get_contents($file), true);
+        return is_array($plans) ? $plans : [];
+    }
+
+    /**
+     * تعداد روز پلن از متن فاکتور / کاتالوگ.
+     * 0 = نامحدود زمانی
+     */
+    function xuiParsePlanDays($planText){
+        $planText = trim((string)$planText);
+
+        if($planText === ''){
+            return 0;
+        }
+
+        $catalog = xuiLoadPlansCatalog();
+        $strLen = function_exists('mb_strlen') ? 'mb_strlen' : 'strlen';
+        $strIpos = function_exists('mb_stripos') ? 'mb_stripos' : 'stripos';
+        usort($catalog, static function($a, $b) use ($strLen){
+            return $strLen((string)($b['name'] ?? '')) <=> $strLen((string)($a['name'] ?? ''));
+        });
+
+        foreach($catalog as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $name = trim((string)($plan['name'] ?? ''));
+
+            if($name === '' || $strIpos($planText, $name) === false){
+                continue;
+            }
+
+            $days = trim((string)($plan['days'] ?? ''));
+
+            if($days === '' || $days === 'نامحدود' || strcasecmp($days, 'unlimited') === 0){
+                return 0;
+            }
+
+            if(preg_match('/^\d+$/', $days)){
+                return max(0, intval($days));
+            }
+        }
+
+        if(preg_match('/(\d+)\s*ماه/u', $planText, $m)){
+            return max(0, intval($m[1]) * 30);
+        }
+
+        if(preg_match('/(\d+)\s*روز/u', $planText, $m)){
+            return max(0, intval($m[1]));
+        }
+
+        return 0;
+    }
+
+    /**
+     * expire از هدر subscription-userinfo
+     * null = نامشخص | 0 = نامحدود | >0 = محدود (unix)
+     */
+    function xuiFetchSubUserinfoExpire($link){
+        $link = trim((string)$link);
+
+        if($link === '' || !preg_match('#^https?://#i', $link) || !function_exists('curl_init')){
+            return null;
+        }
+
+        $modes = [
+            ['nobody' => true],
+            ['nobody' => false, 'range' => '0-0'],
+            ['nobody' => false],
+        ];
+
+        foreach($modes as $mode){
+            $curl = curl_init($link);
+            curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($curl, CURLOPT_HEADER, true);
+            curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 5);
+            curl_setopt($curl, CURLOPT_TIMEOUT, 12);
+            curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+
+            if(!empty($mode['nobody'])){
+                curl_setopt($curl, CURLOPT_NOBODY, true);
+            }
+
+            if(!empty($mode['range'])){
+                curl_setopt($curl, CURLOPT_RANGE, $mode['range']);
+            }
+
+            $raw = curl_exec($curl);
+            curl_close($curl);
+
+            if($raw !== false && $raw !== '' && preg_match('/^subscription-userinfo:\s*(.+)$/im', $raw, $m)){
+                $parts = preg_split('/\s*;\s*/', trim($m[1])) ?: [];
+
+                foreach($parts as $part){
+                    if(stripos($part, 'expire=') !== 0){
+                        continue;
+                    }
+
+                    return max(0, intval(trim(substr($part, 7))));
+                }
+
+                return 0;
+            }
+        }
+
+        return null;
+    }
+
     function xuiGbToBytes($gb){
         return intval($gb) * 1024 * 1024 * 1024;
     }

@@ -892,6 +892,14 @@ if(!function_exists('instantPayPath')){
             return ['ok' => false, 'error' => 'پلن انتخاب‌شده معتبر نیست'];
         }
 
+        if($type === 'تمدید' && function_exists('pnvValidateRenewPlanCategory')){
+            $categoryCheck = pnvValidateRenewPlanCategory($username, $sub, $planValue, $plans);
+
+            if(empty($categoryCheck['ok'])){
+                return $categoryCheck;
+            }
+        }
+
         $items = instantPayExpireDue();
 
         // سفارش‌های قبلی کاربر را از لیست ادمین حذف کن
