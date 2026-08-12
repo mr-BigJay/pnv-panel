@@ -112,8 +112,6 @@ function renewLoadUserSubscriptions($username){
         $link = trim($data[7] ?? '');
         $type = trim($data[9] ?? '');
         $planText = trim((string)($data[2] ?? ''));
-        $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
-        $timeCategory = $planDays > 0 ? 'limited' : 'unlimited';
 
         if($type === 'خرید' && renewIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
             $link = renewNormalizeSubLink($link);
@@ -121,7 +119,7 @@ function renewLoadUserSubscriptions($username){
             $linkIndex[$key] = [
                 'name' => $col1,
                 'link' => $link,
-                'time_category' => $timeCategory
+                'plan_text' => $planText,
             ];
         }
 
@@ -139,13 +137,22 @@ function renewLoadUserSubscriptions($username){
                 $linkIndex[$key] = [
                     'name' => $name,
                     'link' => $col1,
-                    'time_category' => $timeCategory
+                    'plan_text' => $planText,
                 ];
             }
         }
     }
 
     fclose($handle);
+
+    foreach($linkIndex as &$entry){
+        $entry['time_category'] = pnvResolveSubTimeCategory(
+            $entry['link'] ?? '',
+            $entry['plan_text'] ?? ''
+        );
+        unset($entry['plan_text']);
+    }
+    unset($entry);
 
     return array_values($linkIndex);
 }

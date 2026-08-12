@@ -110,4 +110,167 @@ if(!function_exists('pnvFormatPlanPrice')){
 
         return $out;
     }
+
+    function pnvFindSubLinkFromCsv($username, $subLink){
+        $username = trim((string)$username);
+        $subLink = trim((string)$subLink);
+        $file = __DIR__ . '/invoices/payments.csv';
+
+        if($username === '' || $subLink === '' || !file_exists($file)){
+            return $subLink;
+        }
+
+        if(preg_match('#^https?://#i', $subLink)){
+            return $subLink;
+        }
+
+        $needle = strtolower($subLink);
+        $found = '';
+
+        $handle = fopen($file, 'r');
+
+        while(($row = fgetcsv($handle)) !== false){
+            if(($row[0] ?? '') !== $username){
+                continue;
+            }
+
+            if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            $type = trim((string)($row[9] ?? ''));
+            $buyLink = trim((string)($row[7] ?? ''));
+            $renewLink = trim((string)($row[1] ?? ''));
+
+            if($type === 'خرید' && $buyLink !== ''){
+                $hay = strtolower($buyLink);
+
+                if($hay === $needle || strpos($hay, $needle) !== false || strpos($needle, $hay) !== false){
+                    $found = $buyLink;
+                    break;
+                }
+            }
+
+            if($type === 'تمدید' && $renewLink !== ''){
+                $hay = strtolower($renewLink);
+
+                if($hay === $needle || strpos($hay, $needle) !== false || strpos($needle, $hay) !== false){
+                    $found = $renewLink;
+                    break;
+                }
+            }
+        }
+
+        fclose($handle);
+
+        return $found !== '' ? $found : $subLink;
+    }
+
+    function pnvResolveSubTimeCategory($link, $planText = ''){
+        $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
+
+        if($planDays > 0){
+            return 'limited';
+        }
+
+        $link = trim((string)$link);
+
+        if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
+            $expire = xuiFetchSubUserinfoExpire($link);
+
+            if($expire !== null){
+                return $expire > 0 ? 'limited' : 'unlimited';
+            }
+        }
+
+        return 'unlimited';
+    }
+
+    function pnvFindSubPlanTextFromCsv($username, $subLink){
+        $username = trim((string)$username);
+        $subLink = trim((string)$subLink);
+        $file = __DIR__ . '/invoices/payments.csv';
+
+        if($username === '' || $subLink === '' || !file_exists($file)){
+            return '';
+        }
+
+        $target = strtolower(rtrim($subLink, '/'));
+        $planText = '';
+
+        $handle = fopen($file, 'r');
+
+        while(($row = fgetcsv($handle)) !== false){
+            if(($row[0] ?? '') !== $username){
+                continue;
+            }
+
+            if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            $type = trim((string)($row[9] ?? ''));
+            $buyLink = strtolower(rtrim(trim((string)($row[7] ?? '')), '/'));
+            $renewLink = strtolower(rtrim(trim((string)($row[1] ?? '')), '/'));
+
+            if($type === 'خرید' && $buyLink !== '' && ($buyLink === $target || strpos($target, $buyLink) !== false || strpos($buyLink, $target) !== false)){
+                $planText = trim((string)($row[2] ?? ''));
+                break;
+            }
+
+            if($type === 'تمدید' && $renewLink !== '' && ($renewLink === $target || strpos($target, $renewLink) !== false || strpos($renewLink, $target) !== false)){
+                if($planText === ''){
+                    $planText = trim((string)($row[2] ?? ''));
+                }
+            }
+        }
+
+        fclose($handle);
+
+        return $planText;
+    }
+
+    function pnvValidateRenewPlanCategory($username, $subLink, $planValue, $plans){
+        $selectedPlan = null;
+
+        if(!is_array($plans)){
+            $plans = [];
+        }
+
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            if(pnvPlanOptionValue($plan) === $planValue){
+                $selectedPlan = $plan;
+                break;
+            }
+        }
+
+        if(!$selectedPlan){
+            return ['ok' => false, 'error' => 'پلن انتخاب‌شده معتبر نیست'];
+        }
+
+        $selectedCategory = pnvPlanIsUnlimited($selectedPlan) ? 'unlimited' : 'limited';
+        $fullLink = pnvFindSubLinkFromCsv($username, $subLink);
+        $planText = pnvFindSubPlanTextFromCsv($username, $subLink);
+        $subCategory = pnvResolveSubTimeCategory($fullLink, $planText);
+
+        if($subCategory === $selectedCategory){
+            return ['ok' => true];
+        }
+
+        if($subCategory === 'limited'){
+            return [
+                'ok' => false,
+                'error' => 'این اشتراک زمان‌دار است و نمی‌توان آن را با پلن نامحدود زمانی تمدید کرد.'
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'error' => 'این اشتراک نامحدود زمانی است و نمی‌توان آن را با پلن زمان‌دار تمدید کرد.'
+        ];
+    }
 }
