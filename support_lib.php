@@ -29,9 +29,25 @@ if(!function_exists('supportLoad')){
 
     }
 
-    function supportSafeHtml($value){
+    function supportNormalizeText($value){
 
         $value = (string)$value;
+
+        if($value === ''){
+            return '';
+        }
+
+        if(function_exists('mb_convert_encoding')){
+            $value = mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+        }
+
+        return $value;
+
+    }
+
+    function supportSafeHtml($value){
+
+        $value = supportNormalizeText($value);
 
         if($value === ''){
             return '';
@@ -49,26 +65,189 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportExtractMessageText($message){
+
+        if(!is_array($message)){
+            return '';
+        }
+
+        foreach(['text', 'message', 'body', 'content', 'caption'] as $key){
+
+            if(!array_key_exists($key, $message)){
+                continue;
+            }
+
+            $value = $message[$key];
+
+            if(is_string($value)){
+                $text = trim(supportNormalizeText($value));
+            }
+            elseif(is_scalar($value)){
+                $text = trim(supportNormalizeText((string)$value));
+            }
+            else{
+                continue;
+            }
+
+            if($text !== ''){
+                return $text;
+            }
+
+        }
+
+        return '';
+
+    }
+
+    function supportMergeTicketLists($lists){
+
+        $byUser = [];
+
+        foreach($lists as $list){
+
+            if(!is_array($list)){
+                continue;
+            }
+
+            foreach($list as $ticket){
+
+                if(!is_array($ticket)){
+                    continue;
+                }
+
+                $user = trim((string)($ticket['user'] ?? ''));
+
+                if($user === ''){
+                    continue;
+                }
+
+                if(!isset($byUser[$user])){
+                    $byUser[$user] = $ticket;
+                    $byUser[$user]['messages'] = is_array($ticket['messages'] ?? null)
+                        ? array_values($ticket['messages'])
+                        : [];
+                    continue;
+                }
+
+                $seenIds = [];
+
+                foreach($byUser[$user]['messages'] as $msg){
+
+                    if(!is_array($msg)){
+                        continue;
+                    }
+
+                    $id = trim((string)($msg['id'] ?? ''));
+
+                    if($id !== ''){
+                        $seenIds[$id] = true;
+                    }
+
+                }
+
+                foreach(($ticket['messages'] ?? []) as $msg){
+
+                    if(!is_array($msg)){
+                        continue;
+                    }
+
+                    $id = trim((string)($msg['id'] ?? ''));
+
+                    if($id === '' || !isset($seenIds[$id])){
+                        $byUser[$user]['messages'][] = $msg;
+
+                        if($id !== ''){
+                            $seenIds[$id] = true;
+                        }
+                    }
+
+                }
+
+                if(isset($ticket['status'])){
+                    $byUser[$user]['status'] = $ticket['status'];
+                }
+
+            }
+
+        }
+
+        return array_values($byUser);
+
+    }
+
+    function supportDiscoverDataFiles($file){
+
+        $dir = dirname($file);
+        $base = basename($file);
+        $paths = [
+            $file,
+            $file . '.bak',
+            $dir . '/' . $base . '.backup',
+            $dir . '/support.repo.json',
+            $dir . '/support.snapshot.json'
+        ];
+
+        foreach(glob($dir . '/' . $base . '.*') ?: [] as $match){
+            $paths[] = $match;
+        }
+
+        $unique = [];
+
+        foreach($paths as $path){
+            if(is_file($path)){
+                $unique[$path] = $path;
+            }
+        }
+
+        return array_values($unique);
+
+    }
+
     function supportLoad($file){
 
-        $data = supportReadJsonFile($file);
+        $sources = [];
 
-        if(!is_array($data)){
-            $data = [];
+        foreach(supportDiscoverDataFiles($file) as $path){
+            $chunk = supportReadJsonFile($path);
+
+            if(is_array($chunk) && count($chunk) > 0){
+                $sources[] = $chunk;
+            }
         }
 
-        $backup = supportReadJsonFile($file . '.bak');
+        if(count($sources) === 0){
+            if(!file_exists($file)){
+                supportSave($file, [], true);
+            }
 
-        if(is_array($backup) && count($backup) > count($data)){
-            $data = $backup;
-            supportSave($file, $data, true);
+            return [];
         }
 
-        if(!file_exists($file) && $data === []){
-            supportSave($file, [], true);
+        $merged = supportMergeTicketLists($sources);
+        $current = supportReadJsonFile($file);
+        $currentCount = is_array($current) ? count($current) : 0;
+
+        if(count($merged) > $currentCount){
+            supportSave($file, $merged, true);
         }
 
-        return $data;
+        return $merged;
+
+    }
+
+    function supportImportSnapshot($file, $snapshotFile){
+
+        $local = supportReadJsonFile($file) ?: [];
+        $snapshot = supportReadJsonFile($snapshotFile);
+
+        if(!is_array($snapshot) || count($snapshot) === 0){
+            return $local;
+        }
+
+        $merged = supportMergeTicketLists([$local, $snapshot]);
+        supportSave($file, $merged, true);
+
+        return $merged;
 
     }
 
@@ -222,10 +401,12 @@ if(!function_exists('supportLoad')){
             $image = '/' . ltrim($image, '/');
         }
 
+        $plainText = supportExtractMessageText($message);
+
         return [
             'id' => $message['id'] ?? '',
             'sender' => $sender,
-            'text' => $message['text'] ?? '',
+            'text' => $plainText,
             'image' => $image,
             'date' => $display['date'],
             'time' => $display['time'],
@@ -278,7 +459,7 @@ if(!function_exists('supportLoad')){
             return 'بدون پیام';
         }
 
-        $text = trim((string)($last['text'] ?? $last['message'] ?? $last['body'] ?? ''));
+        $text = supportExtractMessageText($last);
 
         if($text === '' && !empty($last['image'])){
             return '📷 تصویر';
@@ -974,7 +1155,7 @@ if(!function_exists('supportLoad')){
 
         $display = supportMessageDisplayTime($m);
         $replyTo = is_array($m['reply_to'] ?? null) ? $m['reply_to'] : null;
-        $plainText = (string)($m['text'] ?? '');
+        $plainText = supportExtractMessageText($m);
         $chatUser = $currentUser !== '' ? $currentUser : ($options['ownUsername'] ?? '');
         $rowClass = ($sender === 'admin') ? 'msgRow msgRow--admin' : 'msgRow msgRow--user';
 
@@ -987,25 +1168,25 @@ if(!function_exists('supportLoad')){
 
         <div
             class="msgBubble msg <?php echo $class; ?>"
-            data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+            data-msg-id="<?php echo supportSafeHtml($m['id'] ?? ''); ?>"
             data-timestamp="<?php echo intval($m['timestamp'] ?? 0); ?>"
-            data-sender="<?php echo htmlspecialchars($sender, ENT_QUOTES, 'UTF-8'); ?>"
+            data-sender="<?php echo supportSafeHtml($sender); ?>"
             data-own="<?php echo $isOwn ? '1' : '0'; ?>"
             data-can-edit="<?php echo $canEdit ? '1' : '0'; ?>"
             data-can-delete="<?php echo $canDelete ? '1' : '0'; ?>"
             data-can-reply="<?php echo $canReply ? '1' : '0'; ?>"
-            data-text="<?php echo htmlspecialchars($plainText, ENT_QUOTES, 'UTF-8'); ?>"
+            data-text="<?php echo supportSafeHtml($plainText); ?>"
         >
 
             <?php if($replyTo){ ?>
             <div class="msgQuote">
                 <strong><?php echo (($replyTo['sender'] ?? '') === 'admin') ? 'پشتیبانی' : 'کاربر'; ?></strong>
-                <span><?php echo htmlspecialchars($replyTo['text'] ?? '', ENT_QUOTES, 'UTF-8'); ?></span>
+                <span><?php echo supportSafeHtml($replyTo['text'] ?? ''); ?></span>
             </div>
             <?php } ?>
 
             <?php if($plainText !== ''){ ?>
-            <div class="msgText"><?php echo nl2br(htmlspecialchars($plainText, ENT_QUOTES, 'UTF-8')); ?></div>
+            <div class="msgText"><?php echo nl2br(supportSafeHtml($plainText)); ?></div>
             <?php } ?>
 
             <?php if(!empty($m['edited'])){ ?>

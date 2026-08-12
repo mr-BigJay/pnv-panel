@@ -17,6 +17,33 @@
             .replace(/'/g, '&#039;');
     }
 
+    function extractMessageText(msg){
+        if(!msg || typeof msg !== 'object'){
+            return '';
+        }
+
+        const keys = ['text', 'message', 'body', 'content', 'caption'];
+
+        for(let i = 0; i < keys.length; i++){
+            const value = msg[keys[i]];
+
+            if(typeof value === 'string'){
+                const text = value.trim();
+                if(text !== ''){
+                    return text;
+                }
+            }
+            else if(value !== null && value !== undefined && typeof value !== 'object'){
+                const text = String(value).trim();
+                if(text !== ''){
+                    return text;
+                }
+            }
+        }
+
+        return '';
+    }
+
     function isMobileComposer(){
         const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
         const narrowScreen = window.matchMedia('(max-width: 768px)').matches;
@@ -736,7 +763,8 @@
         wrap.dataset.msgId = msg.id || '';
         wrap.dataset.timestamp = msg.timestamp || 0;
         wrap.dataset.sender = sender;
-        wrap.dataset.text = msg.text || '';
+        const plainText = extractMessageText(msg);
+        wrap.dataset.text = plainText;
 
         const meta = actionMeta || {};
         const isAdminView = !!meta.isAdmin;
@@ -767,8 +795,8 @@
                 (msg.reply_to.sender === 'admin' ? 'پشتیبانی' : 'کاربر')+
                 '</strong><span>'+escapeHtml(msg.reply_to.text)+'</span></div>';
         }
-        if(msg.text){
-            html += '<div class="msgText">'+escapeHtml(msg.text).replace(/\n/g, '<br>')+'</div>';
+        if(plainText){
+            html += '<div class="msgText">'+escapeHtml(plainText).replace(/\n/g, '<br>')+'</div>';
         }
         if(msg.edited){
             html += '<small class="msgEdited">(ویرایش شد)</small>';

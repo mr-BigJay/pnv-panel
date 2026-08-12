@@ -34,12 +34,21 @@ php -l "${ROOT}/admin/support.php"
 php -l "${ROOT}/support_lib.php"
 
 echo ""
-echo "Recovering support.json from backup if available..."
+echo "Downloading support snapshot for merge..."
+SNAPSHOT="${ROOT}/db/support.repo.json"
+mkdir -p "${ROOT}/db"
+curl -fsSL "${BASE}/db/support.json" -o "${SNAPSHOT}"
+
+echo ""
+echo "Merging support tickets (keeps production-only users like JayForce)..."
 php -r '
 require "'"${ROOT}"'/support_lib.php";
 $file = "'"${ROOT}"'/db/support.json";
-$before = count(supportLoad($file));
-echo "Tickets now: {$before}\n";
+$snapshot = "'"${SNAPSHOT}"'";
+$before = count(supportReadJsonFile($file) ?: []);
+$after = count(supportImportSnapshot($file, $snapshot));
+echo "Tickets before: {$before}\n";
+echo "Tickets after:  {$after}\n";
 '
 
 echo ""
@@ -47,3 +56,4 @@ echo "Done."
 echo "1) Hard refresh: Ctrl+F5"
 echo "2) Open: https://panel.ticketin.ir/bigjay_controller/index.php?page=support"
 echo "3) Diagnose: https://panel.ticketin.ir/bigjay_controller/support-diagnose.php"
+echo "4) Force merge: https://panel.ticketin.ir/bigjay_controller/support-diagnose.php?merge=1"
