@@ -884,7 +884,7 @@ margin-right:0;
 height:100%;
 max-height:100dvh;
 min-height:0;
-padding-top:56px;
+padding-top:0;
 }
 
 .content-support input,
