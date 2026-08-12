@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '/support_ui.css?v=41';
+$cssHref = '/support_ui.css?v=42';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '/support_ui.js?v=41';
+$jsHref = '/support_ui.js?v=42';
 
 if(!$supportEmbedded){
 ?>
@@ -119,25 +119,25 @@ if(!$supportEmbedded){
 ?>
 
 <a
-    href="<?php echo htmlspecialchars(supportAdminUrl($ticketUser, $supportEmbedded), ENT_QUOTES, 'UTF-8'); ?>"
+    href="<?php echo supportSafeHtml(supportAdminUrl($ticketUser, $supportEmbedded)); ?>"
     class="msgConv <?php echo $isActive ? 'active' : ''; ?>"
-    data-username="<?php echo htmlspecialchars($ticketUser, ENT_QUOTES, 'UTF-8'); ?>">
+    data-username="<?php echo supportSafeHtml($ticketUser); ?>">
 
     <?php
     try{
         echo supportRenderConvAvatarHtml($ticketUser);
     }catch(Throwable $e){
-        echo '<div class="msgAvatar">' . htmlspecialchars(supportUserInitial($ticketUser), ENT_QUOTES, 'UTF-8') . '</div>';
+        echo '<div class="msgAvatar">' . supportSafeHtml(supportUserInitial($ticketUser)) . '</div>';
     }
     ?>
 
     <div class="msgConvBody">
         <div class="msgConvTop">
-            <span class="msgConvName"><?php echo htmlspecialchars($ticketUser, ENT_QUOTES, 'UTF-8'); ?></span>
-            <span class="msgConvTime"><?php echo htmlspecialchars($listTime, ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="msgConvName"><?php echo supportSafeHtml($ticketUser); ?></span>
+            <span class="msgConvTime"><?php echo supportSafeHtml($listTime); ?></span>
         </div>
         <div class="msgConvPreview <?php echo $unread > 0 ? 'unread' : ''; ?>">
-            <?php echo htmlspecialchars($preview, ENT_QUOTES, 'UTF-8'); ?>
+            <?php echo supportSafeHtml($preview !== '' ? $preview : 'پیام'); ?>
         </div>
     </div>
 
