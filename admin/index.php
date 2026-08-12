@@ -163,6 +163,19 @@ exit;
 
 $page = $_GET['page'] ?? 'dashboard';
 
+foreach([__DIR__ . '/admin_nav.php', dirname(__DIR__) . '/admin/admin_nav.php'] as $__navFile){
+    if(is_file($__navFile)){
+        require_once $__navFile;
+        break;
+    }
+}
+
+if(!function_exists('adminBottomNavStyles')){
+    function adminBottomNavStyles(){}
+    function adminBottomNav($options = []){}
+    function adminBottomNavScript(){}
+}
+
 require_once __DIR__ . '/../profile_lib.php';
 
 $adminProfileUser = pnvAdminUser();
@@ -247,6 +260,7 @@ $supportFile =
 __DIR__ . '/../db/support.json';
 
 $hasUnreadSupport = false;
+$supportUnreadCount = 0;
 
 if(file_exists($supportFile)){
 
@@ -255,11 +269,14 @@ require_once __DIR__ . '/../support_lib.php';
 $supportData = supportLoad($supportFile);
 
 $hasUnreadSupport = supportAdminHasUnread($supportData);
+$supportUnreadCount = supportAdminUnreadTotal($supportData);
 
 }
 
 $hasNewPayments = false;
 $hasNewRenews = false;
+$pendingPaymentsCount = 0;
+$pendingRenewsCount = 0;
 
 foreach($payments as $pay){
 
@@ -278,6 +295,7 @@ $status != 'رد شد'
 ){
 
 $hasNewPayments = true;
+$pendingPaymentsCount++;
 
 }
 
@@ -290,6 +308,7 @@ $status != 'رد شد'
 ){
 
 $hasNewRenews = true;
+$pendingRenewsCount++;
 
 }
 
@@ -542,6 +561,32 @@ bottom:0;
 overflow:auto;
 padding:20px;
 box-sizing:border-box;
+z-index:40;
+transition:transform .2s ease;
+}
+
+.adminMenuBtn{
+display:none;
+position:fixed;
+top:12px;
+right:12px;
+z-index:50;
+width:44px;
+height:44px;
+border:0;
+border-radius:12px;
+background:#22c55e;
+color:#fff;
+font-size:22px;
+cursor:pointer;
+}
+
+.adminSidebarOverlay{
+display:none;
+position:fixed;
+inset:0;
+background:rgba(0,0,0,.45);
+z-index:35;
 }
 
 .sidebar a{
@@ -873,13 +918,24 @@ height:100dvh;
 }
 
 .sidebar{
-position:relative;
-width:100%;
-height:auto;
+position:fixed;
+width:min(86vw,280px);
+height:100%;
+transform:translateX(110%);
+}
+
+body.adminSidebarOpen .sidebar{
+transform:translateX(0);
+}
+
+body.adminSidebarOpen .adminSidebarOverlay{
+display:block;
 }
 
 .content{
 margin-right:0;
+padding-top:64px;
+padding-bottom:84px;
 }
 
 .content-support{
@@ -887,6 +943,8 @@ margin-right:0;
 height:100%;
 max-height:100dvh;
 min-height:0;
+padding-top:56px;
+padding-bottom:0;
 }
 
 .content-support input,
@@ -913,11 +971,16 @@ grid-template-columns:1fr;
 
 </style>
 
+<?php adminBottomNavStyles(); ?>
+
 </head>
 
-<body class="<?php echo $page === 'support' ? 'adminPageSupport' : ''; ?>">
+<body class="<?php echo $page === 'support' ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
 
-<div class="sidebar">
+<button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
+<div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
+
+<div class="sidebar" id="adminSidebar">
 
 <h2>
 
@@ -1229,6 +1292,41 @@ name="uploadcsv">
 </div>
 </div>
 
+<?php
+$adminBottomActive = in_array($page, ['support', 'renews', 'payments'], true) ? $page : '';
+adminBottomNav([
+    'active' => $adminBottomActive,
+    'more_mode' => 'sidebar',
+    'badges' => [
+        'support' => $supportUnreadCount,
+        'renews' => $pendingRenewsCount,
+        'payments' => $pendingPaymentsCount,
+    ],
+]);
+adminBottomNavScript();
+?>
+
+<script>
+(function(){
+    const menuBtn = document.getElementById('adminMenuBtn');
+    const overlay = document.getElementById('adminSidebarOverlay');
+
+    function closeMenu(){
+        document.body.classList.remove('adminSidebarOpen');
+    }
+
+    if(menuBtn){
+        menuBtn.addEventListener('click', function(){
+            document.body.classList.toggle('adminSidebarOpen');
+        });
+    }
+
+    if(overlay){
+        overlay.addEventListener('click', closeMenu);
+    }
+})();
+</script>
+
 <script>
 (function(){
     const openBtn = document.getElementById('adminProfileOpenBtn');
@@ -1377,7 +1475,7 @@ name="uploadcsv">
 
     const pollUrl = <?php echo json_encode(pnvAdminUrl('support-api.php'), JSON_UNESCAPED_UNICODE); ?>;
 
-    function setUnreadDot(hasUnread){
+    function setUnreadDot(hasUnread, unreadCount){
         let dot = menuLink.querySelector('.notifDot');
 
         if(hasUnread){
@@ -1386,11 +1484,17 @@ name="uploadcsv">
                 dot.className = 'notifDot';
                 menuLink.insertBefore(dot, menuLink.firstChild);
             }
+            if(typeof window.adminBottomNavSetBadge === 'function'){
+                window.adminBottomNavSetBadge('support', unreadCount || 1);
+            }
             return;
         }
 
         if(dot){
             dot.remove();
+        }
+        if(typeof window.adminBottomNavSetBadge === 'function'){
+            window.adminBottomNavSetBadge('support', 0);
         }
     }
 
@@ -1398,7 +1502,7 @@ name="uploadcsv">
         fetch(pollUrl, {credentials:'same-origin'})
             .then(function(r){ return r.json(); })
             .then(function(data){
-                setUnreadDot(!!data.has_unread);
+                setUnreadDot(!!data.has_unread, data.unread_count || 0);
             })
             .catch(function(){});
     }

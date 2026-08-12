@@ -10,6 +10,7 @@ echo "Target: ${ROOT}"
 
 files=(
   "admin/auth.php"
+  "admin/admin_nav.php"
   "admin/index.php"
   "admin/support.php"
   "admin/support-api.php"
