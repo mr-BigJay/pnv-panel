@@ -16,6 +16,8 @@ files=(
   "admin/support-diagnose.php"
   "admin/support-debug.php"
   "support_lib.php"
+  "pnv_date_bootstrap.php"
+  "date_lib.php"
   "support_ui.css"
   "support_ui.js"
   "profile_lib.php"
