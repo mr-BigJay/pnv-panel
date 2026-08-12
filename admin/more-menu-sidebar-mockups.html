@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>طرح‌های منوی بیشتر — پاپ‌آپ ستونی چپ</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px 16px 40px;background:#0b1220;font-family:tahoma,system-ui,sans-serif;color:#e2e8f0;direction:rtl}
+.pageTitle{text-align:center;font-size:22px;font-weight:700;margin:0 0 6px}
+.pageSub{text-align:center;font-size:13px;color:#94a3b8;margin:0 0 28px;line-height:1.9;max-width:640px;margin-left:auto;margin-right:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;max-width:1280px;margin:0 auto}
+.card{background:#111827;border:1px solid #334155;border-radius:20px;padding:16px}
+.cardLabel{display:inline-flex;padding:4px 10px;border-radius:999px;background:rgba(52,211,153,.14);color:#6ee7b7;font-size:11px;font-weight:700;margin-bottom:8px}
+.cardTitle{margin:0;font-size:16px;font-weight:700}
+.cardDesc{margin:6px 0 14px;font-size:12px;color:#94a3b8;line-height:1.7}
+.phone{background:#171f2e;border:1px solid #334155;border-radius:28px;padding:12px 10px 10px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.phoneBar{width:42%;height:4px;background:#334155;border-radius:999px;margin:0 auto 10px}
+.screen{position:relative;background:#0f172a;border-radius:20px;overflow:hidden;height:560px}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px)}
+.pageGhost{position:absolute;inset:0;padding:14px 14px 60px;opacity:.35;pointer-events:none}
+.ghostLine{height:10px;background:#334155;border-radius:6px;margin-bottom:8px}
+.ghostLine.w60{width:60%}.ghostLine.w80{width:80%}.ghostLine.w40{width:40%}
+.bottomNav{position:absolute;left:0;right:0;bottom:0;display:flex;background:#111827;border-top:1px solid #334155;height:52px;z-index:2}
+.bnItem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9px;color:#94a3b8}
+.bnMore{width:26%;border-right:1px solid #1e293b;color:#34d399;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9px;font-weight:700}
+
+/* shared drawer from LEFT */
+.drawer{position:absolute;top:0;bottom:0;left:0;background:#1e293b;border-right:1px solid #334155;box-shadow:8px 0 32px rgba(0,0,0,.45);display:flex;flex-direction:column;z-index:5;overflow:hidden}
+.drawerHead{flex-shrink:0;padding:14px 14px 10px;border-bottom:1px solid #334155}
+.drawerHeadTop{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.drawerTitle{margin:0;font-size:15px;font-weight:700;color:#f8fafc}
+.drawerClose{width:32px;height:32px;border:none;border-radius:10px;background:#242d3d;color:#cbd5e1;font-size:18px;line-height:1;cursor:default}
+.drawerSub{margin:0;font-size:10px;color:#64748b;line-height:1.6}
+.drawerScroll{flex:1;overflow-y:auto;padding:10px 12px;-webkit-overflow-scrolling:touch}
+.drawerScroll::-webkit-scrollbar{width:4px}
+.drawerScroll::-webkit-scrollbar-thumb{background:#475569;border-radius:999px}
+.drawerFoot{flex-shrink:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0));border-top:1px solid #334155;background:#1a2332}
+
+/* A: narrow icon list */
+.a{width:220px}
+.aItem{display:flex;align-items:center;gap:10px;padding:10px 10px;border-radius:12px;text-decoration:none;color:#e2e8f0;margin-bottom:4px;border:1px solid transparent}
+.aItem:hover{background:#242d3d}
+.aItem.is-active{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.35);color:#6ee7b7}
+.aIcon{width:32px;height:32px;border-radius:10px;background:#141b26;border:1px solid #334155;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.aIcon svg{width:17px;height:17px;stroke:#34d399;fill:none;stroke-width:1.8}
+.aItem.is-active .aIcon{background:rgba(52,211,153,.12);border-color:#34d399}
+.aLabel{font-size:12px;font-weight:600}
+.aGroup{font-size:10px;color:#64748b;font-weight:700;margin:10px 4px 6px}
+.aLogout{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;border-radius:12px;background:#450a0a;border:1px solid #7f1d1d;color:#fecaca;font-size:12px;text-decoration:none}
+
+/* B: wider with subtitle */
+.b{width:280px}
+.bItem{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:14px;background:#141b26;border:1px solid #334155;text-decoration:none;color:#f8fafc;margin-bottom:6px}
+.bItem.is-active{border-color:#34d399;background:rgba(52,211,153,.08)}
+.bText{flex:1;min-width:0}
+.bText strong{display:block;font-size:12px;margin-bottom:2px}
+.bText span{display:block;font-size:9px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bChev{color:#64748b;font-size:13px}
+.bItem.is-danger{border-color:#7f1d1d;background:#450a0a}.bItem.is-danger strong{color:#fecaca}
+
+/* C: sticky sections + scroll middle */
+.c{width:240px}
+.cScrollHint{text-align:center;font-size:9px;color:#64748b;padding:4px 0 8px;border-bottom:1px dashed #334155;margin-bottom:8px}
+.cStickyTop{position:sticky;top:0;background:#1e293b;padding-bottom:6px;z-index:1}
+.cQuick{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.cQuick a{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:12px;background:#141b26;border:1px solid #334155;text-decoration:none;color:#cbd5e1;font-size:9px}
+.cQuick a svg{width:16px;height:16px;stroke:#94a3b8;fill:none;stroke-width:1.8}
+.cRow{display:block;padding:9px 10px;border-radius:10px;text-decoration:none;color:#e2e8f0;font-size:12px;margin-bottom:3px}
+.cRow.is-active{background:rgba(52,211,153,.12);color:#6ee7b7;font-weight:700}
+.cDivider{height:1px;background:#334155;margin:8px 0}
+
+/* D: wide card panel */
+.d{width:72%;max-width:300px}
+.dCard{display:flex;align-items:center;gap:10px;padding:12px;border-radius:16px;background:linear-gradient(135deg,#141b26,#1a2332);border:1px solid #334155;text-decoration:none;color:#f8fafc;margin-bottom:8px}
+.dCard.is-active{border-color:#34d399;box-shadow:0 0 0 1px rgba(52,211,153,.2)}
+.dCard svg{width:20px;height:20px;stroke:#34d399;fill:none;stroke-width:1.8;flex-shrink:0}
+.dCard span{font-size:12px;font-weight:700}
+.dCard.is-danger{background:linear-gradient(135deg,#450a0a,#3f0d0d);border-color:#7f1d1d}.dCard.is-danger svg{stroke:#fca5a5}.dCard.is-danger span{color:#fecaca}
+.scrollFade{position:absolute;bottom:52px;left:0;width:220px;height:24px;background:linear-gradient(transparent,#1e293b);pointer-events:none;z-index:6}
+</style>
+</head>
+<body>
+
+<h1 class="pageTitle">منوی «بیشتر» — پاپ‌آپ ستونی از چپ</h1>
+<p class="pageSub">با کلیک روی «بیشتر»، منو از <strong>سمت چپ</strong> صفحه باز می‌شود و داخلش <strong>اسکرول</strong> دارد.<br>یکی را انتخاب کن: <strong>A / B / C / D</strong></p>
+
+<div class="grid">
+
+<!-- A -->
+<div class="card">
+<span class="cardLabel">طرح A</span>
+<h2 class="cardTitle">ستون باریک + آیکون</h2>
+<p class="cardDesc">عرض ~220px — آیکون کنار هر آیتم، گروه‌بندی، خروج ثابت پایین.</p>
+<div class="phone"><div class="phoneBar"></div><div class="screen">
+<div class="pageGhost"><div class="ghostLine w60"></div><div class="ghostLine w80"></div><div class="ghostLine w40"></div><div class="ghostLine w80"></div><div class="ghostLine w60"></div></div>
+<div class="dim"></div>
+<div class="drawer a">
+<div class="drawerHead"><div class="drawerHeadTop"><h3 class="drawerTitle">منوی بیشتر</h3><button class="drawerClose">×</button></div><p class="drawerSub">اسکرول برای دیدن همه بخش‌ها</p></div>
+<div class="drawerScroll">
+<p class="aGroup">مدیریت</p>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3"/></svg></span><span class="aLabel">داشبورد</span></a>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span><span class="aLabel">کاربران</span></a>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg></span><span class="aLabel">پلن‌ها</span></a>
+<a class="aItem is-active" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 010 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 010-4V9z"/></svg></span><span class="aLabel">کمپین‌ها</span></a>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/></svg></span><span class="aLabel">کارت‌ها</span></a>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/></svg></span><span class="aLabel">دانلودها</span></a>
+<p class="aGroup">ابزار</p>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span><span class="aLabel">تلگرام</span></a>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span><span class="aLabel">بله</span></a>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/></svg></span><span class="aLabel">3x-ui</span></a>
+<a class="aItem" href="#"><span class="aIcon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/></svg></span><span class="aLabel">آپلود CSV</span></a>
+</div>
+<div class="drawerFoot"><a class="aLogout" href="#">خروج از پنل</a></div>
+</div>
+<div class="bottomNav"><div class="bnItem">پیام‌ها</div><div class="bnItem">تمدید</div><div class="bnItem">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</div>
+
+<!-- B -->
+<div class="card">
+<span class="cardLabel">طرح B</span>
+<h2 class="cardTitle">پنل عریض‌تر + زیرنویس</h2>
+<p class="cardDesc">عرض ~280px — هر ردیف عنوان و توضیح کوتاه، اسکرول روان.</p>
+<div class="phone"><div class="phoneBar"></div><div class="screen">
+<div class="pageGhost"><div class="ghostLine w80"></div><div class="ghostLine w60"></div></div>
+<div class="dim"></div>
+<div class="drawer b">
+<div class="drawerHead"><div class="drawerHeadTop"><h3 class="drawerTitle">منوی بیشتر</h3><button class="drawerClose">×</button></div></div>
+<div class="drawerScroll">
+<a class="bItem" href="#"><span class="bText"><strong>داشبورد</strong><span>آمار و نمای کلی</span></span><span class="bChev">‹</span></a>
+<a class="bItem" href="#"><span class="bText"><strong>کاربران</strong><span>مدیریت حساب‌ها</span></span><span class="bChev">‹</span></a>
+<a class="bItem" href="#"><span class="bText"><strong>پلن‌ها</strong><span>تعرفه و محدودیت</span></span><span class="bChev">‹</span></a>
+<a class="bItem is-active" href="#"><span class="bText"><strong>کمپین‌ها</strong><span>کد تخفیف و پیام</span></span><span class="bChev">‹</span></a>
+<a class="bItem" href="#"><span class="bText"><strong>کارت‌ها</strong><span>کارت‌های بانکی</span></span><span class="bChev">‹</span></a>
+<a class="bItem" href="#"><span class="bText"><strong>دانلودها</strong><span>فایل‌های کاربران</span></span><span class="bChev">‹</span></a>
+<a class="bItem" href="#"><span class="bText"><strong>تلگرام</strong><span>ربات و اعلان</span></span><span class="bChev">‹</span></a>
+<a class="bItem" href="#"><span class="bText"><strong>بله</strong><span>ربات بله</span></span><span class="bChev">‹</span></a>
+<a class="bItem" href="#"><span class="bText"><strong>3x-ui</strong><span>سرورها</span></span><span class="bChev">‹</span></a>
+<a class="bItem" href="#"><span class="bText"><strong>آپلود CSV</strong><span>ورود دسته‌ای</span></span><span class="bChev">‹</span></a>
+<a class="bItem is-danger" href="#"><span class="bText"><strong>خروج</strong><span>پایان نشست</span></span><span class="bChev">‹</span></a>
+</div>
+</div>
+<div class="bottomNav"><div class="bnItem">پیام‌ها</div><div class="bnItem">تمدید</div><div class="bnItem">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</div>
+
+<!-- C -->
+<div class="card">
+<span class="cardLabel">طرح C</span>
+<h2 class="cardTitle">دسترسی سریع + لیست اسکرول</h2>
+<p class="cardDesc">۲ آیتم پین‌شده بالا + لیست اسکرول — خروج ثابت پایین.</p>
+<div class="phone"><div class="phoneBar"></div><div class="screen">
+<div class="dim"></div>
+<div class="drawer c">
+<div class="drawerHead"><div class="drawerHeadTop"><h3 class="drawerTitle">منوی بیشتر</h3><button class="drawerClose">×</button></div></div>
+<div class="drawerScroll">
+<div class="cStickyTop">
+<div class="cQuick">
+<a href="#"><svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3"/></svg>داشبورد</a>
+<a href="#"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>کاربران</a>
+</div>
+<p class="cScrollHint">▼ اسکرول کنید</p>
+</div>
+<a class="cRow" href="#">پلن‌ها</a>
+<a class="cRow is-active" href="#">کمپین‌ها</a>
+<a class="cRow" href="#">کارت‌ها</a>
+<a class="cRow" href="#">دانلودها</a>
+<a class="cRow" href="#">تلگرام</a>
+<a class="cRow" href="#">بله</a>
+<a class="cRow" href="#">3x-ui</a>
+<a class="cRow" href="#">آپلود CSV</a>
+<div class="cDivider"></div>
+<a class="cRow" href="#">تنظیمات (نمونه)</a>
+<a class="cRow" href="#">گزارش (نمونه)</a>
+</div>
+<div class="drawerFoot"><a class="aLogout" href="#">خروج</a></div>
+</div>
+<div class="bottomNav"><div class="bnItem">پیام‌ها</div><div class="bnItem">تمدید</div><div class="bnItem">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</div>
+
+<!-- D -->
+<div class="card">
+<span class="cardLabel">طرح D</span>
+<h2 class="cardTitle">پنل عریض (~۷۲٪) + کارت</h2>
+<p class="cardDesc">پوشش بیشتر صفحه از چپ — کارت‌های بزرگ، اسکرول عمودی.</p>
+<div class="phone"><div class="phoneBar"></div><div class="screen">
+<div class="dim"></div>
+<div class="drawer d">
+<div class="drawerHead"><div class="drawerHeadTop"><h3 class="drawerTitle">بخش‌های پنل</h3><button class="drawerClose">×</button></div><p class="drawerSub">پیمایش عمودی</p></div>
+<div class="drawerScroll">
+<a class="dCard" href="#"><svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3"/></svg><span>داشبورد</span></a>
+<a class="dCard" href="#"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>کاربران</span></a>
+<a class="dCard is-active" href="#"><svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 010 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 010-4V9z"/></svg><span>کمپین‌ها</span></a>
+<a class="dCard" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/></svg><span>کارت‌ها</span></a>
+<a class="dCard" href="#"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/></svg><span>دانلودها</span></a>
+<a class="dCard" href="#"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>تلگرام</span></a>
+<a class="dCard" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>3x-ui</span></a>
+<a class="dCard is-danger" href="#"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/></svg><span>خروج</span></a>
+</div>
+</div>
+<div class="bottomNav"><div class="bnItem">پیام‌ها</div><div class="bnItem">تمدید</div><div class="bnItem">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</div>
+
+</div>
+</body>
+</html>
