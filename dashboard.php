@@ -82,6 +82,8 @@ function dashH($value){
 html,body{
 height:100%;
 overflow:hidden;
+background:#0f172a;
+color:#fff;
 }
 body.userPanel--dashboard{
 min-height:100dvh;
@@ -89,6 +91,8 @@ height:100dvh;
 align-items:stretch !important;
 padding:10px !important;
 overflow:hidden;
+background:#0f172a;
+color:#fff;
 }
 .dashPage{
 height:100%;
