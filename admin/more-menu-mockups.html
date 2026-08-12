@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>طرح‌های منوی بیشتر</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px 16px 40px;background:#0b1220;font-family:tahoma,system-ui,sans-serif;color:#e2e8f0;direction:rtl}
+.pageTitle{text-align:center;font-size:22px;font-weight:700;margin:0 0 6px}
+.pageSub{text-align:center;font-size:13px;color:#94a3b8;margin:0 0 28px;line-height:1.8}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:1200px;margin:0 auto}
+.card{background:#111827;border:1px solid #334155;border-radius:20px;padding:16px}
+.cardHead{margin-bottom:12px}
+.cardLabel{display:inline-flex;padding:4px 10px;border-radius:999px;background:rgba(52,211,153,.14);color:#6ee7b7;font-size:11px;font-weight:700;margin-bottom:8px}
+.cardTitle{margin:0;font-size:16px;font-weight:700}
+.cardDesc{margin:6px 0 0;font-size:12px;color:#94a3b8;line-height:1.7}
+.phone{background:#171f2e;border:1px solid #334155;border-radius:28px;padding:12px 10px 10px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.phoneBar{width:42%;height:4px;background:#334155;border-radius:999px;margin:0 auto 10px}
+.phoneScreen{position:relative;background:#0f172a;border-radius:20px;overflow:hidden;min-height:520px}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#1e293b;border-radius:18px 18px 0 0;padding:12px 12px 14px;max-height:88%}
+.handle{width:36px;height:4px;background:#475569;border-radius:999px;margin:0 auto 10px}
+.sheetTitle{text-align:center;font-size:14px;font-weight:700;margin:0 0 10px;color:#f8fafc}
+.bottomNav{position:absolute;left:0;right:0;bottom:0;display:flex;background:#111827;border-top:1px solid #334155;height:56px}
+.bnItem{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9px;color:#94a3b8}
+.bnItem svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8}
+.bnMore{width:26%;border-right:1px solid #1e293b;color:#94a3b8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9px}
+
+/* A: Grouped icon grid */
+.aGroups{display:flex;flex-direction:column;gap:10px}
+.aGroupTitle{font-size:10px;color:#64748b;font-weight:700;margin:0 0 6px;padding-right:2px}
+.aGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.aTile{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:12px;background:#141b26;border:1px solid #334155;text-decoration:none;color:#e2e8f0;font-size:9px;text-align:center;line-height:1.4}
+.aTile svg{width:18px;height:18px;stroke:#34d399;fill:none;stroke-width:1.8}
+.aTile.is-active{border-color:#34d399;background:rgba(52,211,153,.1);color:#6ee7b7}
+.aLogout{margin-top:4px;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border-radius:12px;background:#450a0a;border:1px solid #7f1d1d;color:#fecaca;font-size:11px;text-decoration:none}
+.aLogout svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8}
+
+/* B: List rows */
+.bList{display:flex;flex-direction:column;gap:6px}
+.bRow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#141b26;border:1px solid #334155;text-decoration:none;color:#f8fafc}
+.bIcon{width:34px;height:34px;border-radius:10px;background:#242d3d;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bIcon svg{width:18px;height:18px;stroke:#34d399;fill:none;stroke-width:1.8}
+.bText{flex:1;min-width:0}
+.bText strong{display:block;font-size:12px;margin-bottom:2px}
+.bText span{display:block;font-size:9px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bChevron{color:#64748b;font-size:14px}
+.bRow.is-active{border-color:#34d399;background:rgba(52,211,153,.08)}
+.bRow.is-danger .bIcon{background:#450a0a}.bRow.is-danger .bIcon svg{stroke:#fca5a5}.bRow.is-danger strong{color:#fecaca}
+
+/* C: Large tiles */
+.cGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cTile{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:12px;border-radius:16px;background:linear-gradient(145deg,#141b26,#1a2332);border:1px solid #334155;text-decoration:none;color:#f8fafc;min-height:74px;overflow:hidden}
+.cTile::after{content:"";position:absolute;top:-20px;left:-20px;width:60px;height:60px;border-radius:50%;background:rgba(52,211,153,.12)}
+.cTile svg{width:20px;height:20px;stroke:#34d399;fill:none;stroke-width:1.8;position:relative;z-index:1}
+.cTile span{font-size:11px;font-weight:700;position:relative;z-index:1}
+.cTile.is-active{border-color:#34d399;box-shadow:0 0 0 1px rgba(52,211,153,.25)}
+.cTile.is-danger{background:linear-gradient(145deg,#450a0a,#3f0d0d);border-color:#7f1d1d}.cTile.is-danger svg{stroke:#fca5a5}.cTile.is-danger span{color:#fecaca}
+
+/* D: Compact 4-col + footer */
+.dGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.dItem{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 2px;border-radius:12px;text-decoration:none;color:#cbd5e1;font-size:8px;text-align:center;line-height:1.3}
+.dBubble{width:38px;height:38px;border-radius:14px;background:#242d3d;border:1px solid #334155;display:flex;align-items:center;justify-content:center}
+.dBubble svg{width:17px;height:17px;stroke:#94a3b8;fill:none;stroke-width:1.8}
+.dItem.is-active .dBubble{border-color:#34d399;background:rgba(52,211,153,.12)}.dItem.is-active .dBubble svg{stroke:#34d399}.dItem.is-active{color:#6ee7b7}
+.dFooter{margin-top:10px;padding-top:10px;border-top:1px solid #334155;display:flex;gap:8px}
+.dLogout{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border-radius:12px;background:#450a0a;color:#fecaca;font-size:10px;text-decoration:none;border:1px solid #7f1d1d}
+.dClose{flex:1;display:flex;align-items:center;justify-content:center;padding:10px;border-radius:12px;background:#242d3d;color:#cbd5e1;font-size:10px;border:1px solid #334155}
+</style>
+</head>
+<body>
+
+<h1 class="pageTitle">طرح‌های پیشنهادی منوی «بیشتر»</h1>
+<p class="pageSub">۴ طرح مختلف برای bottom sheet — هر کدام با همان آیتم‌های فعلی.<br>بگو کدام را پیاده‌سازی کنم: A، B، C یا D</p>
+
+<div class="grid">
+
+<!-- A -->
+<div class="card">
+<div class="cardHead">
+<span class="cardLabel">طرح A</span>
+<h2 class="cardTitle">گروه‌بندی + آیکون ۳ ستونه</h2>
+<p class="cardDesc">آیتم‌ها در بخش‌های «مدیریت / محتوا / ابزار» — خوانایی بهتر، آیکون برای هر مورد.</p>
+</div>
+<div class="phone"><div class="phoneBar"></div><div class="phoneScreen">
+<div class="dim"></div>
+<div class="sheet">
+<div class="handle"></div>
+<h3 class="sheetTitle">منوی بیشتر</h3>
+<div class="aGroups">
+<div><p class="aGroupTitle">مدیریت</p><div class="aGrid">
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>داشبورد</a>
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>کاربران</a>
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>پلن‌ها</a>
+<a class="aTile is-active" href="#"><svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 010 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 010-4V9z"/></svg>کمپین‌ها</a>
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>کارت‌ها</a>
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>دانلودها</a>
+</div></div>
+<div><p class="aGroupTitle">ابزار و اتصال</p><div class="aGrid">
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg>تلگرام</a>
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg>بله</a>
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>3x-ui</a>
+<a class="aTile" href="#"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>آپلود CSV</a>
+</div></div>
+<a class="aLogout" href="#"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>خروج از پنل</a>
+</div></div>
+<div class="bottomNav"><div class="bnItem"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg>پیام‌ها</div><div class="bnItem"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>تمدید</div><div class="bnItem"><svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/></svg>خرید</div><div class="bnMore"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>بیشتر</div></div>
+</div></div>
+</div>
+
+<!-- B -->
+<div class="card">
+<div class="cardHead">
+<span class="cardLabel">طرح B</span>
+<h2 class="cardTitle">لیست با توضیح کوتاه</h2>
+<p class="cardDesc">هر ردیف: آیکون + عنوان + زیرنویس — مناسب وقتی آیتم‌ها زیاد شوند.</p>
+</div>
+<div class="phone"><div class="phoneBar"></div><div class="phoneScreen">
+<div class="dim"></div>
+<div class="sheet">
+<div class="handle"></div>
+<h3 class="sheetTitle">منوی بیشتر</h3>
+<div class="bList">
+<a class="bRow" href="#"><span class="bIcon"><svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3"/></svg></span><span class="bText"><strong>داشبورد</strong><span>آمار و نمای کلی پنل</span></span><span class="bChevron">‹</span></a>
+<a class="bRow" href="#"><span class="bIcon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span><span class="bText"><strong>کاربران</strong><span>مدیریت حساب‌ها</span></span><span class="bChevron">‹</span></a>
+<a class="bRow is-active" href="#"><span class="bIcon"><svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 010 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 010-4V9z"/></svg></span><span class="bText"><strong>کمپین‌ها</strong><span>کد تخفیف و پیام داشبورد</span></span><span class="bChevron">‹</span></a>
+<a class="bRow" href="#"><span class="bIcon"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/></svg></span><span class="bText"><strong>کارت‌ها</strong><span>کارت‌های بانکی</span></span><span class="bChevron">‹</span></a>
+<a class="bRow" href="#"><span class="bIcon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span><span class="bText"><strong>تلگرام / بله</strong><span>ربات‌ها و اعلان‌ها</span></span><span class="bChevron">‹</span></a>
+<a class="bRow is-danger" href="#"><span class="bIcon"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/></svg></span><span class="bText"><strong>خروج</strong><span>پایان نشست مدیریت</span></span><span class="bChevron">‹</span></a>
+</div></div>
+<div class="bottomNav"><div class="bnItem">پیام‌ها</div><div class="bnItem">تمدید</div><div class="bnItem">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</div>
+
+<!-- C -->
+<div class="card">
+<div class="cardHead">
+<span class="cardLabel">طرح C</span>
+<h2 class="cardTitle">کارت‌های بزرگ ۲ ستونه</h2>
+<p class="cardDesc">ظاهر مدرن‌تر با گرادیان ملایم — مناسب تعداد متوسط آیتم.</p>
+</div>
+<div class="phone"><div class="phoneBar"></div><div class="phoneScreen">
+<div class="dim"></div>
+<div class="sheet">
+<div class="handle"></div>
+<h3 class="sheetTitle">منوی بیشتر</h3>
+<div class="cGrid">
+<a class="cTile" href="#"><svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3"/></svg><span>داشبورد</span></a>
+<a class="cTile" href="#"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>کاربران</span></a>
+<a class="cTile" href="#"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg><span>پلن‌ها</span></a>
+<a class="cTile is-active" href="#"><svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 010 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 010-4V9z"/></svg><span>کمپین‌ها</span></a>
+<a class="cTile" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/></svg><span>کارت‌ها</span></a>
+<a class="cTile" href="#"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/></svg><span>دانلودها</span></a>
+<a class="cTile" href="#"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>تلگرام</span></a>
+<a class="cTile" href="#"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span>3x-ui</span></a>
+<a class="cTile is-danger" href="#" style="grid-column:1/-1;min-height:52px;flex-direction:row;align-items:center"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/></svg><span>خروج از پنل</span></a>
+</div></div>
+<div class="bottomNav"><div class="bnItem">پیام‌ها</div><div class="bnItem">تمدید</div><div class="bnItem">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</div>
+
+<!-- D -->
+<div class="card">
+<div class="cardHead">
+<span class="cardLabel">طرح D</span>
+<h2 class="cardTitle">فشرده ۴ ستونه + دکمه پایین</h2>
+<p class="cardDesc">بیشترین آیتم در کمترین فضا — آیکون دایره‌ای + نوار خروج/بستن.</p>
+</div>
+<div class="phone"><div class="phoneBar"></div><div class="phoneScreen">
+<div class="dim"></div>
+<div class="sheet">
+<div class="handle"></div>
+<h3 class="sheetTitle">منوی بیشتر</h3>
+<div class="dGrid">
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3"/></svg></span>داشبورد</a>
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>کاربران</a>
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg></span>پلن‌ها</a>
+<a class="dItem is-active" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 010 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 010-4V9z"/></svg></span>کمپین</a>
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/></svg></span>کارت‌ها</a>
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/></svg></span>دانلود</a>
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span>تلگرام</a>
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 3V7a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span>بله</a>
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/></svg></span>3x-ui</a>
+<a class="dItem" href="#"><span class="dBubble"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/></svg></span>CSV</a>
+</div>
+<div class="dFooter"><a class="dClose" href="#">بستن</a><a class="dLogout" href="#">خروج</a></div>
+</div>
+<div class="bottomNav"><div class="bnItem">پیام‌ها</div><div class="bnItem">تمدید</div><div class="bnItem">خرید</div><div class="bnMore">بیشتر</div></div>
+</div></div>
+</div>
+
+</div>
+</body>
+</html>
