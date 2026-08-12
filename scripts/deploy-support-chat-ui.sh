@@ -27,4 +27,4 @@ echo ""
 grep -c "supportAvatarLightbox" "${ROOT}/support_ui.css" || true
 grep -c "supportRenderHeaderAvatarHtml" "${ROOT}/support_lib.php" || true
 echo ""
-echo "Done. Hard-refresh admin support (Ctrl+Shift+R). CSS/JS v38."
+echo "Done. Hard-refresh admin support (Ctrl+Shift+R). CSS/JS v41."
