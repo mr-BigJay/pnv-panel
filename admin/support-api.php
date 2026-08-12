@@ -39,7 +39,7 @@ foreach($data as $ticket){
 
     foreach($ticket['messages'] as $msg){
 
-        $timestamp = supportMessageTimestamp($msg);
+        $timestamp = intval($msg['timestamp'] ?? 0);
 
         if($since > 0 && $timestamp <= $since){
             continue;

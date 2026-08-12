@@ -44,17 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=38';
+$cssHref = '/support_ui.css?v=40';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=38';
-
-if(is_file(__DIR__ . '/../profile_lib.php')){
-    require_once __DIR__ . '/../profile_lib.php';
-    if(function_exists('profileLoadUsers')){
-        profileLoadUsers();
-    }
-}
+$jsHref = '/support_ui.js?v=40';
 
 if(!$supportEmbedded){
 ?>
@@ -76,7 +69,7 @@ if(!$supportEmbedded){
 <div class="msgSidebarHead">
 <div class="msgSidebarHeadRow">
 <a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
-<h2>پیام‌های کاربران <?php if(count($data) > 0){ ?><span class="msgSidebarCount"><?php echo count($data); ?></span><?php } ?></h2>
+<h2>پیام‌های کاربران</h2>
 </div>
 <div class="msgSearchWrap">
 <input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
@@ -96,16 +89,38 @@ if(!$supportEmbedded){
 
 <?php foreach($data as $ticket){
 
-    if(!is_array($ticket)){
-        continue;
-    }
+    $ticketUser = $ticket['user'] ?? '';
+    $isActive = $currentUser === $ticketUser;
+    $unread = supportAdminUnreadCount($ticket);
+    $preview = supportTicketPreview($ticket);
+    $lastTs = supportTicketLastTimestamp($ticket);
 
-    echo supportRenderAdminConversationItem($ticket, [
-        'currentUser' => $currentUser,
-        'embedded' => $supportEmbedded
-    ]);
+?>
 
-} ?>
+<a
+    href="<?php echo htmlspecialchars(supportAdminUrl($ticketUser, $supportEmbedded), ENT_QUOTES, 'UTF-8'); ?>"
+    class="msgConv <?php echo $isActive ? 'active' : ''; ?>"
+    data-username="<?php echo htmlspecialchars($ticketUser, ENT_QUOTES, 'UTF-8'); ?>">
+
+    <?php echo supportRenderConvAvatarHtml($ticketUser); ?>
+
+    <div class="msgConvBody">
+        <div class="msgConvTop">
+            <span class="msgConvName"><?php echo htmlspecialchars($ticketUser, ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="msgConvTime"><?php echo htmlspecialchars(supportRelativeTime($lastTs), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
+        <div class="msgConvPreview <?php echo $unread > 0 ? 'unread' : ''; ?>">
+            <?php echo htmlspecialchars($preview, ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+    </div>
+
+    <?php if($unread > 0){ ?>
+    <span class="msgBadge"><?php echo $unread > 9 ? '9+' : $unread; ?></span>
+    <?php } ?>
+
+</a>
+
+<?php } ?>
 
 </div>
 
@@ -150,11 +165,11 @@ $hasMessages = false;
 
 foreach($data as $ticket){
 
-    if(!is_array($ticket) || ($ticket['user'] ?? '') !== $currentUser){
+    if(($ticket['user'] ?? '') !== $currentUser){
         continue;
     }
 
-    if(empty($ticket['messages']) || !is_array($ticket['messages'])){
+    if(empty($ticket['messages'])){
         break;
     }
 
@@ -162,25 +177,14 @@ foreach($data as $ticket){
 
     foreach($ticket['messages'] as $m){
 
-        if(!is_array($m)){
-            continue;
-        }
-
-        try{
-            echo supportRenderMessageHtml($m, [
-                'currentUser' => $currentUser,
-                'embedded' => $supportEmbedded,
-                'csrfField' => $csrfField,
-                'editId' => $editId,
-                'isAdmin' => true,
-                'baseUrl' => $baseUrl
-            ]);
-        }catch(Throwable $e){
-            $fallbackText = supportSafeHtml(supportExtractMessageText($m) ?: 'پیام');
-            echo '<div class="msgRow msgRow--user"><div class="msgBubble msg is-user usermsg"><div class="msgText">'
-                . $fallbackText
-                . '</div></div></div>';
-        }
+        echo supportRenderMessageHtml($m, [
+            'currentUser' => $currentUser,
+            'embedded' => $supportEmbedded,
+            'csrfField' => $csrfField,
+            'editId' => $editId,
+            'isAdmin' => true,
+            'baseUrl' => $baseUrl
+        ]);
 
     }
 
