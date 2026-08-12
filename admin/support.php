@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '/support_ui.css?v=39';
+$cssHref = '/support_ui.css?v=40';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '/support_ui.js?v=39';
+$jsHref = '/support_ui.js?v=40';
 
 if(is_file(__DIR__ . '/../profile_lib.php')){
     require_once __DIR__ . '/../profile_lib.php';

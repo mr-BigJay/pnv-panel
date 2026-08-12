@@ -197,21 +197,22 @@ display:block;
 }
 
 .msgRow{
-display:flex;
-align-items:flex-end;
-gap:8px;
-max-width:min(88%,560px);
+display:block;
+width:fit-content;
+max-width:min(78%,560px);
+min-width:0;
 margin-bottom:8px;
+box-sizing:border-box;
 }
 
 .msgRow--admin{
-margin-left:auto;
-margin-right:0;
+margin-right:auto;
+margin-left:0;
 }
 
 .msgRow--user{
-margin-right:auto;
-margin-left:0;
+margin-left:auto;
+margin-right:0;
 }
 
 .msgRowAvatar{
@@ -219,21 +220,37 @@ display:none !important;
 }
 
 .msgRow .msgBubble{
+display:block;
 max-width:100%;
-flex:1 1 auto;
+width:100%;
 margin:0 !important;
+box-sizing:border-box;
+overflow-wrap:anywhere;
+word-break:break-word;
 }
 
 .msgBody{
 flex:1;
 overflow-y:auto;
+overflow-x:hidden;
 padding:16px;
 display:flex;
 flex-direction:column;
-gap:4px;
+gap:8px;
+min-height:0;
+min-width:0;
 background:
 radial-gradient(circle at top right,rgba(59,130,246,.08),transparent 40%),
 var(--msg-bg);
+}
+
+.msgBody .msgRow{
+margin-bottom:0;
+}
+
+.msgBody .msgBubble{
+max-width:100%;
+margin:0 !important;
 }
 
 /* اسکرول‌بار مدرن — لیست پیام‌ها و سایدبار */
@@ -320,7 +337,9 @@ padding:10px 14px;
 border-radius:var(--msg-bubble);
 line-height:1.75;
 word-break:break-word;
+overflow-wrap:anywhere;
 position:relative;
+box-sizing:border-box;
 box-shadow:0 1px 2px rgba(0,0,0,.15);
 animation:msgIn .2s ease;
 }
@@ -367,8 +386,6 @@ border-bottom-left-radius:var(--msg-bubble);
 .supportPage .msgBubble.is-admin{
 background:var(--msg-admin);
 color:#052e16;
-margin-left:auto;
-margin-right:0;
 border-bottom-left-radius:4px;
 border-bottom-right-radius:var(--msg-bubble);
 }
@@ -1054,31 +1071,51 @@ flex-wrap:wrap;
 .supportMessages{
 flex:1;
 overflow-y:auto;
+overflow-x:hidden;
 padding:16px;
 display:flex;
 flex-direction:column;
 gap:8px;
 min-height:0;
+min-width:0;
 }
 
-.supportPage .msg.usermsg{
+.supportPage .supportMessages .msgRow{
+margin-bottom:0;
+}
+
+.supportPage .supportMessages .msgBubble{
+max-width:100%;
+margin:0 !important;
+}
+
+.supportPage .msg.usermsg,
+.supportPage .msgBubble.is-user{
 background:var(--msg-in);
 color:var(--msg-text);
-margin-right:auto;
-margin-left:0;
 border-bottom-left-radius:4px;
 border-bottom-right-radius:var(--msg-bubble);
-max-width:78%;
 }
 
-.supportPage .msg.admin{
+.supportPage .msg.admin,
+.supportPage .msgBubble.is-admin{
 background:var(--msg-admin);
 color:#052e16;
-margin-left:auto;
-margin-right:0;
 border-bottom-right-radius:4px;
 border-bottom-left-radius:var(--msg-bubble);
-max-width:78%;
+}
+
+.supportPage .msgText,
+.supportPage .msgQuote,
+.supportPage .msgQuote span{
+overflow-wrap:anywhere;
+word-break:break-word;
+}
+
+.supportPage .msgBubble img,
+.supportPage .msg img{
+max-width:100%;
+height:auto;
 }
 
 .supportSendbox{
