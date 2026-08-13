@@ -85,14 +85,23 @@ if(isset($_POST['save'])){
     $message = 'تنظیمات پیامک ذخیره شد.';
 }
 
+if(isset($_POST['test_connection']) || isset($_POST['test_template'])){
+    $postTab = trim((string)($_POST['tab'] ?? $tab));
+    if(isset($templateMenu[$postTab])){
+        $tab = $postTab;
+    }
+}
+
 if(isset($_POST['test_connection'])){
     $config = smsLoadConfig();
-    $mobile = trim((string)($_POST['test_mobile'] ?? ($config['test_mobile'] ?? '')));
+    $mobile = smsResolveTestMobile($_POST, $config);
 
     if($mobile === ''){
         $error = 'شماره موبایل تست را وارد کنید.';
     }
     else{
+        smsRememberTestMobile($mobile, $config);
+        $config = smsLoadConfig();
         $result = smsSend($mobile, '✅ تست اتصال پنل SMS تیکتین — ' . date('Y-m-d H:i'), $config);
         if(!empty($result['ok'])){
             $message = 'پیامک تست اتصال با موفقیت ارسال شد.';
@@ -105,7 +114,7 @@ if(isset($_POST['test_connection'])){
 
 if(isset($_POST['test_template'])){
     $config = smsLoadConfig();
-    $mobile = trim((string)($_POST['test_mobile'] ?? ($config['test_mobile'] ?? '')));
+    $mobile = smsResolveTestMobile($_POST, $config);
     $templateKey = smsNormalizeTemplateKey($_POST['test_template_key'] ?? '');
 
     if($mobile === ''){
@@ -115,6 +124,8 @@ if(isset($_POST['test_template'])){
         $error = 'الگوی انتخاب‌شده نامعتبر است.';
     }
     else{
+        smsRememberTestMobile($mobile, $config);
+        $config = smsLoadConfig();
         $draftTemplates = smsParseTemplatesFromPost($_POST);
         $config['templates'] = smsMergeTemplates($config['templates'] ?? null);
         $config['templates'][$templateKey] = $draftTemplates[$templateKey];
@@ -177,6 +188,8 @@ button,.back,.menuLink{display:block;width:100%;border:0;border-radius:12px;padd
 .sectionDesc{color:#94a3b8;line-height:1.9;margin:0 0 16px;font-size:14px}
 .placeholderList{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
 .placeholderList code{background:#0f172a;padding:4px 8px;border-radius:8px;font-size:12px}
+.testMobileBar{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px 16px;margin-bottom:18px}
+.testMobileBar label{margin:0 0 8px}
 .fieldGroup[data-provider]{display:none}
 .fieldGroup.is-visible{display:block}
 .panelSection{display:none}
@@ -211,8 +224,13 @@ body{padding:10px}
 <?php if($message !== ''){ ?><div class="msg"><?php echo $h($message); ?></div><?php } ?>
 <?php if($error !== ''){ ?><div class="err"><?php echo $h($error); ?></div><?php } ?>
 
-<form method="post">
+<form method="post" id="smsAdminForm">
 <input type="hidden" name="tab" value="<?php echo $h($tab); ?>">
+
+<div class="testMobileBar">
+<label for="test_mobile">موبایل تست</label>
+<input type="text" name="test_mobile" id="test_mobile" value="<?php echo $h($config['test_mobile'] ?? ''); ?>" placeholder="09123456789" dir="ltr" autocomplete="tel">
+</div>
 
 <div class="panelSection <?php echo $tab === 'connection' ? 'is-active' : ''; ?>" data-panel="connection">
 <label class="toggle">
@@ -272,9 +290,6 @@ body{padding:10px}
 <label for="<?php echo $h($prefix); ?>text">متن الگو</label>
 <textarea name="<?php echo $h($prefix); ?>text" id="<?php echo $h($prefix); ?>text"><?php echo $h($row['text'] ?? ''); ?></textarea>
 
-<label for="test_mobile_<?php echo $h($key); ?>">موبایل تست</label>
-<input type="text" name="test_mobile" id="test_mobile_<?php echo $h($key); ?>" value="<?php echo $h($config['test_mobile'] ?? ''); ?>" placeholder="09123456789" dir="ltr">
-
 <div class="hint">
 <p>متغیرهای قابل استفاده:</p>
 <div class="placeholderList">
@@ -286,7 +301,7 @@ body{padding:10px}
 
 <div class="actions">
 <button type="submit" name="save" value="1">ذخیره الگو</button>
-<button type="submit" name="test_template" value="1" class="test" formaction="<?php echo $h($tabUrl($key)); ?>#form">ارسال نمونه</button>
+<button type="submit" name="test_template" value="1" class="test">ارسال نمونه</button>
 <input type="hidden" name="test_template_key" value="<?php echo $h($key); ?>">
 </div>
 </div>

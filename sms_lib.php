@@ -636,4 +636,35 @@ if(!function_exists('smsConfigPath')){
         return $samples[$key] ?? [];
     }
 
+    function smsResolveTestMobile($post, $config = null){
+        if($config === null){
+            $config = smsLoadConfig();
+        }
+
+        $mobile = trim((string)(is_array($post) ? ($post['test_mobile'] ?? '') : ''));
+        if($mobile === ''){
+            $mobile = trim((string)($config['test_mobile'] ?? ''));
+        }
+
+        return $mobile;
+    }
+
+    function smsRememberTestMobile($mobile, $config = null){
+        $mobile = trim((string)$mobile);
+        if($mobile === ''){
+            return;
+        }
+
+        if($config === null){
+            $config = smsLoadConfig();
+        }
+
+        if(trim((string)($config['test_mobile'] ?? '')) === $mobile){
+            return;
+        }
+
+        $config['test_mobile'] = $mobile;
+        smsSaveConfig($config);
+    }
+
 }
