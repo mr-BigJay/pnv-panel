@@ -1,20 +1,41 @@
 <?php
 
-if(file_exists(__DIR__ . '/auth.php')){
-    require_once __DIR__ . '/auth.php';
-    pnvAdminRequireAuth();
-}
-else{
-    session_start();
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/admin_nav.php';
 
-    if(!isset($_SESSION['admin'])){
-        header('Location: index.php');
-        exit;
+$smsLibPath = dirname(__DIR__) . '/sms_lib.php';
+if(!is_file($smsLibPath)){
+    http_response_code(500);
+    header('Content-Type: text/html; charset=UTF-8');
+    $entry = function_exists('pnvAdminUrl') ? pnvAdminUrl() : '../bigjay_controller/';
+    echo '<!DOCTYPE html><html lang="fa"><head><meta charset="UTF-8"><title>خطای پیامک</title></head><body style="font-family:tahoma;direction:rtl;padding:24px;background:#0f172a;color:#fff">';
+    echo '<h2>فایل sms_lib.php روی سرور نیست</h2>';
+    echo '<p>برای رفع خطای 500، فایل <code>sms_lib.php</code> را در ریشه سایت آپلود کنید.</p>';
+    echo '<p><a href="' . htmlspecialchars($entry, ENT_QUOTES, 'UTF-8') . '" style="color:#93c5fd">بازگشت به داشبورد</a></p>';
+    echo '</body></html>';
+    exit;
+}
+
+require_once $smsLibPath;
+
+if(!function_exists('smsLoadConfig')){
+    http_response_code(500);
+    header('Content-Type: text/html; charset=UTF-8');
+    echo '<!DOCTYPE html><html lang="fa"><head><meta charset="UTF-8"><title>خطای پیامک</title></head><body style="font-family:tahoma;direction:rtl;padding:24px;background:#0f172a;color:#fff">';
+    echo '<h2>کتابخانه پیامک ناقص است</h2>';
+    echo '<p>فایل sms_lib.php قدیمی یا خراب است. آخرین نسخه را از GitHub دوباره deploy کنید.</p>';
+    echo '</body></html>';
+    exit;
+}
+
+if(!function_exists('smsSanitizeApiKey')){
+    function smsSanitizeApiKey($key){
+        $key = trim((string)$key);
+        return trim($key, " \t\n\r\0\x0B\"'`");
     }
 }
 
-require_once __DIR__ . '/admin_nav.php';
-require_once __DIR__ . '/../sms_lib.php';
+pnvAdminRequireAuth();
 
 $config = smsLoadConfig();
 $message = '';
