@@ -71,8 +71,56 @@ if(!function_exists('pnvFormatPlanPrice')){
     function pnvPlanOptionValue($plan){
         $name = trim((string)($plan['name'] ?? ''));
         $priceText = pnvFormatPlanPrice($plan['price'] ?? 0);
+        $value = $name . ' - ' . $priceText;
 
-        return $name . ' - ' . $priceText;
+        if(!pnvPlanIsUnlimited($plan)){
+            $daysLabel = pnvPlanDaysLabel($plan);
+
+            if($daysLabel !== '' && $daysLabel !== '—' && $daysLabel !== 'نامحدود زمانی'){
+                $value .= ' - ' . $daysLabel;
+            }
+        }
+
+        return $value;
+    }
+
+    function pnvFindPlanByValue($planValue, $plans){
+        $planValue = trim((string)$planValue);
+
+        if($planValue === '' || !is_array($plans)){
+            return null;
+        }
+
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            if(pnvPlanOptionValue($plan) === $planValue){
+                return $plan;
+            }
+        }
+
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $legacy = trim((string)($plan['name'] ?? ''));
+
+            if($legacy === ''){
+                continue;
+            }
+
+            $priceText = pnvFormatPlanPrice($plan['price'] ?? 0);
+            $legacyValue = $legacy . ' - ' . $priceText;
+
+            if($legacyValue === $planValue || strpos($planValue, $legacyValue) === 0){
+                return $plan;
+            }
+        }
+
+        return null;
     }
 
     function pnvPlansForStepUi($plans){
@@ -167,12 +215,6 @@ if(!function_exists('pnvFormatPlanPrice')){
     }
 
     function pnvResolveSubTimeCategory($link, $planText = ''){
-        $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
-
-        if($planDays > 0){
-            return 'limited';
-        }
-
         $link = trim((string)$link);
 
         if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
@@ -181,6 +223,12 @@ if(!function_exists('pnvFormatPlanPrice')){
             if($expire !== null){
                 return $expire > 0 ? 'limited' : 'unlimited';
             }
+        }
+
+        $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
+
+        if($planDays > 0){
+            return 'limited';
         }
 
         return 'unlimited';
@@ -246,6 +294,10 @@ if(!function_exists('pnvFormatPlanPrice')){
                 $selectedPlan = $plan;
                 break;
             }
+        }
+
+        if(!$selectedPlan){
+            $selectedPlan = pnvFindPlanByValue($planValue, $plans);
         }
 
         if(!$selectedPlan){
