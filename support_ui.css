@@ -21,6 +21,11 @@ margin:0;
 padding:0;
 background:var(--msg-bg);
 color:var(--msg-text);
+}
+
+/* فقط صفحات مستقل پشتیبانی — در embed ادمین body را دست نزن */
+body:not(.adminPageSupport):has(.msgApp--user),
+body:not(.adminPageSupport):has(.supportPage:not(.supportEmbedded)){
 height:100%;
 overflow:hidden;
 }
@@ -119,13 +124,24 @@ flex-shrink:0;
 .msgBody{
 flex:1;
 overflow-y:auto;
+overflow-x:hidden;
 padding:16px;
 display:flex;
 flex-direction:column;
-gap:4px;
+gap:10px;
+min-height:0;
 background:
 radial-gradient(circle at top right,rgba(59,130,246,.08),transparent 40%),
 var(--msg-bg);
+}
+
+.msgBody > .msgBubble,
+.msgBody > .msg{
+flex:0 0 auto;
+flex-shrink:0;
+width:fit-content;
+max-width:min(78%, 520px);
+clear:both;
 }
 
 /* اسکرول‌بار مدرن — لیست پیام‌ها و سایدبار */
@@ -207,7 +223,6 @@ border:1px solid var(--msg-border);
 }
 
 .msgBubble{
-max-width:78%;
 padding:10px 14px;
 border-radius:var(--msg-bubble);
 line-height:1.75;
@@ -215,6 +230,10 @@ word-break:break-word;
 position:relative;
 box-shadow:0 1px 2px rgba(0,0,0,.15);
 animation:msgIn .2s ease;
+flex:0 0 auto;
+flex-shrink:0;
+width:fit-content;
+max-width:min(78%, 520px);
 }
 
 @keyframes msgIn{
@@ -504,6 +523,8 @@ cursor:pointer;
 .supportPage{
 display:flex;
 height:100vh;
+height:100dvh;
+max-height:100dvh;
 background:var(--msg-bg);
 color:var(--msg-text);
 font-family:tahoma,system-ui,sans-serif;
@@ -512,7 +533,8 @@ overflow:hidden;
 }
 
 .supportPage.supportEmbedded{
-height:100vh;
+height:100dvh;
+max-height:100dvh;
 margin:0;
 min-height:0;
 }
@@ -712,7 +734,73 @@ display:flex;
 flex-direction:column;
 min-width:0;
 min-height:0;
+max-height:100%;
+height:100%;
 background:var(--msg-bg);
+overflow:hidden;
+position:relative;
+}
+
+.supportChatTop{
+flex:0 0 auto;
+flex-shrink:0;
+position:relative;
+z-index:12;
+background:var(--msg-panel);
+border-bottom:1px solid var(--msg-border);
+padding-top:env(safe-area-inset-top,0);
+}
+
+.supportChatTop .msgHeader{
+border-bottom:none;
+flex-shrink:0;
+}
+
+.supportProfileBar{
+padding:10px 14px 12px;
+background:var(--msg-card);
+border-top:1px solid var(--msg-border);
+}
+
+.supportProfileGrid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:8px 12px;
+}
+
+.supportProfileItem{
+display:flex;
+flex-direction:column;
+gap:2px;
+min-width:0;
+font-size:12px;
+line-height:1.5;
+}
+
+.supportProfileItem span{
+color:var(--msg-muted);
+font-size:11px;
+}
+
+.supportProfileItem strong{
+color:var(--msg-text);
+font-weight:600;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+}
+
+.supportProfileSubsBtn{
+width:100%;
+margin-top:10px;
+padding:10px 12px;
+border:none;
+border-radius:12px;
+background:#2563eb;
+color:#fff;
+font-size:12px;
+font-family:inherit;
+cursor:pointer;
 }
 
 .supportChatbox .msgHeader{
@@ -926,13 +1014,46 @@ flex-wrap:wrap;
 .profilePagination .activePage{background:#3b82f6;}
 
 .supportMessages{
-flex:1;
+flex:1 1 auto;
 overflow-y:auto;
+overflow-x:hidden;
 padding:16px;
 display:flex;
 flex-direction:column;
-gap:8px;
+gap:10px;
 min-height:0;
+overscroll-behavior:contain;
+overflow-anchor:none;
+position:relative;
+z-index:1;
+}
+
+.supportMessages > .msgBubble,
+.supportMessages > .msg{
+flex:0 0 auto;
+flex-shrink:0;
+align-self:flex-start;
+clear:both;
+}
+
+.supportMessages > .msg.admin,
+.supportMessages > .msgBubble.is-admin{
+align-self:flex-end;
+margin-left:auto;
+margin-right:0;
+}
+
+.supportMessages > .msg.usermsg,
+.supportMessages > .msgBubble.is-user{
+align-self:flex-start;
+margin-right:auto;
+margin-left:0;
+}
+
+.supportMessages .msgEmpty{
+align-self:center;
+width:100%;
+max-width:none;
 }
 
 .supportPage .msg.usermsg{
@@ -953,11 +1074,55 @@ border-bottom-left-radius:4px;
 max-width:78%;
 }
 
+.supportChatbox > .msgFlash{
+flex:0 0 auto;
+flex-shrink:0;
+margin:8px 14px 0;
+}
+
 .supportSendbox{
 padding:12px 14px 16px;
+padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));
 background:var(--msg-panel);
 border-top:1px solid var(--msg-border);
+flex:0 0 auto;
 flex-shrink:0;
+position:relative;
+z-index:20;
+box-shadow:0 -8px 24px rgba(2,6,23,.45);
+}
+
+body.supportKeyboardOpen .supportSendbox{
+padding-bottom:12px;
+}
+
+body.supportVvSync .supportChatTop{
+display:block !important;
+visibility:visible !important;
+opacity:1 !important;
+flex:0 0 auto !important;
+}
+
+body.supportVvSync .content-support,
+body.supportVvSync #supportPage.supportEmbedded{
+position:fixed !important;
+left:0 !important;
+right:0 !important;
+width:100% !important;
+margin:0 !important;
+overflow:hidden !important;
+z-index:200;
+}
+
+body.supportVvSync.adminPageSupport,
+body.supportVvSync{
+overflow:hidden;
+}
+
+html.supportVvSync,
+html.supportVvSync body{
+overflow:hidden;
+height:100%;
 }
 
 .supportSendbox form.msgComposerInner{
@@ -1052,6 +1217,7 @@ box-shadow:none;
 display:flex;
 flex-direction:row;
 height:100%;
+max-height:100dvh;
 min-height:0;
 width:100%;
 }
@@ -1108,8 +1274,10 @@ flex:1;
 flex-direction:column;
 min-width:0;
 min-height:0;
+max-height:100dvh;
 height:100%;
 width:100%;
+overflow:hidden;
 }
 
 .supportPage.chat-active .msgSidebar{
@@ -1118,6 +1286,12 @@ display:none;
 
 .supportPage.chat-active .supportChatbox{
 display:flex;
+min-height:0;
+overflow:hidden;
+}
+
+.supportChatbox .supportChatTop{
+width:100%;
 }
 
 .supportBackBtn{
@@ -1137,6 +1311,14 @@ padding:12px 14px;
 gap:10px;
 }
 
+.supportProfileGrid{
+grid-template-columns:1fr;
+}
+
+.supportProfileItem strong{
+white-space:normal;
+}
+
 .supportChatbox .msgHeader .msgHeaderInfo h2{
 font-size:15px;
 }
@@ -1147,14 +1329,27 @@ font-size:11px;
 }
 
 .supportMessages{
-flex:1;
+flex:1 1 auto;
 min-height:0;
 -webkit-overflow-scrolling:touch;
+overscroll-behavior:contain;
 }
 
 .supportSendbox{
-flex-shrink:0;
-padding-bottom:max(12px, env(safe-area-inset-bottom));
+flex:0 0 auto;
+position:relative;
+z-index:25;
+padding:12px 14px max(16px, calc(12px + env(safe-area-inset-bottom, 0px)));
+background:var(--msg-panel);
+box-shadow:0 -10px 28px rgba(2,6,23,.55);
+}
+
+body.supportKeyboardOpen .supportSendbox{
+padding-bottom:10px;
+}
+
+body.adminPageSupport.supportKeyboardOpen .adminBottomNav{
+display:none !important;
 }
 
 .msgConv{

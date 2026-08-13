@@ -29,7 +29,6 @@ files=(
   "subscriptions.php"
   "buy.php"
   "plan_ui_lib.php"
-  "subscriptions.php"
   "subscriptions_ui.css"
   "sub-usage-api.php"
   "sub_usage_lib.php"
@@ -45,6 +44,11 @@ files=(
   "announcement-api.php"
   "campaign_lib.php"
   "fonts.css"
+  "admin/index.php"
+  "admin/support.php"
+  "admin/support-api.php"
+  "admin/support-users-api.php"
+  "admin/user-profile.php"
 )
 
 for rel in "${files[@]}"; do
@@ -78,5 +82,5 @@ echo ""
 echo "Done. Test:"
 echo "  /dashboard.php"
 echo "  /support.php"
-echo "  /renew.php"
+echo "  /bigjay_controller/?page=support"
 echo "Hard-refresh (Ctrl+Shift+R)."

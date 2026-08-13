@@ -44,10 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=33';
+$cssHref = '../support_ui.css?v=41';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=33';
+$jsHref = '../support_ui.js?v=41';
 
 if(!$supportEmbedded){
 ?>
@@ -55,7 +55,7 @@ if(!$supportEmbedded){
 <html lang="fa">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام‌های کاربران</title>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } else { ?>
@@ -139,19 +139,25 @@ if(!$supportEmbedded){
 یک کاربر را از لیست انتخاب کنید
 </div>
 
-<?php } else { ?>
+<?php } else {
 
+$profileSummary = supportGetUserProfileSummary($currentUser);
+
+?>
+
+<div class="supportChatTop" id="supportChatTop">
 <header class="msgHeader">
-<button type="button" class="supportBackBtn" id="supportBackBtn">← لیست</button>
+<button type="button" class="supportBackBtn" id="supportBackBtn">لیست ←</button>
 <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($currentUser), ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="msgHeaderInfo">
 <h2><?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?></h2>
-<p>پاسخ به کاربر</p>
+<p><?php echo htmlspecialchars($profileSummary['mobile'] !== '-' ? $profileSummary['mobile'] : '—', ENT_QUOTES, 'UTF-8'); ?></p>
 </div>
 <div class="supportChatHeaderActions">
 <button type="button" class="viewSubsBtn" onclick="openUserSubscriptions()">اشتراک‌ها</button>
 </div>
 </header>
+</div>
 
 <?php if($supportError){ ?>
 <div class="msgFlash"><?php echo htmlspecialchars($supportError, ENT_QUOTES, 'UTF-8'); ?></div>
@@ -480,6 +486,17 @@ if(!$hasMessages){
     }
 
     if(currentUser){
+        if('scrollRestoration' in history){
+            history.scrollRestoration = 'manual';
+        }
+
+        SupportUI.bindMobileChatLayout({
+            containerEl: document.querySelector('.content-support') || document.getElementById('supportPage'),
+            messagesEl: supportMessages,
+            textareaEl: supportMessage,
+            chatTopEl: document.getElementById('supportChatTop')
+        });
+
         SupportUI.initPolling({
             chatEl: supportMessages,
             pollUrl: pollUrl,
@@ -490,6 +507,10 @@ if(!$hasMessages){
             actionMeta: {isAdmin: true, ownSender: 'admin'},
             interval: 5000
         });
+
+        if(supportMessages){
+            SupportUI.scrollToBottomOnOpen(supportMessages);
+        }
     }
 })();
 </script>
