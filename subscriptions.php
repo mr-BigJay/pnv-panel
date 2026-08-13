@@ -89,7 +89,7 @@ $firstOkOpen = true;
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=10">
+<link rel="stylesheet" href="subscriptions_ui.css?v=11">
 </head>
 <body>
 <div class="box">
@@ -97,14 +97,6 @@ $firstOkOpen = true;
 <div class="topBar">
 <a class="userBack" href="dashboard.php">بازگشت</a>
 <div class="brand">اشتراک من</div>
-<span class="userBackSpacer" aria-hidden="true"></span>
-</div>
-
-<div class="pageHead">
-<div class="pageHeadText">
-<h1 class="pageTitle">اشتراک من</h1>
-<p class="pageSub">کانفیگ‌های فعال و منقضی‌شده</p>
-</div>
 <div class="pageIcon" aria-hidden="true">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
 <path d="M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z"/>
@@ -115,7 +107,7 @@ $firstOkOpen = true;
 </div>
 
 <div class="subUsageNotice" role="note">
-مصرف و زمان باقی‌مانده هر ۱ دقیقه به‌روزرسانی می‌شود.
+حجم باقی‌مانده و زمان باقیمانده هر ۱ دقیقه به‌روزرسانی می‌شود.
 </div>
 
 <div class="filters" role="tablist" aria-label="فیلتر وضعیت">

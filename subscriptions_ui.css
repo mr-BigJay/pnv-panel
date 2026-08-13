@@ -32,7 +32,7 @@ backdrop-filter:blur(10px);
 display:flex;
 align-items:center;
 justify-content:space-between;
-margin-bottom:18px;
+margin-bottom:14px;
 gap:10px;
 }
 
@@ -40,18 +40,28 @@ gap:10px;
 flex:1;
 text-align:center;
 font-family:"Lalezar",tahoma,sans-serif;
-font-size:20px;
+font-size:23px;
 font-weight:400;
 color:#fff;
 line-height:1.4;
 }
 
+.topBar .pageIcon{
+flex:0 0 auto;
+width:40px;
+height:40px;
+border-radius:13px;
+border:1.5px solid rgba(34,197,94,.55);
+color:#4ade80;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+background:rgba(5,46,22,.35);
+}
+.topBar .pageIcon svg{width:21px;height:21px;display:block}
+
 .pageHead{
-display:flex;
-align-items:flex-start;
-justify-content:space-between;
-gap:12px;
-margin:4px 0 16px;
+display:none;
 }
 
 .pageHeadText{flex:1;min-width:0}
@@ -118,6 +128,7 @@ border:1px solid rgba(96,165,250,.22);
 color:#bfdbfe;
 font-size:12px;
 line-height:1.65;
+text-align:center;
 }
 
 .subList{
@@ -571,5 +582,7 @@ width:100%;
 .subBodyInner{grid-template-columns:1fr;gap:12px}
 .subQrBtn img{width:130px;height:130px}
 .pageTitle{font-size:22px}
-.topBar .brand{font-size:16px}
+.topBar .brand{font-size:20px}
+.topBar .pageIcon{width:36px;height:36px;border-radius:12px}
+.topBar .pageIcon svg{width:19px;height:19px}
 }
