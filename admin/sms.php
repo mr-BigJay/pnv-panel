@@ -35,9 +35,9 @@ $basePageUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('sms.php') : 'sms.ph
 if(isset($_POST['save'])){
     $saved = smsLoadConfig();
 
-    $apiKey = trim((string)($_POST['api_key'] ?? ''));
-    if($apiKey === '' && trim((string)($saved['api_key'] ?? '')) !== ''){
-        $apiKey = $saved['api_key'];
+    $apiKey = smsSanitizeApiKey($_POST['api_key'] ?? '');
+    if($apiKey === '' && smsSanitizeApiKey($saved['api_key'] ?? '') !== ''){
+        $apiKey = smsSanitizeApiKey($saved['api_key'] ?? '');
     }
 
     $password = trim((string)($_POST['password'] ?? ''));
@@ -157,6 +157,8 @@ $senderHint = ($currentProvider === 'smsir')
     : '1000xxxx یا 3000xxxx';
 
 $testMobileDisplay = trim(smsNormalizeDigits((string)($_POST['test_mobile'] ?? ($config['test_mobile'] ?? ''))));
+$apiKeySaved = smsSanitizeApiKey($config['api_key'] ?? '') !== '';
+$senderSaved = smsParseLineNumber($config['sender'] ?? '') !== null;
 
 ?>
 <!DOCTYPE html>
@@ -249,8 +251,13 @@ body{padding:10px}
 </select>
 
 <div class="fieldGroup <?php echo $needsApiKey ? 'is-visible' : ''; ?>" data-provider="smsir kavenegar ippanel">
-<label for="api_key">API Key</label>
-<input type="password" name="api_key" id="api_key" value="" placeholder="<?php echo trim((string)($config['api_key'] ?? '')) !== '' ? '•••••••• (ذخیره شده)' : 'کلید API از پنل SMS.ir'; ?>" autocomplete="off">
+<label for="api_key">API Key <span style="color:#94a3b8;font-size:12px">(کلید وب‌سرویس — نه شناسه الگو)</span></label>
+<input type="password" name="api_key" id="api_key" value="" placeholder="<?php echo $apiKeySaved ? '•••••••• (ذخیره شده)' : 'کلید API از پنل SMS.ir'; ?>" autocomplete="off">
+<?php if($currentProvider === 'smsir'){ ?>
+<p style="margin:8px 0 0;font-size:13px;color:<?php echo $apiKeySaved ? '#86efac' : '#fca5a5'; ?>">
+<?php echo $apiKeySaved ? '✓ کلید API ذخیره شده' : '✗ کلید API هنوز ذخیره نشده — حتماً اینجا وارد و ذخیره کنید'; ?>
+</p>
+<?php } ?>
 </div>
 
 <div class="fieldGroup <?php echo $needsUserPass ? 'is-visible' : ''; ?>" data-provider="melipayamak">
@@ -262,9 +269,15 @@ body{padding:10px}
 
 <label for="sender">شماره خط ارسال (Line Number)</label>
 <input type="text" name="sender" id="sender" value="<?php echo $h($config['sender'] ?? ''); ?>" dir="ltr" placeholder="<?php echo $h($senderHint); ?>">
+<?php if($currentProvider === 'smsir'){ ?>
+<p style="margin:8px 0 0;font-size:13px;color:<?php echo $senderSaved ? '#86efac' : '#fca5a5'; ?>">
+<?php echo $senderSaved ? '✓ شماره خط ذخیره شده' : '✗ شماره خط ارسال را وارد کنید (برای تست اتصال bulk لازم است)'; ?>
+</p>
+<?php } ?>
 
 <div class="hint">
-<p>برای <strong>SMS.ir (ایده‌پردازان)</strong>: API Key را از <a href="https://app.sms.ir/developer/list" target="_blank" rel="noopener" style="color:#93c5fd">برنامه‌نویسان</a> بگیرید.</p>
+<p>برای <strong>SMS.ir (ایده‌پردازان)</strong>: API Key را از <a href="https://app.sms.ir/developer/list" target="_blank" rel="noopener" style="color:#93c5fd">برنامه‌نویسان → لیست کلیدهای API</a> بگیرید.</p>
+<p><strong>توجه:</strong> شناسه الگو (مثل 588023) در تب‌های الگو است و با API Key فرق دارد.</p>
 <p>الگوهای پیامک را از منوی کنار ویرایش کنید.</p>
 </div>
 
@@ -287,13 +300,14 @@ body{padding:10px}
 <span>فعال‌سازی این الگو</span>
 </label>
 
-<label for="<?php echo $h($prefix); ?>template_id">شناسه الگو در SMS.ir (اختیاری)</label>
-<input type="text" name="<?php echo $h($prefix); ?>template_id" id="<?php echo $h($prefix); ?>template_id" value="<?php echo $h($row['template_id'] ?? ''); ?>" dir="ltr" placeholder="Template ID از پنل SMS.ir">
-
-<label for="<?php echo $h($prefix); ?>text">متن الگو</label>
-<textarea name="<?php echo $h($prefix); ?>text" id="<?php echo $h($prefix); ?>text"><?php echo $h($row['text'] ?? ''); ?></textarea>
+<label for="<?php echo $h($prefix); ?>template_id">شناسه الگو در SMS.ir <?php echo $key === 'verify_mobile' ? '(الزامی برای OTP)' : '(اختیاری)'; ?></label>
+<input type="text" name="<?php echo $h($prefix); ?>template_id" id="<?php echo $h($prefix); ?>template_id" value="<?php echo $h($row['template_id'] ?? ''); ?>" dir="ltr" placeholder="<?php echo $key === 'verify_mobile' ? 'مثال: 588023' : 'Template ID از پنل SMS.ir'; ?>">
 
 <div class="hint">
+<?php if($key === 'verify_mobile'){ ?>
+<p>برای کد تایید، SMS.ir از API مخصوص <code>/send/verify</code> استفاده می‌کند. شناسه الگوی تأیید‌شده در پنل (مثل 588023) را اینجا بگذارید.</p>
+<p>متغیر <code>#CODE#</code> در پنل SMS.ir باید با نام <code>CODE</code> تعریف شده باشد.</p>
+<?php } ?>
 <p>متغیرهای قابل استفاده:</p>
 <div class="placeholderList">
 <?php foreach($meta['placeholders'] as $ph){ ?>
@@ -301,6 +315,9 @@ body{padding:10px}
 <?php } ?>
 </div>
 </div>
+
+<label for="<?php echo $h($prefix); ?>text">متن الگو (برای نمایش و تست محلی)</label>
+<textarea name="<?php echo $h($prefix); ?>text" id="<?php echo $h($prefix); ?>text"><?php echo $h($row['text'] ?? ''); ?></textarea>
 
 <div class="actions">
 <button type="submit" name="save" value="1" formnovalidate="formnovalidate">ذخیره الگو</button>

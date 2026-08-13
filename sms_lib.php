@@ -132,6 +132,7 @@ if(!function_exists('smsConfigPath')){
 
         $config = array_merge(smsDefaultConfig(), is_array($config) ? $config : []);
         $config['templates'] = smsMergeTemplates($config['templates'] ?? null);
+        $config['api_key'] = smsSanitizeApiKey($config['api_key'] ?? '');
         $providers = smsProviderOptions();
         if(!isset($providers[$config['provider']])){
             $config['provider'] = 'smsir';
@@ -170,7 +171,7 @@ if(!function_exists('smsConfigPath')){
         $provider = (string)($config['provider'] ?? '');
 
         if($provider === 'smsir'){
-            return trim((string)($config['api_key'] ?? '')) !== ''
+            return smsSanitizeApiKey($config['api_key'] ?? '') !== ''
                 && smsParseLineNumber($config['sender'] ?? '') !== null;
         }
 
@@ -223,11 +224,47 @@ if(!function_exists('smsConfigPath')){
         return $mobile;
     }
 
+    function smsSanitizeApiKey($key){
+        $key = trim((string)$key);
+        $key = trim($key, " \t\n\r\0\x0B\"'`");
+
+        return $key;
+    }
+
+    function smsSmsIrStatusHint($status){
+        $status = (int)$status;
+
+        if($status === 10){
+            return 'کلید API از بخش «برنامه‌نویسان → لیست کلیدهای API» در پنل SMS.ir بگیرید. شناسه الگو (مثل 588023) کلید API نیست.';
+        }
+
+        if($status === 11){
+            return 'کلید API در پنل SMS.ir غیرفعال است.';
+        }
+
+        if($status === 12){
+            return 'کلید API به IP سرور محدود شده. IP سرور را در پنل SMS.ir اضافه کنید یا محدودیت IP را بردارید.';
+        }
+
+        return '';
+    }
+
     function smsExtractSmsIrError($json, $result){
         if(is_array($json)){
+            $status = (int)($json['status'] ?? 0);
             $message = trim((string)($json['message'] ?? ''));
+            $hint = smsSmsIrStatusHint($status);
+
             if($message !== '' && $message !== 'موفق'){
+                if($hint !== ''){
+                    return $message . ' — ' . $hint;
+                }
+
                 return $message;
+            }
+
+            if($hint !== ''){
+                return $hint;
             }
         }
 
@@ -243,8 +280,99 @@ if(!function_exists('smsConfigPath')){
         return 'ارسال ناموفق';
     }
 
+    function smsBuildSmsIrVerifyParameters($templateText, $vars = []){
+        $parameters = [];
+        $seen = [];
+
+        if(!is_array($vars)){
+            $vars = [];
+        }
+
+        preg_match_all('/#([A-Za-z0-9_]+)#/', (string)$templateText, $matches);
+
+        foreach($matches[1] as $name){
+            $lookup = strtoupper($name);
+            if(isset($seen[$lookup])){
+                continue;
+            }
+
+            $seen[$lookup] = true;
+            $value = $vars[$lookup] ?? $vars[$name] ?? $vars[strtolower($name)] ?? '';
+
+            $parameters[] = [
+                'name' => $name,
+                'value' => (string)$value,
+            ];
+        }
+
+        if($parameters === [] && $vars !== []){
+            foreach($vars as $name => $value){
+                $name = trim((string)$name);
+                if($name === ''){
+                    continue;
+                }
+
+                $parameters[] = [
+                    'name' => preg_replace('/^#+|#+$/', '', $name),
+                    'value' => (string)$value,
+                ];
+            }
+        }
+
+        return $parameters;
+    }
+
+    function smsSendViaSmsIrVerify($mobile, $templateId, $parameters, $config){
+        $apiKey = smsSanitizeApiKey($config['api_key'] ?? '');
+
+        if($apiKey === ''){
+            return ['ok' => false, 'provider' => 'smsir', 'error' => 'کلید API تنظیم نشده است. از تب «اتصال پنل» کلید را ذخیره کنید.'];
+        }
+
+        $templateId = (int)preg_replace('/\D+/', '', (string)$templateId);
+        if($templateId <= 0){
+            return ['ok' => false, 'provider' => 'smsir', 'error' => 'شناسه الگو SMS.ir نامعتبر است.'];
+        }
+
+        if($parameters === []){
+            return ['ok' => false, 'provider' => 'smsir', 'error' => 'پارامترهای الگو برای ارسال Verify خالی است.'];
+        }
+
+        $payload = json_encode([
+            'mobile' => $mobile,
+            'templateId' => $templateId,
+            'parameters' => $parameters,
+        ], JSON_UNESCAPED_UNICODE);
+
+        $result = smsHttpRequest('https://api.sms.ir/v1/send/verify', [
+            'method' => 'POST',
+            'headers' => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'X-API-KEY: ' . $apiKey,
+            ],
+            'body' => $payload,
+        ]);
+
+        $json = json_decode((string)($result['body'] ?? ''), true);
+
+        if(is_array($json) && (int)($json['status'] ?? 0) === 1){
+            return [
+                'ok' => true,
+                'provider' => 'smsir',
+                'message_id' => $json['data']['messageId'] ?? null,
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'provider' => 'smsir',
+            'error' => smsExtractSmsIrError($json, $result),
+        ];
+    }
+
     function smsSendViaSmsIr($mobile, $message, $config){
-        $apiKey = trim((string)($config['api_key'] ?? ''));
+        $apiKey = smsSanitizeApiKey($config['api_key'] ?? '');
         $lineNumber = smsParseLineNumber($config['sender'] ?? '');
 
         if($lineNumber === null){
@@ -581,6 +709,28 @@ if(!function_exists('smsConfigPath')){
         $template = smsGetTemplate($key, $config);
         if(empty($template['enabled'])){
             return ['ok' => false, 'skipped' => true, 'error' => 'الگوی پیامک غیرفعال است.'];
+        }
+
+        $provider = (string)($config['provider'] ?? 'smsir');
+        $templateId = trim((string)($template['template_id'] ?? ''));
+
+        if($provider === 'smsir' && $templateId !== '' && $key === 'verify_mobile'){
+            if(empty($config['enabled'])){
+                return ['ok' => false, 'error' => 'سرویس پیامک غیرفعال است.'];
+            }
+
+            if(smsSanitizeApiKey($config['api_key'] ?? '') === ''){
+                return ['ok' => false, 'error' => 'کلید API تنظیم نشده است. از تب «اتصال پنل» کلید API را ذخیره کنید (شناسه الگو جایگزین کلید API نیست).'];
+            }
+
+            $mobile = smsMobileForProvider($mobile, $provider);
+            if($mobile === null){
+                return ['ok' => false, 'error' => 'شماره موبایل نامعتبر است.'];
+            }
+
+            $parameters = smsBuildSmsIrVerifyParameters($template['text'] ?? '', $vars);
+
+            return smsSendViaSmsIrVerify($mobile, $templateId, $parameters, $config);
         }
 
         $message = smsBuildTemplateMessage($key, $vars, $config);
