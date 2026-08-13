@@ -9,7 +9,7 @@ if(!function_exists('smsConfigPath')){
     function smsDefaultConfig(){
         return [
             'enabled' => false,
-            'provider' => 'kavenegar',
+            'provider' => 'smsir',
             'api_key' => '',
             'username' => '',
             'password' => '',
@@ -22,6 +22,7 @@ if(!function_exists('smsConfigPath')){
 
     function smsProviderOptions(){
         return [
+            'smsir' => 'SMS.ir — ایده‌پردازان',
             'kavenegar' => 'کاوه‌نگار (Kavenegar)',
             'melipayamak' => 'ملی‌پیامک (Melipayamak)',
             'ippanel' => 'آی‌پی‌پنل / فراز SMS (IPPanel)',
@@ -52,7 +53,7 @@ if(!function_exists('smsConfigPath')){
         $config = array_merge(smsDefaultConfig(), is_array($config) ? $config : []);
         $providers = smsProviderOptions();
         if(!isset($providers[$config['provider']])){
-            $config['provider'] = 'kavenegar';
+            $config['provider'] = 'smsir';
         }
 
         file_put_contents(
@@ -87,6 +88,11 @@ if(!function_exists('smsConfigPath')){
 
         $provider = (string)($config['provider'] ?? '');
 
+        if($provider === 'smsir'){
+            return trim((string)($config['api_key'] ?? '')) !== ''
+                && smsParseLineNumber($config['sender'] ?? '') !== null;
+        }
+
         if($provider === 'kavenegar'){
             return trim((string)($config['api_key'] ?? '')) !== '' && trim((string)($config['sender'] ?? '')) !== '';
         }
@@ -102,6 +108,100 @@ if(!function_exists('smsConfigPath')){
         }
 
         return false;
+    }
+
+    function smsParseLineNumber($value){
+        $digits = preg_replace('/\D+/', '', trim((string)$value));
+
+        if($digits === ''){
+            return null;
+        }
+
+        if(strlen($digits) > 19){
+            $digits = substr($digits, 0, 19);
+        }
+
+        return $digits;
+    }
+
+    function smsMobileForProvider($mobile, $provider){
+        $mobile = smsNormalizeMobile($mobile);
+
+        if($mobile === null){
+            return null;
+        }
+
+        if($provider === 'smsir'){
+            if(str_starts_with($mobile, '0')){
+                return $mobile;
+            }
+
+            return '0' . $mobile;
+        }
+
+        return $mobile;
+    }
+
+    function smsExtractSmsIrError($json, $result){
+        if(is_array($json)){
+            $message = trim((string)($json['message'] ?? ''));
+            if($message !== '' && $message !== 'موفق'){
+                return $message;
+            }
+        }
+
+        if(!empty($result['error'])){
+            return (string)$result['error'];
+        }
+
+        $body = trim((string)($result['body'] ?? ''));
+        if($body !== ''){
+            return $body;
+        }
+
+        return 'ارسال ناموفق';
+    }
+
+    function smsSendViaSmsIr($mobile, $message, $config){
+        $apiKey = trim((string)($config['api_key'] ?? ''));
+        $lineNumber = smsParseLineNumber($config['sender'] ?? '');
+
+        if($lineNumber === null){
+            return ['ok' => false, 'provider' => 'smsir', 'error' => 'شماره خط ارسال SMS.ir نامعتبر است.'];
+        }
+
+        $payload = json_encode([
+            'lineNumber' => (int)$lineNumber,
+            'messageText' => $message,
+            'mobiles' => [$mobile],
+            'sendDateTime' => null,
+        ], JSON_UNESCAPED_UNICODE);
+
+        $result = smsHttpRequest('https://api.sms.ir/v1/send/bulk', [
+            'method' => 'POST',
+            'headers' => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'X-API-KEY: ' . $apiKey,
+            ],
+            'body' => $payload,
+        ]);
+
+        $json = json_decode((string)($result['body'] ?? ''), true);
+
+        if(is_array($json) && (int)($json['status'] ?? 0) === 1){
+            return [
+                'ok' => true,
+                'provider' => 'smsir',
+                'pack_id' => $json['data']['packId'] ?? null,
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'provider' => 'smsir',
+            'error' => smsExtractSmsIrError($json, $result),
+        ];
     }
 
     function smsHttpRequest($url, $options = []){
@@ -279,7 +379,9 @@ if(!function_exists('smsConfigPath')){
             return ['ok' => false, 'error' => 'تنظیمات پیامک کامل نیست.'];
         }
 
-        $mobile = smsNormalizeMobile($mobile);
+        $provider = (string)($config['provider'] ?? 'smsir');
+
+        $mobile = smsMobileForProvider($mobile, $provider);
         if($mobile === null){
             return ['ok' => false, 'error' => 'شماره موبایل نامعتبر است.'];
         }
@@ -289,7 +391,9 @@ if(!function_exists('smsConfigPath')){
             return ['ok' => false, 'error' => 'متن پیامک خالی است.'];
         }
 
-        $provider = (string)($config['provider'] ?? 'kavenegar');
+        if($provider === 'smsir'){
+            return smsSendViaSmsIr($mobile, $message, $config);
+        }
 
         if($provider === 'melipayamak'){
             return smsSendViaMelipayamak($mobile, $message, $config);

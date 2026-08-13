@@ -1,6 +1,6 @@
 {
   "enabled": false,
-  "provider": "kavenegar",
+  "provider": "smsir",
   "api_key": "",
   "username": "",
   "password": "",

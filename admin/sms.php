@@ -20,7 +20,7 @@ $config = smsLoadConfig();
 $message = '';
 $error = '';
 $providers = smsProviderOptions();
-$currentProvider = (string)($config['provider'] ?? 'kavenegar');
+$currentProvider = (string)($config['provider'] ?? 'smsir');
 
 if(isset($_POST['save'])){
     $saved = smsLoadConfig();
@@ -35,9 +35,9 @@ if(isset($_POST['save'])){
         $password = $saved['password'];
     }
 
-    $provider = trim((string)($_POST['provider'] ?? 'kavenegar'));
+    $provider = trim((string)($_POST['provider'] ?? 'smsir'));
     if(!isset($providers[$provider])){
-        $provider = 'kavenegar';
+        $provider = 'smsir';
     }
 
     $config = [
@@ -79,8 +79,11 @@ $h = static function($value){
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 };
 
-$needsApiKey = in_array($currentProvider, ['kavenegar', 'ippanel'], true);
+$needsApiKey = in_array($currentProvider, ['smsir', 'kavenegar', 'ippanel'], true);
 $needsUserPass = ($currentProvider === 'melipayamak');
+$senderHint = ($currentProvider === 'smsir')
+    ? 'شماره خط اختصاصی SMS.ir (مثلاً 30004505000017)'
+    : '1000xxxx یا 3000xxxx';
 
 ?>
 <!DOCTYPE html>
@@ -133,9 +136,9 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <?php } ?>
 </select>
 
-<div class="fieldGroup <?php echo $needsApiKey ? 'is-visible' : ''; ?>" data-provider="kavenegar ippanel">
-<label for="api_key">API Key / Token</label>
-<input type="password" name="api_key" id="api_key" value="" placeholder="<?php echo trim((string)($config['api_key'] ?? '')) !== '' ? '•••••••• (ذخیره شده)' : 'کلید API'; ?>" autocomplete="off">
+<div class="fieldGroup <?php echo $needsApiKey ? 'is-visible' : ''; ?>" data-provider="smsir kavenegar ippanel">
+<label for="api_key">API Key</label>
+<input type="password" name="api_key" id="api_key" value="" placeholder="<?php echo trim((string)($config['api_key'] ?? '')) !== '' ? '•••••••• (ذخیره شده)' : 'کلید API از پنل SMS.ir'; ?>" autocomplete="off">
 </div>
 
 <div class="fieldGroup <?php echo $needsUserPass ? 'is-visible' : ''; ?>" data-provider="melipayamak">
@@ -145,8 +148,8 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <input type="password" name="password" id="password" value="" placeholder="<?php echo trim((string)($config['password'] ?? '')) !== '' ? '•••••••• (ذخیره شده)' : 'رمز عبور'; ?>" autocomplete="off">
 </div>
 
-<label for="sender">شماره/خط ارسال (Sender)</label>
-<input type="text" name="sender" id="sender" value="<?php echo $h($config['sender'] ?? ''); ?>" dir="ltr" placeholder="1000xxxx یا 3000xxxx">
+<label for="sender">شماره خط ارسال (Line Number)</label>
+<input type="text" name="sender" id="sender" value="<?php echo $h($config['sender'] ?? ''); ?>" dir="ltr" placeholder="<?php echo $h($senderHint); ?>">
 
 <label class="toggle">
 <input type="checkbox" name="register_welcome" <?php echo !empty($config['register_welcome']) ? 'checked' : ''; ?>>
@@ -160,6 +163,8 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <input type="text" name="test_mobile" id="test_mobile" value="<?php echo $h($config['test_mobile'] ?? ''); ?>" placeholder="09123456789" dir="ltr">
 
 <div class="hint">
+<p>برای <strong>SMS.ir (ایده‌پردازان)</strong>: از منوی <code>برنامه‌نویسان</code> در <a href="https://app.sms.ir/developer/list" target="_blank" rel="noopener" style="color:#93c5fd">app.sms.ir</a> کلید API بگیرید.</p>
+<p>شماره خط (Line Number) همان خط اختصاصی پنل شماست — از بخش خطوط در SMS.ir کپی کنید.</p>
 <p>پس از ذخیره، با دکمه «ارسال تست» اتصال را بررسی کنید.</p>
 <p>متغیرهای قالب خوش‌آمد: <code>{username}</code> ، <code>{mobile}</code></p>
 </div>
@@ -177,7 +182,7 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
     var groups = document.querySelectorAll('.fieldGroup[data-provider]');
 
     function syncFields(){
-        var value = provider ? provider.value : 'kavenegar';
+        var value = provider ? provider.value : 'smsir';
         groups.forEach(function(group){
             var allowed = (group.getAttribute('data-provider') || '').split(/\s+/);
             group.classList.toggle('is-visible', allowed.indexOf(value) >= 0);

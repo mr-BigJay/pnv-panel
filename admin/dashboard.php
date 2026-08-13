@@ -132,7 +132,7 @@ if(file_exists(__DIR__ . '/../sms_lib.php')){
                 <span class="setupBadge">نیاز به ستاپ</span>
             <?php } ?>
         </div>
-        <div class="setupDesc">اتصال کاوه‌نگار، ملی‌پیامک یا IPPanel + پیامک خوش‌آمد ثبت‌نام</div>
+        <div class="setupDesc">اتصال SMS.ir (ایده‌پردازان) + پیامک خوش‌آمد ثبت‌نام</div>
         <div class="setupAction">تنظیمات پیامک ←</div>
     </a>
 
