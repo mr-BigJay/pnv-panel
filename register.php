@@ -68,7 +68,12 @@ $chars[rand(0,strlen($chars)-1)];
 
 $_SESSION['register_captcha'] = $captcha;
 
-header("Location: register.php");
+$refreshUrl = 'register.php?refreshcaptcha=1';
+if(trim($_GET['ref'] ?? '') !== ''){
+    $refreshUrl .= '&ref=' . rawurlencode(trim($_GET['ref']));
+}
+
+header('Location: ' . $refreshUrl);
 exit;
 }
 
@@ -383,10 +388,26 @@ font-size:14px;
 color:#bbf7d0;
 }
 .inputGroup{margin-bottom:14px}
+.label{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:8px;
+margin-bottom:6px;
+font-size:14px;
+font-weight:700;
+color:#cbd5e1;
+}
+.fieldHint{
+font-size:11px;
+font-weight:400;
+color:#64748b;
+white-space:nowrap;
+}
 input{
 width:100%;
 height:46px;
-border:none;
+border:1px solid rgba(148,163,184,.18);
 border-radius:14px;
 padding:0 16px;
 font-size:15px;
@@ -396,46 +417,86 @@ outline:none;
 transition:.2s;
 }
 input::placeholder{color:#64748b}
-input:focus{box-shadow:0 0 0 2px #2563eb}
-input.inputPrimary{
-background:#fff;
-color:#0f172a;
+input:focus{
+border-color:#2563eb;
+box-shadow:0 0 0 2px rgba(37,99,235,.35);
 }
-input.inputPrimary::placeholder{color:#64748b}
-input.inputPrimary:focus{box-shadow:0 0 0 2px #2563eb}
 .passwordWrap{position:relative}
 .passwordWrap input{padding-left:46px}
 .eye{
 position:absolute;
 left:16px;
-top:11px;
+top:50%;
+transform:translateY(-50%);
 font-size:20px;
 cursor:pointer;
 user-select:none;
-color:#64748b;
+color:#94a3b8;
+line-height:1;
 }
-.captchaBox{
-height:54px;
-background:#0f172a;
+.captchaSection{
+margin:4px 0 14px;
+padding:10px;
+background:rgba(15,23,42,.45);
+border:1px solid rgba(148,163,184,.14);
 border-radius:14px;
-display:flex;
-justify-content:center;
-align-items:center;
-font-size:24px;
-font-weight:700;
-letter-spacing:6px;
-color:#facc15;
-margin-bottom:12px;
-user-select:none;
 }
-.refresh{
-display:block;
-text-align:center;
-margin-bottom:16px;
-text-decoration:none;
-color:#38bdf8;
+.captchaRow{
+display:flex;
+align-items:center;
+gap:8px;
+direction:rtl;
+}
+.captchaInputWrap{flex:2;min-width:0}
+.captchaInputWrap input{width:100%;height:40px;font-size:14px}
+.captchaMeta{
+flex:1;
+display:flex;
+align-items:center;
+gap:6px;
+min-width:0;
+}
+.captchaCode{
+flex:1;
+min-width:0;
+height:40px;
+padding:0 8px;
+display:flex;
+align-items:center;
+justify-content:center;
+background:#0f172a;
+border:1px solid rgba(148,163,184,.12);
+border-radius:10px;
 font-size:14px;
 font-weight:700;
+letter-spacing:2px;
+color:#facc15;
+user-select:none;
+overflow:hidden;
+white-space:nowrap;
+}
+.captchaRefresh{
+width:34px;
+height:34px;
+display:flex;
+align-items:center;
+justify-content:center;
+border-radius:10px;
+background:#334155;
+color:#94a3b8;
+text-decoration:none;
+flex-shrink:0;
+transition:.2s;
+}
+.captchaRefresh:hover{background:#475569;color:#38bdf8}
+.captchaRefresh svg{
+width:16px;
+height:16px;
+stroke:currentColor;
+fill:none;
+stroke-width:2;
+stroke-linecap:round;
+stroke-linejoin:round;
 }
 button{
 width:100%;
@@ -465,14 +526,9 @@ margin-top:10px;
 transition:.2s;
 }
 .links a:hover{background:#475569}
-.helper{
-font-size:12px;
-color:#94a3b8;
-margin:-6px 0 12px;
-line-height:20px;
-}
 .refbox{
 background:#0f172a;
+border:1px solid rgba(148,163,184,.12);
 padding:12px;
 border-radius:14px;
 margin-bottom:14px;
@@ -505,69 +561,91 @@ text-align:center;
 
 <form method="POST">
 
+<div class="inputGroup">
+<label class="label">
+<span>نام کاربری</span>
+<span class="fieldHint">۶–۲۰ کاراکتر</span>
+</label>
 <input
 type="text"
-class="inputPrimary"
 name="username"
-placeholder="نام کاربری"
 minlength="6"
 maxlength="20"
 pattern="[a-zA-Z0-9._-]+"
 title="نام کاربری باید بین ۶ تا ۲۰ کاراکتر و فقط شامل حروف لاتین، عدد و . _ - باشد"
 required>
+</div>
 
-<div class="helper">نام کاربری باید بین 6 تا 20 کارکتر باشد</div>
-
+<div class="inputGroup">
+<label class="label">
+<span>رمز عبور</span>
+<span class="fieldHint">حروف و عدد · حداقل ۸</span>
+</label>
 <div class="passwordWrap">
 <input
 type="password"
-class="inputPrimary"
 name="password"
 id="password"
-placeholder="رمز عبور"
 minlength="8"
 pattern="(?=.*[A-Za-z])(?=.*\d).+"
 title="رمز عبور باید حداقل ۸ کاراکتر و شامل حروف انگلیسی و عدد باشد"
 required>
 <span class="eye" onclick="togglePassword()" aria-hidden="true">👁</span>
 </div>
+</div>
 
-<div class="helper">رمز عبور باید شامل حروف انگلیسی و عدد باشد</div>
-
+<div class="inputGroup">
+<label class="label"><span>شماره موبایل</span></label>
 <input
 type="tel"
 name="mobile"
-placeholder="شماره موبایل"
 inputmode="tel"
 autocomplete="tel"
 pattern="09[0-9]{9}"
 title="شماره موبایل باید با 09 شروع شود و 11 رقم باشد"
+placeholder="09123456789"
 required>
+</div>
 
 <?php if($refFromLink === ""){ ?>
-<input
-type="text"
-name="referrer"
-placeholder="کد یا شماره معرف (اختیاری)">
+<div class="inputGroup">
+<label class="label">کد یا شماره معرف (اختیاری)</label>
+<input type="text" name="referrer" placeholder="کد یا شماره موبایل معرف">
+</div>
 <?php } ?>
 
-<div class="captchaBox"><?php echo htmlspecialchars((string)$_SESSION['register_captcha'], ENT_QUOTES, 'UTF-8'); ?></div>
-
-<a href="register.php?refreshcaptcha=1<?php echo $refFromLink !== '' ? '&ref=' . rawurlencode($refFromLink) : ''; ?>" class="refresh">تغییر کد امنیتی</a>
-
+<div class="captchaSection">
+<div class="captchaRow">
+<div class="captchaInputWrap">
 <input
 type="text"
 name="captcha"
-placeholder="کد امنیتی"
+placeholder="کد را وارد کنید"
 autocomplete="off"
 required>
+</div>
+<div class="captchaMeta">
+<div class="captchaCode"><?php echo htmlspecialchars((string)$_SESSION['register_captcha'], ENT_QUOTES, 'UTF-8'); ?></div>
+<a
+href="register.php?refreshcaptcha=1<?php echo $refFromLink !== '' ? '&ref=' . rawurlencode($refFromLink) : ''; ?>"
+class="captchaRefresh"
+aria-label="تغییر کد امنیتی"
+title="تغییر کد امنیتی">
+<svg viewBox="0 0 24 24" aria-hidden="true">
+<path d="M21 12a9 9 0 11-3-6.7"/>
+<path d="M21 3v6h-6"/>
+</svg>
+</a>
+</div>
+</div>
+</div>
 
 <button type="submit">ثبت نام</button>
 
 </form>
 
 <div class="links">
-<a href="index.php">بازگشت</a>
+<a href="index.php">بازگشت به ورود</a>
 </div>
 
 </div>
