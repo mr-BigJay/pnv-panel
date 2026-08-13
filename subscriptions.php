@@ -107,7 +107,7 @@ $firstOkOpen = true;
 </div>
 
 <div class="subUsageNotice" role="note">
-حجم باقی‌مانده و زمان باقیمانده هر ۱ دقیقه به‌روزرسانی می‌شود.
+حجم و زمان باقیمانده هر <span class="subUsageNoticeNum">۱</span> دقیقه به‌روزرسانی می‌شود.
 </div>
 
 <div class="filters" role="tablist" aria-label="فیلتر وضعیت">

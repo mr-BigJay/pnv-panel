@@ -131,6 +131,12 @@ line-height:1.65;
 text-align:center;
 }
 
+.subUsageNoticeNum{
+font-weight:800;
+text-decoration:underline;
+text-underline-offset:2px;
+}
+
 .subList{
 display:flex;
 flex-direction:column;
