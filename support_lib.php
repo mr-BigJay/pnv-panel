@@ -874,6 +874,48 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportIsEditRequest(){
+
+        return trim((string)($_POST['edit_id'] ?? '')) !== '';
+
+    }
+
+    function supportNotifyTelegramAdmins($username, $message){
+
+        $lib = __DIR__ . '/telegram_lib.php';
+
+        if(!is_file($lib)){
+            return;
+        }
+
+        require_once $lib;
+
+        if(!function_exists('telegramSendSupportNotification')){
+            return;
+        }
+
+        $config = function_exists('telegramLoadConfig') ? telegramLoadConfig() : [];
+
+        if(
+            empty($config['enabled'])
+            || trim((string)($config['bot_token'] ?? '')) === ''
+            || count(telegramAdminChatIds($config)) === 0
+        ){
+            return;
+        }
+
+        $mobile = function_exists('telegramGetUserMobile')
+            ? telegramGetUserMobile($username)
+            : '';
+
+        try{
+            telegramSendSupportNotification($username, $message, $mobile);
+        }catch(Throwable $e){
+            error_log('support telegram notify failed: ' . $e->getMessage());
+        }
+
+    }
+
     function supportProcessAdminActions($file, $embedded = false){
 
         $data = supportLoad($file);
@@ -898,7 +940,7 @@ if(!function_exists('supportLoad')){
 
         }
 
-        if(isset($_POST['edit_id']) && $redirect === null){
+        if(supportIsEditRequest() && $redirect === null){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';
@@ -936,7 +978,7 @@ if(!function_exists('supportLoad')){
                 isset($_POST['reply'])
                 || (
                     isset($_POST['message'], $_POST['user'])
-                    && !isset($_POST['edit_id'])
+                    && !supportIsEditRequest()
                     && !isset($_POST['delete_message'])
                 )
             )
@@ -1070,7 +1112,7 @@ if(!function_exists('supportLoad')){
 
         }
 
-        if(isset($_POST['edit_id']) && $error === null){
+        if(supportIsEditRequest() && $error === null){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';
@@ -1114,6 +1156,7 @@ if(!function_exists('supportLoad')){
                 || isset($_POST['message'])
             )
             && $error === null
+            && !supportIsEditRequest()
         ){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
@@ -1169,6 +1212,7 @@ if(!function_exists('supportLoad')){
                     }
 
                     supportSave($file, $data);
+                    supportNotifyTelegramAdmins($username, $newmsg);
                     header('Location: support.php');
                     exit;
                 }

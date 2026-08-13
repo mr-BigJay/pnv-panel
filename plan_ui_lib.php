@@ -214,8 +214,22 @@ if(!function_exists('pnvFormatPlanPrice')){
         return $found !== '' ? $found : $subLink;
     }
 
-    function pnvResolveSubTimeCategory($link, $planText = ''){
+    function pnvResolveSubTimeCategory($link, $planText = '', $username = ''){
         $link = trim((string)$link);
+        $username = trim((string)$username);
+
+        if(
+            $link !== ''
+            && !preg_match('#^https?://#i', $link)
+            && $username !== ''
+            && function_exists('pnvFindSubLinkFromCsv')
+        ){
+            $resolved = pnvFindSubLinkFromCsv($username, $link);
+
+            if($resolved !== ''){
+                $link = $resolved;
+            }
+        }
 
         if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
             $expire = xuiFetchSubUserinfoExpire($link);
@@ -307,7 +321,7 @@ if(!function_exists('pnvFormatPlanPrice')){
         $selectedCategory = pnvPlanIsUnlimited($selectedPlan) ? 'unlimited' : 'limited';
         $fullLink = pnvFindSubLinkFromCsv($username, $subLink);
         $planText = pnvFindSubPlanTextFromCsv($username, $subLink);
-        $subCategory = pnvResolveSubTimeCategory($fullLink, $planText);
+        $subCategory = pnvResolveSubTimeCategory($fullLink, $planText, $username);
 
         if($subCategory === $selectedCategory){
             return ['ok' => true];

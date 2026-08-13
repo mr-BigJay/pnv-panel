@@ -146,10 +146,16 @@ function renewLoadUserSubscriptions($username){
     fclose($handle);
 
     foreach($linkIndex as &$entry){
+        $fullLink = function_exists('pnvFindSubLinkFromCsv')
+            ? pnvFindSubLinkFromCsv($username, $entry['link'] ?? '')
+            : ($entry['link'] ?? '');
+
         $entry['time_category'] = pnvResolveSubTimeCategory(
-            $entry['link'] ?? '',
-            $entry['plan_text'] ?? ''
+            $fullLink,
+            $entry['plan_text'] ?? '',
+            $username
         );
+        $entry['link'] = $fullLink !== '' ? $fullLink : ($entry['link'] ?? '');
         unset($entry['plan_text']);
     }
     unset($entry);
@@ -494,7 +500,7 @@ echo json_encode($metaMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>;
 
 function lockMessageFor(cat){
-    if(subTimeCategory === 'unlimited' && cat === 'limited'){
+    if(subTimeCategory !== 'limited' && cat === 'limited'){
         return 'این اشتراک <b>نامحدود زمانی</b> است و نمی‌توان آن را با پلن <b>زمان‌دار</b> تمدید کرد. در صورت نیاز <a href="buy.php">خرید اشتراک جدید</a> را بزنید.';
     }
     if(subTimeCategory === 'limited' && cat === 'unlimited'){
@@ -557,7 +563,7 @@ function syncCategoryLocks(){
     document.querySelectorAll('.catCard').forEach(function(card){
         var cat = card.getAttribute('data-cat');
         var locked = false;
-        if(subTimeCategory === 'unlimited' && cat === 'limited') locked = true;
+        if(subTimeCategory !== 'limited' && cat === 'limited') locked = true;
         if(subTimeCategory === 'limited' && cat === 'unlimited') locked = true;
         card.classList.toggle('is-locked', locked);
         if(locked && card.classList.contains('is-active')){
@@ -579,8 +585,14 @@ function syncCategoryLocks(){
         }
     }
     // اگر نوع مشخص است، دسته سازگار را خودکار باز کن
-    if((subTimeCategory === 'unlimited' || subTimeCategory === 'limited') && !selectedCategory){
-        selectedCategory = subTimeCategory;
+    if(subTimeCategory === 'unlimited' && !selectedCategory){
+        selectedCategory = 'unlimited';
+        document.querySelectorAll('.catCard').forEach(function(el){
+            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+        });
+    }
+    if(subTimeCategory === 'limited' && !selectedCategory){
+        selectedCategory = 'limited';
         document.querySelectorAll('.catCard').forEach(function(el){
             el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
         });
@@ -658,7 +670,7 @@ window.pickSubscription = pickSubscription;
 function updateContinueState(){
     if(!toStep2Btn) return;
     const locked = selectedCategory && (
-        (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
+        (subTimeCategory !== 'limited' && selectedCategory === 'limited') ||
         (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
     );
     const hasPlan = !!(selectedCategory && selectedPlan && planSelect && planSelect.value);
@@ -675,7 +687,7 @@ function renderPlans(){
         return;
     }
     const categoryLocked = (
-        (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
+        (subTimeCategory !== 'limited' && selectedCategory === 'limited') ||
         (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
     );
     if(planBlock) planBlock.classList.add('is-visible');
@@ -721,7 +733,7 @@ document.querySelectorAll('.catCard').forEach(function(card){
     card.addEventListener('click', function(){
         const cat = card.getAttribute('data-cat');
         const locked = (
-            (subTimeCategory === 'unlimited' && cat === 'limited') ||
+            (subTimeCategory !== 'limited' && cat === 'limited') ||
             (subTimeCategory === 'limited' && cat === 'unlimited')
         );
         if(locked){

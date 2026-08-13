@@ -8,6 +8,28 @@
         }
     }
 
+    function scrollToBottomOnOpen(el){
+        if(!el){ return; }
+
+        function doScroll(){
+            el.scrollTop = el.scrollHeight;
+        }
+
+        doScroll();
+        requestAnimationFrame(function(){
+            doScroll();
+            requestAnimationFrame(doScroll);
+        });
+        [0, 50, 120, 250, 500, 900].forEach(function(ms){
+            setTimeout(doScroll, ms);
+        });
+        el.querySelectorAll('img').forEach(function(img){
+            if(img.complete){ return; }
+            img.addEventListener('load', doScroll, {once: true});
+            img.addEventListener('error', doScroll, {once: true});
+        });
+    }
+
     function escapeHtml(text){
         return String(text)
             .replace(/&/g, '&amp;')
@@ -674,11 +696,12 @@
         }
 
         setInterval(poll, interval);
-        scrollToBottom(chatEl, true);
+        scrollToBottomOnOpen(chatEl);
     }
 
     global.SupportUI = {
         scrollToBottom: scrollToBottom,
+        scrollToBottomOnOpen: scrollToBottomOnOpen,
         bindTextareaGrow: bindTextareaGrow,
         bindEnterToSend: bindEnterToSend,
         bindFormGuard: bindFormGuard,
