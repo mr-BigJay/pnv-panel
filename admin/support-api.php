@@ -27,7 +27,7 @@ foreach($data as $ticket){
         $unreadUsers[] = $ticket['user'] ?? '';
     }
 
-    if($user === '' || ($ticket['user'] ?? '') !== $user){
+    if($user === '' || !supportUsernamesMatch($ticket['user'] ?? '', $user)){
         continue;
     }
 
