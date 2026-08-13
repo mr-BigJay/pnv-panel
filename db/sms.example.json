@@ -7,5 +7,27 @@
   "sender": "",
   "register_welcome": false,
   "register_welcome_template": "ثبت‌نام شما در تیکتین با موفقیت انجام شد.",
-  "test_mobile": ""
+  "test_mobile": "",
+  "templates": {
+    "verify_mobile": {
+      "enabled": true,
+      "template_id": "",
+      "text": "کد تایید شما:\n#CODE#\n\nلطفاً برای ورود از آن استفاده کنید.\npanel.ticketin.ir"
+    },
+    "buy_confirm": {
+      "enabled": false,
+      "template_id": "",
+      "text": "#USERNAME# عزیز\nخرید اشتراک #PLAN# با موفقیت ثبت شد.\npanel.ticketin.ir"
+    },
+    "renew_confirm": {
+      "enabled": false,
+      "template_id": "",
+      "text": "#USERNAME# عزیز\nتمدید اشتراک #PLAN# با موفقیت ثبت شد.\npanel.ticketin.ir"
+    },
+    "admin_reply": {
+      "enabled": false,
+      "template_id": "",
+      "text": "پاسخ پشتیبانی تیکتین:\n#MESSAGE#\n\npanel.ticketin.ir"
+    }
+  }
 }

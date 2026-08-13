@@ -20,7 +20,17 @@ $config = smsLoadConfig();
 $message = '';
 $error = '';
 $providers = smsProviderOptions();
+$templateMenu = smsTemplateMenu();
+$templateMeta = smsTemplateMeta();
+$templates = smsMergeTemplates($config['templates'] ?? null);
 $currentProvider = (string)($config['provider'] ?? 'smsir');
+
+$tab = trim((string)($_GET['tab'] ?? 'connection'));
+if(!isset($templateMenu[$tab])){
+    $tab = 'connection';
+}
+
+$basePageUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('sms.php') : 'sms.php';
 
 if(isset($_POST['save'])){
     $saved = smsLoadConfig();
@@ -40,24 +50,42 @@ if(isset($_POST['save'])){
         $provider = 'smsir';
     }
 
-    $config = [
-        'enabled' => isset($_POST['enabled']),
-        'provider' => $provider,
-        'api_key' => $apiKey,
-        'username' => trim((string)($_POST['username'] ?? '')),
-        'password' => $password,
-        'sender' => trim((string)($_POST['sender'] ?? '')),
-        'register_welcome' => isset($_POST['register_welcome']),
-        'register_welcome_template' => trim((string)($_POST['register_welcome_template'] ?? '')),
-        'test_mobile' => trim((string)($_POST['test_mobile'] ?? '')),
-    ];
+    $postTab = trim((string)($_POST['tab'] ?? $tab));
+    if(!isset($templateMenu[$postTab])){
+        $postTab = 'connection';
+    }
+
+    if($postTab === 'connection'){
+        $config = [
+            'enabled' => isset($_POST['enabled']),
+            'provider' => $provider,
+            'api_key' => $apiKey,
+            'username' => trim((string)($_POST['username'] ?? '')),
+            'password' => $password,
+            'sender' => trim((string)($_POST['sender'] ?? '')),
+            'register_welcome' => isset($_POST['register_welcome']),
+            'register_welcome_template' => trim((string)($_POST['register_welcome_template'] ?? '')),
+            'test_mobile' => trim((string)($_POST['test_mobile'] ?? '')),
+            'templates' => $saved['templates'] ?? smsDefaultTemplates(),
+        ];
+    }
+    else{
+        $config = $saved;
+        $config['templates'] = smsParseTemplatesFromPost($_POST);
+        if(trim((string)($_POST['test_mobile'] ?? '')) !== ''){
+            $config['test_mobile'] = trim((string)$_POST['test_mobile']);
+        }
+    }
 
     smsSaveConfig($config);
+    $config = smsLoadConfig();
+    $templates = smsMergeTemplates($config['templates'] ?? null);
     $currentProvider = $provider;
+    $tab = $postTab;
     $message = 'تنظیمات پیامک ذخیره شد.';
 }
 
-if(isset($_POST['test'])){
+if(isset($_POST['test_connection'])){
     $config = smsLoadConfig();
     $mobile = trim((string)($_POST['test_mobile'] ?? ($config['test_mobile'] ?? '')));
 
@@ -67,7 +95,7 @@ if(isset($_POST['test'])){
     else{
         $result = smsSend($mobile, '✅ تست اتصال پنل SMS تیکتین — ' . date('Y-m-d H:i'), $config);
         if(!empty($result['ok'])){
-            $message = 'پیامک تست با موفقیت ارسال شد.';
+            $message = 'پیامک تست اتصال با موفقیت ارسال شد.';
         }
         else{
             $error = $result['error'] ?? 'ارسال پیامک تست ناموفق بود.';
@@ -75,8 +103,40 @@ if(isset($_POST['test'])){
     }
 }
 
+if(isset($_POST['test_template'])){
+    $config = smsLoadConfig();
+    $mobile = trim((string)($_POST['test_mobile'] ?? ($config['test_mobile'] ?? '')));
+    $templateKey = smsNormalizeTemplateKey($_POST['test_template_key'] ?? '');
+
+    if($mobile === ''){
+        $error = 'شماره موبایل تست را وارد کنید.';
+    }
+    elseif($templateKey === null){
+        $error = 'الگوی انتخاب‌شده نامعتبر است.';
+    }
+    else{
+        $draftTemplates = smsParseTemplatesFromPost($_POST);
+        $config['templates'] = smsMergeTemplates($config['templates'] ?? null);
+        $config['templates'][$templateKey] = $draftTemplates[$templateKey];
+        $config['templates'][$templateKey]['enabled'] = true;
+
+        $result = smsSendTemplate($mobile, $templateKey, smsSampleTemplateVars($templateKey), $config);
+        if(!empty($result['ok'])){
+            $message = 'پیامک نمونه الگوی «' . ($templateMenu[$templateKey] ?? $templateKey) . '» ارسال شد.';
+        }
+        else{
+            $error = $result['error'] ?? 'ارسال پیامک نمونه ناموفق بود.';
+        }
+    }
+}
+
 $h = static function($value){
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
+
+$tabUrl = static function($key) use ($basePageUrl){
+    $sep = strpos($basePageUrl, '?') !== false ? '&' : '?';
+    return $basePageUrl . $sep . 'tab=' . rawurlencode($key);
 };
 
 $needsApiKey = in_array($currentProvider, ['smsir', 'kavenegar', 'ippanel'], true);
@@ -95,35 +155,66 @@ $senderHint = ($currentProvider === 'smsir')
 <style>
 *{box-sizing:border-box}
 body{margin:0;padding:20px;background:#0f172a;color:#fff;font-family:tahoma;direction:rtl}
-.box{width:100%;max-width:760px;margin:auto;background:#1e293b;padding:30px;border-radius:20px}
-h2{text-align:center;margin:0 0 28px;font-size:26px}
-label{display:block;margin:18px 0 8px;font-size:15px;color:#e2e8f0}
+.layout{width:100%;max-width:920px;margin:auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px}
+.box{background:#1e293b;padding:24px;border-radius:20px}
+.menuBox{padding:16px}
+h2{margin:0 0 18px;font-size:24px}
+h3{margin:0 0 10px;font-size:18px;color:#e2e8f0}
+label{display:block;margin:16px 0 8px;font-size:15px;color:#e2e8f0}
 input,textarea,select{width:100%;border:0;border-radius:12px;padding:14px;background:#0f172a;color:#fff;font-family:inherit;font-size:15px;line-height:1.8}
-textarea{min-height:90px;resize:vertical}
+textarea{min-height:140px;resize:vertical}
 select{cursor:pointer}
-.toggle{display:flex;align-items:center;gap:10px;cursor:pointer;margin:0 0 22px}
+.toggle{display:flex;align-items:center;gap:10px;cursor:pointer;margin:0 0 18px}
 .toggle input{width:20px;height:20px;margin:0}
 .hint{background:#172554;border-radius:12px;padding:14px;color:#cbd5e1;font-size:14px;line-height:2;margin-top:10px}
 .hint code{direction:ltr;display:inline-block;color:#93c5fd;word-break:break-all}
 .msg,.err{padding:14px;border-radius:12px;line-height:1.8;margin-bottom:18px}
 .msg{background:#166534}.err{background:#991b1b}
-button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;background:#22c55e;color:#fff;font:inherit;font-size:17px;cursor:pointer;text-align:center;text-decoration:none;margin-top:14px}
-.test{background:#2563eb}.back{background:#334155;margin-top:20px}
+button,.back,.menuLink{display:block;width:100%;border:0;border-radius:12px;padding:13px 16px;background:#22c55e;color:#fff;font:inherit;font-size:15px;cursor:pointer;text-align:center;text-decoration:none;margin-top:12px}
+.test{background:#2563eb}.back,.menuLink{background:#334155}
+.menuLink{margin-top:0;margin-bottom:8px}
+.menuLink.is-active{background:#2563eb;color:#fff}
+.sectionDesc{color:#94a3b8;line-height:1.9;margin:0 0 16px;font-size:14px}
+.placeholderList{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+.placeholderList code{background:#0f172a;padding:4px 8px;border-radius:8px;font-size:12px}
 .fieldGroup[data-provider]{display:none}
 .fieldGroup.is-visible{display:block}
-@media(max-width:600px){body{padding:10px}.box{padding:22px 16px;border-radius:16px}h2{font-size:22px}}
+.panelSection{display:none}
+.panelSection.is-active{display:block}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.actions button,.actions .test{margin-top:0}
+@media(max-width:760px){
+body{padding:10px}
+.layout{grid-template-columns:1fr}
+.menuBox{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.menuLink{margin:0;font-size:13px;padding:11px 10px}
+.box{padding:18px 14px;border-radius:16px}
+.actions{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
 <?php adminQuickNavStyles(); adminQuickNav('sms'); ?>
 
+<div class="layout">
+<aside class="box menuBox">
+<h2 style="font-size:18px;margin-bottom:12px">منوی پیامک</h2>
+<?php foreach($templateMenu as $key => $label){ ?>
+<a class="menuLink <?php echo $tab === $key ? 'is-active' : ''; ?>" href="<?php echo $h($tabUrl($key)); ?>"><?php echo $h($label); ?></a>
+<?php } ?>
+<a class="menuLink back" href="<?php echo $h(function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php'); ?>">بازگشت به داشبورد</a>
+</aside>
+
 <div class="box">
-<h2>اتصال پنل SMS</h2>
+<h2>تنظیمات پیامک</h2>
 
 <?php if($message !== ''){ ?><div class="msg"><?php echo $h($message); ?></div><?php } ?>
 <?php if($error !== ''){ ?><div class="err"><?php echo $h($error); ?></div><?php } ?>
 
 <form method="post">
+<input type="hidden" name="tab" value="<?php echo $h($tab); ?>">
+
+<div class="panelSection <?php echo $tab === 'connection' ? 'is-active' : ''; ?>" data-panel="connection">
 <label class="toggle">
 <input type="checkbox" name="enabled" <?php echo !empty($config['enabled']) ? 'checked' : ''; ?>>
 <span>فعال‌سازی ارسال پیامک</span>
@@ -151,29 +242,58 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <label for="sender">شماره خط ارسال (Line Number)</label>
 <input type="text" name="sender" id="sender" value="<?php echo $h($config['sender'] ?? ''); ?>" dir="ltr" placeholder="<?php echo $h($senderHint); ?>">
 
-<label class="toggle">
-<input type="checkbox" name="register_welcome" <?php echo !empty($config['register_welcome']) ? 'checked' : ''; ?>>
-<span>ارسال پیامک خوش‌آمد بعد از ثبت‌نام</span>
-</label>
-
-<label for="register_welcome_template">متن پیامک خوش‌آمد</label>
-<textarea name="register_welcome_template" id="register_welcome_template"><?php echo $h($config['register_welcome_template'] ?? ''); ?></textarea>
-
-<label for="test_mobile">موبایل تست</label>
-<input type="text" name="test_mobile" id="test_mobile" value="<?php echo $h($config['test_mobile'] ?? ''); ?>" placeholder="09123456789" dir="ltr">
-
 <div class="hint">
-<p>برای <strong>SMS.ir (ایده‌پردازان)</strong>: از منوی <code>برنامه‌نویسان</code> در <a href="https://app.sms.ir/developer/list" target="_blank" rel="noopener" style="color:#93c5fd">app.sms.ir</a> کلید API بگیرید.</p>
-<p>شماره خط (Line Number) همان خط اختصاصی پنل شماست — از بخش خطوط در SMS.ir کپی کنید.</p>
-<p>پس از ذخیره، با دکمه «ارسال تست» اتصال را بررسی کنید.</p>
-<p>متغیرهای قالب خوش‌آمد: <code>{username}</code> ، <code>{mobile}</code></p>
+<p>برای <strong>SMS.ir (ایده‌پردازان)</strong>: API Key را از <a href="https://app.sms.ir/developer/list" target="_blank" rel="noopener" style="color:#93c5fd">برنامه‌نویسان</a> بگیرید.</p>
+<p>الگوهای پیامک را از منوی کنار ویرایش کنید.</p>
 </div>
 
+<div class="actions">
 <button type="submit" name="save" value="1">ذخیره تنظیمات</button>
-<button type="submit" name="test" value="1" class="test">ارسال پیامک تست</button>
-</form>
+<button type="submit" name="test_connection" value="1" class="test">ارسال تست اتصال</button>
+</div>
+</div>
 
-<a class="back" href="<?php echo $h(function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php'); ?>">بازگشت به داشبورد</a>
+<?php foreach($templateMeta as $key => $meta){
+    $row = $templates[$key] ?? smsDefaultTemplates()[$key];
+    $prefix = 'tpl_' . $key . '_';
+?>
+<div class="panelSection <?php echo $tab === $key ? 'is-active' : ''; ?>" data-panel="<?php echo $h($key); ?>">
+<h3><?php echo $h($meta['title']); ?></h3>
+<p class="sectionDesc"><?php echo $h($meta['desc']); ?></p>
+
+<label class="toggle">
+<input type="checkbox" name="<?php echo $h($prefix); ?>enabled" <?php echo !empty($row['enabled']) ? 'checked' : ''; ?>>
+<span>فعال‌سازی این الگو</span>
+</label>
+
+<label for="<?php echo $h($prefix); ?>template_id">شناسه الگو در SMS.ir (اختیاری)</label>
+<input type="text" name="<?php echo $h($prefix); ?>template_id" id="<?php echo $h($prefix); ?>template_id" value="<?php echo $h($row['template_id'] ?? ''); ?>" dir="ltr" placeholder="Template ID از پنل SMS.ir">
+
+<label for="<?php echo $h($prefix); ?>text">متن الگو</label>
+<textarea name="<?php echo $h($prefix); ?>text" id="<?php echo $h($prefix); ?>text"><?php echo $h($row['text'] ?? ''); ?></textarea>
+
+<label for="test_mobile_<?php echo $h($key); ?>">موبایل تست</label>
+<input type="text" name="test_mobile" id="test_mobile_<?php echo $h($key); ?>" value="<?php echo $h($config['test_mobile'] ?? ''); ?>" placeholder="09123456789" dir="ltr">
+
+<div class="hint">
+<p>متغیرهای قابل استفاده:</p>
+<div class="placeholderList">
+<?php foreach($meta['placeholders'] as $ph){ ?>
+<code><?php echo $h($ph); ?></code>
+<?php } ?>
+</div>
+</div>
+
+<div class="actions">
+<button type="submit" name="save" value="1">ذخیره الگو</button>
+<button type="submit" name="test_template" value="1" class="test" formaction="<?php echo $h($tabUrl($key)); ?>#form">ارسال نمونه</button>
+<input type="hidden" name="test_template_key" value="<?php echo $h($key); ?>">
+</div>
+</div>
+<?php } ?>
+
+</form>
+</div>
 </div>
 
 <script>
