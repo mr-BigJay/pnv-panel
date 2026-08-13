@@ -72,6 +72,7 @@ if [[ "$SKIP_APT" != "1" ]]; then
         php-mbstring \
         php-xml \
         php-zip \
+        php-zip \
         unzip \
         curl \
         ca-certificates
@@ -114,9 +115,11 @@ echo ">> Copying files to ${ROOT}..."
 rsync -a --delete \
     --exclude 'db/bale.json' \
     --exclude 'db/telegram.json' \
+    --exclude 'db/sms.json' \
     --exclude 'db/xui_servers.json' \
     --exclude 'db/xui_state.json' \
     --exclude 'db/instant_payments.json' \
+    --exclude 'db/backups/' \
     --exclude 'invoices/payments.csv' \
     --exclude '.git' \
     "$SRC_DIR/" "$ROOT/"
@@ -138,6 +141,11 @@ done
 if [[ ! -f "$ROOT/db/xui_servers.json" && -f "$ROOT/db/xui_servers.example.json" ]]; then
     cp "$ROOT/db/xui_servers.example.json" "$ROOT/db/xui_servers.json"
     echo "  Created db/xui_servers.json from example (edit tokens/passwords)"
+fi
+
+if [[ ! -f "$ROOT/db/sms.json" && -f "$ROOT/db/sms.example.json" ]]; then
+    cp "$ROOT/db/sms.example.json" "$ROOT/db/sms.json"
+    echo "  Created db/sms.json from example (edit SMS panel credentials)"
 fi
 
 if [[ ! -f "$ROOT/invoices/payments.csv" ]]; then

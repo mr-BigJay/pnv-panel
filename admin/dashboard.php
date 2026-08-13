@@ -3,6 +3,8 @@ $telegramEnabled = false;
 $telegramConfigured = false;
 $baleEnabled = false;
 $baleConfigured = false;
+$smsEnabled = false;
+$smsConfigured = false;
 
 if(file_exists(__DIR__ . '/../telegram_lib.php')){
     require_once __DIR__ . '/../telegram_lib.php';
@@ -19,6 +21,15 @@ if(file_exists(__DIR__ . '/../bale_lib.php')){
         $baleConfig = baleLoadConfig();
         $baleConfigured = trim((string)($baleConfig['bot_token'] ?? '')) !== '';
         $baleEnabled = !empty($baleConfig['enabled']) && $baleConfigured;
+    }
+}
+
+if(file_exists(__DIR__ . '/../sms_lib.php')){
+    require_once __DIR__ . '/../sms_lib.php';
+    if(function_exists('smsLoadConfig')){
+        $smsConfig = smsLoadConfig();
+        $smsConfigured = smsIsConfigured($smsConfig);
+        $smsEnabled = !empty($smsConfig['enabled']) && $smsConfigured;
     }
 }
 ?>
@@ -108,6 +119,30 @@ if(file_exists(__DIR__ . '/../bale_lib.php')){
         </div>
         <div class="setupDesc">پرداخت آنی کارت‌به‌کارت با فوروارد واریز پست‌بانک</div>
         <div class="setupAction">تنظیمات بله ←</div>
+    </a>
+
+    <a class="setupCard" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('sms.php') : 'sms.php', ENT_QUOTES, 'UTF-8'); ?>">
+        <div class="setupTop">
+            <div class="setupTitle">پنل SMS</div>
+            <?php if(!empty($smsEnabled)){ ?>
+                <span class="setupBadge is-on">فعال</span>
+            <?php } elseif(!empty($smsConfigured)){ ?>
+                <span class="setupBadge is-warn">پیکربندی شده</span>
+            <?php } else { ?>
+                <span class="setupBadge">نیاز به ستاپ</span>
+            <?php } ?>
+        </div>
+        <div class="setupDesc">اتصال کاوه‌نگار، ملی‌پیامک یا IPPanel + پیامک خوش‌آمد ثبت‌نام</div>
+        <div class="setupAction">تنظیمات پیامک ←</div>
+    </a>
+
+    <a class="setupCard" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('backup.php') : 'backup.php', ENT_QUOTES, 'UTF-8'); ?>">
+        <div class="setupTop">
+            <div class="setupTitle">بک‌آپ دیتابیس</div>
+            <span class="setupBadge is-on">آماده</span>
+        </div>
+        <div class="setupDesc">اکسپورت ZIP و بازیابی فایل‌های JSON/CSV پنل</div>
+        <div class="setupAction">بک‌آپ و ایمپورت ←</div>
     </a>
 
 </div>

@@ -1,0 +1,11 @@
+{
+  "enabled": false,
+  "provider": "kavenegar",
+  "api_key": "",
+  "username": "",
+  "password": "",
+  "sender": "",
+  "register_welcome": false,
+  "register_welcome_template": "ثبت‌نام شما در تیکتین با موفقیت انجام شد.",
+  "test_mobile": ""
+}

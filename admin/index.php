@@ -1020,6 +1020,18 @@ class="supportMenu">
 
 </a>
 
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('sms.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+تنظیمات پیامک (SMS)
+
+</a>
+
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('backup.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+بک‌آپ و بازیابی دیتابیس
+
+</a>
+
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=upload'), ENT_QUOTES, 'UTF-8'); ?>">
 
 آپلود فایل کاربران سرورها

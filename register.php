@@ -311,6 +311,13 @@ JSON_PRETTY_PRINT
 )
 );
 
+if(file_exists(__DIR__ . '/sms_lib.php')){
+    require_once __DIR__ . '/sms_lib.php';
+    if(function_exists('smsSendRegisterWelcome')){
+        smsSendRegisterWelcome($mobile, $username);
+    }
+}
+
 $success =
 "ثبت نام با موفقیت انجام شد";
 
