@@ -160,7 +160,7 @@ $visibleItems = array_values(array_filter($items, static function($it){
         $usageTimeLow = !$usageTimeUnlimited && $usageTimePct <= 15;
         $usageExpired = subUsageIsDisplayExpired($usage);
 
-        if(!usageVolUnlimited && $usageVolPct <= 0.05 && ($usage['source'] ?? '') === 'panel'){
+        if(!$usageVolUnlimited && $usageVolPct <= 0.05 && ($usage['source'] ?? '') === 'panel'){
             $usageVolLabel = 'حجم تمام شده';
         }
 
