@@ -636,17 +636,42 @@ if(!function_exists('smsConfigPath')){
         return $samples[$key] ?? [];
     }
 
+    function smsNormalizeDigits($value){
+        return strtr((string)$value, [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+    }
+
     function smsResolveTestMobile($post, $config = null){
         if($config === null){
             $config = smsLoadConfig();
         }
 
-        $mobile = trim((string)(is_array($post) ? ($post['test_mobile'] ?? '') : ''));
-        if($mobile === ''){
-            $mobile = trim((string)($config['test_mobile'] ?? ''));
+        $raw = is_array($post) ? ($post['test_mobile'] ?? '') : '';
+        if(is_array($raw)){
+            foreach($raw as $item){
+                $item = trim(smsNormalizeDigits($item));
+                if($item !== ''){
+                    $raw = $item;
+                    break;
+                }
+            }
+            if(is_array($raw)){
+                $raw = '';
+            }
         }
 
-        return $mobile;
+        $mobile = trim(smsNormalizeDigits((string)$raw));
+        if($mobile === ''){
+            $mobile = trim(smsNormalizeDigits((string)($config['test_mobile'] ?? '')));
+        }
+
+        $normalized = smsNormalizeMobile($mobile);
+
+        return $normalized ?? $mobile;
     }
 
     function smsRememberTestMobile($mobile, $config = null){

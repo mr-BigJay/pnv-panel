@@ -115,7 +115,7 @@ if(isset($_POST['test_connection'])){
 if(isset($_POST['test_template'])){
     $config = smsLoadConfig();
     $mobile = smsResolveTestMobile($_POST, $config);
-    $templateKey = smsNormalizeTemplateKey($_POST['test_template_key'] ?? '');
+    $templateKey = smsNormalizeTemplateKey($_POST['test_template'] ?? ($_POST['test_template_key'] ?? ''));
 
     if($mobile === ''){
         $error = 'شماره موبایل تست را وارد کنید.';
@@ -156,6 +156,8 @@ $senderHint = ($currentProvider === 'smsir')
     ? 'شماره خط اختصاصی SMS.ir (مثلاً 30004505000017)'
     : '1000xxxx یا 3000xxxx';
 
+$testMobileDisplay = trim(smsNormalizeDigits((string)($_POST['test_mobile'] ?? ($config['test_mobile'] ?? ''))));
+
 ?>
 <!DOCTYPE html>
 <html lang="fa">
@@ -189,7 +191,8 @@ button,.back,.menuLink{display:block;width:100%;border:0;border-radius:12px;padd
 .placeholderList{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
 .placeholderList code{background:#0f172a;padding:4px 8px;border-radius:8px;font-size:12px}
 .testMobileBar{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px 16px;margin-bottom:18px}
-.testMobileBar label{margin:0 0 8px}
+.testMobileBar input{color:#fff}
+.testMobileBar input::placeholder{color:#64748b;opacity:1}
 .fieldGroup[data-provider]{display:none}
 .fieldGroup.is-visible{display:block}
 .panelSection{display:none}
@@ -228,8 +231,8 @@ body{padding:10px}
 <input type="hidden" name="tab" value="<?php echo $h($tab); ?>">
 
 <div class="testMobileBar">
-<label for="test_mobile">موبایل تست</label>
-<input type="text" name="test_mobile" id="test_mobile" value="<?php echo $h($config['test_mobile'] ?? ''); ?>" placeholder="09123456789" dir="ltr" autocomplete="tel">
+<label for="test_mobile">موبایل تست <span style="color:#94a3b8;font-size:12px">(الزامی برای ارسال نمونه)</span></label>
+<input type="tel" name="test_mobile" id="test_mobile" value="<?php echo $h($testMobileDisplay); ?>" placeholder="مثال: 09121234567" dir="ltr" autocomplete="tel" inputmode="tel" required>
 </div>
 
 <div class="panelSection <?php echo $tab === 'connection' ? 'is-active' : ''; ?>" data-panel="connection">
@@ -266,7 +269,7 @@ body{padding:10px}
 </div>
 
 <div class="actions">
-<button type="submit" name="save" value="1">ذخیره تنظیمات</button>
+<button type="submit" name="save" value="1" formnovalidate="formnovalidate">ذخیره تنظیمات</button>
 <button type="submit" name="test_connection" value="1" class="test">ارسال تست اتصال</button>
 </div>
 </div>
@@ -300,9 +303,8 @@ body{padding:10px}
 </div>
 
 <div class="actions">
-<button type="submit" name="save" value="1">ذخیره الگو</button>
-<button type="submit" name="test_template" value="1" class="test">ارسال نمونه</button>
-<input type="hidden" name="test_template_key" value="<?php echo $h($key); ?>">
+<button type="submit" name="save" value="1" formnovalidate="formnovalidate">ذخیره الگو</button>
+<button type="submit" name="test_template" value="<?php echo $h($key); ?>" class="test">ارسال نمونه</button>
 </div>
 </div>
 <?php } ?>
@@ -327,6 +329,30 @@ body{padding:10px}
     if(provider){
         provider.addEventListener('change', syncFields);
         syncFields();
+    }
+
+    var testMobile = document.getElementById('test_mobile');
+    var form = document.getElementById('smsAdminForm');
+
+    if(form && testMobile){
+        form.addEventListener('submit', function(e){
+            var submitter = e.submitter;
+            if(!submitter){
+                return;
+            }
+
+            var isTest = submitter.name === 'test_template' || submitter.name === 'test_connection';
+            if(!isTest){
+                return;
+            }
+
+            var mobile = (testMobile.value || '').trim();
+            if(mobile === ''){
+                e.preventDefault();
+                testMobile.focus();
+                alert('لطفاً شماره موبایل تست را در کادر بالای صفحه وارد کنید.');
+            }
+        });
     }
 })();
 </script>
