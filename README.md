@@ -11,7 +11,7 @@ curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/in
 نسخه مشخص (Release):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh | sudo bash -s -- --version v1.0.0
+curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh | sudo bash -s -- --version v01.1.0
 ```
 
 مسیر دلخواه:
@@ -35,15 +35,15 @@ curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/in
 ## Release در GitHub
 
 1. تغییرات stable را به `main` merge کنید
-2. Tag بزنید: `git tag -a v1.0.0 -m "First release"`
-3. Push tag: `git push origin v1.0.0`
-4. GitHub → Releases → **Draft a new release** → tag `v1.0.0`
+2. Tag بزنید: `git tag -a v01.1.0 -m "Release v01.1.0"`
+3. Push tag: `git push origin v01.1.0`
+4. GitHub → Releases → **Draft a new release** → tag `v01.1.0`
 5. توضیحات changelog + فایل `install.sh` را attach کنید (اختیاری)
 
 کاربران نصب:
 
 ```bash
-curl -fsSL https://github.com/mr-BigJay/pnv-panel/releases/download/v1.0.0/install.sh | sudo bash
+curl -fsSL https://github.com/mr-BigJay/pnv-panel/releases/download/v01.1.0/install.sh | sudo bash
 ```
 
 ## به‌روزرسانی جزئی (بدون Release)
