@@ -74,10 +74,18 @@ foreach($items as &$item){
     $item['usage'] = $usageMap[$key] ?? null;
 
     if(pnvNameLooksLikeSubId($item['name'], $item['link']) && is_array($item['usage'])){
-        $fromEmail = pnvExtractConfigNameFromClientEmail((string)($item['usage']['email'] ?? ''));
+        $fromEmail = pnvSubDisplayNameFromClientEmail((string)($item['usage']['email'] ?? ''), $item['link']);
 
         if($fromEmail !== ''){
             $item['name'] = $fromEmail;
+        }
+    }
+
+    if(pnvNameLooksLikeSubId($item['name'], $item['link'])){
+        $fromPanel = pnvFindSubNameFromPanel($item['link']);
+
+        if($fromPanel !== ''){
+            $item['name'] = $fromPanel;
         }
     }
 }
