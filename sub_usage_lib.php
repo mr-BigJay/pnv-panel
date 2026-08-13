@@ -470,6 +470,8 @@ if(!function_exists('subUsageCachePath')){
                         }
                     }
 
+                    $client = subUsageFinalizePanelClient($server, $client, $parsed['sub_id'], $link);
+
                     return [
                         'client' => $client,
                         'email' => $client['email'] ?? $email,
@@ -484,6 +486,7 @@ if(!function_exists('subUsageCachePath')){
 
         if($client){
             $client = xuiHydrateClientByEmail($server, $client);
+            $client = subUsageFinalizePanelClient($server, $client, $parsed['sub_id'], $link);
             return [
                 'client' => $client,
                 'email' => $client['email'] ?? '',
@@ -492,6 +495,39 @@ if(!function_exists('subUsageCachePath')){
         }
 
         return null;
+    }
+
+    function subUsageFinalizePanelClient($server, $client, $subId, $link){
+        if(!is_array($client)){
+            return $client;
+        }
+
+        if(function_exists('xuiEnrichClientTrafficFromInbounds')){
+            $client = xuiEnrichClientTrafficFromInbounds($server, $client, (string)$subId, (string)$link);
+        }
+
+        if(xuiClientUsedBytes($client) <= 0){
+            $userinfo = subUsageFetchFromSubUserinfo($link);
+
+            if(is_array($userinfo)){
+                $uiUsed = max(0, floatval($userinfo['used'] ?? 0));
+                $uiTotal = max(0, floatval($userinfo['total'] ?? 0));
+
+                if($uiUsed > 0){
+                    $client['used'] = $uiUsed;
+
+                    if($uiTotal > 0){
+                        $panelTotal = xuiClientTotalBytes($client);
+
+                        if($panelTotal <= 0 || $uiTotal > $panelTotal){
+                            $client['total'] = $uiTotal;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $client;
     }
 
     function subUsageEstimateFromMeta($meta = []){
@@ -512,6 +548,10 @@ if(!function_exists('subUsageCachePath')){
             $view['volume']['unlimited'] = true;
             $view['volume']['label'] = 'حجم نامحدود';
             $view['volume']['remain_pct'] = 100;
+        }
+        else{
+            $view['volume']['estimated'] = true;
+            $view['volume']['label'] = subUsageFormatBytes($totalBytes) . ' پلن (مصرف دقیق در حال دریافت…)';
         }
 
         if($planDays <= 0 && intval($meta['start_ts'] ?? 0) <= 0){

@@ -1000,6 +1000,70 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
+    function xuiEnrichClientTrafficFromInbounds($server, $client, $subId = '', $subLink = ''){
+        if(!is_array($client) || !is_array($server)){
+            return $client;
+        }
+
+        $subId = trim((string)($subId !== '' ? $subId : ($client['subId'] ?? '')));
+        $uuid = trim((string)($client['uuid'] ?? $client['id'] ?? ''));
+
+        if($uuid !== '' && ctype_digit($uuid)){
+            $uuid = '';
+        }
+
+        $statClient = xuiFindClientInInbounds($server, $subId, $uuid);
+
+        if(!is_array($statClient) && $subLink !== ''){
+            $fetchedUuid = xuiFetchSubUuid($subLink);
+
+            if($fetchedUuid !== ''){
+                $statClient = xuiFindClientInInbounds($server, $subId, $fetchedUuid);
+            }
+        }
+
+        if(!is_array($statClient)){
+            return $client;
+        }
+
+        foreach(['up', 'down', 'used', 'total', 'totalGB', 'expiryTime', 'enable'] as $field){
+            if(!isset($statClient[$field]) || $statClient[$field] === '' || $statClient[$field] === null){
+                continue;
+            }
+
+            if(in_array($field, ['up', 'down', 'used'], true)){
+                $client[$field] = $statClient[$field];
+                continue;
+            }
+
+            if(!isset($client[$field]) || $client[$field] === '' || $client[$field] === null || intval($client[$field]) === 0){
+                $client[$field] = $statClient[$field];
+            }
+        }
+
+        if(xuiClientTotalBytes($statClient) > xuiClientTotalBytes($client)){
+            foreach(['total', 'totalGB'] as $field){
+                if(isset($statClient[$field])){
+                    $client[$field] = $statClient[$field];
+                }
+            }
+        }
+
+        if(xuiClientUsedBytes($statClient) > xuiClientUsedBytes($client)){
+            foreach(['up', 'down', 'used'] as $field){
+                if(isset($statClient[$field])){
+                    $client[$field] = $statClient[$field];
+                }
+            }
+        }
+
+        if(empty($client['_inbound_id']) && !empty($statClient['_inbound_id'])){
+            $client['_inbound_id'] = $statClient['_inbound_id'];
+        }
+
+        return $client;
+    }
+
     function xuiHydrateClientByEmail($server, $client){
         $email = trim((string)($client['email'] ?? ''));
 
@@ -1040,11 +1104,21 @@ if(!function_exists('xuiConfigPath')){
                     }
                 }
 
-                return $fullClient;
+                return xuiEnrichClientTrafficFromInbounds(
+                    $server,
+                    $fullClient,
+                    (string)($fullClient['subId'] ?? $client['subId'] ?? ''),
+                    ''
+                );
             }
         }
 
-        return $client;
+        return xuiEnrichClientTrafficFromInbounds(
+            $server,
+            $client,
+            (string)($client['subId'] ?? ''),
+            ''
+        );
     }
 
     function xuiExtractEmailFromSubUrls($urls){
