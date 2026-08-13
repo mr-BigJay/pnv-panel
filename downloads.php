@@ -9,6 +9,9 @@ exit;
 
 }
 
+require_once __DIR__ . '/mobile_verify_lib.php';
+mobileVerifyGuardRedirectIfNeeded((string)$_SESSION['user']);
+
 $dir = "down";
 
 $files = [];

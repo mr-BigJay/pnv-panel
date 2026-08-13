@@ -294,6 +294,8 @@ PASSWORD_DEFAULT
 
 "mobile"=>$mobile,
 
+"mobile_verified"=>false,
+
 "referral_code"=>$referralCode,
 
 "referrer"=>$finalReferrer,

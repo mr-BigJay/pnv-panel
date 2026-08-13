@@ -7,6 +7,9 @@ if(!isset($_SESSION['user'])){
     exit;
 }
 
+require_once __DIR__ . '/mobile_verify_lib.php';
+mobileVerifyGuardRedirectIfNeeded((string)$_SESSION['user']);
+
 require_once __DIR__ . '/coupon_lib.php';
 require_once __DIR__ . '/telegram_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';

@@ -21,7 +21,19 @@ $avatarUrl = '';
 
 require_once __DIR__ . '/profile_lib.php';
 require_once __DIR__ . '/subscription_lib.php';
+require_once __DIR__ . '/mobile_verify_lib.php';
 $avatarUrl = profileGetUserAvatar($user);
+
+$userRow = null;
+$userMobile = '';
+$needsMobileVerify = false;
+$userRecords = profileLoadUsers();
+$userRecordIndex = profileFindUserIndex($userRecords, $user);
+if($userRecordIndex >= 0){
+    $userRow = $userRecords[$userRecordIndex];
+    $userMobile = trim((string)($userRow['mobile'] ?? ''));
+    $needsMobileVerify = mobileVerifyUserNeedsVerification($userRow);
+}
 
 if(file_exists($supportFile)){
     $supportData = json_decode(file_get_contents($supportFile), true);
@@ -502,6 +514,140 @@ color:#fff;
 opacity:.6;
 cursor:not-allowed;
 }
+.dashModalOverlay--blocking{
+z-index:200;
+background:rgba(2,6,23,.55);
+backdrop-filter:blur(14px);
+-webkit-backdrop-filter:blur(14px);
+}
+.dashModalOverlay--blocking .dashModal{
+pointer-events:auto;
+}
+body.mobileVerifyLocked .dashPage,
+body.mobileVerifyLocked .dashLogout{
+pointer-events:none;
+user-select:none;
+}
+.mobileVerifyRow{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+margin:14px 0 0;
+padding:12px;
+border-radius:14px;
+background:rgba(30,41,59,.75);
+border:1px solid rgba(148,163,184,.16);
+}
+.mobileVerifyNumber{
+font-size:15px;
+font-weight:700;
+color:#fff;
+letter-spacing:.4px;
+direction:ltr;
+text-align:left;
+flex:1;
+}
+.mobileVerifySendBtn{
+flex:0 0 auto;
+height:40px;
+padding:0 14px;
+border:none;
+border-radius:12px;
+background:#2563eb;
+color:#fff;
+font-family:inherit;
+font-size:13px;
+font-weight:700;
+cursor:pointer;
+white-space:nowrap;
+}
+.mobileVerifySendBtn:disabled{
+opacity:.55;
+cursor:not-allowed;
+}
+.mobileVerifyCodeWrap{
+display:none;
+margin-top:14px;
+}
+.mobileVerifyCodeWrap.is-visible{
+display:block;
+}
+.mobileVerifyCodeRow{
+display:flex;
+align-items:center;
+gap:10px;
+}
+.mobileVerifyCodeInput{
+flex:1;
+height:48px;
+border:1px solid rgba(148,163,184,.2);
+border-radius:12px;
+padding:0 14px;
+box-sizing:border-box;
+background:rgba(30,41,59,.85);
+color:#fff;
+font-family:inherit;
+font-size:20px;
+letter-spacing:6px;
+text-align:center;
+outline:none;
+direction:ltr;
+}
+.mobileVerifyCodeInput.is-error{
+border-color:#ef4444;
+box-shadow:0 0 0 1px rgba(239,68,68,.35);
+}
+.mobileVerifyTimer{
+flex:0 0 auto;
+min-width:54px;
+height:48px;
+display:flex;
+align-items:center;
+justify-content:center;
+border-radius:12px;
+background:rgba(51,65,85,.85);
+color:#cbd5e1;
+font-size:13px;
+font-weight:700;
+direction:ltr;
+}
+.mobileVerifyTimer.is-expired{
+color:#fca5a5;
+background:rgba(127,29,29,.55);
+}
+.mobileVerifyFieldError{
+display:none;
+margin-top:8px;
+font-size:12px;
+color:#fca5a5;
+line-height:1.5;
+}
+.mobileVerifyFieldError.is-visible{
+display:block;
+}
+.mobileVerifySuccess{
+display:none;
+margin-top:14px;
+padding:12px;
+border-radius:12px;
+background:rgba(22,101,52,.35);
+border:1px solid rgba(34,197,94,.35);
+color:#bbf7d0;
+font-size:13px;
+line-height:1.7;
+text-align:center;
+}
+.mobileVerifySuccess.is-visible{
+display:block;
+}
+.mobileVerifySuccessCount{
+display:block;
+margin-top:6px;
+font-size:12px;
+color:#86efac;
+direction:ltr;
+}
 .dashAvatarInput{
 display:none;
 }
@@ -690,6 +836,325 @@ max-width:360px;
 </div>
 </div>
 </div>
+
+<div class="dashModalOverlay dashModalOverlay--blocking<?php echo $needsMobileVerify ? ' is-open' : ''; ?>" id="dashMobileVerifyModal" aria-hidden="<?php echo $needsMobileVerify ? 'false' : 'true'; ?>">
+<div class="dashModal" role="dialog" aria-modal="true" aria-labelledby="dashMobileVerifyTitle">
+<h2 class="dashModalTitle" id="dashMobileVerifyTitle">تایید شماره تماس</h2>
+
+<div class="mobileVerifyRow">
+<span class="mobileVerifyNumber" id="mobileVerifyNumber"><?php echo dashH($userMobile); ?></span>
+<button type="button" class="mobileVerifySendBtn" id="mobileVerifySendBtn">دریافت کد تایید</button>
+</div>
+
+<div class="mobileVerifyCodeWrap" id="mobileVerifyCodeWrap">
+<div class="mobileVerifyCodeRow">
+<input type="text" class="mobileVerifyCodeInput" id="mobileVerifyCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="------" aria-label="کد تایید">
+<span class="mobileVerifyTimer" id="mobileVerifyTimer">02:00</span>
+</div>
+<div class="mobileVerifyFieldError" id="mobileVerifyFieldError"></div>
+</div>
+
+<div class="mobileVerifySuccess" id="mobileVerifySuccess">
+شماره تلفن شما تایید شد
+<span class="mobileVerifySuccessCount" id="mobileVerifySuccessCount">5</span>
+</div>
+</div>
+</div>
+
+<script>
+(function(){
+    var needsMobileVerify = <?php echo $needsMobileVerify ? 'true' : 'false'; ?>;
+
+    if(needsMobileVerify){
+        document.body.classList.add('mobileVerifyLocked');
+    }
+
+    var mobileVerifyModal = document.getElementById('dashMobileVerifyModal');
+    var mobileVerifySendBtn = document.getElementById('mobileVerifySendBtn');
+    var mobileVerifyCodeWrap = document.getElementById('mobileVerifyCodeWrap');
+    var mobileVerifyCodeInput = document.getElementById('mobileVerifyCodeInput');
+    var mobileVerifyTimer = document.getElementById('mobileVerifyTimer');
+    var mobileVerifyFieldError = document.getElementById('mobileVerifyFieldError');
+    var mobileVerifySuccess = document.getElementById('mobileVerifySuccess');
+    var mobileVerifySuccessCount = document.getElementById('mobileVerifySuccessCount');
+
+    var otpExpiresAt = 0;
+    var otpTimerId = null;
+    var successTimerId = null;
+    var verifyBusy = false;
+
+    function formatTimer(totalSeconds){
+        var m = Math.floor(totalSeconds / 60);
+        var s = totalSeconds % 60;
+        return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    function showFieldError(msg){
+        if(!mobileVerifyFieldError){
+            return;
+        }
+
+        if(msg){
+            mobileVerifyFieldError.textContent = msg;
+            mobileVerifyFieldError.classList.add('is-visible');
+        } else {
+            mobileVerifyFieldError.textContent = '';
+            mobileVerifyFieldError.classList.remove('is-visible');
+        }
+    }
+
+    function setCodeInputError(on){
+        if(!mobileVerifyCodeInput){
+            return;
+        }
+
+        mobileVerifyCodeInput.classList.toggle('is-error', !!on);
+    }
+
+    function stopOtpTimer(){
+        if(otpTimerId){
+            clearInterval(otpTimerId);
+            otpTimerId = null;
+        }
+    }
+
+    function markOtpExpired(){
+        stopOtpTimer();
+        otpExpiresAt = 0;
+
+        if(mobileVerifyTimer){
+            mobileVerifyTimer.textContent = '00:00';
+            mobileVerifyTimer.classList.add('is-expired');
+        }
+
+        if(mobileVerifyCodeInput){
+            mobileVerifyCodeInput.value = '';
+            mobileVerifyCodeInput.disabled = true;
+        }
+
+        showFieldError('کد منقضی شده است. دوباره دریافت کنید.');
+        setCodeInputError(false);
+
+        if(mobileVerifySendBtn){
+            mobileVerifySendBtn.disabled = false;
+            mobileVerifySendBtn.textContent = 'دریافت کد تایید';
+        }
+    }
+
+    function startOtpTimer(seconds){
+        stopOtpTimer();
+        otpExpiresAt = Date.now() + (seconds * 1000);
+
+        if(mobileVerifyTimer){
+            mobileVerifyTimer.classList.remove('is-expired');
+        }
+
+        if(mobileVerifyCodeInput){
+            mobileVerifyCodeInput.disabled = false;
+        }
+
+        function tick(){
+            var left = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000));
+
+            if(mobileVerifyTimer){
+                mobileVerifyTimer.textContent = formatTimer(left);
+            }
+
+            if(left <= 0){
+                markOtpExpired();
+            }
+        }
+
+        tick();
+        otpTimerId = setInterval(tick, 250);
+    }
+
+    function revealCodeField(expiresIn){
+        if(mobileVerifyCodeWrap){
+            mobileVerifyCodeWrap.classList.add('is-visible');
+        }
+
+        showFieldError('');
+        setCodeInputError(false);
+
+        if(mobileVerifyCodeInput){
+            mobileVerifyCodeInput.value = '';
+            mobileVerifyCodeInput.disabled = false;
+            setTimeout(function(){
+                mobileVerifyCodeInput.focus();
+            }, 0);
+        }
+
+        startOtpTimer(parseInt(expiresIn || 120, 10));
+    }
+
+    function sendMobileCode(){
+        if(!mobileVerifySendBtn || verifyBusy){
+            return;
+        }
+
+        verifyBusy = true;
+        mobileVerifySendBtn.disabled = true;
+        mobileVerifySendBtn.textContent = 'در حال ارسال...';
+        showFieldError('');
+        setCodeInputError(false);
+
+        var body = new URLSearchParams();
+        body.append('action', 'mobile_send_code');
+
+        fetch('profile-api.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: body.toString(),
+            credentials: 'same-origin'
+        })
+        .then(function(res){
+            return res.json();
+        })
+        .then(function(data){
+            verifyBusy = false;
+
+            if(!data || !data.ok){
+                mobileVerifySendBtn.disabled = false;
+                mobileVerifySendBtn.textContent = 'دریافت کد تایید';
+                alert((data && data.error) ? data.error : 'ارسال کد انجام نشد.');
+                return;
+            }
+
+            mobileVerifySendBtn.textContent = 'ارسال مجدد';
+            mobileVerifySendBtn.disabled = false;
+            revealCodeField(data.expires_in || 120);
+        })
+        .catch(function(){
+            verifyBusy = false;
+            mobileVerifySendBtn.disabled = false;
+            mobileVerifySendBtn.textContent = 'دریافت کد تایید';
+            alert('خطا در ارتباط با سرور.');
+        });
+    }
+
+    function showVerifySuccess(){
+        stopOtpTimer();
+
+        if(mobileVerifyCodeWrap){
+            mobileVerifyCodeWrap.classList.remove('is-visible');
+        }
+
+        if(mobileVerifySendBtn){
+            mobileVerifySendBtn.disabled = true;
+        }
+
+        if(mobileVerifySuccess){
+            mobileVerifySuccess.classList.add('is-visible');
+        }
+
+        var left = 5;
+
+        if(mobileVerifySuccessCount){
+            mobileVerifySuccessCount.textContent = left + ' ثانیه';
+        }
+
+        successTimerId = setInterval(function(){
+            left -= 1;
+
+            if(mobileVerifySuccessCount){
+                mobileVerifySuccessCount.textContent = Math.max(0, left) + ' ثانیه';
+            }
+
+            if(left <= 0){
+                clearInterval(successTimerId);
+                successTimerId = null;
+
+                if(mobileVerifyModal){
+                    mobileVerifyModal.classList.remove('is-open');
+                    mobileVerifyModal.setAttribute('aria-hidden', 'true');
+                }
+
+                document.body.classList.remove('mobileVerifyLocked');
+            }
+        }, 1000);
+    }
+
+    function verifyMobileCode(code){
+        if(verifyBusy){
+            return;
+        }
+
+        if(otpExpiresAt > 0 && Date.now() > otpExpiresAt){
+            markOtpExpired();
+            return;
+        }
+
+        verifyBusy = true;
+        showFieldError('');
+        setCodeInputError(false);
+
+        var body = new URLSearchParams();
+        body.append('action', 'mobile_verify_code');
+        body.append('code', code);
+
+        fetch('profile-api.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: body.toString(),
+            credentials: 'same-origin'
+        })
+        .then(function(res){
+            return res.json();
+        })
+        .then(function(data){
+            verifyBusy = false;
+
+            if(!data || !data.ok){
+                if(data && data.expired){
+                    markOtpExpired();
+                    return;
+                }
+
+                setCodeInputError(true);
+                showFieldError((data && data.error) ? data.error : 'کد وارد اشتباه است');
+
+                if(mobileVerifyCodeInput){
+                    mobileVerifyCodeInput.value = '';
+                    mobileVerifyCodeInput.focus();
+                }
+
+                return;
+            }
+
+            showVerifySuccess();
+        })
+        .catch(function(){
+            verifyBusy = false;
+            alert('خطا در ارتباط با سرور.');
+        });
+    }
+
+    if(mobileVerifySendBtn){
+        mobileVerifySendBtn.addEventListener('click', sendMobileCode);
+    }
+
+    if(mobileVerifyCodeInput){
+        mobileVerifyCodeInput.addEventListener('input', function(){
+            var digits = (mobileVerifyCodeInput.value || '').replace(/\D/g, '').slice(0, 6);
+            mobileVerifyCodeInput.value = digits;
+
+            if(digits.length > 0){
+                setCodeInputError(false);
+                showFieldError('');
+            }
+
+            if(digits.length === 6){
+                verifyMobileCode(digits);
+            }
+        });
+    }
+})();
+</script>
 
 <script>
 (function(){

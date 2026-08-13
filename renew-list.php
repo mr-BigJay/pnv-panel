@@ -9,6 +9,9 @@ header("Location: index.php");
 exit;
 }
 
+require_once __DIR__ . '/mobile_verify_lib.php';
+mobileVerifyGuardRedirectIfNeeded((string)$_SESSION['user']);
+
 $user = $_SESSION['user'];
 
 $payments = [];

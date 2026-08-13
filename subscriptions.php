@@ -12,6 +12,9 @@ if(!isset($_SESSION['user'])){
     exit;
 }
 
+require_once __DIR__ . '/mobile_verify_lib.php';
+mobileVerifyGuardRedirectIfNeeded((string)$_SESSION['user']);
+
 $user = $_SESSION['user'];
 
 if(!file_exists("temp")){

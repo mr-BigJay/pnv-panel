@@ -9,6 +9,9 @@ if(!isset($_SESSION['user'])){
     exit;
 }
 
+require_once __DIR__ . '/mobile_verify_lib.php';
+mobileVerifyGuardApiIfNeeded((string)$_SESSION['user']);
+
 require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
 require_once __DIR__ . '/sub_usage_lib.php';
