@@ -41,7 +41,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=22">
+<link rel="stylesheet" href="plan_step_ui.css?v=23">
 </head>
 <body>
 <div class="box">
@@ -139,7 +139,7 @@ $h = static function($v){
 <div class="instantPay" id="instantPay" hidden>
 <div class="instantPayTop">
 <div class="instantPayHead" id="instantPayHead">مهلت پرداخت</div>
-<div class="instantTimer" id="instantTimer">30:00</div>
+<div class="instantTimer" id="instantTimer">۳۰:۰۰</div>
 </div>
 
 <div class="instantAmountLabel">مبلغ قابل پرداخت</div>
@@ -149,7 +149,10 @@ $h = static function($v){
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
 </button>
 </div>
-<div class="instantExactHint">دقیقاً همین مبلغ را واریز کنید</div>
+<div class="instantExactHint">
+<span class="instantExactHintLine">دقیقاً همین مبلغ را کارت به کارت کنید</span>
+<span class="instantExactHintLine instantExactHintSub">تا اتوماتیک تایید شده و اشتراکتان آنی تحویل گردد</span>
+</div>
 
 <div class="instantStatus" id="instantStatus" hidden></div>
 
@@ -163,9 +166,23 @@ $h = static function($v){
 
 <!-- STEP 3 -->
 <div class="formStep" id="step3">
-<div class="resultCard">
-<div class="resultTitle">اشتراک شما آماده است</div>
-<div class="resultMeta" id="resultMeta"></div>
+<div class="resultScreen">
+<div class="resultSuccessBanner">
+<span class="resultSuccessTick" aria-hidden="true">✅</span>
+<div class="resultSuccessText">
+<strong>اشتراک شما با موفقیت فعال شد</strong>
+<span>لینک و QR آماده است</span>
+</div>
+</div>
+<div class="resultPlanSummary planSummary is-visible">
+<div class="planSummaryCard">
+<div class="planSummaryBody">
+<div class="planSummaryLine1" id="resultPlanLine1">پلن: —</div>
+<div class="planSummaryLine2" id="resultPlanLine2">نام کانفیگ: —</div>
+</div>
+<div class="planSummaryIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg></div>
+</div>
+</div>
 <div class="resultLinkWrap">
 <div class="fieldLabel">لینک اشتراک</div>
 <div class="resultLink" id="resultLink">—</div>
@@ -176,9 +193,11 @@ $h = static function($v){
 <div class="resultQrFrame">
 <img id="resultQrImg" src="" alt="QR Code لینک اشتراک">
 </div>
-<div class="resultQrHint">با اسکن این کد، لینک اشتراک وارد اپ می‌شود</div>
+<div class="resultQrHint">QR را با اپ VPN اسکن کنید</div>
 </div>
+<div class="resultActions">
 <a class="btnGhost" href="subscriptions.php">اشتراک‌های من</a>
+</div>
 </div>
 </div>
 
@@ -234,7 +253,8 @@ const instantTimer = document.getElementById('instantTimer');
 const instantAmount = document.getElementById('instantAmount');
 const instantStatus = document.getElementById('instantStatus');
 const instantApproved = document.getElementById('instantApproved');
-const resultMeta = document.getElementById('resultMeta');
+const resultPlanLine1 = document.getElementById('resultPlanLine1');
+const resultPlanLine2 = document.getElementById('resultPlanLine2');
 const resultLink = document.getElementById('resultLink');
 const resultQrWrap = document.getElementById('resultQrWrap');
 const resultQrImg = document.getElementById('resultQrImg');
@@ -246,6 +266,25 @@ let payPollTimer = null;
 let payTickTimer = null;
 let currentPay = null;
 let payCreateInFlight = false;
+
+function escapeHtml(s){
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+const planSummaryCubeSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg>';
+
+function renderPlanSummaryHtml(plan, category, extraHtml){
+    extraHtml = extraHtml || '';
+    const typeLabel = category === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی';
+    return '<div class="planSummaryCard">' +
+        '<div class="planSummaryBody">' +
+        '<div class="planSummaryLine1">پلن: <span class="planSummaryHighlight">' + escapeHtml(plan.name) + '</span> — ' + escapeHtml(plan.price_text) + '</div>' +
+        '<div class="planSummaryLine2">نوع: ' + typeLabel + '</div>' +
+        extraHtml +
+        '</div>' +
+        '<div class="planSummaryIcon">' + planSummaryCubeSvg + '</div>' +
+        '</div>';
+}
 
 function updateContinueState(){
     toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
@@ -322,10 +361,11 @@ function showStep(step){
 
     if(step === 2 && selectedPlan){
         planSummary.classList.add('is-visible');
-        let html = 'پلن: <b>' + selectedPlan.name + '</b> — ' + selectedPlan.price_text;
-        html += '<br>نوع: ' + (selectedCategory === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی');
-        if(selectedCategory === 'limited') html += '<br>مدت: <b>' + (selectedPlan.days_label || '—') + '</b>';
-        planSummary.innerHTML = html;
+        let extraHtml = '';
+        if(selectedCategory === 'limited'){
+            extraHtml += '<div class="planSummaryExtra">مدت: <b>' + escapeHtml(selectedPlan.days_label || '—') + '</b></div>';
+        }
+        planSummary.innerHTML = renderPlanSummaryHtml(selectedPlan, selectedCategory, extraHtml);
         syncCardBox();
         validateCoupon();
         ensureInstantPay();
@@ -347,9 +387,16 @@ function selectCardMeta(card){
 function renderCardTabs(){
     if(!cardTabs) return;
     cardTabs.innerHTML = '';
+    cardTabs.classList.remove('is-hidden');
     const list = Array.isArray(cardsData) ? cardsData : [];
     if(list.length === 0){
         cardTabs.innerHTML = '<div class="cardTabsEmpty">کارتی تعریف نشده است. از پنل ادمین کارت اضافه کنید.</div>';
+        selectCardMeta(null);
+        return;
+    }
+    if(list.length === 1){
+        cardTabs.classList.add('is-hidden');
+        selectCardMeta(list[0]);
         return;
     }
     let preferred = 0;
@@ -378,6 +425,7 @@ function renderCardTabs(){
             cardTabs.querySelectorAll('.cardTab').forEach(function(el){ el.classList.remove('is-active'); });
             btn.classList.add('is-active');
             selectCardMeta(card);
+            ensureInstantPay(true);
         });
         cardTabs.appendChild(btn);
     });
@@ -470,9 +518,24 @@ function showResultQr(link){
     resultQrWrap.classList.add('is-visible');
 }
 
+function parsePlanForSummary(planText){
+    const plan = String(planText || '—').trim();
+    if(plan.indexOf(' - ') >= 0){
+        const parts = plan.split(' - ', 2);
+        return { size: parts[0], price: parts[1], raw: plan };
+    }
+    return { size: plan, price: '', raw: plan };
+}
+
 function fillResult(item){
     const name = document.getElementById('subnameInput').value.trim();
-    resultMeta.innerHTML = 'نام کانفیگ: <b>' + name + '</b><br>پلن: <b>' + (item.plan || '—') + '</b>';
+    const planParts = parsePlanForSummary(item.plan);
+    if(planParts.price){
+        resultPlanLine1.innerHTML = 'پلن: <span class="planSummaryHighlight">' + escapeHtml(planParts.size) + '</span> — ' + escapeHtml(planParts.price);
+    }else{
+        resultPlanLine1.innerHTML = 'پلن: <span class="planSummaryHighlight">' + escapeHtml(planParts.raw) + '</span>';
+    }
+    resultPlanLine2.innerHTML = 'نام کانفیگ: <span class="planSummaryHighlight">' + escapeHtml(name || '—') + '</span>';
     const link = item.link || '—';
     resultLink.textContent = link;
     showResultQr(link);
@@ -495,7 +558,6 @@ function validateCoupon(){
         if(!data.ok){ couponResult.className = 'couponResult is-error'; couponResult.textContent = data.error || 'کد تخفیف معتبر نیست'; return; }
         couponResult.className = 'couponResult is-ok';
         couponResult.innerHTML = 'تخفیف ' + data.percent + '٪<br>مبلغ پلن: ' + data.original_text + '<br><b>قابل پرداخت تقریبی: ' + data.final_text + '</b>';
-        if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
     })
     .catch(function(){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'خطا در بررسی کد'; });
 }
@@ -509,6 +571,7 @@ couponCodeInput.addEventListener('input', function(){
     clearTimeout(couponTimer);
     couponTimer = setTimeout(function(){
         validateCoupon();
+        if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
     }, 450);
 });
 planSelect.addEventListener('change', validateCoupon);
@@ -577,7 +640,7 @@ function renderPay(item){
         instantTimer.textContent = '۰۰:۰۰';
         instantPayHead.textContent = 'مهلت تمام شد';
         instantStatus.hidden = false;
-        instantStatus.textContent = 'مهلت پرداخت تمام شد. اگر همین الان واریز کرده‌اید، پیام @postbank_bot را دوباره به بازو فوروارد کنید؛ هنوز برای مدتی تأیید خودکار انجام می‌شود.';
+        instantStatus.textContent = 'مهلت ۳۰ دقیقه‌ای تمام شد. اگر همین الان واریز کرده‌اید تا ۱۰ دقیقه دیگر بررسی می‌شود؛ در غیر این صورت مبلغ جدید بسازید.';
         instantApproved.hidden = true;
         let restartBtn = document.getElementById('restartPayBtn');
         if(!restartBtn && instantPay){
@@ -654,7 +717,7 @@ function ensureInstantPay(forceRestart){
         return;
     }
     if(!card){
-        showPayCreateError('کارت مقصد را از تب بانک‌ها انتخاب کنید');
+        showPayCreateError('کارت مقصد تعریف نشده است');
         return;
     }
     if(subname.length < 5 || subname.length > 20 || !/^[A-Za-z0-9._-]+$/.test(subname)){
