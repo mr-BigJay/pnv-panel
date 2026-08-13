@@ -147,6 +147,11 @@ if(!function_exists('subUsageCachePath')){
             return false;
         }
 
+        // فقط پنل معتبر است؛ userinfo بعد از تمدید اغلب منقضیِ کاذب نشان می‌دهد
+        if(($usage['source'] ?? '') !== 'panel'){
+            return false;
+        }
+
         $vol = is_array($usage['volume'] ?? null) ? $usage['volume'] : [];
         $time = is_array($usage['time'] ?? null) ? $usage['time'] : [];
         $volPct = !empty($vol['unlimited']) ? 100.0 : floatval($vol['remain_pct'] ?? 0);
@@ -156,6 +161,52 @@ if(!function_exists('subUsageCachePath')){
         $timeGone = $timeCounts && $timePct <= 0.05;
 
         return $volGone || ($timeGone && $volPct <= 5);
+    }
+
+    function subUsageViewLooksDepleted($view){
+        if(!is_array($view) || empty($view['ok'])){
+            return false;
+        }
+
+        $vol = is_array($view['volume'] ?? null) ? $view['volume'] : [];
+        $time = is_array($view['time'] ?? null) ? $view['time'] : [];
+        $volPct = !empty($vol['unlimited']) ? 100.0 : floatval($vol['remain_pct'] ?? 0);
+        $timePct = !empty($time['unlimited']) ? 100.0 : floatval($time['remain_pct'] ?? 0);
+
+        return $volPct <= 0.05 || $timePct <= 0.05;
+    }
+
+    function subUsageCacheIsUsable($cached, $forceRefresh, $age, $ttl){
+        if($forceRefresh){
+            return false;
+        }
+
+        if(!is_array($cached) || empty($cached['ok'])){
+            return false;
+        }
+
+        if($age < 0 || $age >= $ttl){
+            return false;
+        }
+
+        return ($cached['source'] ?? '') === 'panel';
+    }
+
+    function subUsagePurgeNonPanelCache(&$cache){
+        $dirty = false;
+
+        foreach(array_keys($cache) as $cacheKey){
+            $row = $cache[$cacheKey];
+
+            if(!is_array($row) || ($row['source'] ?? '') === 'panel'){
+                continue;
+            }
+
+            unset($cache[$cacheKey]);
+            $dirty = true;
+        }
+
+        return $dirty;
     }
 
     function subUsageFormatDaysLeft($secondsLeft){
@@ -389,6 +440,18 @@ if(!function_exists('subUsageCachePath')){
 
         $email = trim((string)($cachedHint['email'] ?? ''));
 
+        if($email === '' && is_file(__DIR__ . '/plan_ui_lib.php')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+
+            if(function_exists('pnvFetchSubPanelEmail')){
+                $email = trim((string)pnvFetchSubPanelEmail($link));
+            }
+        }
+
+        if($email === '' && function_exists('xuiFetchSubEmail')){
+            $email = trim((string)xuiFetchSubEmail($link));
+        }
+
         if($email !== ''){
             $full = xuiApiRequest(
                 $server,
@@ -491,7 +554,11 @@ if(!function_exists('subUsageCachePath')){
             $view['source'] = 'userinfo';
             $view['email'] = $hint['email'] ?? '';
             $view['server_id'] = $hint['server_id'] ?? '';
-            return $view;
+
+            // userinfo قدیمی بعد از تمدید → به تخمین پلن برو
+            if(!subUsageViewLooksDepleted($view)){
+                return $view;
+            }
         }
 
         // 3) تخمین از اطلاعات فاکتور وقتی پنل در دسترس نیست
@@ -524,6 +591,10 @@ if(!function_exists('subUsageCachePath')){
         $out = [];
         $cacheDirty = false;
 
+        if(subUsagePurgeNonPanelCache($cache)){
+            $cacheDirty = true;
+        }
+
         foreach($items as $item){
             if(!is_array($item)){
                 continue;
@@ -547,11 +618,7 @@ if(!function_exists('subUsageCachePath')){
 
             $cached = $cache[$key] ?? null;
             $age = is_array($cached) ? ($now - intval($cached['updated_at'] ?? 0)) : PHP_INT_MAX;
-            $isFresh = !$forceRefresh
-                && is_array($cached)
-                && !empty($cached['ok'])
-                && $age >= 0
-                && $age < $ttl;
+            $isFresh = subUsageCacheIsUsable($cached, $forceRefresh, $age, $ttl);
 
             if($isFresh){
                 $view = $cached;
@@ -562,7 +629,7 @@ if(!function_exists('subUsageCachePath')){
             }
 
             if($freshUsed >= $maxFresh){
-                if(is_array($cached)){
+                if(is_array($cached) && subUsageCacheIsUsable($cached, true, $age, $ttl)){
                     $view = $cached;
                     $view['cached'] = true;
                     $view['stale'] = true;

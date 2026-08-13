@@ -1017,6 +1017,29 @@ if(!function_exists('xuiConfigPath')){
                     $fullClient['_inbound_id'] = $client['_inbound_id'];
                 }
 
+                foreach(['up', 'down', 'total', 'totalGB', 'expiryTime', 'enable'] as $field){
+                    if((!isset($fullClient[$field]) || $fullClient[$field] === '' || $fullClient[$field] === null)
+                        && isset($client[$field]) && $client[$field] !== '' && $client[$field] !== null){
+                        $fullClient[$field] = $client[$field];
+                    }
+                }
+
+                if(xuiClientTotalBytes($client) > xuiClientTotalBytes($fullClient)){
+                    foreach(['total', 'totalGB'] as $field){
+                        if(isset($client[$field])){
+                            $fullClient[$field] = $client[$field];
+                        }
+                    }
+                }
+
+                if(xuiClientUsedBytes($client) > xuiClientUsedBytes($fullClient)){
+                    foreach(['up', 'down', 'used'] as $field){
+                        if(isset($client[$field])){
+                            $fullClient[$field] = $client[$field];
+                        }
+                    }
+                }
+
                 return $fullClient;
             }
         }
