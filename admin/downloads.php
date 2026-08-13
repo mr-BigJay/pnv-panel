@@ -54,6 +54,8 @@ exit;
 
 }
 
+}
+
 if(isset($_GET['delete'])){
 
 $file =

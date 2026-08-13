@@ -40,6 +40,14 @@ for rel in "${files[@]}"; do
     continue
   fi
 
+  if ! php -l "$tmp" >/dev/null 2>&1; then
+    echo "  FAIL syntax ${rel}" >&2
+    php -l "$tmp" 2>&1 | sed 's/^/    /' >&2
+    failed=1
+    rm -f "$tmp"
+    continue
+  fi
+
   if ! mv "$tmp" "$dest"; then
     echo "  FAIL write ${dest} (disk full or permission?)" >&2
     failed=1

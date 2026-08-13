@@ -351,6 +351,7 @@ $supportFile =
 $pnvRootDir . '/db/support.json';
 
 $hasUnreadSupport = false;
+$supportUnreadCount = 0;
 
 if(file_exists($supportFile) && file_exists(__DIR__ . '/../support_lib.php')){
 
@@ -404,8 +405,6 @@ $pendingRenewsCount++;
 }
 
 }
-
-$supportUnreadCount = 0;
 
 $todayUsers = 0;
 

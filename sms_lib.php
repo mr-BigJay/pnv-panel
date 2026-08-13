@@ -1,5 +1,18 @@
 <?php
 
+if(!function_exists('str_starts_with')){
+    function str_starts_with($haystack, $needle){
+        $haystack = (string)$haystack;
+        $needle = (string)$needle;
+
+        if($needle === ''){
+            return true;
+        }
+
+        return strncmp($haystack, $needle, strlen($needle)) === 0;
+    }
+}
+
 if(!function_exists('smsConfigPath')){
 
     function smsConfigPath(){

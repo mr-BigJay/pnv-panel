@@ -26,10 +26,16 @@ if(file_exists(__DIR__ . '/../bale_lib.php')){
 
 if(file_exists(__DIR__ . '/../sms_lib.php')){
     require_once __DIR__ . '/../sms_lib.php';
-    if(function_exists('smsLoadConfig')){
-        $smsConfig = smsLoadConfig();
-        $smsConfigured = smsIsConfigured($smsConfig);
-        $smsEnabled = !empty($smsConfig['enabled']) && $smsConfigured;
+    if(function_exists('smsLoadConfig') && function_exists('smsIsConfigured')){
+        try{
+            $smsConfig = smsLoadConfig();
+            $smsConfigured = smsIsConfigured($smsConfig);
+            $smsEnabled = !empty($smsConfig['enabled']) && $smsConfigured;
+        }
+        catch(Throwable $e){
+            $smsConfigured = false;
+            $smsEnabled = false;
+        }
     }
 }
 ?>

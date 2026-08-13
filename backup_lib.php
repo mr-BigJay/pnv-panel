@@ -1,5 +1,20 @@
 <?php
 
+if(!function_exists('str_ends_with')){
+    function str_ends_with($haystack, $needle){
+        $haystack = (string)$haystack;
+        $needle = (string)$needle;
+
+        if($needle === ''){
+            return true;
+        }
+
+        $len = strlen($needle);
+
+        return $len === 0 || substr($haystack, -$len) === $needle;
+    }
+}
+
 if(!function_exists('pnvBackupRootDir')){
 
     function pnvBackupRootDir(){
