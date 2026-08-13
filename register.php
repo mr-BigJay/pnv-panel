@@ -645,7 +645,7 @@ title="تغییر کد امنیتی">
 </form>
 
 <div class="links">
-<a href="index.php">بازگشت به ورود</a>
+<a href="index.php">بازگشت</a>
 </div>
 
 </div>
