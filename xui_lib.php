@@ -1464,15 +1464,16 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
-    function xuiAdjustClientTraffic($server, $email, $addGb, $client = null){
+    function xuiAdjustClientTraffic($server, $email, $addGb, $client = null, $addDays = 0){
         $bytes = xuiGbToBytes($addGb);
         $email = trim((string)$email);
         $errors = [];
+        $addDays = max(0, intval($addDays));
 
         if($email !== ''){
             $result = xuiApiRequest($server, 'POST', '/panel/api/clients/bulkAdjust', [
                 'emails' => [$email],
-                'addDays' => 0,
+                'addDays' => $addDays,
                 'addBytes' => $bytes
             ]);
 
@@ -1566,6 +1567,7 @@ if(!function_exists('xuiConfigPath')){
         $subLink = trim((string)($paymentRow[1] ?? ''));
         $planText = trim((string)($paymentRow[2] ?? ''));
         $gb = xuiParsePlanGb($planText);
+        $days = xuiParsePlanDays($planText);
 
         if($gb <= 0){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
@@ -1601,7 +1603,7 @@ if(!function_exists('xuiConfigPath')){
             return ['ok' => false, 'error' => 'ایمیل کلاینت خالی است'];
         }
 
-        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client);
+        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
 
         if(empty($adjusted['ok'])){
             return $adjusted;

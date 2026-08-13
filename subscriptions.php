@@ -430,8 +430,10 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
         var volPct = vol.unlimited ? 100 : Math.max(0, Math.min(100, Number(vol.remain_pct || 0)));
         var timePct = time.unlimited ? 100 : Math.max(0, Math.min(100, Number(time.remain_pct || 0)));
         var volGone = !vol.unlimited && volPct <= 0.05;
-        var timeGone = !time.unlimited && timePct <= 0.05;
-        var expired = volGone || timeGone;
+        var timeCounts = !time.unlimited && !time.estimated;
+        var timeGone = timeCounts && timePct <= 0.05;
+        // اگر حجم هنوز مانده، «منقضی شده» نشان نده (مثلاً بعد از تمدید حجمی)
+        var expired = volGone || (timeGone && volPct <= 5);
 
         if(volFill){
             volFill.style.width = volPct + '%';

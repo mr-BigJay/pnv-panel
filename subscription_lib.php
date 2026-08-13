@@ -199,6 +199,12 @@ if(!function_exists('pnvClearedSubsPath')){
                         'time' => $time,
                     ];
                 }
+                else{
+                    $linkIndex[$key]['plan_text'] = $planText;
+                    $linkIndex[$key]['tracking'] = $tracking;
+                    $linkIndex[$key]['date'] = $date;
+                    $linkIndex[$key]['time'] = $time;
+                }
             }
         }
 

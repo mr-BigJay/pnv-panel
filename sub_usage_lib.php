@@ -185,6 +185,7 @@ if(!function_exists('subUsageCachePath')){
         $remainSeconds = 0;
         $timeEstimated = false;
         $expireTs = 0;
+        $trustExpiry = !empty($meta['trust_expiry']);
 
         if($expiryMs > 0){
             $timeUnlimited = false;
@@ -206,8 +207,8 @@ if(!function_exists('subUsageCachePath')){
 
             $timePct = max(0, min(100, ($remainSeconds / max(1, $totalSeconds)) * 100));
         }
-        elseif($planDays > 0 && $startTs > 0){
-            // پنل expiry=0 ولی پلن زمان‌دار است → تخمین از تاریخ خرید
+        elseif(!$trustExpiry && $planDays > 0 && $startTs > 0){
+            // فقط وقتی پنل/userinfo در دسترس نبود: تخمین از تاریخ فاکتور
             $timeUnlimited = false;
             $timeEstimated = true;
             $expireTs = $startTs + ($planDays * 86400);
@@ -429,6 +430,7 @@ if(!function_exists('subUsageCachePath')){
             $panel = subUsageFetchFromPanel($link, $hint);
 
             if(is_array($panel) && !empty($panel['client'])){
+                $meta['trust_expiry'] = true;
                 $view = subUsageFromClient($panel['client'], $meta);
                 $view['source'] = 'panel';
                 $view['email'] = $panel['email'] ?? '';
@@ -441,6 +443,7 @@ if(!function_exists('subUsageCachePath')){
         $userinfo = subUsageFetchFromSubUserinfo($link);
 
         if(is_array($userinfo)){
+            $meta['trust_expiry'] = true;
             $view = subUsageBuildView(
                 $userinfo['used'],
                 $userinfo['total'],
@@ -459,6 +462,7 @@ if(!function_exists('subUsageCachePath')){
         }
 
         if(is_array($panel) && !empty($panel['client'])){
+            $meta['trust_expiry'] = true;
             $view = subUsageFromClient($panel['client'], $meta);
             $view['source'] = 'panel';
             $view['email'] = $panel['email'] ?? '';
