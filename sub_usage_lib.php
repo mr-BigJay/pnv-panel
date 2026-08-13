@@ -349,9 +349,31 @@ if(!function_exists('subUsageCachePath')){
         return null;
     }
 
+    function subUsageEstimateFromMeta($meta = []){
+        $planText = trim((string)($meta['plan_text'] ?? $meta['plan'] ?? ''));
+        $planGb = function_exists('xuiParsePlanGb') ? xuiParsePlanGb($planText) : 0;
+        $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
+        $totalBytes = $planGb > 0 ? ($planGb * 1024 * 1024 * 1024) : 0;
+
+        $view = subUsageBuildView(0, $totalBytes, 0, [
+            'plan_days' => $planDays,
+            'start_ts' => max(0, intval($meta['start_ts'] ?? 0)),
+        ]);
+        $view['source'] = 'estimate';
+        $view['estimated'] = true;
+
+        if($totalBytes <= 0 && $planDays <= 0){
+            $view['ok'] = false;
+            $view['error'] = 'اطلاعات پلن برای تخمین مصرف کافی نیست';
+        }
+
+        return $view;
+    }
+
     function subUsageRefreshOne($link, $meta = [], $cacheEntry = null){
         $link = trim((string)$link);
         $hint = is_array($cacheEntry) ? $cacheEntry : [];
+        $meta['plan_text'] = trim((string)($meta['plan_text'] ?? $meta['plan'] ?? ''));
 
         // 1) مسیر سبک: هدر subscription-userinfo
         $userinfo = subUsageFetchFromSubUserinfo($link);
@@ -378,6 +400,15 @@ if(!function_exists('subUsageCachePath')){
             $view['email'] = $panel['email'] ?? '';
             $view['server_id'] = $panel['server_id'] ?? '';
             return $view;
+        }
+
+        // 3) تخمین از اطلاعات فاکتور وقتی پنل در دسترس نیست
+        $estimate = subUsageEstimateFromMeta($meta);
+
+        if(!empty($estimate['ok'])){
+            $estimate['email'] = $hint['email'] ?? (is_array($panel) ? ($panel['email'] ?? '') : '');
+            $estimate['server_id'] = $hint['server_id'] ?? (is_array($panel) ? ($panel['server_id'] ?? '') : '');
+            return $estimate;
         }
 
         return [
@@ -415,6 +446,8 @@ if(!function_exists('subUsageCachePath')){
             $key = subUsageCacheKey($link);
             $planText = trim((string)($item['plan'] ?? ''));
             $meta = [
+                'plan' => $planText,
+                'plan_text' => $planText,
                 'plan_days' => xuiParsePlanDays($planText),
                 'start_ts' => subUsageParseDateTs($item['date'] ?? '', $item['time'] ?? ''),
             ];

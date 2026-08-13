@@ -248,6 +248,201 @@ if(!function_exists('pnvFormatPlanPrice')){
         return 'unlimited';
     }
 
+    function pnvExtractSubIdFromLink($link){
+        $link = trim((string)$link);
+
+        if($link === ''){
+            return '';
+        }
+
+        if(preg_match('/\/sub\/([^\/\?#]+)/i', $link, $m)){
+            return strtolower($m[1]);
+        }
+
+        if(preg_match('/^[A-Za-z0-9]{8,32}$/', $link)){
+            return strtolower($link);
+        }
+
+        return '';
+    }
+
+    function pnvSubLinksMatch($left, $right){
+        $left = strtolower(rtrim(trim((string)$left), '/'));
+        $right = strtolower(rtrim(trim((string)$right), '/'));
+
+        if($left === '' || $right === ''){
+            return false;
+        }
+
+        if($left === $right){
+            return true;
+        }
+
+        if(strpos($left, $right) !== false || strpos($right, $left) !== false){
+            return true;
+        }
+
+        $leftId = pnvExtractSubIdFromLink($left);
+        $rightId = pnvExtractSubIdFromLink($right);
+
+        return $leftId !== '' && $rightId !== '' && $leftId === $rightId;
+    }
+
+    function pnvNameLooksLikeSubId($name, $link = ''){
+        $name = trim((string)$name);
+
+        if($name === ''){
+            return true;
+        }
+
+        if(function_exists('pnvIsValidSubLink') && pnvIsValidSubLink($name)){
+            return true;
+        }
+
+        if(!preg_match('/^[A-Za-z0-9._-]{8,40}$/', $name)){
+            return false;
+        }
+
+        $subId = pnvExtractSubIdFromLink($link);
+
+        if($subId !== '' && strcasecmp($name, $subId) === 0){
+            return true;
+        }
+
+        return !preg_match('/[._-]/', $name) && preg_match('/^[A-Za-z0-9]{10,32}$/', $name);
+    }
+
+    function pnvFindSubNameFromCsv($username, $subLink){
+        $username = trim((string)$username);
+        $subLink = trim((string)$subLink);
+        $file = __DIR__ . '/invoices/payments.csv';
+
+        if($username === '' || $subLink === '' || !file_exists($file)){
+            return '';
+        }
+
+        if(function_exists('pnvFindSubLinkFromCsv')){
+            $resolved = pnvFindSubLinkFromCsv($username, $subLink);
+
+            if($resolved !== ''){
+                $subLink = $resolved;
+            }
+        }
+
+        $target = strtolower(rtrim($subLink, '/'));
+        $targetId = pnvExtractSubIdFromLink($target);
+        $bestName = '';
+        $bestTs = 0;
+
+        $handle = fopen($file, 'r');
+
+        while(($row = fgetcsv($handle)) !== false){
+            if(($row[0] ?? '') !== $username){
+                continue;
+            }
+
+            if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            $type = trim((string)($row[9] ?? ''));
+            $col1 = trim((string)($row[1] ?? ''));
+            $buyLink = strtolower(rtrim(trim((string)($row[7] ?? '')), '/'));
+            $rowTs = intval($row[8] ?? 0);
+
+            if($type !== 'خرید' || $buyLink === '' || !function_exists('pnvIsValidSubLink') || !pnvIsValidSubLink($buyLink)){
+                continue;
+            }
+
+            $matches = ($buyLink === $target)
+                || ($targetId !== '' && pnvExtractSubIdFromLink($buyLink) === $targetId)
+                || strpos($buyLink, $target) !== false
+                || ($targetId !== '' && strpos($buyLink, $targetId) !== false);
+
+            if(!$matches){
+                continue;
+            }
+
+            if($col1 === '' || pnvNameLooksLikeSubId($col1, $buyLink)){
+                continue;
+            }
+
+            if($rowTs >= $bestTs){
+                $bestTs = $rowTs;
+                $bestName = $col1;
+            }
+        }
+
+        fclose($handle);
+
+        return $bestName;
+    }
+
+    function pnvResolveSubDisplayName($username, $link, $fallback = ''){
+        $fallback = trim((string)$fallback);
+
+        if($fallback !== '' && !pnvNameLooksLikeSubId($fallback, $link)){
+            return $fallback;
+        }
+
+        $fromCsv = pnvFindSubNameFromCsv($username, $link);
+
+        if($fromCsv !== ''){
+            return $fromCsv;
+        }
+
+        if(function_exists('subUsageLoadCache') && function_exists('subUsageCacheKey')){
+            require_once __DIR__ . '/sub_usage_lib.php';
+            $cache = subUsageLoadCache();
+            $cached = $cache[subUsageCacheKey($link)] ?? null;
+            $email = trim((string)($cached['email'] ?? ''));
+
+            if($email !== '' && !pnvNameLooksLikeSubId($email, $link)){
+                return $email;
+            }
+        }
+
+        if($fallback !== ''){
+            return $fallback;
+        }
+
+        if(function_exists('xuiIsEnabled') === false && is_file(__DIR__ . '/xui_lib.php')){
+            require_once __DIR__ . '/xui_lib.php';
+        }
+
+        static $panelNameLookups = 0;
+
+        if(
+            $panelNameLookups < 3
+            && function_exists('xuiIsEnabled')
+            && function_exists('xuiLoadConfig')
+            && function_exists('xuiParseSubLink')
+            && function_exists('xuiFindServerByHost')
+            && function_exists('xuiFindClientBySubId')
+            && xuiIsEnabled(xuiLoadConfig())
+        ){
+            $parsed = xuiParseSubLink($link);
+
+            if(is_array($parsed)){
+                $server = xuiFindServerByHost($parsed['host'], xuiLoadConfig());
+
+                if($server){
+                    $panelNameLookups++;
+                    $client = xuiFindClientBySubId($server, $parsed['sub_id'], $link);
+                    $email = trim((string)(is_array($client) ? ($client['email'] ?? '') : ''));
+
+                    if($email !== '' && !pnvNameLooksLikeSubId($email, $link)){
+                        return $email;
+                    }
+                }
+            }
+        }
+
+        $subId = pnvExtractSubIdFromLink($link);
+
+        return $subId !== '' ? $subId : 'اشتراک';
+    }
+
     function pnvFindSubPlanTextFromCsv($username, $subLink){
         $username = trim((string)$username);
         $subLink = trim((string)$subLink);

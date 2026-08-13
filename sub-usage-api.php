@@ -10,6 +10,7 @@ if(!isset($_SESSION['user'])){
 }
 
 require_once __DIR__ . '/subscription_lib.php';
+require_once __DIR__ . '/plan_ui_lib.php';
 require_once __DIR__ . '/sub_usage_lib.php';
 
 @set_time_limit(28);
@@ -32,56 +33,55 @@ if(isset($input['links']) && is_array($input['links'])){
     foreach($input['links'] as $link){
         $link = trim((string)$link);
         if($link !== ''){
-            $requestedLinks[$link] = true;
+            $requestedLinks[] = $link;
         }
     }
 }
 
-// فقط لینک‌های تایید‌شدهٔ همین کاربر از CSV
+$activeSubs = pnvLoadUserActiveSubscriptions($username);
 $items = [];
-$file = __DIR__ . '/invoices/payments.csv';
+$itemKeys = [];
 
-if(file_exists($file)){
-    $handle = fopen($file, 'r');
-
-    while(($row = fgetcsv($handle)) !== false){
-        if(($row[0] ?? '') !== $username){
-            continue;
-        }
-
-        if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
-            continue;
-        }
-
-        $link = trim((string)($row[7] ?? ''));
-
-        if($link === '' || !xuiParseSubLink($link)){
-            continue;
-        }
-
-        if(pnvIsSubLinkCleared($username, $link)){
-            continue;
-        }
-
-        if(count($requestedLinks) > 0 && !isset($requestedLinks[$link])){
-            continue;
-        }
-
-        $key = subUsageCacheKey($link);
-
-        // جدیدترین ردیف برای هر لینک اولویت دارد
-        $items[$key] = [
-            'link' => $link,
-            'plan' => trim((string)($row[2] ?? '')),
-            'date' => trim((string)($row[4] ?? '')),
-            'time' => trim((string)($row[5] ?? '')),
-        ];
+foreach($activeSubs as $sub){
+    if(!is_array($sub)){
+        continue;
     }
 
-    fclose($handle);
-}
+    $link = trim((string)($sub['link'] ?? ''));
 
-$items = array_values($items);
+    if($link === '' || !pnvIsValidSubLink($link)){
+        continue;
+    }
+
+    if(count($requestedLinks) > 0){
+        $matched = false;
+
+        foreach($requestedLinks as $requested){
+            if(pnvSubLinksMatch($link, $requested)){
+                $matched = true;
+                break;
+            }
+        }
+
+        if(!$matched){
+            continue;
+        }
+    }
+
+    $key = subUsageCacheKey($link);
+
+    if(isset($itemKeys[$key])){
+        continue;
+    }
+
+    $itemKeys[$key] = true;
+    $items[] = [
+        'link' => $link,
+        'plan' => trim((string)($sub['plan_text'] ?? '')),
+        'date' => trim((string)($sub['date'] ?? '')),
+        'time' => trim((string)($sub['time'] ?? '')),
+    ];
+}
 
 // محدودیت ایمنی برای ۱ CPU
 if(count($items) > 40){
@@ -96,7 +96,6 @@ if(isset($input['max_fresh'])){
 
 $result = subUsageGetForItems($items, $maxFresh);
 
-// اگر هنوز pending مانده، کلاینت دوباره می‌زند
 $pending = 0;
 
 foreach(($result['items'] ?? []) as $row){
