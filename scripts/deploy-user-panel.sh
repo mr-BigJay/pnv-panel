@@ -11,6 +11,9 @@ echo "Target: ${ROOT}"
 
 files=(
   "dashboard.php"
+  "user_bg.css"
+  "profile_lib.php"
+  "profile-api.php"
   "user_panel.css"
   "user_nav.css"
   "user_nav.php"
@@ -47,9 +50,9 @@ for rel in "${files[@]}"; do
   echo "  OK ${rel}"
 done
 
-mkdir -p "${ROOT}/uploads/support"
+mkdir -p "${ROOT}/uploads/support" "${ROOT}/uploads/avatars"
 mkdir -p "${ROOT}/db"
-chmod 775 "${ROOT}/uploads/support" 2>/dev/null || true
+chmod 775 "${ROOT}/uploads/support" "${ROOT}/uploads/avatars" 2>/dev/null || true
 
 for name in support discount_codes discount_code_usages dashboard_announcements dashboard_announcement_reads; do
   dest="${ROOT}/db/${name}.json"
@@ -63,7 +66,7 @@ done
 chmod 775 "${ROOT}/db" 2>/dev/null || true
 
 if id www-data >/dev/null 2>&1; then
-  chown -R www-data:www-data "${ROOT}/db" "${ROOT}/uploads/support" 2>/dev/null || true
+  chown -R www-data:www-data "${ROOT}/db" "${ROOT}/uploads/support" "${ROOT}/uploads/avatars" 2>/dev/null || true
   chown www-data:www-data "${ROOT}/db/"*.json 2>/dev/null || true
 fi
 
