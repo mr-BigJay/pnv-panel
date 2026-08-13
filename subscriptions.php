@@ -65,7 +65,7 @@ foreach($items as $item){
 }
 
 $usageBundle = count($usageItems) > 0
-    ? subUsageGetForItems($usageItems, max(4, min(12, count($usageItems))))
+    ? subUsageGetForItems($usageItems, max(4, min(12, count($usageItems))), true)
     : ['items' => []];
 $usageMap = is_array($usageBundle['items'] ?? null) ? $usageBundle['items'] : [];
 
@@ -89,7 +89,7 @@ $firstOkOpen = true;
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=11">
+<link rel="stylesheet" href="subscriptions_ui.css?v=12">
 </head>
 <body>
 <div class="box">
@@ -145,6 +145,7 @@ $visibleItems = array_values(array_filter($items, static function($it){
     $usageTimeLow = false;
     $usageVolUnlimited = false;
     $usageTimeUnlimited = false;
+    $usageExpired = false;
     $usageBoxClass = 'subUsage';
 
     if($usageReady){
@@ -157,25 +158,35 @@ $visibleItems = array_values(array_filter($items, static function($it){
         $usageTimePct = $usageTimeUnlimited ? 100 : max(0, min(100, floatval($time['remain_pct'] ?? 0)));
         $usageVolLow = !$usageVolUnlimited && $usageVolPct <= 15;
         $usageTimeLow = !$usageTimeUnlimited && $usageTimePct <= 15;
+        $usageExpired = subUsageIsDisplayExpired($usage);
 
         if(!$usageVolUnlimited && $usageVolPct <= 0.05){
             $usageVolLabel = 'حجم تمام شده';
         }
 
-        if(!$usageTimeUnlimited && $usageTimePct <= 0.05){
+        if(!$usageTimeUnlimited && $usageTimePct <= 0.05 && $usageVolPct <= 5){
             $usageTimeLabel = 'زمان تمام شده';
         }
     }
     else{
         $usageBoxClass .= ' is-loading';
     }
+
+    if($usageExpired){
+        $chipClass .= ' is-expired';
+    }
+
+    $lifeState = $usageExpired ? 'expired' : 'active';
+    $lifeTagHidden = $usageExpired ? '' : ' hidden';
+    $lifeTagText = $usageExpired ? 'منقضی شده — با تمدید فعال می‌شود' : 'منقضی شده';
+    $badgeText = $usageExpired ? '!' : '✓';
 ?>
-<article class="<?php echo $h($chipClass); ?>" data-state="ok" data-life="active" data-id="<?php echo (int)$item['i']; ?>" data-link="<?php echo $h($item['link']); ?>">
+<article class="<?php echo $h($chipClass); ?>" data-state="ok" data-life="<?php echo $h($lifeState); ?>" data-id="<?php echo (int)$item['i']; ?>" data-link="<?php echo $h($item['link']); ?>">
 <button type="button" class="subHead" aria-expanded="<?php echo $open ? 'true' : 'false'; ?>">
-<span class="subBadge" aria-hidden="true">✓</span>
+<span class="subBadge" aria-hidden="true"><?php echo $h($badgeText); ?></span>
 <span class="subMeta">
 <span class="subName"><?php echo $h($item['name']); ?></span>
-<span class="subLifeTag" data-life-tag hidden>منقضی شده</span>
+<span class="subLifeTag" data-life-tag<?php echo $lifeTagHidden; ?>><?php echo $h($lifeTagText); ?></span>
 </span>
 <svg class="subChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M6 9l6 6 6-6"/>
@@ -445,7 +456,7 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
         }
         if(volLabel) volLabel.textContent = vol.label || '—';
         if(timeLabel){
-            if(timeGone) timeLabel.textContent = 'زمان تمام شده';
+            if(timeGone && volPct <= 5) timeLabel.textContent = 'زمان تمام شده';
             else if(volGone && !time.unlimited) timeLabel.textContent = time.label || '—';
             else timeLabel.textContent = time.label || '—';
         }
@@ -529,7 +540,7 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
     }
 
     if(document.querySelector('[data-usage-link]')){
-        loadUsage(0, false);
+        loadUsage(0, true);
         setInterval(function(){
             if(document.hidden){
                 return;

@@ -53,6 +53,8 @@ foreach($activeSubs as $sub){
         continue;
     }
 
+    $link = function_exists('subUsageSanitizeLink') ? subUsageSanitizeLink($link) : $link;
+
     if(count($requestedLinks) > 0){
         $matched = false;
 

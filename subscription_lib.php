@@ -123,7 +123,7 @@ if(!function_exists('pnvClearedSubsPath')){
             return '';
         }
 
-        if(preg_match('~https?://(?:vip\d*)\.boozhaan\.ir(?::\d+)?/sub/[A-Za-z0-9]+~i', $value, $m)){
+        if(preg_match('~https?://[^/\s]+(?::\d+)?/sub/[A-Za-z0-9]+~i', $value, $m)){
             return $m[0];
         }
 
@@ -216,7 +216,8 @@ if(!function_exists('pnvClearedSubsPath')){
 
         foreach($linkIndex as &$entry){
             $fullLink = pnvFindSubLinkFromCsv($username, $entry['link'] ?? '');
-            $entry['link'] = $fullLink !== '' ? $fullLink : ($entry['link'] ?? '');
+            $fullLink = pnvNormalizeSubLinkValue($fullLink !== '' ? $fullLink : ($entry['link'] ?? ''));
+            $entry['link'] = $fullLink;
 
             if($resolveNames){
                 $entry['name'] = pnvEnsureSubDisplayName(

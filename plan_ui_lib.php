@@ -169,7 +169,8 @@ if(!function_exists('pnvFormatPlanPrice')){
         }
 
         if(preg_match('#^https?://#i', $subLink)){
-            return $subLink;
+            $clean = pnvNormalizeSubLinkValue($subLink);
+            return $clean !== '' ? $clean : $subLink;
         }
 
         $needle = strtolower($subLink);
@@ -211,7 +212,7 @@ if(!function_exists('pnvFormatPlanPrice')){
 
         fclose($handle);
 
-        return $found !== '' ? $found : $subLink;
+        return $found !== '' ? (pnvNormalizeSubLinkValue($found) ?: $found) : $subLink;
     }
 
     function pnvResolveSubTimeCategory($link, $planText = '', $username = ''){

@@ -116,6 +116,48 @@ if(!function_exists('subUsageCachePath')){
         return round($bytes) . ' B';
     }
 
+    function subUsageSanitizeLink($link){
+        $link = trim((string)$link);
+
+        if($link === ''){
+            return '';
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        if(function_exists('pnvNormalizeSubLinkValue')){
+            $clean = trim((string)pnvNormalizeSubLinkValue($link));
+
+            if($clean !== '' && preg_match('#^https?://#i', $clean)){
+                return $clean;
+            }
+        }
+
+        if(preg_match('#(https?://[^/\s]+(?::\d+)?/sub/[A-Za-z0-9]+)#i', $link, $m)){
+            return $m[1];
+        }
+
+        return $link;
+    }
+
+    function subUsageIsDisplayExpired($usage){
+        if(!is_array($usage) || empty($usage['ok'])){
+            return false;
+        }
+
+        $vol = is_array($usage['volume'] ?? null) ? $usage['volume'] : [];
+        $time = is_array($usage['time'] ?? null) ? $usage['time'] : [];
+        $volPct = !empty($vol['unlimited']) ? 100.0 : floatval($vol['remain_pct'] ?? 0);
+        $timePct = !empty($time['unlimited']) ? 100.0 : floatval($time['remain_pct'] ?? 0);
+        $volGone = empty($vol['unlimited']) && $volPct <= 0.05;
+        $timeCounts = empty($time['unlimited']) && empty($time['estimated']);
+        $timeGone = $timeCounts && $timePct <= 0.05;
+
+        return $volGone || ($timeGone && $volPct <= 5);
+    }
+
     function subUsageFormatDaysLeft($secondsLeft){
         $secondsLeft = max(0, intval($secondsLeft));
 
@@ -419,27 +461,23 @@ if(!function_exists('subUsageCachePath')){
     }
 
     function subUsageRefreshOne($link, $meta = [], $cacheEntry = null, $preferPanel = false){
-        $link = trim((string)$link);
+        $link = subUsageSanitizeLink($link);
         $hint = is_array($cacheEntry) ? $cacheEntry : [];
         $meta['plan_text'] = trim((string)($meta['plan_text'] ?? $meta['plan'] ?? ''));
 
-        $panel = null;
+        // 1) پنل API — منبع اصلی؛ userinfo بعد از تمدید اغلب قدیمی می‌ماند
+        $panel = subUsageFetchFromPanel($link, $hint);
 
-        if($preferPanel){
-            // بروزرسانی دوره‌ای: پنل دقیق‌تر از هدر subscription-userinfo است
-            $panel = subUsageFetchFromPanel($link, $hint);
-
-            if(is_array($panel) && !empty($panel['client'])){
-                $meta['trust_expiry'] = true;
-                $view = subUsageFromClient($panel['client'], $meta);
-                $view['source'] = 'panel';
-                $view['email'] = $panel['email'] ?? '';
-                $view['server_id'] = $panel['server_id'] ?? '';
-                return $view;
-            }
+        if(is_array($panel) && !empty($panel['client'])){
+            $meta['trust_expiry'] = true;
+            $view = subUsageFromClient($panel['client'], $meta);
+            $view['source'] = 'panel';
+            $view['email'] = $panel['email'] ?? '';
+            $view['server_id'] = $panel['server_id'] ?? '';
+            return $view;
         }
 
-        // مسیر سبک: هدر subscription-userinfo
+        // 2) هدر subscription-userinfo (fallback)
         $userinfo = subUsageFetchFromSubUserinfo($link);
 
         if(is_array($userinfo)){
@@ -456,21 +494,7 @@ if(!function_exists('subUsageCachePath')){
             return $view;
         }
 
-        // پنل API
-        if(!is_array($panel)){
-            $panel = subUsageFetchFromPanel($link, $hint);
-        }
-
-        if(is_array($panel) && !empty($panel['client'])){
-            $meta['trust_expiry'] = true;
-            $view = subUsageFromClient($panel['client'], $meta);
-            $view['source'] = 'panel';
-            $view['email'] = $panel['email'] ?? '';
-            $view['server_id'] = $panel['server_id'] ?? '';
-            return $view;
-        }
-
-        // تخمین از اطلاعات فاکتور وقتی پنل در دسترس نیست
+        // 3) تخمین از اطلاعات فاکتور وقتی پنل در دسترس نیست
         $estimate = subUsageEstimateFromMeta($meta);
 
         if(!empty($estimate['ok'])){
@@ -506,6 +530,7 @@ if(!function_exists('subUsageCachePath')){
             }
 
             $link = trim((string)($item['link'] ?? ''));
+            $link = subUsageSanitizeLink($link);
 
             if($link === ''){
                 continue;

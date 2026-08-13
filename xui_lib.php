@@ -1366,23 +1366,27 @@ if(!function_exists('xuiConfigPath')){
             return 0;
         }
 
+        $candidates = [];
+
         // نسخه‌های مختلف: totalGB گاهی بایت است، گاهی گیگ
         if(isset($client['totalGB'])){
             $value = intval($client['totalGB']);
 
-            // اگر خیلی کوچک بود، احتمالاً گیگ است
-            if($value > 0 && $value < 1024){
-                return xuiGbToBytes($value);
+            if($value > 0){
+                if($value < 1024){
+                    $candidates[] = xuiGbToBytes($value);
+                }
+                else{
+                    $candidates[] = max(0, $value);
+                }
             }
-
-            return max(0, $value);
         }
 
         if(isset($client['total'])){
-            return max(0, intval($client['total']));
+            $candidates[] = max(0, intval($client['total']));
         }
 
-        return 0;
+        return count($candidates) > 0 ? max($candidates) : 0;
     }
 
     function xuiClientUsedBytes($client){
