@@ -139,10 +139,6 @@ $visibleItems = array_values(array_filter($items, static function($it){
     if($open){
         $chipClass .= ' is-open';
     }
-    $planLine = $item['plan'] !== '' ? $item['plan'] : $item['status'];
-    if($item['date'] !== ''){
-        $planLine .= ($planLine !== '' ? ' • ' : '') . $item['date'];
-    }
     $usage = is_array($item['usage'] ?? null) ? $item['usage'] : null;
     $usageReady = is_array($usage) && !empty($usage['ok']);
     $usageVolLabel = $usageReady ? (string)(($usage['volume']['label'] ?? '') ?: '—') : 'در حال دریافت…';
@@ -183,7 +179,6 @@ $visibleItems = array_values(array_filter($items, static function($it){
 <span class="subBadge" aria-hidden="true">✓</span>
 <span class="subMeta">
 <span class="subName"><?php echo $h($item['name']); ?></span>
-<span class="subPlan"><?php echo $h($planLine); ?></span>
 <span class="subLifeTag" data-life-tag hidden>منقضی شده</span>
 </span>
 <svg class="subChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
