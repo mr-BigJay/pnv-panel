@@ -379,6 +379,51 @@ if(!function_exists('pnvFormatPlanPrice')){
                         }
                     }
                 }
+
+                if(count($list) === 1){
+                    $client = xuiNormalizeClientRecord($list[0]['client'] ?? $list[0]);
+                    $email = trim((string)(is_array($client) ? ($client['email'] ?? '') : ''));
+
+                    if($email !== ''){
+                        return $email;
+                    }
+                }
+            }
+        }
+
+        $subLinks = xuiApiRequest($server, 'GET', '/panel/api/clients/subLinks/' . rawurlencode($subId));
+
+        if(!empty($subLinks['success']) && function_exists('xuiExtractEmailFromSubUrls')){
+            $obj = $subLinks['obj'] ?? null;
+            $urls = [];
+
+            if(is_array($obj)){
+                if(isset($obj[0]) || count($obj) === 0){
+                    $urls = $obj;
+                }
+                elseif(isset($obj['links']) && is_array($obj['links'])){
+                    $urls = $obj['links'];
+                }
+            }
+
+            $email = trim((string)xuiExtractEmailFromSubUrls($urls));
+
+            if($email !== ''){
+                return $email;
+            }
+        }
+
+        if(function_exists('xuiFetchInbounds') && function_exists('xuiParseInboundClients') && function_exists('xuiClientMatchesSubId')){
+            foreach(xuiFetchInbounds($server) as $inbound){
+                foreach(xuiParseInboundClients($inbound) as $client){
+                    if(xuiClientMatchesSubId($client, $subId)){
+                        $email = trim((string)($client['email'] ?? ''));
+
+                        if($email !== ''){
+                            return $email;
+                        }
+                    }
+                }
             }
         }
 
@@ -562,6 +607,81 @@ if(!function_exists('pnvFormatPlanPrice')){
         }
 
         return '';
+    }
+
+    function pnvFetchSubPanelEmail($link){
+        $link = trim((string)$link);
+
+        if($link === ''){
+            return '';
+        }
+
+        $cachedEmail = pnvFindSubCachedClientEmail($link);
+
+        if($cachedEmail !== ''){
+            return $cachedEmail;
+        }
+
+        if(!function_exists('xuiParseSubLink') && is_file(__DIR__ . '/xui_lib.php')){
+            require_once __DIR__ . '/xui_lib.php';
+        }
+
+        if(!function_exists('xuiParseSubLink') || !function_exists('xuiLoadConfig') || !function_exists('xuiFindServerByHost')){
+            return '';
+        }
+
+        $parsed = xuiParseSubLink($link);
+
+        if(!is_array($parsed)){
+            return '';
+        }
+
+        $server = xuiFindServerByHost($parsed['host'], xuiLoadConfig());
+
+        if(!$server || !function_exists('xuiServerHasAuth') || !xuiServerHasAuth($server)){
+            return '';
+        }
+
+        return pnvFindSubClientEmailFromServer($server, $parsed['sub_id'], $link);
+    }
+
+    /**
+     * فقط برای نمایش در «اشتراک من» و dropdown تمدید — روند پرداخت/تمدید را تغییر نمی‌دهد.
+     */
+    function pnvEnsureSubDisplayName($username, $link, $currentName = '', $hintEmail = ''){
+        $currentName = trim((string)$currentName);
+        $link = trim((string)$link);
+        $hintEmail = trim((string)$hintEmail);
+
+        if($currentName !== '' && !pnvSubNameNeedsPanelResolve($currentName, $link)){
+            return $currentName;
+        }
+
+        $fromCsv = pnvFindSubNameFromCsv($username, $link);
+
+        if($fromCsv !== ''){
+            return $fromCsv;
+        }
+
+        $emailCandidates = [
+            $hintEmail,
+            pnvFindSubCachedClientEmail($link),
+            pnvFetchSubPanelEmail($link),
+        ];
+
+        foreach($emailCandidates as $candidate){
+            $display = pnvSubDisplayNameFromClientEmail($candidate, $link);
+
+            if($display !== ''){
+                return $display;
+            }
+        }
+
+        if($currentName !== '' && !pnvSubNameNeedsPanelResolve($currentName, $link)){
+            return $currentName;
+        }
+
+        return 'اشتراک';
     }
 
     function pnvFindSubNameFromPanel($link){

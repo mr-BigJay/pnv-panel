@@ -72,26 +72,8 @@ $usageMap = is_array($usageBundle['items'] ?? null) ? $usageBundle['items'] : []
 foreach($items as &$item){
     $key = $item['usage_key'] ?? subUsageCacheKey($item['link']);
     $item['usage'] = $usageMap[$key] ?? null;
-
-    if(!pnvSubNameNeedsPanelResolve($item['name'], $item['link'])){
-        continue;
-    }
-
-    if(is_array($item['usage'])){
-        $fromEmail = pnvSubDisplayNameFromClientEmail((string)($item['usage']['email'] ?? ''), $item['link']);
-
-        if($fromEmail !== ''){
-            $item['name'] = $fromEmail;
-        }
-    }
-
-    if(pnvSubNameNeedsPanelResolve($item['name'], $item['link'])){
-        $fromPanel = pnvFindSubNameFromPanel($item['link']);
-
-        if($fromPanel !== ''){
-            $item['name'] = $fromPanel;
-        }
-    }
+    $hintEmail = is_array($item['usage']) ? trim((string)($item['usage']['email'] ?? '')) : '';
+    $item['name'] = pnvEnsureSubDisplayName($user, $item['link'], $item['name'] ?? '', $hintEmail);
 }
 unset($item);
 

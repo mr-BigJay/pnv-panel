@@ -211,7 +211,7 @@ if(!function_exists('pnvClearedSubsPath')){
         foreach($linkIndex as &$entry){
             $fullLink = pnvFindSubLinkFromCsv($username, $entry['link'] ?? '');
             $entry['link'] = $fullLink !== '' ? $fullLink : ($entry['link'] ?? '');
-            $entry['name'] = pnvResolveSubDisplayName(
+            $entry['name'] = pnvEnsureSubDisplayName(
                 $username,
                 $entry['link'],
                 $entry['name'] ?? ''
