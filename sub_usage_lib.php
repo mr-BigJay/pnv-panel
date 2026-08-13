@@ -9,7 +9,49 @@ if(!function_exists('subUsageCachePath')){
     }
 
     function subUsageTtlSeconds(){
-        return 600; // 10 دقیقه
+        return 60; // 1 دقیقه
+    }
+
+    function subUsageInvalidateLink($link){
+        $link = trim((string)$link);
+
+        if($link === ''){
+            return;
+        }
+
+        $cache = subUsageLoadCache();
+        $key = subUsageCacheKey($link);
+        $dirty = false;
+
+        if(isset($cache[$key])){
+            unset($cache[$key]);
+            $dirty = true;
+        }
+
+        $subId = '';
+
+        if(function_exists('pnvExtractSubIdFromLink')){
+            if(is_file(__DIR__ . '/plan_ui_lib.php')){
+                require_once __DIR__ . '/plan_ui_lib.php';
+            }
+
+            if(function_exists('pnvExtractSubIdFromLink')){
+                $subId = strtolower(pnvExtractSubIdFromLink($link));
+            }
+        }
+
+        if($subId !== ''){
+            foreach(array_keys($cache) as $cacheKey){
+                if(stripos($cacheKey, $subId) !== false){
+                    unset($cache[$cacheKey]);
+                    $dirty = true;
+                }
+            }
+        }
+
+        if($dirty){
+            subUsageSaveCache($cache);
+        }
     }
 
     function subUsageLoadCache(){

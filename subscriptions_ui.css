@@ -109,6 +109,17 @@ color:#fff;
 font-weight:700;
 }
 
+.subUsageNotice{
+margin:0 0 12px;
+padding:10px 12px;
+border-radius:12px;
+background:rgba(30,58,95,.55);
+border:1px solid rgba(96,165,250,.22);
+color:#bfdbfe;
+font-size:12px;
+line-height:1.65;
+}
+
 .subList{
 display:flex;
 flex-direction:column;

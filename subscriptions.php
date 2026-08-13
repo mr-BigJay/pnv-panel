@@ -89,7 +89,7 @@ $firstOkOpen = true;
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=9">
+<link rel="stylesheet" href="subscriptions_ui.css?v=10">
 </head>
 <body>
 <div class="box">
@@ -112,6 +112,10 @@ $firstOkOpen = true;
 <path d="M9 12h6"/>
 </svg>
 </div>
+</div>
+
+<div class="subUsageNotice" role="note">
+مصرف و زمان باقی‌مانده حداکثر هر ۱ دقیقه از پنل VPN بروزرسانی می‌شود. بعد از تمدید، با ورود به این صفحه داده‌های همان اشتراک بلافاصله تازه می‌شوند.
 </div>
 
 <div class="filters" role="tablist" aria-label="فیلتر وضعیت">
@@ -523,6 +527,12 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
 
     if(document.querySelector('[data-usage-link]')){
         loadUsage(0);
+        setInterval(function(){
+            if(document.hidden){
+                return;
+            }
+            loadUsage(0);
+        }, 60000);
     }
 })();
 </script>

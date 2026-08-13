@@ -1683,6 +1683,22 @@ if(!function_exists('xuiConfigPath')){
         $payments[$index][7] = $result['link'];
         xuiSavePayments($payments);
 
+        if(!function_exists('subUsageInvalidateLink') && is_file(__DIR__ . '/sub_usage_lib.php')){
+            require_once __DIR__ . '/sub_usage_lib.php';
+        }
+
+        if(function_exists('subUsageInvalidateLink')){
+            $renewLink = trim((string)($row[1] ?? ''));
+
+            if($type === 'تمدید' && $renewLink !== ''){
+                subUsageInvalidateLink($renewLink);
+            }
+
+            if(!empty($result['link'])){
+                subUsageInvalidateLink($result['link']);
+            }
+        }
+
         return $result;
     }
 
