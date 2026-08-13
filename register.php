@@ -332,394 +332,254 @@ unset($_SESSION['register_captcha']);
 ?>
 
 <!DOCTYPE html>
-
 <html lang="fa">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
-
-<title>
-
-ثبت نام
-
-</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ثبت نام</title>
 <link rel="stylesheet" href="/fonts.css">
-
 <style>
-
-*{
-box-sizing:border-box;
-}
-
+*{margin:0;padding:0;box-sizing:border-box}
 body{
-margin:0;
-padding:16px;
-background:#0f172a;
+background:linear-gradient(180deg,#08113a 0%,#0f172a 100%);
 font-family:tahoma;
 direction:rtl;
-color:white;
+color:#fff;
 min-height:100vh;
+padding:12px 12px 24px;
+display:flex;
+justify-content:center;
+align-items:flex-start;
+padding-top:24px;
+}
+.container{width:100%;max-width:380px}
+.box{
+background:#1e293b;
+border-radius:22px;
+padding:24px 20px;
+box-shadow:0 10px 30px rgba(0,0,0,.35);
+}
+.logo{text-align:center;font-size:34px;margin-bottom:12px}
+h2{text-align:center;font-size:22px;margin-bottom:18px;font-weight:700}
+.error{
+background:#7f1d1d;
+border:1px solid #ef4444;
+padding:12px;
+border-radius:14px;
+margin-bottom:16px;
+line-height:24px;
+text-align:center;
+font-size:14px;
+}
+.success{
+background:#14532d;
+border:1px solid #22c55e;
+padding:12px;
+border-radius:14px;
+margin-bottom:16px;
+line-height:24px;
+text-align:center;
+font-size:14px;
+color:#bbf7d0;
+}
+.inputGroup{margin-bottom:14px}
+input{
+width:100%;
+height:46px;
+border:none;
+border-radius:14px;
+padding:0 16px;
+font-size:15px;
+background:#0f172a;
+color:#fff;
+outline:none;
+transition:.2s;
+}
+input::placeholder{color:#64748b}
+input:focus{box-shadow:0 0 0 2px #2563eb}
+input.inputPrimary{
+background:#fff;
+color:#0f172a;
+}
+input.inputPrimary::placeholder{color:#64748b}
+input.inputPrimary:focus{box-shadow:0 0 0 2px #2563eb}
+.passwordWrap{position:relative}
+.passwordWrap input{padding-left:46px}
+.eye{
+position:absolute;
+left:16px;
+top:11px;
+font-size:20px;
+cursor:pointer;
+user-select:none;
+color:#64748b;
+}
+.captchaBox{
+height:54px;
+background:#0f172a;
+border-radius:14px;
 display:flex;
 justify-content:center;
 align-items:center;
-}
-
-.box{
-width:100%;
-max-width:720px;
-background:#1e293b;
-padding:44px 28px;
-border-radius:28px;
-}
-
-h2{
-font-size:32px;
-margin-top:0;
-margin-bottom:30px;
-text-align:center;
-}
-
-input{
-width:100%;
-padding:16px;
-margin-top:10px;
-margin-bottom:18px;
-border:none;
-border-radius:14px;
-box-sizing:border-box;
-font-size:18px;
-background:#0f172a;
-color:white;
-}
-
-.passwordWrap{
-position:relative;
-}
-
-.passwordWrap input{
-padding-left:55px;
-}
-
-.eye{
-position:absolute;
-left:18px;
-top:25px;
-font-size:22px;
-cursor:pointer;
-user-select:none;
-color:#94a3b8;
-}
-
-button{
-width:100%;
-padding:16px;
-background:#22c55e;
-border:none;
-border-radius:14px;
-color:white;
-font-size:22px;
-cursor:pointer;
-}
-
-.back{
-display:block;
-margin-top:18px;
-text-align:center;
-background:#334155;
-padding:16px;
-border-radius:14px;
-color:white;
-text-decoration:none;
-font-size:20px;
-}
-
-.error{
-background:#dc2626;
-padding:16px;
-border-radius:14px;
-margin-bottom:18px;
-line-height:32px;
-font-size:18px;
-}
-
-.success{
-background:#16a34a;
-padding:16px;
-border-radius:14px;
-margin-bottom:18px;
-line-height:32px;
-font-size:18px;
-}
-
-.captchaBox{
-background:#0f172a;
-padding:20px;
-border-radius:14px;
-margin-bottom:18px;
-text-align:center;
-font-size:34px;
-font-weight:bold;
+font-size:24px;
+font-weight:700;
 letter-spacing:6px;
 color:#facc15;
+margin-bottom:12px;
 user-select:none;
 }
-
 .refresh{
 display:block;
-margin-top:-4px;
-margin-bottom:18px;
 text-align:center;
-color:#38bdf8;
+margin-bottom:16px;
 text-decoration:none;
-font-size:18px;
+color:#38bdf8;
+font-size:14px;
+font-weight:700;
 }
-
+button{
+width:100%;
+height:46px;
+border:none;
+border-radius:14px;
+background:#22c55e;
+color:#fff;
+font-size:17px;
+font-weight:700;
+cursor:pointer;
+transition:.2s;
+}
+button:hover{background:#16a34a}
+.links{margin-top:16px}
+.links a{
+display:flex;
+justify-content:center;
+align-items:center;
+height:46px;
+background:#334155;
+border-radius:14px;
+text-decoration:none;
+color:#fff;
+font-size:16px;
+margin-top:10px;
+transition:.2s;
+}
+.links a:hover{background:#475569}
 .helper{
-font-size:15px;
+font-size:12px;
 color:#94a3b8;
-margin-top:-8px;
-margin-bottom:18px;
-line-height:28px;
+margin:-6px 0 12px;
+line-height:20px;
 }
-
 .refbox{
 background:#0f172a;
-padding:14px;
-border-radius:12px;
-margin-bottom:18px;
-font-size:15px;
-line-height:28px;
+padding:12px;
+border-radius:14px;
+margin-bottom:14px;
+font-size:13px;
+line-height:22px;
 color:#cbd5e1;
+text-align:center;
 }
-
-@media(max-width:768px){
-
-body{
-padding:10px;
-align-items:flex-start;
-}
-
-.box{
-max-width:100%;
-padding:30px 20px;
-border-radius:24px;
-margin-top:12px;
-}
-
-h2{
-font-size:28px;
-margin-bottom:24px;
-}
-
-input{
-font-size:16px;
-padding:14px;
-}
-
-button{
-font-size:20px;
-padding:14px;
-}
-
-.back{
-font-size:18px;
-padding:14px;
-}
-
-.error,
-.success{
-font-size:16px;
-line-height:28px;
-}
-
-.captchaBox{
-font-size:28px;
-padding:18px;
-}
-
-.refresh{
-font-size:16px;
-}
-
-.helper{
-font-size:14px;
-line-height:24px;
-}
-
-.refbox{
-font-size:14px;
-line-height:24px;
-}
-
-.eye{
-top:22px;
-font-size:20px;
-}
-
-}
-
 </style>
-
 </head>
-
 <body>
 
+<div class="container">
 <div class="box">
 
-<h2>
+<div class="logo">📝</div>
+<h2>ثبت نام</h2>
 
-ثبت نام
-
-</h2>
-
-<?php if($error!=""){ ?>
-
-<div class="error">
-
-<?php echo $error; ?>
-
-</div>
-
+<?php if($error !== ""){ ?>
+<div class="error"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div>
 <?php } ?>
 
-<?php if($success!=""){ ?>
-
-<div class="success">
-
-<?php echo $success; ?>
-
-</div>
-
+<?php if($success !== ""){ ?>
+<div class="success"><?php echo htmlspecialchars($success, ENT_QUOTES, 'UTF-8'); ?></div>
 <?php } ?>
 
-<?php if($refFromLink!=""){ ?>
-
-<div class="refbox">
-
-ثبت نام از طریق لینک دعوت انجام شده است
-
-</div>
-
+<?php if($refFromLink !== ""){ ?>
+<div class="refbox">ثبت نام از طریق لینک دعوت انجام شده است</div>
 <?php } ?>
 
 <form method="POST">
 
 <input
 type="text"
+class="inputPrimary"
 name="username"
 placeholder="نام کاربری"
+minlength="6"
+maxlength="20"
+pattern="[a-zA-Z0-9._-]+"
+title="نام کاربری باید بین ۶ تا ۲۰ کاراکتر و فقط شامل حروف لاتین، عدد و . _ - باشد"
 required>
 
-<div class="helper">
-
-نام کاربری باید بین 6 تا 20 کارکتر باشد
-
-</div>
+<div class="helper">نام کاربری باید بین 6 تا 20 کارکتر باشد</div>
 
 <div class="passwordWrap">
-
 <input
 type="password"
+class="inputPrimary"
 name="password"
 id="password"
 placeholder="رمز عبور"
+minlength="8"
+pattern="(?=.*[A-Za-z])(?=.*\d).+"
+title="رمز عبور باید حداقل ۸ کاراکتر و شامل حروف انگلیسی و عدد باشد"
 required>
-
-<span
-class="eye"
-onclick="togglePassword()">
-
-👁
-
-</span>
-
+<span class="eye" onclick="togglePassword()" aria-hidden="true">👁</span>
 </div>
 
-<div class="helper">
-
-رمز عبور باید شامل حروف انگلیسی و عدد باشد
-
-</div>
+<div class="helper">رمز عبور باید شامل حروف انگلیسی و عدد باشد</div>
 
 <input
-type="text"
+type="tel"
 name="mobile"
 placeholder="شماره موبایل"
+inputmode="tel"
+autocomplete="tel"
+pattern="09[0-9]{9}"
+title="شماره موبایل باید با 09 شروع شود و 11 رقم باشد"
 required>
 
-<?php if($refFromLink==""){ ?>
-
+<?php if($refFromLink === ""){ ?>
 <input
 type="text"
 name="referrer"
 placeholder="کد یا شماره معرف (اختیاری)">
-
 <?php } ?>
 
-<div class="captchaBox">
+<div class="captchaBox"><?php echo htmlspecialchars((string)$_SESSION['register_captcha'], ENT_QUOTES, 'UTF-8'); ?></div>
 
-<?php echo $_SESSION['register_captcha']; ?>
-
-</div>
-
-<a
-href="register.php?refreshcaptcha=1"
-class="refresh">
-
-تغییر کد امنیتی
-
-</a>
+<a href="register.php?refreshcaptcha=1<?php echo $refFromLink !== '' ? '&ref=' . rawurlencode($refFromLink) : ''; ?>" class="refresh">تغییر کد امنیتی</a>
 
 <input
 type="text"
 name="captcha"
 placeholder="کد امنیتی"
+autocomplete="off"
 required>
 
-<button type="submit">
-
-ثبت نام
-
-</button>
+<button type="submit">ثبت نام</button>
 
 </form>
 
-<a
-href="index.php"
-class="back">
+<div class="links">
+<a href="index.php">بازگشت</a>
+</div>
 
-بازگشت
-
-</a>
-
+</div>
 </div>
 
 <script>
-
 function togglePassword(){
-
-let p =
-document.getElementById('password');
-
-if(p.type=='password'){
-
-p.type='text';
-
-}else{
-
-p.type='password';
-
+var p = document.getElementById('password');
+if(!p){ return; }
+p.type = (p.type === 'password') ? 'text' : 'password';
 }
-
-}
-
 </script>
 
 </body>
-
 </html>
