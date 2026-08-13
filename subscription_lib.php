@@ -138,7 +138,7 @@ if(!function_exists('pnvClearedSubsPath')){
         return trim(preg_split('/\s+/u', $value)[0] ?? '');
     }
 
-    function pnvLoadUserActiveSubscriptions($username){
+    function pnvLoadUserActiveSubscriptions($username, $resolveNames = true){
         $username = trim((string)$username);
         $linkIndex = [];
         $file = pnvPaymentsCsvPath();
@@ -211,11 +211,14 @@ if(!function_exists('pnvClearedSubsPath')){
         foreach($linkIndex as &$entry){
             $fullLink = pnvFindSubLinkFromCsv($username, $entry['link'] ?? '');
             $entry['link'] = $fullLink !== '' ? $fullLink : ($entry['link'] ?? '');
-            $entry['name'] = pnvEnsureSubDisplayName(
-                $username,
-                $entry['link'],
-                $entry['name'] ?? ''
-            );
+
+            if($resolveNames){
+                $entry['name'] = pnvEnsureSubDisplayName(
+                    $username,
+                    $entry['link'],
+                    $entry['name'] ?? ''
+                );
+            }
         }
         unset($entry);
 

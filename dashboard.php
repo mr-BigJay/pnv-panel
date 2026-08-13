@@ -20,6 +20,7 @@ $pendingRenews = 0;
 $avatarUrl = '';
 
 require_once __DIR__ . '/profile_lib.php';
+require_once __DIR__ . '/subscription_lib.php';
 $avatarUrl = profileGetUserAvatar($user);
 
 if(file_exists($supportFile)){
@@ -41,6 +42,8 @@ if(file_exists($supportFile)){
     }
 }
 
+$approvedSubs = count(pnvLoadUserActiveSubscriptions($user, false));
+
 if(file_exists($paymentsFile)){
     $handle = fopen($paymentsFile, 'r');
 
@@ -51,11 +54,6 @@ if(file_exists($paymentsFile)){
 
         $status = trim((string)($row[6] ?? ''));
         $type = trim((string)($row[9] ?? ''));
-        $link = trim((string)($row[7] ?? ''));
-
-        if($status === 'تایید شد' && $type === 'خرید' && $link !== ''){
-            $approvedSubs++;
-        }
 
         if($status !== 'تایید شد' && $status !== 'رد شد'){
             if($type === 'تمدید'){
