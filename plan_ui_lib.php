@@ -348,34 +348,107 @@ if(!function_exists('pnvFormatPlanPrice')){
             $type = trim((string)($row[9] ?? ''));
             $col1 = trim((string)($row[1] ?? ''));
             $buyLink = strtolower(rtrim(trim((string)($row[7] ?? '')), '/'));
+            $renewLink = strtolower(rtrim(trim((string)($row[1] ?? '')), '/'));
             $rowTs = intval($row[8] ?? 0);
 
-            if($type !== 'خرید' || $buyLink === '' || !function_exists('pnvIsValidSubLink') || !pnvIsValidSubLink($buyLink)){
+            if($type === 'خرید' && $buyLink !== '' && function_exists('pnvIsValidSubLink') && pnvIsValidSubLink($buyLink)){
+                $matches = ($buyLink === $target)
+                    || ($targetId !== '' && pnvExtractSubIdFromLink($buyLink) === $targetId)
+                    || strpos($buyLink, $target) !== false
+                    || ($targetId !== '' && strpos($buyLink, $targetId) !== false);
+
+                if(!$matches){
+                    continue;
+                }
+
+                if($col1 === '' || pnvNameLooksLikeSubId($col1, $buyLink)){
+                    continue;
+                }
+
+                if($rowTs >= $bestTs){
+                    $bestTs = $rowTs;
+                    $bestName = $col1;
+                }
+
                 continue;
             }
 
-            $matches = ($buyLink === $target)
-                || ($targetId !== '' && pnvExtractSubIdFromLink($buyLink) === $targetId)
-                || strpos($buyLink, $target) !== false
-                || ($targetId !== '' && strpos($buyLink, $targetId) !== false);
+            if($type === 'تمدید' && $renewLink !== '' && function_exists('pnvIsValidSubLink') && pnvIsValidSubLink($renewLink)){
+                $matches = ($renewLink === $target)
+                    || ($targetId !== '' && pnvExtractSubIdFromLink($renewLink) === $targetId)
+                    || strpos($renewLink, $target) !== false
+                    || ($targetId !== '' && strpos($renewLink, $targetId) !== false);
 
-            if(!$matches){
-                continue;
-            }
+                if(!$matches){
+                    continue;
+                }
 
-            if($col1 === '' || pnvNameLooksLikeSubId($col1, $buyLink)){
-                continue;
-            }
-
-            if($rowTs >= $bestTs){
-                $bestTs = $rowTs;
-                $bestName = $col1;
+                if($col1 !== '' && !pnvNameLooksLikeSubId($col1, $renewLink) && !pnvIsValidSubLink($col1)){
+                    if($rowTs >= $bestTs){
+                        $bestTs = $rowTs;
+                        $bestName = $col1;
+                    }
+                }
             }
         }
 
         fclose($handle);
 
         return $bestName;
+    }
+
+    function pnvExtractConfigNameFromClientEmail($email){
+        $email = trim((string)$email);
+
+        if($email === ''){
+            return '';
+        }
+
+        if(preg_match('/^(.+)_\d{4}$/u', $email, $m)){
+            $name = trim((string)$m[1]);
+
+            if($name !== '' && !pnvNameLooksLikeSubId($name)){
+                return $name;
+            }
+        }
+
+        if(!pnvNameLooksLikeSubId($email)){
+            return $email;
+        }
+
+        return '';
+    }
+
+    function pnvFindSubNameFromPanel($link){
+        $link = trim((string)$link);
+
+        if($link === '' || !function_exists('xuiParseSubLink')){
+            if(is_file(__DIR__ . '/xui_lib.php')){
+                require_once __DIR__ . '/xui_lib.php';
+            }
+        }
+
+        if(!function_exists('xuiParseSubLink') || !function_exists('xuiLoadConfig') || !function_exists('xuiFindServerByHost') || !function_exists('xuiFindClientBySubId')){
+            return '';
+        }
+
+        $parsed = xuiParseSubLink($link);
+
+        if(!is_array($parsed)){
+            return '';
+        }
+
+        $config = xuiLoadConfig();
+        $server = xuiFindServerByHost($parsed['host'], $config);
+
+        if(!$server || !function_exists('xuiServerHasAuth') || !xuiServerHasAuth($server)){
+            return '';
+        }
+
+        $client = xuiFindClientBySubId($server, $parsed['sub_id'], $link);
+        $email = trim((string)(is_array($client) ? ($client['email'] ?? '') : ''));
+
+        return pnvExtractConfigNameFromClientEmail($email);
     }
 
     function pnvResolveSubDisplayName($username, $link, $fallback = ''){
@@ -396,46 +469,21 @@ if(!function_exists('pnvFormatPlanPrice')){
             $cache = subUsageLoadCache();
             $cached = $cache[subUsageCacheKey($link)] ?? null;
             $email = trim((string)($cached['email'] ?? ''));
+            $fromEmail = pnvExtractConfigNameFromClientEmail($email);
 
-            if($email !== '' && !pnvNameLooksLikeSubId($email, $link)){
-                return $email;
+            if($fromEmail !== ''){
+                return $fromEmail;
             }
+        }
+
+        $fromPanel = pnvFindSubNameFromPanel($link);
+
+        if($fromPanel !== ''){
+            return $fromPanel;
         }
 
         if($fallback !== ''){
             return $fallback;
-        }
-
-        if(function_exists('xuiIsEnabled') === false && is_file(__DIR__ . '/xui_lib.php')){
-            require_once __DIR__ . '/xui_lib.php';
-        }
-
-        static $panelNameLookups = 0;
-
-        if(
-            $panelNameLookups < 3
-            && function_exists('xuiIsEnabled')
-            && function_exists('xuiLoadConfig')
-            && function_exists('xuiParseSubLink')
-            && function_exists('xuiFindServerByHost')
-            && function_exists('xuiFindClientBySubId')
-            && xuiIsEnabled(xuiLoadConfig())
-        ){
-            $parsed = xuiParseSubLink($link);
-
-            if(is_array($parsed)){
-                $server = xuiFindServerByHost($parsed['host'], xuiLoadConfig());
-
-                if($server){
-                    $panelNameLookups++;
-                    $client = xuiFindClientBySubId($server, $parsed['sub_id'], $link);
-                    $email = trim((string)(is_array($client) ? ($client['email'] ?? '') : ''));
-
-                    if($email !== '' && !pnvNameLooksLikeSubId($email, $link)){
-                        return $email;
-                    }
-                }
-            }
         }
 
         $subId = pnvExtractSubIdFromLink($link);

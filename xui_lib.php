@@ -411,22 +411,214 @@ if(!function_exists('xuiConfigPath')){
         return '';
     }
 
-    function xuiApiRequest($server, $method, $path, $body = null){
-        $base = rtrim((string)($server['base_url'] ?? ''), '/');
+    function xuiServerHasToken($server){
         $token = trim((string)($server['api_token'] ?? ''));
 
-        if($base === '' || $token === ''){
-            return ['success' => false, 'msg' => 'تنظیمات سرور ناقص است'];
+        return $token !== '' && strpos($token, 'REPLACE_TOKEN_') !== 0;
+    }
+
+    function xuiServerHasSessionCredentials($server){
+        return trim((string)($server['username'] ?? '')) !== ''
+            && trim((string)($server['password'] ?? '')) !== '';
+    }
+
+    function xuiServerHasAuth($server){
+        return xuiServerHasToken($server) || xuiServerHasSessionCredentials($server);
+    }
+
+    function xuiGetStoredSession($server){
+        $id = trim((string)($server['id'] ?? ''));
+
+        if($id === ''){
+            return null;
         }
 
-        $url = $base . '/' . ltrim($path, '/');
+        $state = xuiLoadState();
+        $session = $state['sessions'][$id] ?? null;
+
+        if(!is_array($session)){
+            return null;
+        }
+
+        if(intval($session['expires_at'] ?? 0) < time()){
+            return null;
+        }
+
+        $cookie = trim((string)($session['cookie'] ?? ''));
+
+        if($cookie === ''){
+            return null;
+        }
+
+        return $session;
+    }
+
+    function xuiSaveStoredSession($server, $cookie, $csrf = ''){
+        $id = trim((string)($server['id'] ?? ''));
+
+        if($id === '' || trim((string)$cookie) === ''){
+            return;
+        }
+
+        $state = xuiLoadState();
+
+        if(!isset($state['sessions']) || !is_array($state['sessions'])){
+            $state['sessions'] = [];
+        }
+
+        $state['sessions'][$id] = [
+            'cookie' => trim((string)$cookie),
+            'csrf' => trim((string)$csrf),
+            'expires_at' => time() + 21600,
+        ];
+
+        xuiSaveState($state);
+    }
+
+    function xuiCookieHeaderFromJar($jarFile){
+        if(!is_file($jarFile)){
+            return '';
+        }
+
+        $parts = [];
+
+        foreach(file($jarFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line){
+            if($line === '' || $line[0] === '#'){
+                continue;
+            }
+
+            $cols = explode("\t", $line);
+
+            if(count($cols) >= 7){
+                $parts[] = $cols[5] . '=' . $cols[6];
+            }
+        }
+
+        return implode('; ', $parts);
+    }
+
+    function xuiLoginSession($server){
+        $base = rtrim((string)($server['base_url'] ?? ''), '/');
+        $username = trim((string)($server['username'] ?? ''));
+        $password = trim((string)($server['password'] ?? ''));
+
+        if($base === '' || $username === '' || $password === '' || !function_exists('curl_init')){
+            return false;
+        }
+
+        $jar = tempnam(sys_get_temp_dir(), 'xui_cookie_');
+        $csrf = '';
+
+        $csrfCurl = curl_init($base . '/csrf-token');
+        curl_setopt($csrfCurl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($csrfCurl, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($csrfCurl, CURLOPT_TIMEOUT, 20);
+        curl_setopt($csrfCurl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($csrfCurl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($csrfCurl, CURLOPT_COOKIEJAR, $jar);
+        curl_setopt($csrfCurl, CURLOPT_COOKIEFILE, $jar);
+        $csrfRaw = curl_exec($csrfCurl);
+        curl_close($csrfCurl);
+
+        if(is_string($csrfRaw) && $csrfRaw !== ''){
+            $csrfJson = json_decode($csrfRaw, true);
+
+            if(is_array($csrfJson)){
+                $csrf = trim((string)($csrfJson['obj'] ?? ''));
+            }
+        }
+
         $headers = [
             'Accept: application/json',
-            'Authorization: Bearer ' . $token
+            'Content-Type: application/json',
         ];
+
+        if($csrf !== ''){
+            $headers[] = 'X-CSRF-Token: ' . $csrf;
+        }
+
+        $loginCurl = curl_init($base . '/login');
+        curl_setopt($loginCurl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($loginCurl, CURLOPT_POST, true);
+        curl_setopt($loginCurl, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($loginCurl, CURLOPT_TIMEOUT, 20);
+        curl_setopt($loginCurl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($loginCurl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($loginCurl, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($loginCurl, CURLOPT_POSTFIELDS, json_encode([
+            'username' => $username,
+            'password' => $password,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        curl_setopt($loginCurl, CURLOPT_COOKIEJAR, $jar);
+        curl_setopt($loginCurl, CURLOPT_COOKIEFILE, $jar);
+        $loginRaw = curl_exec($loginCurl);
+        curl_close($loginCurl);
+
+        $loginJson = is_string($loginRaw) ? json_decode($loginRaw, true) : null;
+        $cookie = xuiCookieHeaderFromJar($jar);
+        @unlink($jar);
+
+        if(!is_array($loginJson) || empty($loginJson['success']) || $cookie === ''){
+            return false;
+        }
+
+        xuiSaveStoredSession($server, $cookie, $csrf);
+        return true;
+    }
+
+    function xuiEnsureSession($server){
+        $session = xuiGetStoredSession($server);
+
+        if(is_array($session)){
+            return $session;
+        }
+
+        if(!xuiLoginSession($server)){
+            return null;
+        }
+
+        return xuiGetStoredSession($server);
+    }
+
+    function xuiApiRequestRaw($server, $method, $path, $body, $authMode){
+        $base = rtrim((string)($server['base_url'] ?? ''), '/');
+
+        if($base === ''){
+            return ['success' => false, 'msg' => 'آدرس سرور 3x-ui خالی است'];
+        }
 
         if(!function_exists('curl_init')){
             return ['success' => false, 'msg' => 'افزونه cURL فعال نیست'];
+        }
+
+        $url = $base . '/' . ltrim($path, '/');
+        $headers = ['Accept: application/json'];
+        $session = null;
+
+        if($authMode === 'token'){
+            $token = trim((string)($server['api_token'] ?? ''));
+
+            if($token === ''){
+                return ['success' => false, 'msg' => 'API Token تنظیم نشده است'];
+            }
+
+            $headers[] = 'Authorization: Bearer ' . $token;
+        }
+        else{
+            $session = xuiEnsureSession($server);
+
+            if(!is_array($session)){
+                return ['success' => false, 'msg' => 'ورود session به 3x-ui انجام نشد'];
+            }
+
+            $headers[] = 'Cookie: ' . $session['cookie'];
+
+            if(
+                strtoupper($method) !== 'GET'
+                && trim((string)($session['csrf'] ?? '')) !== ''
+            ){
+                $headers[] = 'X-CSRF-Token: ' . $session['csrf'];
+            }
         }
 
         $curl = curl_init($url);
@@ -461,6 +653,55 @@ if(!function_exists('xuiConfigPath')){
 
         $json['http'] = $status;
         return $json;
+    }
+
+    function xuiApiRequest($server, $method, $path, $body = null){
+        $modes = [];
+
+        if(xuiServerHasToken($server)){
+            $modes[] = 'token';
+        }
+
+        if(xuiServerHasSessionCredentials($server)){
+            $modes[] = 'session';
+        }
+
+        if(count($modes) === 0){
+            return ['success' => false, 'msg' => 'تنظیمات سرور ناقص است (Token یا نام کاربری/رمز)'];
+        }
+
+        $last = ['success' => false, 'msg' => 'اتصال به 3x-ui ناموفق بود'];
+
+        foreach($modes as $mode){
+            $last = xuiApiRequestRaw($server, $method, $path, $body, $mode);
+
+            if(!empty($last['success'])){
+                return $last;
+            }
+
+            if($mode === 'session'){
+                $id = trim((string)($server['id'] ?? ''));
+
+                if($id !== ''){
+                    $state = xuiLoadState();
+
+                    if(isset($state['sessions'][$id])){
+                        unset($state['sessions'][$id]);
+                        xuiSaveState($state);
+                    }
+                }
+
+                if(xuiLoginSession($server)){
+                    $last = xuiApiRequestRaw($server, $method, $path, $body, 'session');
+
+                    if(!empty($last['success'])){
+                        return $last;
+                    }
+                }
+            }
+        }
+
+        return $last;
     }
 
     function xuiTestServer($server){
@@ -1142,6 +1383,40 @@ if(!function_exists('xuiConfigPath')){
         }
 
         return 0;
+    }
+
+    function xuiClientUsedBytes($client){
+        if(!is_array($client)){
+            return 0;
+        }
+
+        if(isset($client['used'])){
+            return max(0, floatval($client['used']));
+        }
+
+        $up = max(0, floatval($client['up'] ?? $client['upload'] ?? 0));
+        $down = max(0, floatval($client['down'] ?? $client['download'] ?? 0));
+
+        return $up + $down;
+    }
+
+    function xuiClientExpiryMs($client){
+        if(!is_array($client)){
+            return 0;
+        }
+
+        $expiry = intval($client['expiryTime'] ?? $client['expiry_time'] ?? 0);
+
+        if($expiry <= 0){
+            return 0;
+        }
+
+        // 3x-ui: expiryTime معمولاً میلی‌ثانیه است
+        if($expiry < 10000000000){
+            return $expiry * 1000;
+        }
+
+        return $expiry;
     }
 
     function xuiAdjustClientTrafficLegacy($server, $client, $addGb){

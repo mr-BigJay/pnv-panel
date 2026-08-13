@@ -4,6 +4,8 @@ session_start();
 
 require_once "phpqrcode/qrlib.php";
 require_once __DIR__ . '/subscription_lib.php';
+require_once __DIR__ . '/sub_usage_lib.php';
+require_once __DIR__ . '/plan_ui_lib.php';
 
 if(!isset($_SESSION['user'])){
     header("Location: index.php");
@@ -48,8 +50,38 @@ foreach($activeSubs as $sub){
         'link_ok' => true,
         'link_cleared' => false,
         'qr' => $qrfile,
+        'usage_key' => subUsageCacheKey($link),
     ];
 }
+
+$usageItems = [];
+foreach($items as $item){
+    $usageItems[] = [
+        'link' => $item['link'],
+        'plan' => $item['plan'],
+        'date' => $item['date'],
+        'time' => $item['time'],
+    ];
+}
+
+$usageBundle = count($usageItems) > 0
+    ? subUsageGetForItems($usageItems, max(4, min(12, count($usageItems))))
+    : ['items' => []];
+$usageMap = is_array($usageBundle['items'] ?? null) ? $usageBundle['items'] : [];
+
+foreach($items as &$item){
+    $key = $item['usage_key'] ?? subUsageCacheKey($item['link']);
+    $item['usage'] = $usageMap[$key] ?? null;
+
+    if(pnvNameLooksLikeSubId($item['name'], $item['link']) && is_array($item['usage'])){
+        $fromEmail = pnvExtractConfigNameFromClientEmail((string)($item['usage']['email'] ?? ''));
+
+        if($fromEmail !== ''){
+            $item['name'] = $fromEmail;
+        }
+    }
+}
+unset($item);
 
 $firstOkOpen = true;
 
@@ -63,7 +95,7 @@ $firstOkOpen = true;
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=8">
+<link rel="stylesheet" href="subscriptions_ui.css?v=9">
 </head>
 <body>
 <div class="box">
@@ -117,6 +149,40 @@ $visibleItems = array_values(array_filter($items, static function($it){
     if($item['date'] !== ''){
         $planLine .= ($planLine !== '' ? ' • ' : '') . $item['date'];
     }
+    $usage = is_array($item['usage'] ?? null) ? $item['usage'] : null;
+    $usageReady = is_array($usage) && !empty($usage['ok']);
+    $usageVolLabel = $usageReady ? (string)(($usage['volume']['label'] ?? '') ?: '—') : 'در حال دریافت…';
+    $usageTimeLabel = $usageReady ? (string)(($usage['time']['label'] ?? '') ?: '—') : 'در حال دریافت…';
+    $usageVolPct = 0;
+    $usageTimePct = 0;
+    $usageVolLow = false;
+    $usageTimeLow = false;
+    $usageVolUnlimited = false;
+    $usageTimeUnlimited = false;
+    $usageBoxClass = 'subUsage';
+
+    if($usageReady){
+        $usageBoxClass .= ' is-ready';
+        $vol = is_array($usage['volume'] ?? null) ? $usage['volume'] : [];
+        $time = is_array($usage['time'] ?? null) ? $usage['time'] : [];
+        $usageVolUnlimited = !empty($vol['unlimited']);
+        $usageTimeUnlimited = !empty($time['unlimited']);
+        $usageVolPct = $usageVolUnlimited ? 100 : max(0, min(100, floatval($vol['remain_pct'] ?? 0)));
+        $usageTimePct = $usageTimeUnlimited ? 100 : max(0, min(100, floatval($time['remain_pct'] ?? 0)));
+        $usageVolLow = !$usageVolUnlimited && $usageVolPct <= 15;
+        $usageTimeLow = !$usageTimeUnlimited && $usageTimePct <= 15;
+
+        if(!$usageVolUnlimited && $usageVolPct <= 0.05){
+            $usageVolLabel = 'حجم تمام شده';
+        }
+
+        if(!$usageTimeUnlimited && $usageTimePct <= 0.05){
+            $usageTimeLabel = 'زمان تمام شده';
+        }
+    }
+    else{
+        $usageBoxClass .= ' is-loading';
+    }
 ?>
 <article class="<?php echo $h($chipClass); ?>" data-state="ok" data-life="active" data-id="<?php echo (int)$item['i']; ?>" data-link="<?php echo $h($item['link']); ?>">
 <button type="button" class="subHead" aria-expanded="<?php echo $open ? 'true' : 'false'; ?>">
@@ -131,23 +197,23 @@ $visibleItems = array_values(array_filter($items, static function($it){
 </svg>
 </button>
 
-<div class="subUsage is-loading" data-usage-link="<?php echo $h($item['link']); ?>">
+<div class="<?php echo $h($usageBoxClass); ?>" data-usage-link="<?php echo $h($item['link']); ?>">
 <div class="usageRow">
 <div class="usageLabels">
 <span class="usageKind usageKind--vol">حجم باقی‌مانده</span>
-<span class="usageVal" data-usage-vol-label>در حال دریافت…</span>
+<span class="usageVal" data-usage-vol-label><?php echo $h($usageVolLabel); ?></span>
 </div>
 <div class="usageTrack" aria-hidden="true">
-<div class="usageFill usageFill--vol" data-usage-vol-fill style="width:0%"></div>
+<div class="usageFill usageFill--vol<?php echo $usageVolLow ? ' is-low' : ''; ?>" data-usage-vol-fill style="width:<?php echo $h((string)$usageVolPct); ?>%"></div>
 </div>
 </div>
 <div class="usageRow">
 <div class="usageLabels">
 <span class="usageKind usageKind--time">زمان باقی‌مانده</span>
-<span class="usageVal" data-usage-time-label>در حال دریافت…</span>
+<span class="usageVal" data-usage-time-label><?php echo $h($usageTimeLabel); ?></span>
 </div>
 <div class="usageTrack" aria-hidden="true">
-<div class="usageFill usageFill--time" data-usage-time-fill style="width:0%"></div>
+<div class="usageFill usageFill--time<?php echo $usageTimeLow ? ' is-low' : ''; ?>" data-usage-time-fill style="width:<?php echo $h((string)$usageTimePct); ?>%"></div>
 </div>
 </div>
 </div>
@@ -204,7 +270,9 @@ echo $h(implode(' • ', $foot));
 </div>
 
 <script>
+window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 (function(){
+    var initialUsage = window.__subUsageInitial || {};
     var list = document.getElementById('subList');
     var toast = document.getElementById('toast');
     var modal = document.getElementById('qrModal');
@@ -406,6 +474,22 @@ echo $h(implode(' • ', $foot));
         attempt = attempt || 0;
         var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-usage-link]'));
         if(!boxes.length) return;
+
+        boxes.forEach(function(box){
+            var link = box.getAttribute('data-usage-link') || '';
+            var key = usageKeyFromLink(link);
+            var row = (key && initialUsage[key]) ? initialUsage[key] : null;
+            if(!row){
+                Object.keys(initialUsage).forEach(function(k){
+                    if(initialUsage[k] && initialUsage[k].link === link){
+                        row = initialUsage[k];
+                    }
+                });
+            }
+            if(row && !row.pending){
+                applyUsage(box, row);
+            }
+        });
 
         var links = boxes.map(function(b){ return b.getAttribute('data-usage-link'); }).filter(Boolean);
 

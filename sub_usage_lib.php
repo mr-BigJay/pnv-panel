@@ -302,16 +302,13 @@ if(!function_exists('subUsageCachePath')){
             return null;
         }
 
-        $timeouts = ['connect' => 4, 'timeout' => 12];
         $email = trim((string)($cachedHint['email'] ?? ''));
 
         if($email !== ''){
             $full = xuiApiRequest(
                 $server,
                 'GET',
-                '/panel/api/clients/get/' . rawurlencode($email),
-                null,
-                $timeouts
+                '/panel/api/clients/get/' . rawurlencode($email)
             );
 
             if(!empty($full['success']) && is_array($full['obj'] ?? null)){
@@ -338,7 +335,7 @@ if(!function_exists('subUsageCachePath')){
         $client = xuiFindClientBySubId($server, $parsed['sub_id'], $link);
 
         if($client){
-            $client = xuiHydrateClientByEmail($server, $client, $timeouts);
+            $client = xuiHydrateClientByEmail($server, $client);
             return [
                 'client' => $client,
                 'email' => $client['email'] ?? '',
@@ -361,10 +358,18 @@ if(!function_exists('subUsageCachePath')){
         ]);
         $view['source'] = 'estimate';
         $view['estimated'] = true;
+        $view['ok'] = true;
 
-        if($totalBytes <= 0 && $planDays <= 0){
-            $view['ok'] = false;
-            $view['error'] = 'اطلاعات پلن برای تخمین مصرف کافی نیست';
+        if($totalBytes <= 0){
+            $view['volume']['unlimited'] = true;
+            $view['volume']['label'] = 'حجم نامحدود';
+            $view['volume']['remain_pct'] = 100;
+        }
+
+        if($planDays <= 0 && intval($meta['start_ts'] ?? 0) <= 0){
+            $view['time']['unlimited'] = true;
+            $view['time']['label'] = 'زمان نامحدود';
+            $view['time']['remain_pct'] = 100;
         }
 
         return $view;
