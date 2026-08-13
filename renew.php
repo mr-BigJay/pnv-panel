@@ -39,128 +39,28 @@ $cardsUi = pnvCardsForUi($cards);
 $payWindowSeconds = instantPayWindowSeconds();
 
 function renewIsValidSubLink($value){
-
-    $value = renewNormalizeSubLink($value);
-
-    if($value === ''){
-        return false;
-    }
-
-    $validDomains = [
-        'vip.boozhaan.ir',
-        'vip2.boozhaan.ir',
-        'vip3.boozhaan.ir',
-        'vip4.boozhaan.ir'
-    ];
-
-    foreach($validDomains as $domain){
-        if(stripos($value, $domain) !== false){
-            return true;
-        }
-    }
-
-    return false;
+    return pnvIsValidSubLink($value);
 }
 
 function renewNormalizeSubLink($value){
-    $value = trim((string)$value);
-
-    if($value === ''){
-        return '';
-    }
-
-    // لینک کامل داخل متن کثیف
-    if(preg_match('~https?://(?:vip\d*)\.boozhaan\.ir(?::\d+)?/sub/[A-Za-z0-9]+~i', $value, $m)){
-        return $m[0];
-    }
-
-    // فقط SubID خام
-    if(preg_match('/^[A-Za-z0-9]{8,32}$/', $value)){
-        return $value;
-    }
-
-    // SubID در ابتدای متن خراب
-    if(preg_match('/^\s*([A-Za-z0-9]{8,32})\b/u', $value, $m)){
-        return $m[1];
-    }
-
-    return trim(preg_split('/\s+/u', $value)[0] ?? '');
+    return pnvNormalizeSubLinkValue($value);
 }
 
 function renewLoadUserSubscriptions($username){
 
-    $linkIndex = [];
-    $file = 'invoices/payments.csv';
+    $entries = pnvLoadUserActiveSubscriptions($username);
 
-    if(!file_exists($file)){
-        return [];
-    }
-
-    $handle = fopen($file, 'r');
-
-    while(($data = fgetcsv($handle)) !== false){
-
-        if(($data[0] ?? '') !== $username){
-            continue;
-        }
-
-        if(($data[6] ?? '') !== 'تایید شد'){
-            continue;
-        }
-
-        $col1 = trim($data[1] ?? '');
-        $link = trim($data[7] ?? '');
-        $type = trim($data[9] ?? '');
-        $planText = trim((string)($data[2] ?? ''));
-
-        if($type === 'خرید' && renewIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
-            $link = renewNormalizeSubLink($link);
-            $key = strtolower($link);
-            $linkIndex[$key] = [
-                'name' => $col1,
-                'link' => $link,
-                'plan_text' => $planText,
-            ];
-        }
-
-        if($type === 'تمدید' && renewIsValidSubLink($col1) && !pnvIsSubLinkCleared($username, $col1)){
-            $col1 = renewNormalizeSubLink($col1);
-            $key = strtolower($col1);
-
-            if(!isset($linkIndex[$key])){
-                $name = $col1;
-
-                if(preg_match('/\/sub\/([^\/\?]+)/i', $col1, $matches)){
-                    $name = $matches[1];
-                }
-
-                $linkIndex[$key] = [
-                    'name' => $name,
-                    'link' => $col1,
-                    'plan_text' => $planText,
-                ];
-            }
-        }
-    }
-
-    fclose($handle);
-
-    foreach($linkIndex as &$entry){
-        $fullLink = function_exists('pnvFindSubLinkFromCsv')
-            ? pnvFindSubLinkFromCsv($username, $entry['link'] ?? '')
-            : ($entry['link'] ?? '');
-
+    foreach($entries as &$entry){
         $entry['time_category'] = pnvResolveSubTimeCategory(
-            $fullLink,
+            $entry['link'] ?? '',
             $entry['plan_text'] ?? '',
             $username
         );
-        $entry['link'] = $fullLink !== '' ? $fullLink : ($entry['link'] ?? '');
-        unset($entry['plan_text']);
+        unset($entry['plan_text'], $entry['tracking'], $entry['date'], $entry['time']);
     }
     unset($entry);
 
-    return array_values($linkIndex);
+    return $entries;
 }
 
 $userSubscriptions = renewLoadUserSubscriptions($_SESSION['user']);
@@ -183,7 +83,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=21">
+<link rel="stylesheet" href="plan_step_ui.css?v=22">
 <style>
 .topBar .brand{
 font-size:24px;

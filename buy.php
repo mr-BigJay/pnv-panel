@@ -41,7 +41,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=17">
+<link rel="stylesheet" href="plan_step_ui.css?v=22">
 </head>
 <body>
 <div class="box">

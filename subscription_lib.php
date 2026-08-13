@@ -116,6 +116,109 @@ if(!function_exists('pnvClearedSubsPath')){
         return true;
     }
 
+    function pnvNormalizeSubLinkValue($value){
+        $value = trim((string)$value);
+
+        if($value === ''){
+            return '';
+        }
+
+        if(preg_match('~https?://(?:vip\d*)\.boozhaan\.ir(?::\d+)?/sub/[A-Za-z0-9]+~i', $value, $m)){
+            return $m[0];
+        }
+
+        if(preg_match('/^[A-Za-z0-9]{8,32}$/', $value)){
+            return $value;
+        }
+
+        if(preg_match('/^\s*([A-Za-z0-9]{8,32})\b/u', $value, $m)){
+            return $m[1];
+        }
+
+        return trim(preg_split('/\s+/u', $value)[0] ?? '');
+    }
+
+    function pnvLoadUserActiveSubscriptions($username){
+        $username = trim((string)$username);
+        $linkIndex = [];
+        $file = pnvPaymentsCsvPath();
+
+        if($username === '' || !file_exists($file)){
+            return [];
+        }
+
+        $handle = fopen($file, 'r');
+
+        while(($data = fgetcsv($handle)) !== false){
+            if(($data[0] ?? '') !== $username){
+                continue;
+            }
+
+            if(trim((string)($data[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            $col1 = trim((string)($data[1] ?? ''));
+            $link = trim((string)($data[7] ?? ''));
+            $type = trim((string)($data[9] ?? ''));
+            $planText = trim((string)($data[2] ?? ''));
+            $tracking = trim((string)($data[3] ?? ''));
+            $date = trim((string)($data[4] ?? ''));
+            $time = trim((string)($data[5] ?? ''));
+
+            if($type === 'خرید' && pnvIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
+                $link = pnvNormalizeSubLinkValue($link);
+                $key = strtolower($link);
+                $linkIndex[$key] = [
+                    'name' => $col1 !== '' ? $col1 : $link,
+                    'link' => $link,
+                    'plan_text' => $planText,
+                    'tracking' => $tracking,
+                    'date' => $date,
+                    'time' => $time,
+                ];
+            }
+
+            if($type === 'تمدید' && pnvIsValidSubLink($col1) && !pnvIsSubLinkCleared($username, $col1)){
+                $col1 = pnvNormalizeSubLinkValue($col1);
+                $key = strtolower($col1);
+
+                if(!isset($linkIndex[$key])){
+                    $name = $col1;
+
+                    if(preg_match('/\/sub\/([^\/\?]+)/i', $col1, $matches)){
+                        $name = $matches[1];
+                    }
+
+                    $linkIndex[$key] = [
+                        'name' => $name,
+                        'link' => $col1,
+                        'plan_text' => $planText,
+                        'tracking' => $tracking,
+                        'date' => $date,
+                        'time' => $time,
+                    ];
+                }
+            }
+        }
+
+        fclose($handle);
+
+        if(function_exists('pnvFindSubLinkFromCsv') === false && is_file(__DIR__ . '/plan_ui_lib.php')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+
+        foreach($linkIndex as &$entry){
+            $fullLink = function_exists('pnvFindSubLinkFromCsv')
+                ? pnvFindSubLinkFromCsv($username, $entry['link'] ?? '')
+                : ($entry['link'] ?? '');
+            $entry['link'] = $fullLink !== '' ? $fullLink : ($entry['link'] ?? '');
+        }
+        unset($entry);
+
+        return array_values($linkIndex);
+    }
+
     function pnvClearUserSubscriptionLink($username, $tracking, $timestamp){
         $username = trim((string)$username);
         $tracking = trim((string)$tracking);
