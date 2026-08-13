@@ -312,6 +312,88 @@ if(!function_exists('pnvFormatPlanPrice')){
         return !preg_match('/[._-]/', $name) && preg_match('/^[A-Za-z0-9]{10,32}$/', $name);
     }
 
+    function pnvSubNameNeedsPanelResolve($name, $link = ''){
+        $name = trim((string)$name);
+
+        if($name === '' || pnvNameLooksLikeSubId($name, $link)){
+            return true;
+        }
+
+        if($name === 'اشتراک'){
+            return true;
+        }
+
+        return (bool)preg_match('/^اشتراک\s+\d+$/u', $name);
+    }
+
+    function pnvFindSubCachedClientEmail($link){
+        if(!function_exists('subUsageLoadCache') || !function_exists('subUsageCacheKey')){
+            if(is_file(__DIR__ . '/sub_usage_lib.php')){
+                require_once __DIR__ . '/sub_usage_lib.php';
+            }
+        }
+
+        if(!function_exists('subUsageLoadCache') || !function_exists('subUsageCacheKey')){
+            return '';
+        }
+
+        $cache = subUsageLoadCache();
+        $cached = $cache[subUsageCacheKey($link)] ?? null;
+
+        return trim((string)(is_array($cached) ? ($cached['email'] ?? '') : ''));
+    }
+
+    function pnvFindSubClientEmailFromServer($server, $subId, $link = ''){
+        if(!function_exists('xuiApiRequest')){
+            if(is_file(__DIR__ . '/xui_lib.php')){
+                require_once __DIR__ . '/xui_lib.php';
+            }
+        }
+
+        $subId = trim((string)$subId);
+
+        if($subId === '' || !is_array($server) || !function_exists('xuiApiRequest')){
+            return '';
+        }
+
+        $result = xuiApiRequest(
+            $server,
+            'GET',
+            '/panel/api/clients/list/paged?page=1&pageSize=10&search=' . rawurlencode($subId)
+            . '&filter=&protocol=&sort=email&order=ascend'
+        );
+
+        if(!empty($result['success']) && function_exists('xuiNormalizeClientRecord') && function_exists('xuiClientMatchesSubId')){
+            $obj = $result['obj'] ?? [];
+            $list = $obj['list'] ?? $obj['clients'] ?? [];
+
+            if(is_array($list)){
+                foreach($list as $item){
+                    $client = xuiNormalizeClientRecord($item['client'] ?? $item);
+
+                    if($client && xuiClientMatchesSubId($client, $subId)){
+                        $email = trim((string)($client['email'] ?? ''));
+
+                        if($email !== ''){
+                            return $email;
+                        }
+                    }
+                }
+            }
+        }
+
+        if(function_exists('xuiFindClientBySubId')){
+            $client = xuiFindClientBySubId($server, $subId, $link);
+            $email = trim((string)(is_array($client) ? ($client['email'] ?? '') : ''));
+
+            if($email !== ''){
+                return $email;
+            }
+        }
+
+        return '';
+    }
+
     function pnvFindSubNameFromCsv($username, $subLink){
         $username = trim((string)$username);
         $subLink = trim((string)$subLink);
@@ -414,6 +496,18 @@ if(!function_exists('pnvFormatPlanPrice')){
             return '';
         }
 
+        $cachedEmail = pnvFindSubCachedClientEmail($link);
+
+        if($cachedEmail !== ''){
+            return $cachedEmail;
+        }
+
+        static $liveLookups = 0;
+
+        if($liveLookups >= 4){
+            return '';
+        }
+
         if(!function_exists('xuiParseSubLink') && is_file(__DIR__ . '/xui_lib.php')){
             require_once __DIR__ . '/xui_lib.php';
         }
@@ -425,9 +519,9 @@ if(!function_exists('pnvFormatPlanPrice')){
                 $config = xuiLoadConfig();
                 $server = xuiFindServerByHost($parsed['host'], $config);
 
-                if($server && function_exists('xuiServerHasAuth') && xuiServerHasAuth($server) && function_exists('xuiFindClientBySubId')){
-                    $client = xuiFindClientBySubId($server, $parsed['sub_id'], $link);
-                    $email = trim((string)(is_array($client) ? ($client['email'] ?? '') : ''));
+                if($server && function_exists('xuiServerHasAuth') && xuiServerHasAuth($server)){
+                    $liveLookups++;
+                    $email = pnvFindSubClientEmailFromServer($server, $parsed['sub_id'], $link);
 
                     if($email !== ''){
                         return $email;
@@ -437,6 +531,7 @@ if(!function_exists('pnvFormatPlanPrice')){
         }
 
         if(function_exists('xuiFetchSubEmail')){
+            $liveLookups++;
             $email = trim((string)xuiFetchSubEmail($link));
 
             if($email !== ''){
@@ -476,7 +571,7 @@ if(!function_exists('pnvFormatPlanPrice')){
     function pnvResolveSubDisplayName($username, $link, $fallback = ''){
         $fallback = trim((string)$fallback);
 
-        if($fallback !== '' && !pnvNameLooksLikeSubId($fallback, $link)){
+        if($fallback !== '' && !pnvSubNameNeedsPanelResolve($fallback, $link)){
             return $fallback;
         }
 
@@ -486,24 +581,19 @@ if(!function_exists('pnvFormatPlanPrice')){
             return $fromCsv;
         }
 
+        $cachedEmail = pnvSubDisplayNameFromClientEmail(pnvFindSubCachedClientEmail($link), $link);
+
+        if($cachedEmail !== ''){
+            return $cachedEmail;
+        }
+
         $fromPanel = pnvFindSubNameFromPanel($link);
 
         if($fromPanel !== ''){
             return $fromPanel;
         }
 
-        if(function_exists('subUsageLoadCache') && function_exists('subUsageCacheKey')){
-            require_once __DIR__ . '/sub_usage_lib.php';
-            $cache = subUsageLoadCache();
-            $cached = $cache[subUsageCacheKey($link)] ?? null;
-            $fromEmail = pnvSubDisplayNameFromClientEmail((string)($cached['email'] ?? ''), $link);
-
-            if($fromEmail !== ''){
-                return $fromEmail;
-            }
-        }
-
-        if($fallback !== '' && !pnvNameLooksLikeSubId($fallback, $link)){
+        if($fallback !== '' && !pnvSubNameNeedsPanelResolve($fallback, $link)){
             return $fallback;
         }
 

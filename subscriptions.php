@@ -73,7 +73,11 @@ foreach($items as &$item){
     $key = $item['usage_key'] ?? subUsageCacheKey($item['link']);
     $item['usage'] = $usageMap[$key] ?? null;
 
-    if(pnvNameLooksLikeSubId($item['name'], $item['link']) && is_array($item['usage'])){
+    if(!pnvSubNameNeedsPanelResolve($item['name'], $item['link'])){
+        continue;
+    }
+
+    if(is_array($item['usage'])){
         $fromEmail = pnvSubDisplayNameFromClientEmail((string)($item['usage']['email'] ?? ''), $item['link']);
 
         if($fromEmail !== ''){
@@ -81,7 +85,7 @@ foreach($items as &$item){
         }
     }
 
-    if(pnvNameLooksLikeSubId($item['name'], $item['link'])){
+    if(pnvSubNameNeedsPanelResolve($item['name'], $item['link'])){
         $fromPanel = pnvFindSubNameFromPanel($item['link']);
 
         if($fromPanel !== ''){
