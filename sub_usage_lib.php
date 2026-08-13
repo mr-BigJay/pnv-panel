@@ -417,12 +417,27 @@ if(!function_exists('subUsageCachePath')){
         return $view;
     }
 
-    function subUsageRefreshOne($link, $meta = [], $cacheEntry = null){
+    function subUsageRefreshOne($link, $meta = [], $cacheEntry = null, $preferPanel = false){
         $link = trim((string)$link);
         $hint = is_array($cacheEntry) ? $cacheEntry : [];
         $meta['plan_text'] = trim((string)($meta['plan_text'] ?? $meta['plan'] ?? ''));
 
-        // 1) مسیر سبک: هدر subscription-userinfo
+        $panel = null;
+
+        if($preferPanel){
+            // بروزرسانی دوره‌ای: پنل دقیق‌تر از هدر subscription-userinfo است
+            $panel = subUsageFetchFromPanel($link, $hint);
+
+            if(is_array($panel) && !empty($panel['client'])){
+                $view = subUsageFromClient($panel['client'], $meta);
+                $view['source'] = 'panel';
+                $view['email'] = $panel['email'] ?? '';
+                $view['server_id'] = $panel['server_id'] ?? '';
+                return $view;
+            }
+        }
+
+        // مسیر سبک: هدر subscription-userinfo
         $userinfo = subUsageFetchFromSubUserinfo($link);
 
         if(is_array($userinfo)){
@@ -438,8 +453,10 @@ if(!function_exists('subUsageCachePath')){
             return $view;
         }
 
-        // 2) پنل API
-        $panel = subUsageFetchFromPanel($link, $hint);
+        // پنل API
+        if(!is_array($panel)){
+            $panel = subUsageFetchFromPanel($link, $hint);
+        }
 
         if(is_array($panel) && !empty($panel['client'])){
             $view = subUsageFromClient($panel['client'], $meta);
@@ -449,7 +466,7 @@ if(!function_exists('subUsageCachePath')){
             return $view;
         }
 
-        // 3) تخمین از اطلاعات فاکتور وقتی پنل در دسترس نیست
+        // تخمین از اطلاعات فاکتور وقتی پنل در دسترس نیست
         $estimate = subUsageEstimateFromMeta($meta);
 
         if(!empty($estimate['ok'])){
@@ -471,7 +488,7 @@ if(!function_exists('subUsageCachePath')){
      * @param array $items [ ['link'=>..., 'plan'=>..., 'date'=>..., 'time'=>...], ... ]
      * @param int $maxFresh حداکثر تعداد رفرش زنده در همین درخواست
      */
-    function subUsageGetForItems($items, $maxFresh = 4){
+    function subUsageGetForItems($items, $maxFresh = 4, $forceRefresh = false){
         $cache = subUsageLoadCache();
         $ttl = subUsageTtlSeconds();
         $now = time();
@@ -501,7 +518,11 @@ if(!function_exists('subUsageCachePath')){
 
             $cached = $cache[$key] ?? null;
             $age = is_array($cached) ? ($now - intval($cached['updated_at'] ?? 0)) : PHP_INT_MAX;
-            $isFresh = is_array($cached) && !empty($cached['ok']) && $age >= 0 && $age <= $ttl;
+            $isFresh = !$forceRefresh
+                && is_array($cached)
+                && !empty($cached['ok'])
+                && $age >= 0
+                && $age < $ttl;
 
             if($isFresh){
                 $view = $cached;
@@ -531,7 +552,12 @@ if(!function_exists('subUsageCachePath')){
             }
 
             $freshUsed++;
-            $view = subUsageRefreshOne($link, $meta, is_array($cached) ? $cached : []);
+            $view = subUsageRefreshOne(
+                $link,
+                $meta,
+                is_array($cached) ? $cached : [],
+                $forceRefresh
+            );
             $view['cached'] = false;
             $view['link'] = $link;
             $view['key'] = $key;

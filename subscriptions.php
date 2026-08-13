@@ -455,8 +455,9 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
         applyListFilter();
     }
 
-    function loadUsage(attempt){
+    function loadUsage(attempt, forceRefresh){
         attempt = attempt || 0;
+        forceRefresh = !!forceRefresh;
         var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-usage-link]'));
         if(!boxes.length) return;
 
@@ -478,11 +479,19 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
 
         var links = boxes.map(function(b){ return b.getAttribute('data-usage-link'); }).filter(Boolean);
 
+        var payload = {
+            links: links,
+            max_fresh: Math.min(Math.max(links.length, 1), 8)
+        };
+        if(forceRefresh){
+            payload.force = true;
+        }
+
         fetch('sub-usage-api.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             credentials: 'same-origin',
-            body: JSON.stringify({ links: links, max_fresh: 4 })
+            body: JSON.stringify(payload)
         }).then(function(r){ return r.json(); }).then(function(data){
             if(!data || !data.ok){
                 boxes.forEach(function(b){ applyUsage(b, null); });
@@ -506,11 +515,11 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
             });
 
             if((data.pending || 0) > 0 && attempt < 6){
-                setTimeout(function(){ loadUsage(attempt + 1); }, 900);
+                setTimeout(function(){ loadUsage(attempt + 1, forceRefresh); }, 900);
             }
         }).catch(function(){
             if(attempt < 2){
-                setTimeout(function(){ loadUsage(attempt + 1); }, 1200);
+                setTimeout(function(){ loadUsage(attempt + 1, forceRefresh); }, 1200);
                 return;
             }
             boxes.forEach(function(b){ applyUsage(b, null); });
@@ -518,12 +527,12 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
     }
 
     if(document.querySelector('[data-usage-link]')){
-        loadUsage(0);
+        loadUsage(0, false);
         setInterval(function(){
             if(document.hidden){
                 return;
             }
-            loadUsage(0);
+            loadUsage(0, true);
         }, 60000);
     }
 })();

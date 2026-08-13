@@ -94,7 +94,8 @@ if(isset($input['max_fresh'])){
     $maxFresh = max(1, min(8, intval($input['max_fresh'])));
 }
 
-$result = subUsageGetForItems($items, $maxFresh);
+$forceRefresh = !empty($input['force']);
+$result = subUsageGetForItems($items, $maxFresh, $forceRefresh);
 
 $pending = 0;
 
