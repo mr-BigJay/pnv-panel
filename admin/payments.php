@@ -520,6 +520,11 @@ background:#facc15;
 box-shadow:0 0 0 2px rgba(250,204,21,.25);
 }
 
+.statusDot--blue{
+background:#2563eb;
+box-shadow:0 0 0 2px rgba(37,99,235,.35);
+}
+
 .menuWrap{
 position:relative;
 display:inline-block;
@@ -860,20 +865,12 @@ width:180px;
 
             $p = $row['data'];
 
+            $statusMeta = function_exists('instantPayAdminRowStatusMeta')
+                ? instantPayAdminRowStatusMeta($p)
+                : ['title' => 'در حال بررسی', 'class' => 'statusDot--yellow'];
+            $statusDotClass = $statusMeta['class'];
+            $statusTitle = $statusMeta['title'];
             $status = trim($p[6] ?? '');
-
-            $statusDotClass = 'statusDot--yellow';
-            $statusTitle = 'در حال بررسی';
-
-            if($status === 'تایید شد'){
-                $statusDotClass = 'statusDot--green';
-                $statusTitle = 'تایید شد';
-            }
-
-            if($status === 'رد شد'){
-                $statusDotClass = 'statusDot--red';
-                $statusTitle = 'رد شد';
-            }
 
             $mobile =
             getUserMobile(

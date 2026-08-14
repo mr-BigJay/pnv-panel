@@ -615,6 +615,7 @@ stroke:#fff;
 .statusIcon.is-ok{background:#22c55e}
 .statusIcon.is-no{background:#ef4444}
 .statusIcon.is-pending{background:#f59e0b}
+.statusIcon.is-progress{background:#2563eb}
 
 .dropdown{
 display:none;
@@ -780,11 +781,38 @@ $status = 'درحال بررسی';
 }
 
 $statusClass = 'is-pending';
-if($status === 'تایید شد'){
-$statusClass = 'is-ok';
+$statusTitle = 'درحال بررسی';
+if(function_exists('instantPayAdminRowStatusMeta')){
+    $renewStatusMeta = instantPayAdminRowStatusMeta($p);
+    $statusTitle = $renewStatusMeta['title'] ?? $statusTitle;
+    if(($renewStatusMeta['class'] ?? '') === 'statusDot--green'){
+        $statusClass = 'is-ok';
+    }
+    elseif(($renewStatusMeta['class'] ?? '') === 'statusDot--red'){
+        $statusClass = 'is-no';
+    }
+    elseif(($renewStatusMeta['class'] ?? '') === 'statusDot--blue'){
+        $statusClass = 'is-progress';
+        $statusTitle = 'در حال انجام';
+    }
+    elseif($status === 'تایید شد'){
+        $statusClass = 'is-ok';
+        $statusTitle = 'تایید شد';
+    }
+    elseif($status === 'رد شد'){
+        $statusClass = 'is-no';
+        $statusTitle = 'رد شد';
+    }
 }
-elseif($status === 'رد شد'){
-$statusClass = 'is-no';
+else{
+    if($status === 'تایید شد'){
+        $statusClass = 'is-ok';
+        $statusTitle = 'تایید شد';
+    }
+    elseif($status === 'رد شد'){
+        $statusClass = 'is-no';
+        $statusTitle = 'رد شد';
+    }
 }
 
 $mobile=getUserMobile($p[0] ?? '',$users);
@@ -832,7 +860,7 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
 </span>
 <?php } else { ?>
-<span class="statusIcon is-pending" title="درحال بررسی" aria-label="درحال بررسی">
+<span class="statusIcon <?php echo htmlspecialchars($statusClass, ENT_QUOTES, 'UTF-8'); ?>" title="<?php echo htmlspecialchars($statusTitle, ENT_QUOTES, 'UTF-8'); ?>" aria-label="<?php echo htmlspecialchars($statusTitle, ENT_QUOTES, 'UTF-8'); ?>">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
 </span>
 <?php } ?>
