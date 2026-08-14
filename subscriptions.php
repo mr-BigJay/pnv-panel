@@ -91,7 +91,7 @@ $firstOkOpen = true;
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=14">
+<link rel="stylesheet" href="subscriptions_ui.css?v=15">
 </head>
 <body>
 <div class="box">
@@ -230,7 +230,7 @@ $visibleItems = array_values(array_filter($items, static function($it){
 </div>
 <button type="button" class="btnCopy copyBtn" data-copy="sub<?php echo (int)$item['i']; ?>">
 <svg class="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-کپی لینک
+کپی لینک اشتراک
 </button>
 </div>
 </div>
