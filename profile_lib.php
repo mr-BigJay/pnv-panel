@@ -72,14 +72,28 @@ if(!function_exists('profileUsersPath')){
     }
 
     function profileLoadUsers(){
+        static $cache = null;
+
+        if(!empty($GLOBALS['__profileUsersCacheReset'])){
+            $cache = null;
+            unset($GLOBALS['__profileUsersCacheReset']);
+        }
+
+        if($cache !== null){
+            return $cache;
+        }
+
         $path = profileUsersPath();
 
         if(!file_exists($path)){
-            return [];
+            $cache = [];
+            return $cache;
         }
 
         $data = json_decode(file_get_contents($path), true);
-        return is_array($data) ? $data : [];
+        $cache = is_array($data) ? $data : [];
+
+        return $cache;
     }
 
     function profileSaveUsers($users){
@@ -91,6 +105,8 @@ if(!function_exists('profileUsersPath')){
             ),
             LOCK_EX
         );
+
+        $GLOBALS['__profileUsersCacheReset'] = true;
     }
 
     function profileFindUserIndex($users, $username){

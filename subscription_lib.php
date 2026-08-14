@@ -38,14 +38,65 @@ if(!function_exists('pnvClearedSubsPath')){
     }
 
     function pnvLoadClearedSubs(){
+        static $cache = null;
+
+        if(!empty($GLOBALS['__pnvClearedSubsCacheReset'])){
+            $cache = null;
+            unset($GLOBALS['__pnvClearedSubsCacheReset']);
+        }
+
+        if($cache !== null){
+            return $cache;
+        }
+
         $file = pnvClearedSubsPath();
 
         if(!file_exists($file)){
-            return [];
+            $cache = [];
+            return $cache;
         }
 
         $data = json_decode(file_get_contents($file), true);
-        return is_array($data) ? $data : [];
+        $cache = is_array($data) ? $data : [];
+
+        return $cache;
+    }
+
+    function pnvUserClearedLinkLookup($username){
+        static $cache = [];
+
+        $username = strtolower(trim((string)$username));
+
+        if($username === ''){
+            return [];
+        }
+
+        if(!empty($GLOBALS['__pnvClearedSubsCacheReset'])){
+            $cache = [];
+            unset($GLOBALS['__pnvClearedSubsCacheReset']);
+        }
+
+        if(isset($cache[$username])){
+            return $cache[$username];
+        }
+
+        $data = pnvLoadClearedSubs();
+        $list = $data[$username] ?? [];
+        $lookup = [];
+
+        if(is_array($list)){
+            foreach($list as $item){
+                $normalized = pnvNormalizeSubLink($item);
+
+                if($normalized !== ''){
+                    $lookup[$normalized] = true;
+                }
+            }
+        }
+
+        $cache[$username] = $lookup;
+
+        return $lookup;
     }
 
     function pnvSaveClearedSubs($data){
@@ -58,6 +109,8 @@ if(!function_exists('pnvClearedSubsPath')){
             json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
             LOCK_EX
         );
+
+        $GLOBALS['__pnvClearedSubsCacheReset'] = true;
     }
 
     function pnvIsSubLinkCleared($username, $link){
@@ -68,20 +121,9 @@ if(!function_exists('pnvClearedSubsPath')){
             return false;
         }
 
-        $data = pnvLoadClearedSubs();
-        $list = $data[$username] ?? [];
+        $lookup = pnvUserClearedLinkLookup($username);
 
-        if(!is_array($list)){
-            return false;
-        }
-
-        foreach($list as $item){
-            if(pnvNormalizeSubLink($item) === $link){
-                return true;
-            }
-        }
-
-        return false;
+        return !empty($lookup[pnvNormalizeSubLink($link)]);
     }
 
     function pnvMarkSubLinkCleared($username, $link){
@@ -138,6 +180,84 @@ if(!function_exists('pnvClearedSubsPath')){
         return trim(preg_split('/\s+/u', $value)[0] ?? '');
     }
 
+    /**
+     * آمار داشبورد کاربر با یک‌بار خواندن payments.csv
+     *
+     * @return array{approved_subs:int,pending_buys:int,pending_renews:int}
+     */
+    function pnvDashboardUserPaymentStats($username){
+        $username = trim((string)$username);
+        $stats = [
+            'approved_subs' => 0,
+            'pending_buys' => 0,
+            'pending_renews' => 0,
+        ];
+        $file = pnvPaymentsCsvPath();
+
+        if($username === '' || !file_exists($file)){
+            return $stats;
+        }
+
+        $clearedLookup = pnvUserClearedLinkLookup($username);
+        $linkIndex = [];
+        $handle = fopen($file, 'r');
+
+        if($handle === false){
+            return $stats;
+        }
+
+        while(($data = fgetcsv($handle)) !== false){
+            if(($data[0] ?? '') !== $username){
+                continue;
+            }
+
+            $status = trim((string)($data[6] ?? ''));
+            $type = trim((string)($data[9] ?? ''));
+
+            if($status !== 'تایید شد' && $status !== 'رد شد'){
+                if($type === 'تمدید'){
+                    $stats['pending_renews']++;
+                }
+                else{
+                    $stats['pending_buys']++;
+                }
+
+                continue;
+            }
+
+            if($status !== 'تایید شد'){
+                continue;
+            }
+
+            $col1 = trim((string)($data[1] ?? ''));
+            $link = trim((string)($data[7] ?? ''));
+
+            if($type === 'خرید' && pnvIsValidSubLink($link)){
+                $link = pnvNormalizeSubLinkValue($link);
+                $key = strtolower($link);
+
+                if($key !== '' && empty($clearedLookup[pnvNormalizeSubLink($link)])){
+                    $linkIndex[$key] = true;
+                }
+            }
+
+            if($type === 'تمدید' && pnvIsValidSubLink($col1)){
+                $col1 = pnvNormalizeSubLinkValue($col1);
+                $key = strtolower($col1);
+
+                if($key !== '' && empty($clearedLookup[pnvNormalizeSubLink($col1)])){
+                    $linkIndex[$key] = true;
+                }
+            }
+        }
+
+        fclose($handle);
+
+        $stats['approved_subs'] = count($linkIndex);
+
+        return $stats;
+    }
+
     function pnvLoadUserActiveSubscriptions($username, $resolveNames = true){
         $username = trim((string)$username);
         $linkIndex = [];
@@ -148,6 +268,7 @@ if(!function_exists('pnvClearedSubsPath')){
         }
 
         $handle = fopen($file, 'r');
+        $clearedLookup = pnvUserClearedLinkLookup($username);
 
         while(($data = fgetcsv($handle)) !== false){
             if(($data[0] ?? '') !== $username){
@@ -166,7 +287,7 @@ if(!function_exists('pnvClearedSubsPath')){
             $date = trim((string)($data[4] ?? ''));
             $time = trim((string)($data[5] ?? ''));
 
-            if($type === 'خرید' && pnvIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
+            if($type === 'خرید' && pnvIsValidSubLink($link) && empty($clearedLookup[pnvNormalizeSubLink($link)])){
                 $link = pnvNormalizeSubLinkValue($link);
                 $key = strtolower($link);
                 $linkIndex[$key] = [
@@ -179,7 +300,7 @@ if(!function_exists('pnvClearedSubsPath')){
                 ];
             }
 
-            if($type === 'تمدید' && pnvIsValidSubLink($col1) && !pnvIsSubLinkCleared($username, $col1)){
+            if($type === 'تمدید' && pnvIsValidSubLink($col1) && empty($clearedLookup[pnvNormalizeSubLink($col1)])){
                 $col1 = pnvNormalizeSubLinkValue($col1);
                 $key = strtolower($col1);
 
@@ -215,9 +336,14 @@ if(!function_exists('pnvClearedSubsPath')){
         }
 
         foreach($linkIndex as &$entry){
-            $fullLink = pnvFindSubLinkFromCsv($username, $entry['link'] ?? '');
-            $fullLink = pnvNormalizeSubLinkValue($fullLink !== '' ? $fullLink : ($entry['link'] ?? ''));
-            $entry['link'] = $fullLink;
+            $currentLink = trim((string)($entry['link'] ?? ''));
+
+            if($currentLink !== '' && !preg_match('#^https?://#i', $currentLink)){
+                $fullLink = pnvFindSubLinkFromCsv($username, $currentLink);
+                $currentLink = $fullLink !== '' ? $fullLink : $currentLink;
+            }
+
+            $entry['link'] = pnvNormalizeSubLinkValue($currentLink);
 
             if($resolveNames){
                 $entry['name'] = pnvEnsureSubDisplayName(
