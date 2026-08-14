@@ -91,7 +91,7 @@ $firstOkOpen = true;
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=13">
+<link rel="stylesheet" href="subscriptions_ui.css?v=14">
 </head>
 <body>
 <div class="box">
@@ -225,10 +225,10 @@ $visibleItems = array_values(array_filter($items, static function($it){
 <div class="subQrHint">برای بزرگ‌نمایی بزنید</div>
 </div>
 <div class="subLinkCol">
-<div class="subLinkTitle">لینک اشتراک</div>
-<div class="subLinkHint">برای استفاده، لینک را کپی کنید</div>
-<div class="subLinkHidden" id="sub<?php echo (int)$item['i']; ?>"><?php echo $h($item['link']); ?></div>
-<button type="button" class="btnPrimary copyBtn" data-copy="sub<?php echo (int)$item['i']; ?>">
+<div class="subLinkBox" title="<?php echo $h($item['link']); ?>">
+<span class="subLinkText" id="sub<?php echo (int)$item['i']; ?>"><?php echo $h($item['link']); ?></span>
+</div>
+<button type="button" class="btnCopy copyBtn" data-copy="sub<?php echo (int)$item['i']; ?>">
 <svg class="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
 کپی لینک
 </button>
