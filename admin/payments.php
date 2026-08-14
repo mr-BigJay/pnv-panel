@@ -78,6 +78,10 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+if (is_file(__DIR__ . '/../subscription_lib.php')) {
+    require_once __DIR__ . '/../subscription_lib.php';
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -198,13 +202,29 @@ $allowedPerPage = [20, 50, 100];
 
 if(isset($_POST['approve_payment'])){
 
-    $index = intval($_POST['approve_index']);
-
+    $indexFallback = intval($_POST['approve_index'] ?? -1);
+    $username = trim($_POST['approve_username'] ?? '');
+    $tracking = trim($_POST['approve_tracking'] ?? '');
     $link = trim($_POST['approve_link'] ?? '');
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
     if(!in_array($redirectPer, $allowedPerPage, true)){
         $redirectPer = 20;
+    }
+
+    $index = function_exists('pnvFindPaymentRowIndex')
+        ? pnvFindPaymentRowIndex(
+            $payments,
+            $username,
+            $tracking,
+            $indexFallback >= 0 ? $indexFallback : null
+        )
+        : ($indexFallback >= 0 && isset($payments[$indexFallback]) ? $indexFallback : null);
+
+    if($index === null){
+        $_SESSION['payment_error'] = 'ردیف پرداخت یافت نشد. صفحه را تازه کنید و دوباره تلاش کنید.';
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        exit;
     }
 
     $xuiConfig = xuiLoadConfig();
@@ -231,12 +251,11 @@ if(isset($_POST['approve_payment'])){
         exit;
     }
 
-    if(isset($payments[$index])){
+    $payments[$index][6] = 'تایید شد';
+    $payments[$index][7] = $link;
 
-        $payments[$index][6] = 'تایید شد';
-
-        $payments[$index][7] = $link;
-
+    if(trim((string)($payments[$index][9] ?? '')) === ''){
+        $payments[$index][9] = 'خرید';
     }
 
     $fp = fopen($paymentsFile,'w');
@@ -258,8 +277,9 @@ if(isset($_POST['approve_payment'])){
 
 if(isset($_POST['reject_payment'])){
 
-    $index = intval($_POST['reject_index']);
-
+    $indexFallback = intval($_POST['reject_index'] ?? -1);
+    $username = trim($_POST['reject_username'] ?? '');
+    $tracking = trim($_POST['reject_tracking'] ?? '');
     $reason = trim($_POST['reject_reason']);
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
@@ -267,13 +287,23 @@ if(isset($_POST['reject_payment'])){
         $redirectPer = 20;
     }
 
-    if(isset($payments[$index])){
+    $index = function_exists('pnvFindPaymentRowIndex')
+        ? pnvFindPaymentRowIndex(
+            $payments,
+            $username,
+            $tracking,
+            $indexFallback >= 0 ? $indexFallback : null
+        )
+        : ($indexFallback >= 0 && isset($payments[$indexFallback]) ? $indexFallback : null);
 
-        $payments[$index][6] = 'رد شد';
-
-        $payments[$index][7] = $reason;
-
+    if($index === null){
+        $_SESSION['payment_error'] = 'ردیف پرداخت یافت نشد. صفحه را تازه کنید و دوباره تلاش کنید.';
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        exit;
     }
+
+    $payments[$index][6] = 'رد شد';
+    $payments[$index][7] = $reason;
 
     $fp = fopen($paymentsFile,'w');
 
@@ -970,7 +1000,8 @@ width:180px;
                                 <?php echo json_encode($mobile); ?>,
                                 <?php echo json_encode($p[1] ?? ""); ?>,
                                 <?php echo json_encode($status); ?>,
-                                <?php echo json_encode($p[7] ?? ""); ?>
+                                <?php echo json_encode($p[7] ?? ""); ?>,
+                                <?php echo json_encode($p[3] ?? ""); ?>
                                 )'>
 
                                 عملیات
@@ -1274,7 +1305,8 @@ function showAction(
     mobile,
     config,
     status='',
-    savedLink=''
+    savedLink='',
+    track=''
 ){
 
     let content = '';
@@ -1345,6 +1377,16 @@ function showAction(
                     value="${id}">
 
                 <input
+                    type="hidden"
+                    name="approve_username"
+                    value="${user}">
+
+                <input
+                    type="hidden"
+                    name="approve_tracking"
+                    value="${track}">
+
+                <input
                     type="text"
                     name="approve_link"
                     id="approveLink"
@@ -1384,6 +1426,16 @@ function showAction(
                     type="hidden"
                     name="reject_index"
                     value="${id}">
+
+                <input
+                    type="hidden"
+                    name="reject_username"
+                    value="${user}">
+
+                <input
+                    type="hidden"
+                    name="reject_tracking"
+                    value="${track}">
 
                 <select name="reject_reason">
 

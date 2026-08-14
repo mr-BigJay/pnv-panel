@@ -48,7 +48,7 @@ if(file_exists($paymentsFile)){
     $handle = fopen($paymentsFile, 'r');
 
     while(($row = fgetcsv($handle)) !== false){
-        if(($row[0] ?? '') !== $user){
+        if(!pnvPaymentUsernameMatches($row[0] ?? '', $user)){
             continue;
         }
 
