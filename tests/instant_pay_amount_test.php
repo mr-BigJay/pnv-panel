@@ -107,5 +107,22 @@ $csvRow[13] = 2920;
 assertTrue(instantPayCsvRowPending($csvRow), 'csv pending row detected');
 assertTrue(instantPayCsvRowAmountRial($csvRow) === 2492920, 'csv amount column');
 
+$visibleRow = $csvRow;
+assertTrue(!instantPayAdminRowVisible($visibleRow), 'auto pending without json hidden');
+
+$items = [[
+    'id' => 't1',
+    'user' => 'demo',
+    'type' => 'خرید',
+    'status' => 'waiting',
+    'code' => 2920,
+    'expires_at' => time() + 600,
+    'csv_index' => 0,
+]];
+instantPaySave($items);
+assertTrue(instantPayAdminRowVisible($visibleRow), 'auto pending with active waiting json visible');
+$meta = instantPayAdminRowStatusMeta($visibleRow);
+assertTrue(($meta['title'] ?? '') === 'در حال انجام', 'in-progress status label');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

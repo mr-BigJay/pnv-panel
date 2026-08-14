@@ -347,6 +347,21 @@ fclose($f);
 
 }
 
+if(file_exists(__DIR__ . '/../instant_pay_lib.php')){
+    require_once __DIR__ . '/../instant_pay_lib.php';
+    if(function_exists('instantPayPurgeStaleAdminRows')){
+        instantPayPurgeStaleAdminRows();
+        $payments = [];
+        if(file_exists($paymentsFile)){
+            $f = fopen($paymentsFile, 'r');
+            while(($d = fgetcsv($f)) !== false){
+                $payments[] = $d;
+            }
+            fclose($f);
+        }
+    }
+}
+
 $supportFile =
 $pnvRootDir . '/db/support.json';
 
@@ -386,6 +401,10 @@ $status != 'تایید شد'
 $status != 'رد شد'
 ){
 
+if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
+    continue;
+}
+
 $hasNewPayments = true;
 $pendingPaymentsCount++;
 
@@ -398,6 +417,10 @@ $status != 'تایید شد'
 &&
 $status != 'رد شد'
 ){
+
+if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
+    continue;
+}
 
 $hasNewRenews = true;
 $pendingRenewsCount++;
