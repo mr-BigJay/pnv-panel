@@ -82,6 +82,10 @@ if(!function_exists('pnvAdminIsLoggedIn')){
     function pnvAdminUrl($path = 'index.php'){
         $base = rtrim(PNV_ADMIN_BASE, '/');
         if($path === '' || $path === 'index.php'){ return $base . '/'; }
+        if(strpos($path, '?') !== false){
+            [$file, $query] = explode('?', $path, 2);
+            return $base . '/' . ltrim($file, '/') . '?' . $query;
+        }
         return $base . '/' . ltrim($path, '/');
     }
     function pnvAdminRequireAuth(){
@@ -630,6 +634,29 @@ header('Location: ' . pnvAdminUrl('index.php?page=upload'));
 
 exit;
 
+}
+
+// تایید/رد/حذف خرید و تمدید باید قبل از خروجی HTML اجرا شوند تا redirect کار کند.
+if($page === 'payments'){
+    $hasPaymentMutation = (
+        isset($_POST['approve_payment'])
+        || isset($_POST['reject_payment'])
+        || isset($_GET['deletepayment'])
+    );
+    if($hasPaymentMutation){
+        pnvAdminInclude('payments.php');
+    }
+}
+
+if($page === 'renews'){
+    $hasRenewMutation = (
+        isset($_POST['approve_payment'])
+        || isset($_POST['reject_payment'])
+        || isset($_GET['deletepayment'])
+    );
+    if($hasRenewMutation){
+        pnvAdminInclude('renews.php');
+    }
 }
 
 ?>
