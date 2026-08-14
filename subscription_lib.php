@@ -176,6 +176,7 @@ if(!function_exists('pnvClearedSubsPath')){
                     'tracking' => $tracking,
                     'date' => $date,
                     'time' => $time,
+                    'created_ts' => intval($data[8] ?? 0),
                 ];
             }
 
@@ -197,6 +198,7 @@ if(!function_exists('pnvClearedSubsPath')){
                         'tracking' => $tracking,
                         'date' => $date,
                         'time' => $time,
+                        'created_ts' => intval($data[8] ?? 0),
                     ];
                 }
                 else{
@@ -204,6 +206,7 @@ if(!function_exists('pnvClearedSubsPath')){
                     $linkIndex[$key]['tracking'] = $tracking;
                     $linkIndex[$key]['date'] = $date;
                     $linkIndex[$key]['time'] = $time;
+                    $linkIndex[$key]['created_ts'] = intval($data[8] ?? 0);
                 }
             }
         }

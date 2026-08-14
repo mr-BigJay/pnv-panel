@@ -44,6 +44,7 @@ foreach($activeSubs as $sub){
         'tracking' => trim((string)($sub['tracking'] ?? '')),
         'date' => trim((string)($sub['date'] ?? '')),
         'time' => trim((string)($sub['time'] ?? '')),
+        'created_ts' => intval($sub['created_ts'] ?? 0),
         'status' => 'تایید شد',
         'state' => 'ok',
         'link' => $link,
@@ -61,6 +62,7 @@ foreach($items as $item){
         'plan' => $item['plan'],
         'date' => $item['date'],
         'time' => $item['time'],
+        'created_ts' => intval($item['created_ts'] ?? 0),
     ];
 }
 

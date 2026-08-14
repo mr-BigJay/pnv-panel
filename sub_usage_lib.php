@@ -2,6 +2,10 @@
 
 require_once __DIR__ . '/xui_lib.php';
 
+if(is_file(__DIR__ . '/pnv_date_bootstrap.php')){
+    require_once __DIR__ . '/pnv_date_bootstrap.php';
+}
+
 if(!function_exists('subUsageCachePath')){
 
     function subUsageCachePath(){
@@ -176,6 +180,10 @@ if(!function_exists('subUsageCachePath')){
         return $volPct <= 0.05 || $timePct <= 0.05;
     }
 
+    function subUsageCalcVersion(){
+        return 2;
+    }
+
     function subUsageCacheIsUsable($cached, $forceRefresh, $age, $ttl){
         if($forceRefresh){
             return false;
@@ -186,6 +194,10 @@ if(!function_exists('subUsageCachePath')){
         }
 
         if($age < 0 || $age >= $ttl){
+            return false;
+        }
+
+        if(intval($cached['calc_version'] ?? 0) < subUsageCalcVersion()){
             return false;
         }
 
@@ -239,6 +251,16 @@ if(!function_exists('subUsageCachePath')){
             return 0;
         }
 
+        $combined = trim($date . ($time !== '' ? (' ' . $time) : ''));
+
+        if(function_exists('pnvParseDateTimeToTimestamp')){
+            $ts = pnvParseDateTimeToTimestamp($combined);
+
+            if($ts > 0){
+                return $ts;
+            }
+        }
+
         $candidates = [];
 
         if(preg_match('/^\d{4}\/\d{1,2}\/\d{1,2}$/', $date)){
@@ -256,6 +278,64 @@ if(!function_exists('subUsageCachePath')){
         }
 
         return 0;
+    }
+
+    function subUsageInferBillingPeriodSeconds($remainSeconds){
+        $remainSeconds = max(0, intval($remainSeconds));
+        $remainDays = max(1, (int)ceil($remainSeconds / 86400));
+        $candidates = [7, 15, 30, 60, 90, 180, 365];
+
+        foreach($candidates as $days){
+            if($days >= $remainDays){
+                return $days * 86400;
+            }
+        }
+
+        return (int)ceil($remainDays / 365) * 365 * 86400;
+    }
+
+    function subUsageNormalizeTimeTotalSeconds($totalSeconds, $remainSeconds){
+        $totalSeconds = max(0, intval($totalSeconds));
+        $remainSeconds = max(0, intval($remainSeconds));
+
+        if($totalSeconds <= 0){
+            return 0;
+        }
+
+        if($totalSeconds < $remainSeconds){
+            return 0;
+        }
+
+        if($totalSeconds > (3 * 365 * 86400)){
+            return 0;
+        }
+
+        return $totalSeconds;
+    }
+
+    function subUsageResolveTimeTotalSeconds($expireTs, $remainSeconds, $planDays, $startTs){
+        $expireTs = max(0, intval($expireTs));
+        $remainSeconds = max(0, intval($remainSeconds));
+        $planDays = max(0, intval($planDays));
+        $startTs = max(0, intval($startTs));
+        $totalSeconds = 0;
+
+        if($startTs > 0 && $expireTs > $startTs){
+            $totalSeconds = subUsageNormalizeTimeTotalSeconds($expireTs - $startTs, $remainSeconds);
+        }
+
+        if($totalSeconds <= 0 && $planDays > 0){
+            $totalSeconds = subUsageNormalizeTimeTotalSeconds($planDays * 86400, $remainSeconds);
+        }
+
+        if($totalSeconds <= 0 && $remainSeconds > 0){
+            $totalSeconds = subUsageNormalizeTimeTotalSeconds(
+                subUsageInferBillingPeriodSeconds($remainSeconds),
+                $remainSeconds
+            );
+        }
+
+        return max(1, $totalSeconds > 0 ? $totalSeconds : subUsageInferBillingPeriodSeconds(max($remainSeconds, 86400)));
     }
 
     function subUsageBuildView($used, $total, $expiryMs, $meta = []){
@@ -285,18 +365,12 @@ if(!function_exists('subUsageCachePath')){
             $expireTs = (int)floor($expiryMs / 1000);
             $remainSeconds = max(0, $expireTs - time());
 
-            // طول کل بازه: اگر start داریم از آن، وگرنه از plan_days
-            $totalSeconds = 0;
-
-            if($startTs > 0 && $expireTs > $startTs){
-                $totalSeconds = $expireTs - $startTs;
-            }
-            elseif($planDays > 0){
-                $totalSeconds = $planDays * 86400;
-            }
-            else{
-                $totalSeconds = max($remainSeconds, 1);
-            }
+            $totalSeconds = subUsageResolveTimeTotalSeconds(
+                $expireTs,
+                $remainSeconds,
+                $planDays,
+                $startTs
+            );
 
             $timePct = max(0, min(100, ($remainSeconds / max(1, $totalSeconds)) * 100));
         }
@@ -333,6 +407,7 @@ if(!function_exists('subUsageCachePath')){
                     : (subUsageFormatDaysLeft($remainSeconds) . ' مانده'),
             ],
             'updated_at' => time(),
+            'calc_version' => subUsageCalcVersion(),
         ];
     }
 
@@ -653,7 +728,11 @@ if(!function_exists('subUsageCachePath')){
                 'plan' => $planText,
                 'plan_text' => $planText,
                 'plan_days' => xuiParsePlanDays($planText),
-                'start_ts' => subUsageParseDateTs($item['date'] ?? '', $item['time'] ?? ''),
+                'start_ts' => max(
+                    0,
+                    intval($item['created_ts'] ?? 0),
+                    subUsageParseDateTs($item['date'] ?? '', $item['time'] ?? '')
+                ),
             ];
 
             $cached = $cache[$key] ?? null;
