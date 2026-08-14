@@ -357,7 +357,6 @@ display:flex;
 flex-direction:column;
 justify-content:flex-start;
 align-items:center;
-gap:8px;
 width:100%;
 max-width:var(--subQrBlockWidth);
 min-width:0;
@@ -367,19 +366,22 @@ justify-self:center;
 width:100%;
 height:var(--subQrBtnSize);
 min-height:var(--subQrBtnSize);
-padding:10px;
+padding:10px 8px 8px;
 border-radius:16px;
 background:rgba(15,23,42,.78);
 border:1px solid rgba(148,163,184,.22);
 box-sizing:border-box;
 display:flex;
+flex-direction:column;
 align-items:center;
-justify-content:center;
+justify-content:space-between;
+gap:6px;
 }
 .subLinkText{
 display:block;
 width:100%;
-max-height:100%;
+flex:1 1 auto;
+min-height:0;
 overflow-x:hidden;
 overflow-y:auto;
 white-space:normal;
@@ -399,14 +401,14 @@ unicode-bidi:plaintext;
 display:inline-flex;
 align-items:center;
 justify-content:center;
-gap:5px;
-align-self:center;
+gap:4px;
+flex:0 0 auto;
 width:auto;
 max-width:100%;
 min-width:0;
-padding:6px 11px;
-border-radius:9px;
-font-size:10px;
+padding:5px 10px;
+border-radius:8px;
+font-size:9px;
 font-family:tahoma,sans-serif;
 font-weight:700;
 cursor:pointer;
@@ -420,8 +422,8 @@ filter:brightness(.95);
 background:rgba(14,165,233,.22);
 }
 .btnCopy .btnIcon{
-width:11px;
-height:11px;
+width:10px;
+height:10px;
 }
 
 .btnPrimary,
