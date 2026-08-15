@@ -453,6 +453,20 @@ text-align:right;
 color:#fff;
 }
 
+.payUiTag{
+display:inline-block;
+margin-right:8px;
+padding:2px 8px;
+border-radius:999px;
+background:rgba(34,197,94,.18);
+color:#86efac;
+font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+font-size:11px;
+font-weight:700;
+vertical-align:middle;
+letter-spacing:.04em;
+}
+
 .payList{
 display:flex;
 flex-direction:column;
@@ -794,7 +808,7 @@ flex:0 0 20px;
 
 <div class="box paymentsPage" data-payments-ui="cards">
 
-<h2>لیست خرید های جدید</h2>
+<h2>لیست خرید های جدید <span class="payUiTag" title="payments UI cards v20260815">cards</span></h2>
 
 <?php if($paymentMessage !== ''){ ?>
 <div class="payAlertOk"><?php echo htmlspecialchars($paymentMessage, ENT_QUOTES, 'UTF-8'); ?></div>
