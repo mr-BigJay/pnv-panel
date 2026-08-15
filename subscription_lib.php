@@ -409,6 +409,75 @@ if(!function_exists('pnvClearedSubsPath')){
         return $list;
     }
 
+    function pnvUserCanViewSubQr($username, $link){
+        $username = trim((string)$username);
+        $link = pnvNormalizeSubLinkValue(trim((string)$link));
+
+        if($username === '' || $link === ''){
+            return false;
+        }
+
+        foreach(pnvLoadUserActiveSubscriptions($username, false) as $sub){
+            $subLink = pnvNormalizeSubLinkValue(trim((string)($sub['link'] ?? '')));
+
+            if($subLink !== '' && strcasecmp($subLink, $link) === 0){
+                return true;
+            }
+        }
+
+        if(is_file(__DIR__ . '/instant_pay_lib.php')){
+            require_once __DIR__ . '/instant_pay_lib.php';
+
+            foreach(instantPayLoad() as $item){
+                if(strcasecmp(trim((string)($item['user'] ?? '')), $username) !== 0){
+                    continue;
+                }
+
+                if(!in_array((string)($item['status'] ?? ''), ['paid', 'processing'], true)){
+                    continue;
+                }
+
+                $itemLink = trim((string)($item['link'] ?? $item['sub'] ?? ''));
+
+                if($itemLink !== '' && strcasecmp(pnvNormalizeSubLinkValue($itemLink), $link) === 0){
+                    return true;
+                }
+            }
+        }
+
+        $file = pnvPaymentsCsvPath();
+
+        if(!file_exists($file)){
+            return false;
+        }
+
+        $handle = fopen($file, 'r');
+
+        while(($row = fgetcsv($handle)) !== false){
+            if(!pnvPaymentUsernameMatches($row[0] ?? '', $username)){
+                continue;
+            }
+
+            if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            foreach([trim((string)($row[1] ?? '')), trim((string)($row[7] ?? ''))] as $candidate){
+                if($candidate === '' || !pnvIsValidSubLink($candidate)){
+                    continue;
+                }
+
+                if(strcasecmp(pnvNormalizeSubLinkValue($candidate), $link) === 0){
+                    fclose($handle);
+                    return true;
+                }
+            }
+        }
+
+        fclose($handle);
+        return false;
+    }
+
     function pnvClearUserSubscriptionLink($username, $tracking, $timestamp){
         $username = trim((string)$username);
         $tracking = trim((string)$tracking);

@@ -298,7 +298,7 @@ pointer-events:none !important;
 <div class="planSummaryCard">
 <div class="planSummaryBody">
 <div class="planSummaryLine1" id="resultPlanLine1">پلن: —</div>
-<div class="planSummaryLine2" id="resultPlanLine2">اشتراک: —</div>
+<div class="planSummaryLine2" id="resultPlanLine2">اکانت: —</div>
 </div>
 <div class="planSummaryIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg></div>
 </div>
@@ -316,8 +316,7 @@ pointer-events:none !important;
 <div class="resultQrHint">QR را با اپ VPN اسکن کنید</div>
 </div>
 <div class="resultActions">
-<a class="btnGhost" href="subscriptions.php">اشتراک‌های من</a>
-<a class="btnGhost" href="buy.php">خرید اشتراک جدید</a>
+<a class="btnResultPrimary" href="subscriptions.php">اشتراک‌های من</a>
 </div>
 </div>
 </div>
@@ -344,6 +343,7 @@ pointer-events:none !important;
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+const userSubscriptions = <?php echo json_encode($userSubscriptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const payWindowSeconds = <?php echo intval($payWindowSeconds); ?>;
 const planSelect = document.getElementById('planSelect');
 const planGrid = document.getElementById('planGrid');
@@ -394,8 +394,38 @@ function showResultQr(link){
         resultQrImg.removeAttribute('src');
         return;
     }
-    resultQrImg.src = 'sub-qr.php?u=' + encodeURIComponent(link) + '&t=' + Date.now();
+    resultQrImg.onerror = function(){
+        resultQrWrap.classList.add('is-visible');
+    };
+    resultQrImg.src = 'sub-qr.php?link=' + encodeURIComponent(link) + '&t=' + Date.now();
     resultQrWrap.classList.add('is-visible');
+}
+
+function resolveSubDisplayName(link){
+    link = String(link || '').trim();
+    if(!link) return '—';
+
+    const list = Array.isArray(userSubscriptions) ? userSubscriptions : [];
+    for(let i = 0; i < list.length; i++){
+        const item = list[i] || {};
+        if(String(item.link || '').trim() === link){
+            const name = String(item.name || '').trim();
+            if(name && name.indexOf('/sub/') === -1) return name;
+        }
+    }
+
+    const sel = document.getElementById('subSelect');
+    if(sel){
+        for(let j = 0; j < sel.options.length; j++){
+            const opt = sel.options[j];
+            if(String(opt.value || '').trim() === link){
+                const label = String(opt.textContent || '').trim();
+                if(label && label !== 'انتخاب از اشتراک‌های من' && label !== 'لینک دیگر') return label;
+            }
+        }
+    }
+
+    return shortSubLabel(link);
 }
 
 let couponTimer = null;
@@ -729,7 +759,7 @@ function showStep(step){
         }
         const sub = document.getElementById('subInput').value.trim();
         if(sub){
-            extraHtml += '<div class="planSummaryExtra">اشتراک: <b style="word-break:break-all">' + escapeHtml(sub) + '</b></div>';
+            extraHtml += '<div class="planSummaryExtra">اکانت: <b>' + escapeHtml(resolveSubDisplayName(sub)) + '</b></div>';
         }
         planSummary.innerHTML = renderPlanSummaryHtml(selectedPlan, selectedCategory, extraHtml);
         syncCardBox();
@@ -888,7 +918,8 @@ function fillResult(item){
         resultPlanLine1.innerHTML = 'پلن: <span class="planSummaryHighlight">' + escapeHtml(planParts.raw) + '</span>';
     }
     const link = item.link || sub || '—';
-    resultPlanLine2.innerHTML = 'اشتراک: <span class="planSummaryHighlight">' + escapeHtml(shortSubLabel(link)) + '</span>';
+    const displayName = resolveSubDisplayName(link);
+    resultPlanLine2.innerHTML = 'اکانت: <span class="planSummaryHighlight">' + escapeHtml(displayName) + '</span>';
     resultLink.textContent = link;
     showResultQr(link);
 }
