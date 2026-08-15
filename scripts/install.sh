@@ -1,7 +1,10 @@
 #!/bin/bash
 # PNV Panel — one-line install / upgrade (overwrite code, keep db & payments)
 #
-#   bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh)
+#   DOMAIN=panel.example.com EMAIL=admin@example.com bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh)
+#
+# Ba DOMAIN: nginx + PHP + SSL (Let's Encrypt) — hame ba yek dastoor.
+# Bedune DOMAIN: faghat deploy rooye port 80 (ba IP server).
 #
 set -euo pipefail
 
@@ -124,6 +127,22 @@ fi
 
 WEB="$(echo "$WEB" | tr '[:upper:]' '[:lower:]')"
 
+if [[ -n "$DOMAIN" && -z "$EMAIL" ]]; then
+    EMAIL="admin@${DOMAIN}"
+fi
+
+ensure_letsencrypt_nginx_files(){
+    apt-get install -y certbot python3-certbot-nginx 2>/dev/null || true
+    mkdir -p /etc/letsencrypt
+    if [[ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
+        local src="/usr/lib/python3/dist-packages/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf"
+        [[ -f "$src" ]] && cp "$src" /etc/letsencrypt/options-ssl-nginx.conf
+    fi
+    if [[ ! -f /etc/letsencrypt/ssl-dhparams.pem ]]; then
+        openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048 2>/dev/null || true
+    fi
+}
+
 if ! command -v curl >/dev/null 2>&1; then
     apt_update_safe || exit 1
     apt-get install -y curl ca-certificates
@@ -136,7 +155,10 @@ if [[ "$SKIP_APT" != "1" ]]; then
     export DEBIAN_FRONTEND=noninteractive
     apt_update_safe || exit 1
     if [[ "$WEB" == "nginx" ]]; then
-        apt-get install -y nginx php-fpm php-cli php-curl php-gd php-mbstring php-xml php-zip unzip curl ca-certificates rsync
+        apt-get install -y nginx php-fpm php-cli php-curl php-gd php-mbstring php-xml php-zip unzip curl ca-certificates rsync openssl
+        if [[ -n "$DOMAIN" ]]; then
+            apt-get install -y certbot python3-certbot-nginx 2>/dev/null || true
+        fi
         if [[ -z "$PHP_FPM_SOCK" ]]; then
             PHP_FPM_SOCK="$(find /run/php -maxdepth 1 -type s -name 'php*-fpm.sock' 2>/dev/null | sort -V | tail -1 || true)"
         fi
@@ -217,6 +239,7 @@ if [[ "$WEB" == "nginx" ]]; then
     SITE="/etc/nginx/sites-available/pnv-panel.conf"
     if [[ -n "$DOMAIN" ]]; then
         if nginx_has_letsencrypt "$DOMAIN"; then
+            ensure_letsencrypt_nginx_files
             cp "$ROOT/scripts/nginx-pnv-panel-ssl.conf.example" "$SITE"
             say "   Using existing Let's Encrypt certs for $DOMAIN"
         else
@@ -242,6 +265,7 @@ NGX
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
     nginx -t
     systemctl enable nginx php*-fpm 2>/dev/null || true
+    systemctl start php*-fpm nginx 2>/dev/null || true
     systemctl reload nginx || systemctl restart nginx
 else
     say ">> Configuring Apache..."
@@ -262,22 +286,21 @@ APX
 fi
 
 if [[ -n "$DOMAIN" ]]; then
-    if [[ -z "$EMAIL" ]]; then
-        say "!! DOMAIN set shode vali EMAIL khali — SSL skip (bad az install: certbot --nginx -d $DOMAIN)"
-    elif nginx_has_letsencrypt "$DOMAIN"; then
-        say ">> SSL: cert haye $DOMAIN az ghabl vojood darand — certbot skip"
+    if nginx_has_letsencrypt "$DOMAIN"; then
+        say ">> SSL: cert haye $DOMAIN az ghabl vojood darand"
+        nginx -t
+        systemctl reload nginx || systemctl restart nginx
     else
-        say ">> SSL (Let's Encrypt)..."
-        apt-get install -y certbot 2>/dev/null || true
+        say ">> SSL (Let's Encrypt) baraye $DOMAIN..."
+        ensure_letsencrypt_nginx_files
         if [[ "$WEB" == "nginx" ]]; then
-            apt-get install -y python3-certbot-nginx 2>/dev/null || true
-            certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect \
-                || say "!! Certbot failed — avval HTTP ro test kon, badan: certbot --nginx -d $DOMAIN"
+            certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
         else
             apt-get install -y python3-certbot-apache 2>/dev/null || true
-            certbot --apache -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect \
-                || say "!! Certbot failed"
+            certbot --apache -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
         fi
+        nginx -t 2>/dev/null || true
+        systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
     fi
 fi
 
