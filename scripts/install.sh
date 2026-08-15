@@ -215,6 +215,8 @@ for name in support users admins plans discount_codes discount_code_usages dashb
     [[ -f "$f" ]] || echo '[]' > "$f"
 done
 
+[[ -f "$ROOT/db/instant_payments.json" ]] || echo '[]' > "$ROOT/db/instant_payments.json"
+
 [[ -f "$ROOT/db/xui_servers.json" ]] || [[ ! -f "$ROOT/db/xui_servers.example.json" ]] || cp "$ROOT/db/xui_servers.example.json" "$ROOT/db/xui_servers.json"
 
 if id www-data >/dev/null 2>&1; then

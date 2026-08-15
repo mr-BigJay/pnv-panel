@@ -64,6 +64,23 @@ if(!function_exists('instantPayPath')){
         return instantPayWindowSeconds($config) + instantPayMatchGraceSeconds($config);
     }
 
+    /**
+     * مدت نمایش سفارش AUTO در لیست ادمین: مهلت پرداخت + ۱۰ دقیقه.
+     */
+    function instantPayAdminVisibilitySeconds($config = null){
+        return instantPayWindowSeconds($config) + 600;
+    }
+
+    function instantPayNormalizeTracking($tracking){
+        $tracking = trim((string)$tracking);
+
+        if(preg_match('/^AUTO-(\d+)$/i', $tracking, $m)){
+            return 'AUTO-' . str_pad((string)intval($m[1]), 4, '0', STR_PAD_LEFT);
+        }
+
+        return $tracking;
+    }
+
     function instantPayCsvRowPending($row){
         if(!is_array($row)){
             return false;
@@ -90,7 +107,7 @@ if(!function_exists('instantPayPath')){
 
     function instantPayFindJsonByTracking($user, $tracking, $items = null){
         $userKey = strtolower(trim((string)$user));
-        $tracking = trim((string)$tracking);
+        $tracking = instantPayNormalizeTracking($tracking);
 
         if($userKey === '' || $tracking === ''){
             return null;
@@ -105,7 +122,7 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if(instantPayTrackingCode($item) !== $tracking){
+            if(instantPayNormalizeTracking(instantPayTrackingCode($item)) !== $tracking){
                 continue;
             }
 
@@ -559,7 +576,11 @@ if(!function_exists('instantPayPath')){
             }
 
             $created = intval($row[8] ?? 0);
-            $key = strtolower(trim((string)($row[0] ?? ''))) . '|' . $tracking;
+            $key = strtolower(trim((string)($row[0] ?? ''))) . '|' . instantPayNormalizeTracking($tracking);
+
+            if(function_exists('instantPayAdminRowIsInProgress') && instantPayAdminRowIsInProgress($row)){
+                continue;
+            }
 
             if($created > 0 && ($now - $created) < $window && isset($activeKeys[$key])){
                 continue;
@@ -597,19 +618,20 @@ if(!function_exists('instantPayPath')){
 
         $created = intval($row[8] ?? 0);
         $now = time();
+        $maxAge = instantPayAdminVisibilitySeconds();
 
-        if($created > 0 && ($now - $created) > instantPayMaxOrderAgeSeconds()){
+        if($created <= 0 || ($now - $created) > $maxAge){
             return false;
         }
 
         $user = trim((string)($row[0] ?? ''));
         $item = instantPayFindJsonByTracking($user, $tracking);
 
-        if(!is_array($item)){
+        if(is_array($item) && in_array((string)($item['status'] ?? ''), ['cancelled', 'failed'], true)){
             return false;
         }
 
-        return in_array((string)($item['status'] ?? ''), ['waiting', 'processing'], true);
+        return true;
     }
 
     function instantPayAdminRowStatusMeta($row){
@@ -633,7 +655,7 @@ if(!function_exists('instantPayPath')){
                     return ['title' => 'در حال صدور', 'class' => 'statusDot--yellow'];
                 }
 
-                return ['title' => 'در حال انجام', 'class' => 'statusDot--blue'];
+                return ['title' => 'در حال بررسی', 'class' => 'statusDot--yellow'];
             }
         }
 
@@ -642,7 +664,7 @@ if(!function_exists('instantPayPath')){
 
     /**
      * آیا این ردیف CSV در لیست ادمین نمایش داده شود؟
-     * سفارش AUTOِ درحال‌انجام (بدون بازگشت کاربر) تا ۴۰ دقیقه دیده می‌شود.
+     * سفارش AUTOِ درحال‌انجام تا پایان مهلت پرداخت + ۱۰ دقیقه دیده می‌شود.
      */
     function instantPayAdminRowVisible($row){
         if(!is_array($row)){
