@@ -200,6 +200,15 @@ if id www-data >/dev/null 2>&1; then
     chmod -R 775 "$ROOT/db" "$ROOT/uploads" "$ROOT/temp" 2>/dev/null || true
 fi
 
+nginx_has_letsencrypt(){
+    local domain="$1"
+    [[ -n "$domain" ]] || return 1
+    [[ -f "/etc/letsencrypt/live/$domain/fullchain.pem" ]] || return 1
+    [[ -f "/etc/letsencrypt/live/$domain/privkey.pem" ]] || return 1
+    [[ -f /etc/letsencrypt/options-ssl-nginx.conf ]] || return 1
+    [[ -f /etc/letsencrypt/ssl-dhparams.pem ]] || return 1
+}
+
 if [[ "$WEB" == "nginx" ]]; then
     say ">> Configuring Nginx..."
     [[ -n "$PHP_FPM_SOCK" ]] || PHP_FPM_SOCK="$(find /run/php -maxdepth 1 -type s -name 'php*-fpm.sock' 2>/dev/null | sort -V | tail -1 || true)"
@@ -207,7 +216,13 @@ if [[ "$WEB" == "nginx" ]]; then
 
     SITE="/etc/nginx/sites-available/pnv-panel.conf"
     if [[ -n "$DOMAIN" ]]; then
-        cp "$ROOT/scripts/nginx-pnv-panel.conf.example" "$SITE"
+        if nginx_has_letsencrypt "$DOMAIN"; then
+            cp "$ROOT/scripts/nginx-pnv-panel-ssl.conf.example" "$SITE"
+            say "   Using existing Let's Encrypt certs for $DOMAIN"
+        else
+            cp "$ROOT/scripts/nginx-pnv-panel.conf.example" "$SITE"
+            say "   HTTP-only vhost (SSL ba certbot bad az nginx reload)"
+        fi
         sed -i "s|PNV_DOMAIN|$DOMAIN|g; s|PNV_ROOT|$ROOT|g; s|PNV_PHP_FPM_SOCK|$PHP_FPM_SOCK|g" "$SITE"
     else
         cat > "$SITE" <<NGX
@@ -246,15 +261,23 @@ APX
     systemctl reload apache2 || systemctl restart apache2 || true
 fi
 
-if [[ -n "$DOMAIN" && -n "$EMAIL" ]]; then
-    say ">> SSL (Let's Encrypt)..."
-    apt-get install -y certbot 2>/dev/null || true
-    if [[ "$WEB" == "nginx" ]]; then
-        apt-get install -y python3-certbot-nginx 2>/dev/null || true
-        certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect || say "!! Certbot failed — SSL ro dasti setup kon"
+if [[ -n "$DOMAIN" ]]; then
+    if [[ -z "$EMAIL" ]]; then
+        say "!! DOMAIN set shode vali EMAIL khali — SSL skip (bad az install: certbot --nginx -d $DOMAIN)"
+    elif nginx_has_letsencrypt "$DOMAIN"; then
+        say ">> SSL: cert haye $DOMAIN az ghabl vojood darand — certbot skip"
     else
-        apt-get install -y python3-certbot-apache 2>/dev/null || true
-        certbot --apache -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect || say "!! Certbot failed"
+        say ">> SSL (Let's Encrypt)..."
+        apt-get install -y certbot 2>/dev/null || true
+        if [[ "$WEB" == "nginx" ]]; then
+            apt-get install -y python3-certbot-nginx 2>/dev/null || true
+            certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect \
+                || say "!! Certbot failed — avval HTTP ro test kon, badan: certbot --nginx -d $DOMAIN"
+        else
+            apt-get install -y python3-certbot-apache 2>/dev/null || true
+            certbot --apache -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect \
+                || say "!! Certbot failed"
+        fi
     fi
 fi
 

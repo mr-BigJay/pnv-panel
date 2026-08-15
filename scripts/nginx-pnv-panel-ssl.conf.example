@@ -1,16 +1,27 @@
-# PNV Panel — Nginx + PHP-FPM (HTTP only; certbot --nginx adds HTTPS)
-# Copy to /etc/nginx/sites-available/pnv-panel.conf
-# Replace PNV_DOMAIN, PNV_ROOT, and PNV_PHP_FPM_SOCK before use.
+# PNV Panel — Nginx + PHP-FPM with existing Let's Encrypt certificates
+# Used on reinstall/upgrade when certs already exist under /etc/letsencrypt/live/PNV_DOMAIN/
 
 server {
     listen 80;
     listen [::]:80;
+    server_name PNV_DOMAIN;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name PNV_DOMAIN;
 
     root PNV_ROOT;
     index index.php index.html;
 
     client_max_body_size 32m;
+
+    ssl_certificate     /etc/letsencrypt/live/PNV_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/PNV_DOMAIN/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
