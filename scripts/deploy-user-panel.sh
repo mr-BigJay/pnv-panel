@@ -44,6 +44,8 @@ files=(
   "bank_lib.php"
   "xui_lib.php"
   "announcement-api.php"
+  "bank_lib.php"
+  "bank-icon.php"
   "fonts.css"
   "admin/index.php"
   "admin/support.php"
@@ -57,6 +59,18 @@ for rel in "${files[@]}"; do
   mkdir -p "$(dirname "$dest")"
   curl -fsSL "${BASE}/${rel}" -o "${dest}"
   echo "  OK ${rel}"
+done
+
+mkdir -p "${ROOT}/assets/bank-logos"
+bank_logos=(
+  ansar arman ayandeh bank-hekmat bank-markazi blu dey eghtesad-novin gardeshgari ghavamin
+  iran-zamin karafarin keshavarzi khavar-mianeh kosar maskan mellat melli mehr mehr-eghtesad
+  mehr-iran parsian pasargad post refah resalat saderat saman sarmayeh sanat-madan sepah shahr
+  sina taavon-eslami tejarat tosee-saderat tosee-taavon
+)
+for logo in "${bank_logos[@]}"; do
+  dest="${ROOT}/assets/bank-logos/${logo}.svg"
+  curl -fsSL "${BASE}/assets/bank-logos/${logo}.svg" -o "${dest}" && echo "  OK assets/bank-logos/${logo}.svg"
 done
 
 mkdir -p "${ROOT}/uploads/support" "${ROOT}/uploads/avatars"

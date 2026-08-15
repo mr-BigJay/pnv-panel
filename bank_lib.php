@@ -62,21 +62,64 @@ if(!function_exists('pnvBanksCatalog')){
         return (bool)preg_match('/' . preg_quote($needle, '/') . '/iu', $haystack);
     }
 
-    function pnvBankIconUrl($bankId){
+    function pnvBankIconSvgPath($bankId){
         $bankId = preg_replace('/[^a-z0-9\-]/', '', strtolower(trim((string)$bankId)));
         if($bankId === ''){
             return '';
         }
 
-        $fsPath = __DIR__ . '/assets/bank-logos/' . $bankId . '.svg';
-
-        if(is_file($fsPath)){
-            return 'bank-icon.php?b=' . rawurlencode($bankId);
+        foreach([
+            __DIR__ . '/assets/bank-logos/' . $bankId . '.svg',
+            __DIR__ . '/banks/' . $bankId . '.svg',
+        ] as $path){
+            if(is_file($path)){
+                return $path;
+            }
         }
 
-        $altPath = __DIR__ . '/banks/' . $bankId . '.svg';
-        if(is_file($altPath)){
-            return 'bank-icon.php?b=' . rawurlencode($bankId);
+        return '';
+    }
+
+    function pnvBankIconFallbackSvg(){
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
+            . '<rect width="24" height="24" rx="6" fill="#334155"/>'
+            . '<path d="M4 10h16v8H4z" fill="#94a3b8"/>'
+            . '<path d="M2 8l10-5 10 5" stroke="#e2e8f0" stroke-width="1.5" fill="none"/>'
+            . '</svg>';
+    }
+
+    function pnvBankIconDataUri($bankId){
+        static $cache = [];
+        $bankId = preg_replace('/[^a-z0-9\-]/', '', strtolower(trim((string)$bankId)));
+
+        if($bankId === ''){
+            return '';
+        }
+
+        if(isset($cache[$bankId])){
+            return $cache[$bankId];
+        }
+
+        $path = pnvBankIconSvgPath($bankId);
+        $svg = $path !== '' ? trim((string)file_get_contents($path)) : '';
+
+        if($svg === ''){
+            $svg = pnvBankIconFallbackSvg();
+        }
+
+        $cache[$bankId] = 'data:image/svg+xml;base64,' . base64_encode($svg);
+        return $cache[$bankId];
+    }
+
+    function pnvBankIconUrl($bankId){
+        $dataUri = pnvBankIconDataUri($bankId);
+        if($dataUri !== ''){
+            return $dataUri;
+        }
+
+        $bankId = preg_replace('/[^a-z0-9\-]/', '', strtolower(trim((string)$bankId)));
+        if($bankId === ''){
+            return '';
         }
 
         return 'bank-icon.php?b=' . rawurlencode($bankId);
