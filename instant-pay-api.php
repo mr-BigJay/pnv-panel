@@ -9,9 +9,10 @@ if(!isset($_SESSION['user'])){
     exit;
 }
 
+require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/instant_pay_lib.php';
 require_once __DIR__ . '/coupon_lib.php';
-require_once __DIR__ . '/campaign_lib.php';
+require_once __DIR__ . '/pnv_campaign_bootstrap.php';
 require_once __DIR__ . '/telegram_lib.php';
 
 $username = $_SESSION['user'];

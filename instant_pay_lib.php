@@ -777,7 +777,7 @@ if(!function_exists('instantPayPath')){
             $changed = true;
 
             if(!function_exists('checkoutReleaseDiscountOrder')){
-                require_once __DIR__ . '/campaign_lib.php';
+                require_once __DIR__ . '/pnv_campaign_bootstrap.php';
             }
 
             checkoutReleaseDiscountOrder($items[$i]['id'] ?? '');
@@ -1148,7 +1148,7 @@ if(!function_exists('instantPayPath')){
 
         if(!empty($found['coupon_code']) || !empty($found['discount_source'])){
             if(!function_exists('checkoutMarkDiscountPaid')){
-                require_once __DIR__ . '/campaign_lib.php';
+                require_once __DIR__ . '/pnv_campaign_bootstrap.php';
             }
 
             checkoutMarkDiscountPaid($found);
