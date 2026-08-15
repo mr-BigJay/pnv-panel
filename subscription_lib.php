@@ -37,6 +37,15 @@ if(!function_exists('pnvClearedSubsPath')){
         return false;
     }
 
+    function pnvPaymentUsernameMatches($csvUsername, $username){
+        return strcasecmp(trim((string)$csvUsername), trim((string)$username)) === 0;
+    }
+
+    function pnvPaymentRowIsBuy($type){
+        $type = trim((string)$type);
+        return $type === '' || $type === 'خرید';
+    }
+
     function pnvLoadClearedSubs(){
         static $cache = null;
 
@@ -207,7 +216,7 @@ if(!function_exists('pnvClearedSubsPath')){
         }
 
         while(($data = fgetcsv($handle)) !== false){
-            if(($data[0] ?? '') !== $username){
+            if(!pnvPaymentUsernameMatches($data[0] ?? '', $username)){
                 continue;
             }
 
@@ -218,7 +227,7 @@ if(!function_exists('pnvClearedSubsPath')){
                 if($type === 'تمدید'){
                     $stats['pending_renews']++;
                 }
-                else{
+                elseif(pnvPaymentRowIsBuy($type)){
                     $stats['pending_buys']++;
                 }
 
@@ -232,7 +241,7 @@ if(!function_exists('pnvClearedSubsPath')){
             $col1 = trim((string)($data[1] ?? ''));
             $link = trim((string)($data[7] ?? ''));
 
-            if($type === 'خرید' && pnvIsValidSubLink($link)){
+            if(pnvPaymentRowIsBuy($type) && pnvIsValidSubLink($link)){
                 $link = pnvNormalizeSubLinkValue($link);
                 $key = strtolower($link);
 
@@ -271,7 +280,7 @@ if(!function_exists('pnvClearedSubsPath')){
         $clearedLookup = pnvUserClearedLinkLookup($username);
 
         while(($data = fgetcsv($handle)) !== false){
-            if(($data[0] ?? '') !== $username){
+            if(!pnvPaymentUsernameMatches($data[0] ?? '', $username)){
                 continue;
             }
 
@@ -287,7 +296,7 @@ if(!function_exists('pnvClearedSubsPath')){
             $date = trim((string)($data[4] ?? ''));
             $time = trim((string)($data[5] ?? ''));
 
-            if($type === 'خرید' && pnvIsValidSubLink($link) && empty($clearedLookup[pnvNormalizeSubLink($link)])){
+            if(pnvPaymentRowIsBuy($type) && pnvIsValidSubLink($link) && empty($clearedLookup[pnvNormalizeSubLink($link)])){
                 $link = pnvNormalizeSubLinkValue($link);
                 $key = strtolower($link);
                 $linkIndex[$key] = [
@@ -331,29 +340,28 @@ if(!function_exists('pnvClearedSubsPath')){
 
         fclose($handle);
 
-        if(function_exists('pnvFindSubLinkFromCsv') === false && is_file(__DIR__ . '/plan_ui_lib.php')){
+        if($resolveNames && function_exists('pnvFindSubLinkFromCsv') === false && is_file(__DIR__ . '/plan_ui_lib.php')){
             require_once __DIR__ . '/plan_ui_lib.php';
         }
 
-        foreach($linkIndex as &$entry){
-            $currentLink = trim((string)($entry['link'] ?? ''));
+        if($resolveNames){
+            foreach($linkIndex as &$entry){
+                $currentLink = trim((string)($entry['link'] ?? ''));
 
-            if($currentLink !== '' && !preg_match('#^https?://#i', $currentLink)){
-                $fullLink = pnvFindSubLinkFromCsv($username, $currentLink);
-                $currentLink = $fullLink !== '' ? $fullLink : $currentLink;
-            }
+                if($currentLink !== '' && !preg_match('#^https?://#i', $currentLink)){
+                    $fullLink = pnvFindSubLinkFromCsv($username, $currentLink);
+                    $currentLink = $fullLink !== '' ? $fullLink : $currentLink;
+                }
 
-            $entry['link'] = pnvNormalizeSubLinkValue($currentLink);
-
-            if($resolveNames){
+                $entry['link'] = pnvNormalizeSubLinkValue($currentLink);
                 $entry['name'] = pnvEnsureSubDisplayName(
                     $username,
                     $entry['link'],
                     $entry['name'] ?? ''
                 );
             }
+            unset($entry);
         }
-        unset($entry);
 
         return array_values($linkIndex);
     }
