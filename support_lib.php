@@ -948,6 +948,9 @@ if(!function_exists('supportLoad')){
             else{
                 $id = $_POST['edit_id'] ?? '';
                 $text = trim($_POST['edit_text'] ?? '');
+                if($text === ''){
+                    $text = trim($_POST['message'] ?? '');
+                }
                 $user = $_POST['user'] ?? '';
 
                 foreach($data as $i => $ticket){
@@ -1120,6 +1123,9 @@ if(!function_exists('supportLoad')){
             else{
                 $editId = $_POST['edit_id'] ?? '';
                 $newText = trim($_POST['edit_text'] ?? '');
+                if($newText === ''){
+                    $newText = trim($_POST['message'] ?? '');
+                }
 
                 foreach($data as $i => $ticket){
 

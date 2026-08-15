@@ -576,9 +576,73 @@ if(!function_exists('instantPayPath')){
         return $items;
     }
 
+    function instantPayNormalizeType($type){
+        return trim((string)$type) === 'تمدید' ? 'تمدید' : 'خرید';
+    }
+
+    function instantPayAdminRowIsInProgress($row){
+        if(!is_array($row)){
+            return false;
+        }
+
+        if(!instantPayCsvRowPending($row)){
+            return false;
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') !== 0){
+            return true;
+        }
+
+        $created = intval($row[8] ?? 0);
+        $now = time();
+
+        if($created > 0 && ($now - $created) > instantPayMaxOrderAgeSeconds()){
+            return false;
+        }
+
+        $user = trim((string)($row[0] ?? ''));
+        $item = instantPayFindJsonByTracking($user, $tracking);
+
+        if(!is_array($item)){
+            return false;
+        }
+
+        return in_array((string)($item['status'] ?? ''), ['waiting', 'processing'], true);
+    }
+
+    function instantPayAdminRowStatusMeta($row){
+        $status = trim((string)($row[6] ?? ''));
+
+        if($status === 'تایید شد'){
+            return ['title' => 'تایید شد', 'class' => 'statusDot--green'];
+        }
+
+        if($status === 'رد شد'){
+            return ['title' => 'رد شد', 'class' => 'statusDot--red'];
+        }
+
+        if(instantPayAdminRowIsInProgress($row)){
+            $tracking = trim((string)($row[3] ?? ''));
+
+            if(strpos($tracking, 'AUTO-') === 0){
+                $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+
+                if(is_array($item) && ($item['status'] ?? '') === 'processing'){
+                    return ['title' => 'در حال صدور', 'class' => 'statusDot--yellow'];
+                }
+
+                return ['title' => 'در حال انجام', 'class' => 'statusDot--blue'];
+            }
+        }
+
+        return ['title' => 'در حال بررسی', 'class' => 'statusDot--yellow'];
+    }
+
     /**
      * آیا این ردیف CSV در لیست ادمین نمایش داده شود؟
-     * سفارش‌های AUTOِ پرداخت‌نشده فقط بعد از تأیید دیده می‌شوند.
+     * سفارش AUTOِ درحال‌انجام (بدون بازگشت کاربر) تا ۴۰ دقیقه دیده می‌شود.
      */
     function instantPayAdminRowVisible($row){
         if(!is_array($row)){
@@ -598,13 +662,13 @@ if(!function_exists('instantPayPath')){
         }
 
         if(in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true)){
-            return false;
+            return instantPayAdminRowIsInProgress($row);
         }
 
         if($status === 'رد شد'){
             $reason = trim((string)($row[7] ?? ''));
 
-            if(in_array($reason, ['لغو شد', 'منقضی شد', 'لغو به‌خاطر مبلغ جدید'], true)){
+            if(in_array($reason, ['لغو شد', 'منقضی شد', 'لغو به‌خاطر مبلغ جدید', 'لغو به‌خاطر درخواست جدید'], true)){
                 return false;
             }
         }

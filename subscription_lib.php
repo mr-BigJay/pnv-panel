@@ -37,6 +37,42 @@ if(!function_exists('pnvClearedSubsPath')){
         return false;
     }
 
+    function pnvPaymentUsernameMatches($csvUsername, $username){
+        return strcasecmp(trim((string)$csvUsername), trim((string)$username)) === 0;
+    }
+
+    function pnvPaymentRowIsBuy($type){
+        $type = trim((string)$type);
+        return $type === '' || $type === 'خرید';
+    }
+
+    function pnvFindPaymentRowIndex($payments, $username, $tracking = '', $indexFallback = null){
+        $tracking = trim((string)$tracking);
+        $username = trim((string)$username);
+
+        if($tracking !== '' && $username !== ''){
+            foreach($payments as $i => $row){
+                if(!pnvPaymentUsernameMatches($row[0] ?? '', $username)){
+                    continue;
+                }
+
+                if(trim((string)($row[3] ?? '')) === $tracking){
+                    return (int)$i;
+                }
+            }
+        }
+
+        if($indexFallback !== null){
+            $indexFallback = (int)$indexFallback;
+
+            if(isset($payments[$indexFallback]) && pnvPaymentUsernameMatches($payments[$indexFallback][0] ?? '', $username)){
+                return $indexFallback;
+            }
+        }
+
+        return null;
+    }
+
     function pnvLoadClearedSubs(){
         $file = pnvClearedSubsPath();
 
@@ -150,7 +186,7 @@ if(!function_exists('pnvClearedSubsPath')){
         $handle = fopen($file, 'r');
 
         while(($data = fgetcsv($handle)) !== false){
-            if(($data[0] ?? '') !== $username){
+            if(!pnvPaymentUsernameMatches($data[0] ?? '', $username)){
                 continue;
             }
 
@@ -166,7 +202,7 @@ if(!function_exists('pnvClearedSubsPath')){
             $date = trim((string)($data[4] ?? ''));
             $time = trim((string)($data[5] ?? ''));
 
-            if($type === 'خرید' && pnvIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
+            if(pnvPaymentRowIsBuy($type) && pnvIsValidSubLink($link) && !pnvIsSubLinkCleared($username, $link)){
                 $link = pnvNormalizeSubLinkValue($link);
                 $key = strtolower($link);
                 $linkIndex[$key] = [

@@ -8,46 +8,6 @@
         }
     }
 
-    function scrollToBottomOnOpen(el){
-        if(!el){ return; }
-
-        function doScroll(){
-            el.scrollTop = el.scrollHeight;
-        }
-
-        doScroll();
-
-        requestAnimationFrame(function(){
-            doScroll();
-            requestAnimationFrame(doScroll);
-        });
-
-        [0, 50, 120, 250, 500, 900].forEach(function(ms){
-            setTimeout(doScroll, ms);
-        });
-
-        el.querySelectorAll('img').forEach(function(img){
-            if(img.complete){
-                return;
-            }
-            img.addEventListener('load', doScroll, {once: true});
-            img.addEventListener('error', doScroll, {once: true});
-        });
-
-        if(typeof ResizeObserver === 'function'){
-            let ticks = 0;
-            const observer = new ResizeObserver(function(){
-                doScroll();
-                ticks += 1;
-                if(ticks >= 4){
-                    observer.disconnect();
-                }
-            });
-            observer.observe(el);
-            setTimeout(function(){ observer.disconnect(); }, 1200);
-        }
-    }
-
     function escapeHtml(text){
         return String(text)
             .replace(/&/g, '&amp;')
@@ -126,6 +86,36 @@
                 alert('متن یا تصویر وارد کنید');
             }
         });
+    }
+
+    function bindComposerFocus(textarea, form){
+        if(!textarea){ return; }
+
+        function focusComposer(){
+            setTimeout(function(){
+                textarea.focus();
+                const len = textarea.value.length;
+                try{
+                    textarea.setSelectionRange(len, len);
+                }catch(err){}
+            }, 0);
+        }
+
+        try{
+            if(sessionStorage.getItem('pnvSupportFocusComposer') === '1'){
+                sessionStorage.removeItem('pnvSupportFocusComposer');
+            }
+        }catch(err){}
+
+        focusComposer();
+
+        if(form){
+            form.addEventListener('submit', function(){
+                try{
+                    sessionStorage.setItem('pnvSupportFocusComposer', '1');
+                }catch(err){}
+            });
+        }
     }
 
     function ensureOverlay(){
@@ -468,12 +458,97 @@
             form.insertBefore(replyChip, form.firstChild);
         }
 
+        let editInput = form.querySelector('input[name="edit_id"]');
+        if(!editInput){
+            editInput = document.createElement('input');
+            editInput.type = 'hidden';
+            editInput.name = 'edit_id';
+            form.appendChild(editInput);
+        }
+
+        let editTextInput = form.querySelector('input[name="edit_text"]');
+        if(!editTextInput){
+            editTextInput = document.createElement('input');
+            editTextInput.type = 'hidden';
+            editTextInput.name = 'edit_text';
+            form.appendChild(editTextInput);
+        }
+
+        let editChip = form.querySelector('.supportEditChip');
+        if(!editChip){
+            editChip = document.createElement('div');
+            editChip.className = 'supportEditChip';
+            editChip.hidden = true;
+            form.insertBefore(editChip, replyChip.nextSibling || form.firstChild);
+        }
+
+        const composerTextarea = form.querySelector('textarea');
+        let editingBubble = null;
+
         function closeSheet(){
             sheet.hidden = true;
             sheet.innerHTML = '';
         }
 
+        function clearEditHighlight(){
+            if(editingBubble){
+                editingBubble.classList.remove('is-editing');
+                editingBubble = null;
+            }
+        }
+
+        function clearEdit(clearTextarea){
+            editInput.value = '';
+            editTextInput.value = '';
+            editChip.hidden = true;
+            editChip.innerHTML = '';
+            clearEditHighlight();
+            if(clearTextarea && composerTextarea){
+                composerTextarea.value = '';
+                composerTextarea.dispatchEvent(new Event('input', {bubbles:true}));
+            }
+        }
+
+        function setEdit(msgId, text){
+            setReply('', '');
+            if(!msgId){
+                clearEdit(true);
+                return;
+            }
+
+            editInput.value = msgId;
+            editTextInput.value = '';
+            clearEditHighlight();
+
+            editChip.hidden = false;
+            editChip.innerHTML =
+                '<div><small>در حال ویرایش</small><div>'+escapeHtml(text || '')+'</div></div>' +
+                '<button type="button" class="supportEditClear">×</button>';
+            editChip.querySelector('.supportEditClear').onclick = function(){
+                clearEdit(true);
+                if(composerTextarea){ composerTextarea.focus(); }
+            };
+
+            const bubble = chatEl.querySelector('[data-msg-id="'+CSS.escape(msgId)+'"]');
+            if(bubble){
+                bubble.classList.add('is-editing');
+                editingBubble = bubble;
+                bubble.scrollIntoView({block:'nearest', behavior:'smooth'});
+            }
+
+            if(composerTextarea){
+                composerTextarea.value = text || '';
+                composerTextarea.dispatchEvent(new Event('input', {bubbles:true}));
+                composerTextarea.focus();
+                const len = composerTextarea.value.length;
+                try{
+                    composerTextarea.setSelectionRange(len, len);
+                }catch(err){}
+            }
+        }
+
         function setReply(msgId, preview){
+            clearEdit(false);
             replyInput.value = msgId || '';
             if(!msgId){
                 replyChip.hidden = true;
@@ -554,18 +629,8 @@
                         return;
                     }
                     if(act === 'edit'){
-                        const next = window.prompt('متن جدید پیام:', text);
-                        if(next === null){ return; }
-                        const f = document.createElement('form');
-                        f.method = 'POST';
-                        f.innerHTML =
-                            '<input type="hidden" name="csrf" value="'+escapeHtml(getCsrf(form))+'">' +
-                            '<input type="hidden" name="edit_id" value="'+escapeHtml(msgId)+'">' +
-                            '<input type="hidden" name="user" value="'+escapeHtml((form.querySelector('input[name="user"]')||{}).value || '')+'">' +
-                            '<input type="hidden" name="edit_text" value="">';
-                        f.querySelector('input[name="edit_text"]').value = next;
-                        document.body.appendChild(f);
-                        f.submit();
+                        setEdit(msgId, text || '');
+                        return;
                     }
                 };
             });
@@ -620,14 +685,29 @@
         sheet.addEventListener('click', function(e){
             if(e.target === sheet){ closeSheet(); }
         });
+
+        form.addEventListener('submit', function(){
+            if((editInput.value || '').trim() && composerTextarea){
+                editTextInput.value = (composerTextarea.value || '').trim();
+            }
+        });
+
+        if(composerTextarea){
+            composerTextarea.addEventListener('keydown', function(e){
+                if(e.key === 'Escape' && (editInput.value || '').trim()){
+                    e.preventDefault();
+                    clearEdit(true);
+                    composerTextarea.focus();
+                }
+            });
+        }
     }
 
     function buildBubbleNode(msg, classMap, actionMeta){
         const sender = msg.sender || 'user';
-        const roleCls = classMap[sender] || classMap.user || 'user';
-        const typeCls = (sender === 'admin') ? 'is-admin admin' : 'is-user usermsg';
+        let cls = classMap[sender] || classMap.user || 'user';
         const wrap = document.createElement('div');
-        wrap.className = 'msgBubble msg ' + typeCls;
+        wrap.className = 'msgBubble ' + cls + ' msg ' + cls;
         wrap.dataset.msgId = msg.id || '';
         wrap.dataset.timestamp = msg.timestamp || 0;
         wrap.dataset.sender = sender;
@@ -678,171 +758,6 @@
         return wrap;
     }
 
-    function bindMobileChatLayout(options){
-        options = options || {};
-
-        const vv = window.visualViewport;
-
-        if(!vv){
-            return;
-        }
-
-        const mobileQuery = window.matchMedia('(max-width: 768px)');
-
-        const container = options.containerEl
-            || document.querySelector('.content-support')
-            || document.getElementById('supportPage');
-
-        const messagesEl = options.messagesEl || document.getElementById('supportMessages');
-        const textarea = options.textareaEl || document.getElementById('supportMessage');
-        const chatTop = options.chatTopEl || document.getElementById('supportChatTop');
-
-        if(!container){
-            return;
-        }
-
-        let focusPending = false;
-        let syncFrame = 0;
-
-        function scrollMessagesToBottom(){
-            scrollToBottom(messagesEl, true);
-        }
-
-        function isKeyboardOpen(){
-            const layoutHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-            const visibleHeight = vv.height || layoutHeight;
-            const offsetTop = vv.offsetTop || 0;
-            return focusPending
-                || offsetTop > 0
-                || (layoutHeight > 0 && visibleHeight < layoutHeight - 80);
-        }
-
-        function syncLayout(){
-            if(syncFrame){
-                cancelAnimationFrame(syncFrame);
-            }
-
-            syncFrame = requestAnimationFrame(function(){
-                syncFrame = 0;
-
-                if(!mobileQuery.matches){
-                    resetLayout();
-                    return;
-                }
-
-                const top = Math.max(0, vv.offsetTop || 0);
-                const height = Math.max(0, vv.height || window.innerHeight);
-                const keyboardOpen = isKeyboardOpen();
-
-                container.style.position = 'fixed';
-                container.style.left = '0';
-                container.style.right = '0';
-                container.style.width = '100%';
-                container.style.top = top + 'px';
-                container.style.height = height + 'px';
-                container.style.maxHeight = height + 'px';
-                container.style.bottom = 'auto';
-
-                document.documentElement.classList.add('supportVvSync');
-                document.body.classList.add('supportVvSync');
-
-                document.body.classList.toggle('supportKeyboardOpen', keyboardOpen);
-
-                if(chatTop){
-                    chatTop.style.display = '';
-                    chatTop.style.visibility = 'visible';
-                }
-
-                if(window.scrollY !== 0){
-                    window.scrollTo(0, 0);
-                }
-
-                if(keyboardOpen){
-                    scrollMessagesToBottom();
-                }
-            });
-        }
-
-        function resetLayout(){
-            if(syncFrame){
-                cancelAnimationFrame(syncFrame);
-                syncFrame = 0;
-            }
-
-            container.style.position = '';
-            container.style.left = '';
-            container.style.right = '';
-            container.style.width = '';
-            container.style.top = '';
-            container.style.height = '';
-            container.style.maxHeight = '';
-            container.style.bottom = '';
-
-            document.documentElement.classList.remove('supportVvSync');
-            document.body.classList.remove('supportVvSync');
-            document.body.classList.remove('supportKeyboardOpen');
-        }
-
-        function onViewportChange(){
-            syncLayout();
-        }
-
-        function onMobileChange(){
-            if(mobileQuery.matches){
-                syncLayout();
-            }
-            else{
-                resetLayout();
-            }
-        }
-
-        vv.addEventListener('resize', onViewportChange);
-        vv.addEventListener('scroll', onViewportChange);
-        window.addEventListener('resize', onViewportChange);
-        window.addEventListener('orientationchange', function(){
-            focusPending = false;
-            setTimeout(onViewportChange, 120);
-            setTimeout(onViewportChange, 320);
-        });
-
-        if(typeof mobileQuery.addEventListener === 'function'){
-            mobileQuery.addEventListener('change', onMobileChange);
-        }
-        else if(typeof mobileQuery.addListener === 'function'){
-            mobileQuery.addListener(onMobileChange);
-        }
-
-        if(textarea){
-            textarea.addEventListener('touchstart', function(){
-                focusPending = true;
-                syncLayout();
-            }, {passive: true});
-
-            textarea.addEventListener('focus', function(){
-                focusPending = true;
-                window.scrollTo(0, 0);
-                syncLayout();
-                setTimeout(syncLayout, 50);
-                setTimeout(syncLayout, 160);
-                setTimeout(syncLayout, 320);
-                setTimeout(scrollMessagesToBottom, 360);
-            }, true);
-
-            textarea.addEventListener('blur', function(){
-                focusPending = false;
-                setTimeout(function(){
-                    if(document.activeElement !== textarea){
-                        syncLayout();
-                    }
-                }, 120);
-            });
-        }
-
-        if(mobileQuery.matches){
-            syncLayout();
-        }
-    }
-
     function initPolling(options){
         const chatEl = options.chatEl;
         const pollUrl = options.pollUrl;
@@ -880,18 +795,17 @@
         }
 
         setInterval(poll, interval);
-        scrollToBottomOnOpen(chatEl);
+        scrollToBottom(chatEl, true);
     }
 
     global.SupportUI = {
         scrollToBottom: scrollToBottom,
-        scrollToBottomOnOpen: scrollToBottomOnOpen,
         bindTextareaGrow: bindTextareaGrow,
         bindEnterToSend: bindEnterToSend,
         bindFormGuard: bindFormGuard,
+        bindComposerFocus: bindComposerFocus,
         bindImageAttach: bindImageAttach,
         bindMessageActions: bindMessageActions,
-        bindMobileChatLayout: bindMobileChatLayout,
         initPolling: initPolling,
         submitComposerForm: submitComposerForm
     };
