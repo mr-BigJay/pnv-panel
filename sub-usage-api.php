@@ -38,7 +38,7 @@ if(isset($input['links']) && is_array($input['links'])){
     }
 }
 
-$activeSubs = pnvLoadUserActiveSubscriptions($username);
+$activeSubs = pnvLoadUserActiveSubscriptions($username, false);
 $items = [];
 $itemKeys = [];
 

@@ -2,7 +2,6 @@
 
 session_start();
 
-require_once "phpqrcode/qrlib.php";
 require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/sub_usage_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
@@ -14,15 +13,11 @@ if(!isset($_SESSION['user'])){
 
 $user = $_SESSION['user'];
 
-if(!file_exists("temp")){
-    mkdir("temp", 0755, true);
-}
-
 $h = static function($v){
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
 
-$activeSubs = pnvLoadUserActiveSubscriptions($user);
+$activeSubs = pnvLoadUserActiveSubscriptions($user, false);
 $items = [];
 $i = 0;
 
@@ -34,8 +29,7 @@ foreach($activeSubs as $sub){
     }
 
     $i++;
-    $qrfile = 'temp/qr' . $i . '.png';
-    QRcode::png($link, $qrfile, QR_ECLEVEL_L, 8);
+    $qrUrl = 'sub-qr.php?link=' . rawurlencode($link);
 
     $items[] = [
         'i' => $i,
@@ -49,7 +43,7 @@ foreach($activeSubs as $sub){
         'link' => $link,
         'link_ok' => true,
         'link_cleared' => false,
-        'qr' => $qrfile,
+        'qr' => $qrUrl,
         'usage_key' => subUsageCacheKey($link),
     ];
 }
@@ -65,7 +59,7 @@ foreach($items as $item){
 }
 
 $usageBundle = count($usageItems) > 0
-    ? subUsageGetForItems($usageItems, max(4, min(12, count($usageItems))), true)
+    ? subUsageGetForItems($usageItems, 0, false)
     : ['items' => []];
 $usageMap = is_array($usageBundle['items'] ?? null) ? $usageBundle['items'] : [];
 
@@ -73,7 +67,10 @@ foreach($items as &$item){
     $key = $item['usage_key'] ?? subUsageCacheKey($item['link']);
     $item['usage'] = $usageMap[$key] ?? null;
     $hintEmail = is_array($item['usage']) ? trim((string)($item['usage']['email'] ?? '')) : '';
-    $item['name'] = pnvEnsureSubDisplayName($user, $item['link'], $item['name'] ?? '', $hintEmail);
+
+    if($hintEmail !== ''){
+        $item['name'] = pnvEnsureSubDisplayName($user, $item['link'], $item['name'] ?? '', $hintEmail);
+    }
 }
 unset($item);
 
@@ -218,7 +215,7 @@ $visibleItems = array_values(array_filter($items, static function($it){
 <div class="subBodyInner">
 <div class="subQrCol">
 <button type="button" class="subQrBtn" data-qr="<?php echo $h($item['qr']); ?>" data-name="<?php echo $h($item['name']); ?>" aria-label="نمایش QR Code بزرگ">
-<img src="<?php echo $h($item['qr']); ?>" alt="QR Code">
+<img src="<?php echo $h($item['qr']); ?>" alt="QR Code" loading="lazy" decoding="async">
 </button>
 <div class="subQrHint">برای بزرگ‌نمایی بزنید</div>
 </div>
@@ -540,7 +537,7 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
     }
 
     if(document.querySelector('[data-usage-link]')){
-        loadUsage(0, true);
+        loadUsage(0, false);
         setInterval(function(){
             if(document.hidden){
                 return;
