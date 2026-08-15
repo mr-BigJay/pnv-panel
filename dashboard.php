@@ -1,8 +1,5 @@
 <?php
 
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
 session_start();
 
 if(!isset($_SESSION['user'])){
@@ -11,8 +8,6 @@ if(!isset($_SESSION['user'])){
 }
 
 $user = $_SESSION['user'];
-$supportFile = 'db/support.json';
-$paymentsFile = 'invoices/payments.csv';
 $hasUnreadSupport = false;
 $approvedSubs = 0;
 $pendingBuys = 0;
@@ -21,52 +16,16 @@ $avatarUrl = '';
 
 require_once __DIR__ . '/profile_lib.php';
 require_once __DIR__ . '/subscription_lib.php';
+require_once __DIR__ . '/support_lib.php';
+require_once __DIR__ . '/dashboard_lib.php';
+
 $avatarUrl = profileGetUserAvatar($user);
+$hasUnreadSupport = supportUserHasUnread($user);
 
-if(file_exists($supportFile)){
-    $supportData = json_decode(file_get_contents($supportFile), true);
-
-    if(is_array($supportData)){
-        foreach($supportData as $ticket){
-            if(($ticket['user'] ?? '') !== $user){
-                continue;
-            }
-
-            foreach(($ticket['messages'] ?? []) as $msg){
-                if(($msg['sender'] ?? '') === 'admin' && empty($msg['seen_by_user'])){
-                    $hasUnreadSupport = true;
-                    break 2;
-                }
-            }
-        }
-    }
-}
-
-$approvedSubs = count(pnvLoadUserActiveSubscriptions($user, false));
-
-if(file_exists($paymentsFile)){
-    $handle = fopen($paymentsFile, 'r');
-
-    while(($row = fgetcsv($handle)) !== false){
-        if(($row[0] ?? '') !== $user){
-            continue;
-        }
-
-        $status = trim((string)($row[6] ?? ''));
-        $type = trim((string)($row[9] ?? ''));
-
-        if($status !== 'تایید شد' && $status !== 'رد شد'){
-            if($type === 'تمدید'){
-                $pendingRenews++;
-            }
-            else{
-                $pendingBuys++;
-            }
-        }
-    }
-
-    fclose($handle);
-}
+$dashStats = pnvDashboardUserPaymentStats($user);
+$approvedSubs = intval($dashStats['approved_subs'] ?? 0);
+$pendingBuys = intval($dashStats['pending_buys'] ?? 0);
+$pendingRenews = intval($dashStats['pending_renews'] ?? 0);
 
 function dashH($value){
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');

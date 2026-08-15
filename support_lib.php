@@ -37,35 +37,6 @@ if(!function_exists('supportLoad')){
 
     }
 
-    function supportUserHasUnread($username, $file = null){
-        $username = trim((string)$username);
-
-        if($username === ''){
-            return false;
-        }
-
-        $file = $file ?: (__DIR__ . '/db/support.json');
-        $data = supportLoad($file);
-
-        if(!is_array($data)){
-            return false;
-        }
-
-        foreach($data as $ticket){
-            if(($ticket['user'] ?? '') !== $username){
-                continue;
-            }
-
-            foreach(($ticket['messages'] ?? []) as $msg){
-                if(($msg['sender'] ?? '') === 'admin' && empty($msg['seen_by_user'])){
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     function supportSave($file, $data){
 
         $dir = dirname($file);
@@ -1262,4 +1233,35 @@ if(!function_exists('supportLoad')){
 
     }
 
+}
+
+if(!function_exists('supportUserHasUnread')){
+    function supportUserHasUnread($username, $file = null){
+        $username = trim((string)$username);
+
+        if($username === ''){
+            return false;
+        }
+
+        $file = $file ?: (__DIR__ . '/db/support.json');
+        $data = function_exists('supportLoad') ? supportLoad($file) : json_decode((string)@file_get_contents($file), true);
+
+        if(!is_array($data)){
+            return false;
+        }
+
+        foreach($data as $ticket){
+            if(strcasecmp(trim((string)($ticket['user'] ?? '')), $username) !== 0){
+                continue;
+            }
+
+            foreach(($ticket['messages'] ?? []) as $msg){
+                if(($msg['sender'] ?? '') === 'admin' && empty($msg['seen_by_user'])){
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 }

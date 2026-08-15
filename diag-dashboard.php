@@ -55,6 +55,7 @@ $record('session_user', static function(){
 
 $files = [
     'dashboard.php',
+    'dashboard_lib.php',
     'profile_lib.php',
     'subscription_lib.php',
     'support_lib.php',
@@ -89,6 +90,11 @@ $record('require subscription_lib.php', static function() use ($root){
 
 $record('require support_lib.php', static function() use ($root){
     require_once $root . '/support_lib.php';
+    return 'loaded';
+});
+
+$record('require dashboard_lib.php', static function() use ($root){
+    require_once $root . '/dashboard_lib.php';
     return 'loaded';
 });
 
