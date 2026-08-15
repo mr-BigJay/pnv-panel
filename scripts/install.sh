@@ -22,6 +22,38 @@ IMPORT_ZIP="${IMPORT_ZIP:-}"
 PHP_FPM_SOCK="${PHP_FPM_SOCK:-}"
 
 say(){ echo -e "$*"; }
+
+apt_update_safe(){
+    if apt-get update -qq 2>/dev/null; then
+        return 0
+    fi
+
+    say "!! apt update failed — momkene yek repo third-party kharab bashe (mesle ookla/speedtest)"
+    local f base disabled=0
+    for f in /etc/apt/sources.list.d/*.list; do
+        [[ -f "$f" ]] || continue
+        base="$(basename "$f")"
+        case "$base" in
+            *.disabled-by-pnv-install) continue ;;
+        esac
+        if grep -qiE 'packagecloud|ookla|speedtest' "$f" 2>/dev/null; then
+            mv "$f" "${f}.disabled-by-pnv-install" && disabled=1
+            say "   disabled: $base"
+        fi
+    done
+
+    if [[ "$disabled" == "1" ]] && apt-get update -qq 2>/dev/null; then
+        say ">> apt update OK (bad repo ha disable shodan)"
+        return 0
+    fi
+
+    say "!! Hanooz apt update error dare. Ino dasti fix kon:"
+    say "   ls /etc/apt/sources.list.d/"
+    say "   sudo mv /etc/apt/sources.list.d/ookla*.list /tmp/  # ya file kharab"
+    say "   sudo apt-get update"
+    return 1
+}
+
 ask(){
     local prompt="$1"
     local default="${2:-}"
@@ -94,7 +126,7 @@ fi
 WEB="$(echo "$WEB" | tr '[:upper:]' '[:lower:]')"
 
 if ! command -v curl >/dev/null 2>&1; then
-    apt-get update -qq
+    apt_update_safe || exit 1
     apt-get install -y curl ca-certificates
 fi
 
@@ -103,7 +135,7 @@ say "\n>> Repo: $REPO | Version: $REF | Web: $WEB | Root: $ROOT"
 if [[ "$SKIP_APT" != "1" ]]; then
     say ">> Installing packages..."
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
+    apt_update_safe || exit 1
     if [[ "$WEB" == "nginx" ]]; then
         apt-get install -y nginx php-fpm php-cli php-curl php-gd php-mbstring php-xml php-zip unzip curl ca-certificates rsync
         if [[ -z "$PHP_FPM_SOCK" ]]; then
