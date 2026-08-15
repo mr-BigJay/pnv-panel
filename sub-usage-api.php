@@ -82,6 +82,7 @@ foreach($activeSubs as $sub){
         'plan' => trim((string)($sub['plan_text'] ?? '')),
         'date' => trim((string)($sub['date'] ?? '')),
         'time' => trim((string)($sub['time'] ?? '')),
+        'created_ts' => intval($sub['created_ts'] ?? 0),
     ];
 }
 

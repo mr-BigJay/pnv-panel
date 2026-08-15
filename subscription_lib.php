@@ -138,6 +138,41 @@ if(!function_exists('pnvClearedSubsPath')){
         return trim(preg_split('/\s+/u', $value)[0] ?? '');
     }
 
+    function pnvSubscriptionActivityTs($entry){
+        if(!is_array($entry)){
+            return 0;
+        }
+
+        $ts = intval($entry['created_ts'] ?? 0);
+
+        if($ts > 0){
+            return $ts;
+        }
+
+        $date = trim((string)($entry['date'] ?? ''));
+        $time = trim((string)($entry['time'] ?? ''));
+
+        if($date === ''){
+            return 0;
+        }
+
+        if(is_file(__DIR__ . '/pnv_date_bootstrap.php')){
+            require_once __DIR__ . '/pnv_date_bootstrap.php';
+        }
+
+        if(function_exists('pnvParseDateTimeToTimestamp')){
+            $parsed = pnvParseDateTimeToTimestamp(trim($date . ($time !== '' ? (' ' . $time) : '')));
+
+            if($parsed > 0){
+                return intval($parsed);
+            }
+        }
+
+        $parsed = strtotime($date . ($time !== '' ? (' ' . $time) : ''));
+
+        return ($parsed !== false && $parsed > 0) ? intval($parsed) : 0;
+    }
+
     function pnvLoadUserActiveSubscriptions($username, $resolveNames = true){
         $username = trim((string)$username);
         $linkIndex = [];
@@ -176,6 +211,7 @@ if(!function_exists('pnvClearedSubsPath')){
                     'tracking' => $tracking,
                     'date' => $date,
                     'time' => $time,
+                    'created_ts' => intval($data[8] ?? 0),
                 ];
             }
 
@@ -197,6 +233,7 @@ if(!function_exists('pnvClearedSubsPath')){
                         'tracking' => $tracking,
                         'date' => $date,
                         'time' => $time,
+                        'created_ts' => intval($data[8] ?? 0),
                     ];
                 }
                 else{
@@ -204,6 +241,7 @@ if(!function_exists('pnvClearedSubsPath')){
                     $linkIndex[$key]['tracking'] = $tracking;
                     $linkIndex[$key]['date'] = $date;
                     $linkIndex[$key]['time'] = $time;
+                    $linkIndex[$key]['created_ts'] = intval($data[8] ?? 0);
                 }
             }
         }
@@ -229,7 +267,13 @@ if(!function_exists('pnvClearedSubsPath')){
         }
         unset($entry);
 
-        return array_values($linkIndex);
+        $list = array_values($linkIndex);
+
+        usort($list, static function($a, $b){
+            return pnvSubscriptionActivityTs($b) <=> pnvSubscriptionActivityTs($a);
+        });
+
+        return $list;
     }
 
     function pnvClearUserSubscriptionLink($username, $tracking, $timestamp){
