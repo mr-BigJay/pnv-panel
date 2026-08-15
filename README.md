@@ -4,23 +4,24 @@
 
 **نسخه فعلی:** `v02.01.01`
 
-## نصب یک‌خطی (Nginx — پیشنهادی)
+## نصب / آپدیت یک‌خطی (Nginx)
+
+نصب تازه یا **overwrite** روی نصب قبلی — کد عوض می‌شود، `db/` و `payments.csv` حفظ می‌شوند:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/v02.01.01/scripts/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh)
 ```
 
-نصب با دامنه و SSL:
+با SSL (اختیاری):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/v02.01.01/scripts/install.sh | sudo bash -s -- \
-  --yes --web nginx --domain panel.example.com --email admin@example.com --root /var/www/pnv-panel
+DOMAIN=panel.example.com EMAIL=you@example.com bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh)
 ```
 
-## Apache
+حالت سوالی (Finglish):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/v02.01.01/scripts/install.sh | sudo bash -s -- --web apache
+bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh) --ask
 ```
 
 ## پیش‌نیاز

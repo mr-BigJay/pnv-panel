@@ -1,21 +1,18 @@
 #!/bin/bash
-# PNV Panel v02.01.01 — one-line installer (Nginx or Apache)
+# PNV Panel — one-line install / upgrade (overwrite code, keep db & payments)
 #
-#   bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/v02.01.01/scripts/install.sh)
-#
-# Non-interactive:
-#   curl -fsSL .../install.sh | sudo bash -s -- --yes --web nginx --domain panel.example.com --email admin@example.com --version v02.01.01
+#   bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh)
 #
 set -euo pipefail
 
 REPO="${REPO:-mr-BigJay/pnv-panel}"
-VERSION="${VERSION:-v02.01.01}"
-ROOT="${ROOT:-/var/www/pnv-panel}"
+VERSION="${VERSION:-main}"
+ROOT="${ROOT:-/var/www/html}"
 REF="${REF:-${VERSION}}"
 WEB="${WEB:-nginx}"
 SKIP_APT="${SKIP_APT:-0}"
-BACKUP="${BACKUP:-1}"
-INTERACTIVE="${INTERACTIVE:-1}"
+BACKUP="${BACKUP:-0}"
+INTERACTIVE="${INTERACTIVE:-0}"
 DOMAIN="${DOMAIN:-}"
 EMAIL="${EMAIL:-}"
 IMPORT_ZIP="${IMPORT_ZIP:-}"
@@ -91,6 +88,7 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --yes|-y) INTERACTIVE=0; shift ;;
+        --ask) INTERACTIVE=1; shift ;;
         --web) WEB="$2"; shift 2 ;;
         --domain) DOMAIN="$2"; shift 2 ;;
         --email) EMAIL="$2"; shift 2 ;;
@@ -100,6 +98,7 @@ while [[ $# -gt 0 ]]; do
         --repo) REPO="$2"; shift 2 ;;
         --skip-apt) SKIP_APT=1; shift ;;
         --no-backup) BACKUP=0; shift ;;
+        --backup) BACKUP=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown: $1"; usage; exit 1 ;;
     esac
@@ -111,7 +110,7 @@ if [[ "$(id -u)" -ne 0 ]]; then
 fi
 
 if [[ "$INTERACTIVE" == "1" ]]; then
-    say "\n=== PNV Panel Installer v02.01.01 ===\n"
+    say "\n=== PNV Panel Installer ===\n"
     WEB="$(ask "Web server? (nginx/apache)" "$WEB")"
     VERSION="$(ask "Version/tag" "$VERSION")"
     REF="$VERSION"
@@ -174,7 +173,7 @@ if [[ -d "$ROOT" && "$BACKUP" == "1" && "$(ls -A "$ROOT" 2>/dev/null || true)" !
 fi
 
 mkdir -p "$ROOT"
-say ">> Deploying files..."
+say ">> Deploying files (overwrite code, keep db/payments config)..."
 rsync -a --delete \
     --exclude 'db/bale.json' \
     --exclude 'db/telegram.json' \
@@ -278,5 +277,5 @@ else
 fi
 say "Admin: /bigjay_controller/"
 say "Backup/Import: admin → Backup"
-say "\nUpgrade:"
-say "  bash <(curl -Ls https://raw.githubusercontent.com/${REPO}/v02.01.01/scripts/install.sh) --yes --version v02.01.01 --root $ROOT --web $WEB"
+say "\nUpgrade again:"
+say "  bash <(curl -Ls https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh)"
