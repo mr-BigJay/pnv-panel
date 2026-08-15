@@ -16,6 +16,8 @@ if(!function_exists('adminQuickNav')){
             ['key' => 'telegram', 'label' => 'تلگرام', 'href' => pnvAdminUrl('telegram.php')],
             ['key' => 'bale', 'label' => 'بله', 'href' => pnvAdminUrl('bale.php')],
             ['key' => 'xui', 'label' => '3x-ui', 'href' => pnvAdminUrl('xui-servers.php')],
+            ['key' => 'sms', 'label' => 'پیامک', 'href' => pnvAdminUrl('sms.php')],
+            ['key' => 'backup', 'label' => 'بک‌آپ', 'href' => pnvAdminUrl('backup.php')],
         ];
 
         echo '<nav class="adminQuickNav">';
@@ -248,6 +250,8 @@ body.adminPageSupport{padding-bottom:0}
             ['key' => 'telegram', 'label' => 'تلگرام', 'href' => pnvAdminUrl('telegram.php')],
             ['key' => 'bale', 'label' => 'بله', 'href' => pnvAdminUrl('bale.php')],
             ['key' => 'xui', 'label' => '3x-ui', 'href' => pnvAdminUrl('xui-servers.php')],
+            ['key' => 'sms', 'label' => 'پیامک', 'href' => pnvAdminUrl('sms.php')],
+            ['key' => 'backup', 'label' => 'بک‌آپ', 'href' => pnvAdminUrl('backup.php')],
             ['key' => 'upload', 'label' => 'آپلود CSV', 'href' => pnvAdminUrl('index.php?page=upload')],
             ['key' => 'logout', 'label' => 'خروج', 'href' => pnvAdminUrl('index.php?logout=1'), 'danger' => true],
         ];

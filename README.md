@@ -2,49 +2,43 @@
 
 پنل کاربری و مدیریت اشتراک (PHP) — خرید، تمدید، پشتیبانی، اتصال 3x-ui.
 
-## نصب یک‌خطی (Ubuntu + Apache)
+**نسخه فعلی:** `v02.01.01`
+
+## نصب یک‌خطی (Nginx — پیشنهادی)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh | sudo bash
+bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/v02.01.01/scripts/install.sh)
 ```
 
-نسخه مشخص (Release):
+نصب با دامنه و SSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh | sudo bash -s -- --version v01.1.0
+curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/v02.01.01/scripts/install.sh | sudo bash -s -- \
+  --yes --web nginx --domain panel.example.com --email admin@example.com --root /var/www/pnv-panel
 ```
 
-مسیر دلخواه:
+## Apache
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/install.sh | sudo ROOT=/var/www/html bash
+curl -fsSL https://raw.githubusercontent.com/mr-BigJay/pnv-panel/v02.01.01/scripts/install.sh | sudo bash -s -- --web apache
 ```
 
 ## پیش‌نیاز
 
 - Ubuntu 20.04+ (یا Debian مشابه)
 - دسترسی root
-- Apache + PHP 8.x (اسکریپت نصب خودکار نصب می‌کند)
+- Nginx + PHP-FPM 8.x (اسکریپت نصب خودکار نصب می‌کند)
 
 ## بعد از نصب
 
 1. `db/xui_servers.json` — تنظیم سرورهای 3x-ui
-2. SSL و دامنه در Apache
+2. SSL و دامنه (در حالت interactive از شما پرسیده می‌شود)
 3. ورود ادمین: `/bigjay_controller/`
+4. بک‌آپ/ایمپورت: Admin → **بک‌آپ** (با انتخاب بخش)
 
 ## Release در GitHub
 
-1. تغییرات stable را به `main` merge کنید
-2. Tag بزنید: `git tag -a v01.1.0 -m "Release v01.1.0"`
-3. Push tag: `git push origin v01.1.0`
-4. GitHub → Releases → **Draft a new release** → tag `v01.1.0`
-5. توضیحات changelog + فایل `install.sh` را attach کنید (اختیاری)
-
-کاربران نصب:
-
-```bash
-curl -fsSL https://github.com/mr-BigJay/pnv-panel/releases/download/v01.1.0/install.sh | sudo bash
-```
+Tag: `v02.01.01` — جزئیات در [RELEASE_v02.01.01.md](RELEASE_v02.01.01.md)
 
 ## به‌روزرسانی جزئی (بدون Release)
 
