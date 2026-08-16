@@ -2,7 +2,7 @@
 # Deploy user dashboard, renew, and support — run ON THE SERVER
 set -euo pipefail
 
-BR="${BR:-cursor/fix-user-panel-regressions-b94c}"
+BR="${BR:-cursor/telegram-user-bot-058b}"
 BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/${BR}"
 ROOT="${ROOT:-/var/www/html}"
 
@@ -41,6 +41,10 @@ files=(
   "campaign_lib.php"
   "subscription_lib.php"
   "telegram_lib.php"
+  "telegram.php"
+  "telegram_ui.css"
+  "form_validation_fa.js"
+  "form_validation_fa.php"
   "bank_lib.php"
   "xui_lib.php"
   "announcement-api.php"

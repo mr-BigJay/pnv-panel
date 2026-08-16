@@ -58,6 +58,7 @@ maybe_deploy(){
         admin/campaign-announcements.php
         scripts/telegram_notify_expiry.php
         scripts/setup-telegram-bot.sh
+        scripts/deploy-telegram-page.sh
     )
     local rel
     for rel in "${files[@]}"; do
