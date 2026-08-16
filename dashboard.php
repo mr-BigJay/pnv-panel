@@ -20,14 +20,12 @@ require_once __DIR__ . '/support_lib.php';
 require_once __DIR__ . '/dashboard_lib.php';
 
 $telegramStatus = ['linked' => false, 'telegram_username' => '', 'linked_at' => ''];
-$telegramFeatureOk = false;
 
 if(is_file(__DIR__ . '/telegram_user_lib.php')){
     require_once __DIR__ . '/telegram_user_lib.php';
 
     if(function_exists('tgUserGetTelegramStatus')){
         $telegramStatus = tgUserGetTelegramStatus($user);
-        $telegramFeatureOk = true;
     }
 }
 

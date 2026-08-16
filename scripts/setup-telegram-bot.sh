@@ -46,6 +46,8 @@ maybe_deploy(){
         telegram_lib.php
         profile-api.php
         dashboard.php
+        telegram.php
+        telegram_ui.css
         support_lib.php
         xui_lib.php
         admin/payments.php
