@@ -636,6 +636,7 @@ max-width:360px;
 <span class="dashItemText">اتصال تلگرام</span>
 </span>
 <span class="dashItemMeta<?php echo $telegramLinked ? ' is-on' : ''; ?>" id="dashTelegramMainMeta"><?php echo $telegramLinked ? 'متصل ✅' : 'غیرفعال'; ?></span>
+<span class="dashItemChevron" aria-hidden="true">‹</span>
 </button>
 <a class="dashItem" href="coupon.php">
 <span class="dashItemMain">
@@ -717,7 +718,6 @@ max-width:360px;
     var moreMenu = document.getElementById('dashMoreMenu');
     var editAvatarBtn = document.getElementById('dashEditAvatarBtn');
     var editUsernameBtn = document.getElementById('dashEditUsernameBtn');
-    var telegramBtn = document.getElementById('dashTelegramBtn');
     var telegramMainBtn = document.getElementById('dashTelegramMainBtn');
     var telegramMainMeta = document.getElementById('dashTelegramMainMeta');
     var telegramModal = document.getElementById('dashTelegramModal');
@@ -1405,10 +1405,6 @@ max-width:360px;
 
     if(editUsernameBtn){
         editUsernameBtn.addEventListener('click', openUsernameModal);
-    }
-
-    if(telegramBtn){
-        telegramBtn.addEventListener('click', openTelegramModal);
     }
 
     if(telegramMainBtn){

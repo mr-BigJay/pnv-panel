@@ -593,7 +593,7 @@ if(!function_exists('tgUserFaNum')){
         ], $config);
     }
 
-    function tgUserLoadSubsBundle($username){
+    function tgUserLoadSubsBundle($username, $options = []){
         if(!function_exists('pnvLoadUserActiveSubscriptions')){
             require_once __DIR__ . '/subscription_lib.php';
         }
@@ -607,6 +607,8 @@ if(!function_exists('tgUserFaNum')){
         }
 
         $username = trim((string)$username);
+        $skipUsage = !empty($options['skip_usage']);
+        $forceRefresh = !empty($options['force_refresh']);
         $activeSubs = pnvLoadUserActiveSubscriptions($username, false);
         $items = [];
         $i = 0;
@@ -628,7 +630,12 @@ if(!function_exists('tgUserFaNum')){
                 'created_ts' => intval($sub['created_ts'] ?? 0),
                 'link' => $link,
                 'usage_key' => subUsageCacheKey($link),
+                'usage' => null,
             ];
+        }
+
+        if($skipUsage || count($items) === 0){
+            return $items;
         }
 
         $usageItems = [];
@@ -642,12 +649,14 @@ if(!function_exists('tgUserFaNum')){
             ];
         }
 
-        $usageMap = [];
+        $maxFresh = intval($options['max_fresh'] ?? 0);
 
-        if(count($usageItems) > 0){
-            $bundle = subUsageGetForItems($usageItems, 0, false);
-            $usageMap = is_array($bundle['items'] ?? null) ? $bundle['items'] : [];
+        if($maxFresh <= 0){
+            $maxFresh = max(1, min(8, count($usageItems)));
         }
+
+        $bundle = subUsageGetForItems($usageItems, $maxFresh, $forceRefresh);
+        $usageMap = is_array($bundle['items'] ?? null) ? $bundle['items'] : [];
 
         foreach($items as &$item){
             $key = $item['usage_key'] ?? subUsageCacheKey($item['link']);
@@ -659,6 +668,73 @@ if(!function_exists('tgUserFaNum')){
         unset($item);
 
         return $items;
+    }
+
+    function tgUserRefreshSubUsage($sub, $forceRefresh = true){
+        if(!is_array($sub)){
+            return $sub;
+        }
+
+        if(!function_exists('subUsageGetForItems')){
+            require_once __DIR__ . '/sub_usage_lib.php';
+        }
+
+        $usageItems = [[
+            'link' => $sub['link'] ?? '',
+            'plan' => $sub['plan'] ?? '',
+            'date' => $sub['date'] ?? '',
+            'time' => $sub['time'] ?? '',
+            'created_ts' => intval($sub['created_ts'] ?? 0),
+        ]];
+
+        $bundle = subUsageGetForItems($usageItems, 1, $forceRefresh);
+        $usageMap = is_array($bundle['items'] ?? null) ? $bundle['items'] : [];
+        $key = subUsageCacheKey($sub['link'] ?? '');
+        $usage = $usageMap[$key] ?? null;
+
+        if(is_array($usage)){
+            $sub['usage'] = $usage;
+        }
+
+        return $sub;
+    }
+
+    function tgUserUsageLabels($sub){
+        $usage = is_array($sub['usage'] ?? null) ? $sub['usage'] : [];
+        $plan = trim((string)($sub['plan'] ?? ''));
+
+        if(empty($usage['ok'])){
+            if($plan !== ''){
+                return [
+                    'time' => 'پلن: ' . $plan,
+                    'volume' => 'در حال دریافت اطلاعات مصرف',
+                    'remain_pct' => 0,
+                    'time_pct' => 0,
+                    'warn' => false,
+                ];
+            }
+
+            return [
+                'time' => 'اطلاعات مصرف در دسترس نیست',
+                'volume' => '',
+                'remain_pct' => 0,
+                'time_pct' => 0,
+                'warn' => false,
+            ];
+        }
+
+        $time = is_array($usage['time'] ?? null) ? $usage['time'] : [];
+        $vol = is_array($usage['volume'] ?? null) ? $usage['volume'] : [];
+        $volPct = !empty($vol['unlimited']) ? 100 : floatval($vol['remain_pct'] ?? 0);
+        $timePct = !empty($time['unlimited']) ? 100 : floatval($time['remain_pct'] ?? 0);
+
+        return [
+            'time' => trim((string)($time['label'] ?? 'زمان نامشخص')),
+            'volume' => trim((string)($vol['label'] ?? '')),
+            'remain_pct' => $volPct,
+            'time_pct' => $timePct,
+            'warn' => ($timePct <= 20 || $volPct <= 20),
+        ];
     }
 
     function tgUserSubDisplayName($sub){
@@ -704,36 +780,48 @@ if(!function_exists('tgUserFaNum')){
         return 0;
     }
 
+    function tgUserBuildConnectWelcomeText($username){
+        $count = count(tgUserLoadSubsBundle($username, ['skip_usage' => true]));
+        $lines = [
+            'اتصال با موفقیت انجام شد. ✅',
+            '',
+            'سلام ' . $username . ' 👋',
+            '',
+            'به ربات پنل خوش آمدید!',
+            '',
+            'وضعیت اشتراک‌ها:',
+        ];
+
+        if($count === 0){
+            $lines[] = 'شما اشتراک فعالی ندارید.';
+        }
+        else{
+            $lines[] = 'شما (' . tgUserFaNum((string)$count) . ') اشتراک فعال دارید.';
+        }
+
+        return implode("\n", $lines);
+    }
+
     function tgUserBuildHomeText($username){
-        $subs = tgUserLoadSubsBundle($username);
+        $count = count(tgUserLoadSubsBundle($username, ['skip_usage' => true]));
         $unread = tgUserSupportUnreadCount($username);
         $lines = [
             'سلام ' . $username . ' 👋',
             '',
-            'وضعیت اشتراک‌ها:',
+            'به ربات پنل خوش آمدید!',
             '',
+            'وضعیت اشتراک‌ها:',
         ];
 
-        if(count($subs) === 0){
-            $lines[] = 'اشتراک فعالی ثبت نشده است.';
+        if($count === 0){
+            $lines[] = 'شما اشتراک فعالی ندارید.';
         }
         else{
-            foreach($subs as $sub){
-                $name = tgUserSubDisplayName($sub);
-                $usage = is_array($sub['usage'] ?? null) ? $sub['usage'] : [];
-                $time = is_array($usage['time'] ?? null) ? $usage['time'] : [];
-                $vol = is_array($usage['volume'] ?? null) ? $usage['volume'] : [];
-                $timeLabel = trim((string)($time['label'] ?? 'نامشخص'));
-                $volPct = !empty($vol['unlimited']) ? 100 : floatval($vol['remain_pct'] ?? 0);
-                $timePct = !empty($time['unlimited']) ? 100 : floatval($time['remain_pct'] ?? 0);
-                $warn = ($timePct <= 20 || $volPct <= 20) ? ' ⚠️' : ' ✅';
-                $lines[] = $name;
-                $lines[] = '  ' . $timeLabel . ' | ' . tgUserFaNum((string)round($volPct)) . '٪ حجم' . $warn;
-                $lines[] = '';
-            }
+            $lines[] = 'شما (' . tgUserFaNum((string)$count) . ') اشتراک فعال دارید.';
         }
 
         if($unread > 0){
+            $lines[] = '';
             $lines[] = tgUserFaNum((string)$unread) . ' پیام خوانده‌نشده از پشتیبانی 📨';
         }
 
@@ -749,16 +837,18 @@ if(!function_exists('tgUserFaNum')){
 
         foreach($subs as $i => $sub){
             $name = tgUserSubDisplayName($sub);
-            $usage = is_array($sub['usage'] ?? null) ? $sub['usage'] : [];
-            $time = is_array($usage['time'] ?? null) ? $usage['time'] : [];
-            $vol = is_array($usage['volume'] ?? null) ? $usage['volume'] : [];
-            $timeLabel = trim((string)($time['label'] ?? 'نامشخص'));
-            $volPct = !empty($vol['unlimited']) ? 100 : floatval($vol['remain_pct'] ?? 0);
-            $timePct = !empty($time['unlimited']) ? 100 : floatval($time['remain_pct'] ?? 0);
-            $warn = ($timePct <= 20 || $volPct <= 20) ? ' ⚠️' : '';
+            $labels = tgUserUsageLabels($sub);
+            $warn = !empty($labels['warn']) ? ' ⚠️' : '';
             $lines[] = tgUserFaNum((string)($i + 1)) . '. ' . $name . $warn;
-            $lines[] = '   ' . $timeLabel;
-            $lines[] = '   ' . tgUserFaNum((string)round($volPct)) . '٪ حجم باقیمانده';
+            $lines[] = '   ' . $labels['time'];
+
+            if($labels['volume'] !== ''){
+                $lines[] = '   ' . $labels['volume'];
+            }
+            else{
+                $lines[] = '   ' . tgUserFaNum((string)round(floatval($labels['remain_pct']))) . '٪ حجم باقیمانده';
+            }
+
             $lines[] = '';
         }
 
@@ -768,15 +858,19 @@ if(!function_exists('tgUserFaNum')){
 
     function tgUserBuildSubDetailText($sub){
         $name = tgUserSubDisplayName($sub);
-        $usage = is_array($sub['usage'] ?? null) ? $sub['usage'] : [];
-        $time = is_array($usage['time'] ?? null) ? $usage['time'] : [];
-        $vol = is_array($usage['volume'] ?? null) ? $usage['volume'] : [];
+        $labels = tgUserUsageLabels($sub);
         $lines = [
             $name,
             '',
-            '⏳ ' . trim((string)($time['label'] ?? 'نامشخص')),
-            '📦 ' . trim((string)($vol['label'] ?? 'نامشخص')),
+            '⏳ ' . $labels['time'],
         ];
+
+        if($labels['volume'] !== ''){
+            $lines[] = '📦 ' . $labels['volume'];
+        }
+        else{
+            $lines[] = '📦 ' . tgUserFaNum((string)round(floatval($labels['remain_pct']))) . '٪ حجم باقیمانده';
+        }
 
         if(trim((string)($sub['date'] ?? '')) !== ''){
             $lines[] = '📅 تاریخ: ' . trim((string)$sub['date']) . ' ' . trim((string)($sub['time'] ?? ''));
@@ -1036,8 +1130,7 @@ if(!function_exists('tgUserFaNum')){
 
             $username = trim((string)($result['username'] ?? ''));
             tgUserSetSession($chatId, ['screen' => 'home', 'username' => $username, 'mode' => '']);
-            $text = "اتصال با موفقیت انجام شد. ✅\n\n" . tgUserBuildHomeText($username);
-            tgUserSendKeyboardMessage($chatId, $text, tgUserMainKeyboard(), $config);
+            tgUserSendKeyboardMessage($chatId, tgUserBuildConnectWelcomeText($username), tgUserMainKeyboard(), $config);
             return;
         }
 
@@ -1237,6 +1330,7 @@ if(!function_exists('tgUserFaNum')){
             $sub = tgUserFindSubByLabel($subs, $text);
 
             if($sub){
+                $sub = tgUserRefreshSubUsage($sub, true);
                 tgUserSetSession($chatId, ['screen' => 'sub_detail', 'mode' => '', 'selected_link' => $sub['link'] ?? '']);
                 tgUserSendKeyboardMessage($chatId, tgUserBuildSubDetailText($sub), tgUserBackKeyboard(), $config);
                 return;
