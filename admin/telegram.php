@@ -25,7 +25,11 @@ if(isset($_POST['save'])){
     $config = [
         'enabled' => isset($_POST['enabled']),
         'bot_token' => trim($_POST['bot_token'] ?? ''),
+        'bot_username' => trim(ltrim((string)($_POST['bot_username'] ?? ''), '@')),
         'admin_chat_ids' => trim($_POST['admin_chat_ids'] ?? ''),
+        'panel_url' => rtrim(trim((string)($_POST['panel_url'] ?? '')), '/'),
+        'notify_expire_days' => max(1, intval($_POST['notify_expire_days'] ?? 3)),
+        'notify_traffic_pct' => max(1, min(100, intval($_POST['notify_traffic_pct'] ?? 20))),
         'local_proxy_urls' => telegramLinesToArray($_POST['local_proxy_urls'] ?? ''),
         'xray_vless_uris' => telegramLinesToArray($_POST['xray_vless_uris'] ?? '')
     ];
@@ -133,7 +137,21 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 
 <label for="admin_chat_ids">شناسه چت مدیران</label>
 <input type="text" id="admin_chat_ids" name="admin_chat_ids" value="<?php echo htmlspecialchars($config['admin_chat_ids'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="مثال: 123456789 یا -1001234567890">
-<div class="hint">برای چند مدیر یا گروه، شناسه‌ها را با ویرگول جدا کنید. فقط همین شناسه‌ها می‌توانند منوی بات را استفاده کنند. قبل از تست، حتماً در بات /start بزنید.</div>
+<div class="hint">برای چند مدیر یا گروه، شناسه‌ها را با ویرگول جدا کنید. فقط همین شناسه‌ها منوی مدیریت را می‌بینند. کاربران عادی با اتصال از داشبورد، منوی جداگانه دریافت می‌کنند.</div>
+
+<label for="bot_username">نام کاربری بات (اختیاری)</label>
+<input type="text" id="bot_username" name="bot_username" value="<?php echo htmlspecialchars($config['bot_username'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="YourPanelBot">
+<div class="hint">اگر خالی باشد از API تلگرام خوانده می‌شود. برای ساخت لینک اتصال کاربران استفاده می‌شود.</div>
+
+<label for="panel_url">آدرس پنل کاربری</label>
+<input type="text" id="panel_url" name="panel_url" value="<?php echo htmlspecialchars($config['panel_url'] ?? 'https://panel.ticketin.ir', ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://panel.ticketin.ir">
+
+<label for="notify_expire_days">هشدار انقضا (چند روز قبل)</label>
+<input type="number" id="notify_expire_days" name="notify_expire_days" min="1" max="30" value="<?php echo (int)($config['notify_expire_days'] ?? 3); ?>">
+
+<label for="notify_traffic_pct">هشدار حجم (درصد باقیمانده)</label>
+<input type="number" id="notify_traffic_pct" name="notify_traffic_pct" min="1" max="100" value="<?php echo (int)($config['notify_traffic_pct'] ?? 20); ?>">
+<div class="hint">وقتی حجم باقیمانده به این درصد یا کمتر برسد، اعلان ارسال می‌شود. cron روزانه: <code>php scripts/telegram_notify_expiry.php</code></div>
 
 <label for="local_proxy_urls">آدرس پراکسی محلی Xray (هر خط یک مورد)</label>
 <textarea id="local_proxy_urls" name="local_proxy_urls" placeholder="socks5h://127.0.0.1:10808"><?php echo telegramTextAreaValue($config['local_proxy_urls'] ?? []); ?></textarea>

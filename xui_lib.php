@@ -1802,6 +1802,23 @@ if(!function_exists('xuiConfigPath')){
             }
         }
 
+        if(!function_exists('tgUserNotifyPaymentApproved') && is_file(__DIR__ . '/telegram_user_lib.php')){
+            require_once __DIR__ . '/telegram_user_lib.php';
+        }
+
+        if(function_exists('tgUserNotifyPaymentApproved')){
+            $username = trim((string)($row[0] ?? ''));
+            $configName = trim((string)($row[1] ?? ''));
+            $planText = trim((string)($row[2] ?? ''));
+            $subName = $configName;
+
+            if($subName === '' && !empty($result['email'])){
+                $subName = trim((string)$result['email']);
+            }
+
+            tgUserNotifyPaymentApproved($username, $subName, $planText, $type === 'تمدید');
+        }
+
         return $result;
     }
 

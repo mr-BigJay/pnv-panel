@@ -1037,6 +1037,14 @@ if(!function_exists('supportLoad')){
 
                         supportSave($file, $data);
 
+                        if(!function_exists('tgUserNotifySupportReply') && is_file(__DIR__ . '/telegram_user_lib.php')){
+                            require_once __DIR__ . '/telegram_user_lib.php';
+                        }
+
+                        if(function_exists('tgUserNotifySupportReply')){
+                            tgUserNotifySupportReply($user, $text);
+                        }
+
                     }
                     $redirect = supportAdminUrl($user, $embedded);
                 }

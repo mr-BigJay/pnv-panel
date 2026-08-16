@@ -6,6 +6,7 @@ if(PHP_SAPI !== 'cli'){
 }
 
 require_once __DIR__ . '/telegram_lib.php';
+require_once __DIR__ . '/telegram_user_lib.php';
 
 $loop = in_array('--loop', $argv ?? [], true);
 $config = telegramLoadConfig();
@@ -67,7 +68,6 @@ do {
             $state['offset'] = $updateId + 1;
         }
 
-        // offset را زود ذخیره کن تا در صورت خطا، آپدیت تکرار نشود
         file_put_contents(
             $stateFile,
             json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
@@ -75,22 +75,24 @@ do {
         );
 
         if(isset($update['callback_query'])){
-            telegramHandleCallback($update['callback_query'], $config);
+            $callbackChatId = (string)($update['callback_query']['message']['chat']['id'] ?? '');
+
+            if($callbackChatId !== '' && telegramCanUseBot($callbackChatId, $config)){
+                telegramHandleCallback($update['callback_query'], $config);
+            }
+
             continue;
         }
 
         $message = $update['message'] ?? [];
-        $chatId = (string)($message['chat']['id'] ?? '');
-        $text = trim((string)($message['text'] ?? ''));
 
-        if($chatId === '' || $text === '' || !telegramCanUseBot($chatId, $config)){
+        if(!is_array($message) || count($message) === 0){
             continue;
         }
 
-        telegramHandleAdminText($chatId, $text, $config);
+        tgUserHandleMessage($message, $config);
     }
 
-    // یادآوری خرید/تمدید در انتظار تایید (حدود هر ۵ دقیقه، با حذف پیام قبلی)
     telegramProcessPendingReminders($config);
 
 } while($loop);

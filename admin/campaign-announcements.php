@@ -76,7 +76,21 @@ if(isset($_POST['save_announcement'])){
         }
 
         if($flash === ''){
+            $isNew = ($id === '');
             campaignAnnouncementsSave($rows);
+
+            if(
+                $isNew
+                && $status === 'active'
+                && is_file(__DIR__ . '/../telegram_user_lib.php')
+            ){
+                require_once __DIR__ . '/../telegram_user_lib.php';
+
+                if(function_exists('tgUserNotifyCampaign')){
+                    tgUserNotifyCampaign($title, $message);
+                }
+            }
+
             header('Location: ' . pnvAdminUrl('campaign-announcements.php'));
             exit;
         }

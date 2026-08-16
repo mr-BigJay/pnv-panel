@@ -6,3 +6,7 @@ db/xui_servers.json
 db/xui_state.json
 db/telegram_sessions.json
 db/telegram_reminders.json
+db/telegram_links.json
+db/telegram_user_sessions.json
+db/telegram_notify_state.json
+db/telegram_bot_username.cache

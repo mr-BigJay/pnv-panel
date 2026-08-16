@@ -23,7 +23,11 @@ if(!function_exists('telegramConfigPath')){
         $defaults = [
             'enabled' => false,
             'bot_token' => '',
+            'bot_username' => '',
             'admin_chat_ids' => '',
+            'panel_url' => 'https://panel.ticketin.ir',
+            'notify_expire_days' => 3,
+            'notify_traffic_pct' => 20,
             'local_proxy_urls' => [],
             'xray_vless_uris' => []
         ];
@@ -1619,6 +1623,14 @@ if(!function_exists('telegramConfigPath')){
 
         telegramSaveSupport($data);
 
+        if(!function_exists('tgUserNotifySupportReply') && is_file(__DIR__ . '/telegram_user_lib.php')){
+            require_once __DIR__ . '/telegram_user_lib.php';
+        }
+
+        if(function_exists('tgUserNotifySupportReply')){
+            tgUserNotifySupportReply($username, $text);
+        }
+
         return ['ok' => true, 'message' => $newmsg];
     }
 
@@ -1728,7 +1740,9 @@ if(!function_exists('telegramConfigPath')){
         // منوی بصری؛ فقط استارت برای باز کردن صفحه اصلی
         return telegramApiRequest('setMyCommands', [
             'commands' => json_encode([
-                ['command' => 'start', 'description' => 'منوی اصلی']
+                ['command' => 'start', 'description' => 'منوی اصلی'],
+                ['command' => 'status', 'description' => 'وضعیت اشتراک‌ها'],
+                ['command' => 'support', 'description' => 'پشتیبانی'],
             ], JSON_UNESCAPED_UNICODE)
         ], [], $config);
     }
