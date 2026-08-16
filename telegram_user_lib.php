@@ -1300,6 +1300,38 @@ if(!function_exists('tgUserFaNum')){
         return trim(implode("\n", $lines));
     }
 
+    function tgUserBuildSubLoadingText($sub){
+        $name = tgUserSubDisplayName($sub);
+
+        return implode("\n", [
+            $name,
+            '',
+            tgUserRtlLine('در حال آنالیز اشتراک، لطفاً منتظر بمانید ⏳'),
+        ]);
+    }
+
+    function tgUserShowSubDetail($chatId, $sub, $config = null){
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        tgUserSetSession($chatId, [
+            'screen' => 'sub_detail',
+            'mode' => 'loading',
+            'selected_link' => $sub['link'] ?? '',
+        ]);
+        tgUserSendKeyboardMessage($chatId, tgUserBuildSubLoadingText($sub), tgUserBackKeyboard(), $config);
+
+        $sub = tgUserRefreshSubUsage($sub, true);
+
+        tgUserSetSession($chatId, [
+            'screen' => 'sub_detail',
+            'mode' => '',
+            'selected_link' => $sub['link'] ?? '',
+        ]);
+        tgUserSendKeyboardMessage($chatId, tgUserBuildSubDetailText($sub), tgUserBackKeyboard(), $config);
+    }
+
     function tgUserBuildSubDetailText($sub){
         $name = tgUserSubDisplayName($sub);
         $labels = tgUserUsageLabels($sub);
@@ -1696,6 +1728,10 @@ if(!function_exists('tgUserFaNum')){
         $session = tgUserGetSession($chatId);
         $mode = trim((string)($session['mode'] ?? ''));
 
+        if($mode === 'loading'){
+            return;
+        }
+
         if($text === '/status'){
             tgUserSendKeyboardMessage($chatId, tgUserBuildHomeText($username), tgUserMainKeyboard(), $config);
             return;
@@ -1777,13 +1813,11 @@ if(!function_exists('tgUserFaNum')){
         }
 
         if(($session['screen'] ?? '') === 'subs'){
-            $subs = tgUserLoadSubsBundle($username);
+            $subs = tgUserLoadSubsBundle($username, ['skip_usage' => true]);
             $sub = tgUserFindSubByLabel($subs, $text);
 
             if($sub){
-                $sub = tgUserRefreshSubUsage($sub, true);
-                tgUserSetSession($chatId, ['screen' => 'sub_detail', 'mode' => '', 'selected_link' => $sub['link'] ?? '']);
-                tgUserSendKeyboardMessage($chatId, tgUserBuildSubDetailText($sub), tgUserBackKeyboard(), $config);
+                tgUserShowSubDetail($chatId, $sub, $config);
                 return;
             }
         }
