@@ -16,8 +16,47 @@ SERVICE_NAME="${SERVICE_NAME:-pnv-telegram-poll}"
 RUN_USER="${RUN_USER:-www-data}"
 PHP_BIN="${PHP_BIN:-}"
 
+REPO="${REPO:-mr-BigJay/pnv-panel}"
+BR="${BR:-cursor/telegram-user-bot-058b}"
+DEPLOY="${DEPLOY:-1}"
+
 say(){ echo -e "$*"; }
 die(){ say "!! $*"; exit 1; }
+
+deploy_file(){
+    local rel="$1"
+    local dest="${ROOT}/${rel}"
+    local url="https://raw.githubusercontent.com/${REPO}/${BR}/${rel}"
+    mkdir -p "$(dirname "$dest")"
+    curl -fsSL "$url" -o "$dest"
+    say "  deploy OK ${rel}"
+}
+
+maybe_deploy(){
+    [[ "$DEPLOY" == "1" ]] || return 0
+    [[ -f "${ROOT}/telegram_user_lib.php" ]] && return 0
+
+    say ">> فایل‌های ربات روی سرور نیست — deploy از branch ${BR}..."
+    local files=(
+        telegram_poll.php
+        telegram_user_lib.php
+        telegram_lib.php
+        profile-api.php
+        dashboard.php
+        support_lib.php
+        xui_lib.php
+        admin/payments.php
+        admin/renews.php
+        admin/telegram.php
+        admin/campaign-announcements.php
+        scripts/telegram_notify_expiry.php
+        scripts/setup-telegram-bot.sh
+    )
+    local rel
+    for rel in "${files[@]}"; do
+        deploy_file "$rel"
+    done
+}
 
 if [[ "$(id -u)" -ne 0 ]]; then
     die "این اسکریپت را با root اجرا کنید: sudo bash ..."
