@@ -14,6 +14,12 @@
 --tg-green-line:rgba(34,197,94,.35);
 --tg-blue:#2563eb;
 --tg-blue-dark:#1d4ed8;
+--tg-telegram:#229ed9;
+--tg-telegram-soft:rgba(34,158,217,.14);
+--tg-telegram-line:rgba(34,158,217,.35);
+--tg-danger:#ef4444;
+--tg-danger-soft:rgba(239,68,68,.12);
+--tg-danger-line:rgba(239,68,68,.35);
 }
 
 body.telegramPage{
@@ -64,13 +70,19 @@ width:56px;
 height:56px;
 margin:0 auto 12px;
 border-radius:18px;
-background:rgba(61,220,151,.1);
-border:1px solid rgba(61,220,151,.22);
+background:var(--tg-telegram-soft);
+border:1px solid var(--tg-telegram-line);
 display:flex;
 align-items:center;
 justify-content:center;
-font-size:26px;
+color:var(--tg-telegram);
 line-height:1;
+}
+
+.telegramMainIcon svg{
+width:30px;
+height:30px;
+display:block;
 }
 
 .telegramMainStatus{
@@ -164,22 +176,14 @@ border-color:var(--tg-line);
 color:var(--tg-soft);
 }
 
-.telegramLinkBtn{
-margin-top:4px;
-padding:8px 0;
-border:0;
-background:transparent;
-color:var(--tg-muted);
-font-family:inherit;
-font-size:12px;
-cursor:pointer;
-text-decoration:underline;
-text-underline-offset:3px;
+.telegramBtn--danger{
+background:var(--tg-danger-soft);
+border-color:var(--tg-danger-line);
+color:#fecaca;
 }
 
-.telegramLinkBtn:disabled{
-opacity:.6;
-cursor:not-allowed;
+.telegramBtn--danger:hover{
+background:rgba(239,68,68,.18);
 }
 
 .telegramHint{

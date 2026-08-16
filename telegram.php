@@ -66,7 +66,7 @@ if($linked){
 <title>اتصال تلگرام</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="telegram_ui.css?v=2">
+<link rel="stylesheet" href="telegram_ui.css?v=3">
 </head>
 <body class="telegramPage">
 
@@ -75,7 +75,11 @@ if($linked){
 <?php userBackBar('dashboard.php', 'اتصال تلگرام'); ?>
 
 <section class="telegramMainCard">
-<div class="telegramMainIcon" aria-hidden="true">✈</div>
+<div class="telegramMainIcon" aria-hidden="true">
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/>
+</svg>
+</div>
 <div class="telegramMainStatus<?php echo $linked ? ' is-on' : ' is-off'; ?>" id="tgStatusValue">
 <?php echo $linked ? '✅ متصل' : '❌ متصل نیست'; ?>
 </div>
@@ -95,8 +99,7 @@ elseif(!$linked){
 <?php } else { ?>
 <div class="telegramActions" id="tgActions">
 <?php if($linked){ ?>
-<button type="button" class="telegramBtn telegramBtn--ghost" id="tgDisconnectBtn">قطع اتصال</button>
-<button type="button" class="telegramLinkBtn" id="tgTestBtn">ارسال پیام تست</button>
+<button type="button" class="telegramBtn telegramBtn--danger" id="tgDisconnectBtn">قطع اتصال</button>
 <?php } else { ?>
 <button type="button" class="telegramBtn telegramBtn--primary" id="tgConnectBtn">اتصال به ربات تلگرام</button>
 <p class="telegramHint"><?php
@@ -129,7 +132,6 @@ else{
     var statusValue = document.getElementById('tgStatusValue');
     var statusMeta = document.getElementById('tgStatusMeta');
     var connectBtn = document.getElementById('tgConnectBtn');
-    var testBtn = document.getElementById('tgTestBtn');
     var disconnectBtn = document.getElementById('tgDisconnectBtn');
 
     function showFlash(msg, kind){
@@ -173,34 +175,6 @@ else{
             })
             .catch(function(){
                 connectBtn.disabled = false;
-                showFlash('خطا در ارتباط با سرور', 'error');
-            });
-        });
-    }
-
-    if(testBtn){
-        testBtn.addEventListener('click', function(){
-            showFlash('');
-            testBtn.disabled = true;
-
-            fetch('profile-api.php', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'action=telegram_test'
-            })
-            .then(function(r){ return r.json(); })
-            .then(function(data){
-                testBtn.disabled = false;
-
-                if(!data.ok){
-                    showFlash(data.error || 'ارسال پیام تست ناموفق بود', 'error');
-                    return;
-                }
-
-                showFlash('پیام تست ارسال شد ✅', 'success');
-            })
-            .catch(function(){
-                testBtn.disabled = false;
                 showFlash('خطا در ارتباط با سرور', 'error');
             });
         });
