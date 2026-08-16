@@ -703,6 +703,44 @@ if(!function_exists('tgUserFaNum')){
         telegramDeleteMessage((string)$chatId, $messageId, $config);
     }
 
+    function tgUserShouldClearUserInputMessage($text, $session){
+        $text = trim((string)$text);
+
+        if($text === ''){
+            return false;
+        }
+
+        if(trim((string)($session['mode'] ?? '')) === 'write'){
+            return false;
+        }
+
+        return true;
+    }
+
+    function tgUserClearUserInputMessage($chatId, $message, $config = null){
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        $chatId = (string)$chatId;
+        $session = tgUserGetSession($chatId);
+        $storedIds = is_array($session['user_input_message_ids'] ?? null) ? $session['user_input_message_ids'] : [];
+
+        foreach($storedIds as $msgId){
+            tgUserDeleteAnnouncementMessage($chatId, intval($msgId), $config);
+        }
+
+        if(is_array($message)){
+            $currentId = intval($message['message_id'] ?? 0);
+
+            if($currentId > 0){
+                tgUserDeleteAnnouncementMessage($chatId, $currentId, $config);
+            }
+        }
+
+        tgUserSetSession($chatId, ['user_input_message_ids' => []]);
+    }
+
     function tgUserClearMenu($chatId, $config = null){
         $session = tgUserGetSession($chatId);
         $menuMessageId = intval($session['menu_message_id'] ?? 0);
@@ -1595,7 +1633,11 @@ if(!function_exists('tgUserFaNum')){
         tgUserSendKeyboardMessage($chatId, implode("\n\n", $lines), tgUserSupportKeyboard(), $config);
     }
 
-    function tgUserHandleStart($chatId, $args, $from, $config = null){
+    function tgUserHandleStart($chatId, $args, $from, $config = null, $message = null){
+        if(is_array($message)){
+            tgUserClearUserInputMessage($chatId, $message, $config);
+        }
+
         if(preg_match('/^link[_-]([a-f0-9]+)$/i', (string)$args, $m)){
             $result = tgUserConsumeLinkToken($m[1], $chatId, is_array($from) ? $from : []);
 
@@ -1704,7 +1746,7 @@ if(!function_exists('tgUserFaNum')){
 
         if($text === '/start' || strpos($text, '/start ') === 0){
             $args = trim(substr($text, 6));
-            tgUserHandleStart($chatId, $args, $from, $config);
+            tgUserHandleStart($chatId, $args, $from, $config, $message);
             return;
         }
 
@@ -1719,6 +1761,7 @@ if(!function_exists('tgUserFaNum')){
 
         if(!$user){
             if($text !== ''){
+                tgUserClearUserInputMessage($chatId, $message, $config);
                 tgUserSendKeyboardMessage($chatId, tgUserBuildGuestText($config), tgUserReplyMarkup([[tgUserBtnPanel()]]), $config);
             }
             return;
@@ -1730,6 +1773,10 @@ if(!function_exists('tgUserFaNum')){
 
         if($mode === 'loading'){
             return;
+        }
+
+        if(tgUserShouldClearUserInputMessage($text, $session)){
+            tgUserClearUserInputMessage($chatId, $message, $config);
         }
 
         if($text === '/status'){

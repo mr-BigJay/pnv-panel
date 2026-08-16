@@ -178,17 +178,6 @@ text-align:right;
 cursor:pointer;
 }
 .dashMoreMenu button:hover{background:rgba(30,41,59,.8)}
-.dashTelegramStatus{
-margin:0 0 12px;
-padding:10px 12px;
-border-radius:10px;
-background:rgba(15,23,42,.55);
-border:1px solid rgba(148,163,184,.16);
-color:#e2e8f0;
-font-size:13px;
-line-height:1.7;
-white-space:pre-line;
-}
 .dashWelcomeRow{
 display:flex;
 align-items:flex-start;
@@ -630,14 +619,14 @@ max-width:360px;
 </span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
 </a>
-<button type="button" class="dashItem" id="dashTelegramMainBtn">
+<a class="dashItem" href="telegram.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">✈</span>
 <span class="dashItemText">اتصال تلگرام</span>
 </span>
-<span class="dashItemMeta<?php echo $telegramLinked ? ' is-on' : ''; ?>" id="dashTelegramMainMeta"><?php echo $telegramLinked ? 'متصل ✅' : 'غیرفعال'; ?></span>
+<span class="dashItemMeta<?php echo $telegramLinked ? ' is-on' : ''; ?>"><?php echo $telegramLinked ? 'متصل ✅' : 'غیرفعال'; ?></span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
-</button>
+</a>
 <a class="dashItem" href="coupon.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">%</span>
@@ -675,19 +664,6 @@ max-width:360px;
 </div>
 </div>
 
-<div class="dashModalOverlay" id="dashTelegramModal" aria-hidden="true">
-<div class="dashModal" role="dialog" aria-modal="true" aria-labelledby="dashTelegramModalTitle">
-<h2 class="dashModalTitle" id="dashTelegramModalTitle">اتصال تلگرام</h2>
-<p class="dashModalHint" id="dashTelegramIntro">با اتصال تلگرام از انقضا، حجم، پاسخ پشتیبانی، کمپین‌ها و تأیید پرداخت مطلع می‌شوید.</p>
-<div class="dashTelegramStatus" id="dashTelegramStatus"></div>
-<div class="dashModalError" id="dashTelegramError"></div>
-<div class="dashModalActions" id="dashTelegramActions">
-<button type="button" class="dashModalBtn dashModalBtn--ghost" id="dashTelegramCancel">بستن</button>
-<button type="button" class="dashModalBtn dashModalBtn--primary" id="dashTelegramConnect">اتصال به تلگرام</button>
-</div>
-</div>
-</div>
-
 <div class="dashModalOverlay" id="dashAvatarCropModal" aria-hidden="true">
 <div class="dashModal dashModal--crop" role="dialog" aria-modal="true" aria-labelledby="dashAvatarCropTitle">
 <h2 class="dashModalTitle" id="dashAvatarCropTitle">تنظیم عکس پروفایل</h2>
@@ -718,15 +694,6 @@ max-width:360px;
     var moreMenu = document.getElementById('dashMoreMenu');
     var editAvatarBtn = document.getElementById('dashEditAvatarBtn');
     var editUsernameBtn = document.getElementById('dashEditUsernameBtn');
-    var telegramMainBtn = document.getElementById('dashTelegramMainBtn');
-    var telegramMainMeta = document.getElementById('dashTelegramMainMeta');
-    var telegramModal = document.getElementById('dashTelegramModal');
-    var telegramStatusEl = document.getElementById('dashTelegramStatus');
-    var telegramError = document.getElementById('dashTelegramError');
-    var telegramActions = document.getElementById('dashTelegramActions');
-    var telegramCancel = document.getElementById('dashTelegramCancel');
-    var telegramConnect = document.getElementById('dashTelegramConnect');
-    var telegramState = <?php echo json_encode($telegramStatus, JSON_UNESCAPED_UNICODE); ?>;
     var avatarInput = document.getElementById('dashAvatarInput');
     var avatarEl = document.getElementById('dashAvatar');
     var usernameModal = document.getElementById('dashUsernameModal');
@@ -776,208 +743,6 @@ max-width:360px;
             usernameError.textContent = '';
             usernameError.classList.remove('is-visible');
         }
-    }
-
-    function showTelegramError(msg){
-        if(!telegramError){
-            return;
-        }
-
-        if(msg){
-            telegramError.textContent = msg;
-            telegramError.classList.add('is-visible');
-        } else {
-            telegramError.textContent = '';
-            telegramError.classList.remove('is-visible');
-        }
-    }
-
-    function updateTelegramMainMeta(){
-        if(!telegramMainMeta){
-            return;
-        }
-
-        if(telegramState.linked){
-            telegramMainMeta.textContent = 'متصل ✅';
-            telegramMainMeta.classList.add('is-on');
-        }
-        else{
-            telegramMainMeta.textContent = 'غیرفعال';
-            telegramMainMeta.classList.remove('is-on');
-        }
-    }
-
-    function renderTelegramModal(){
-        if(!telegramStatusEl || !telegramConnect || !telegramActions){
-            return;
-        }
-
-        showTelegramError('');
-        telegramActions.innerHTML = '';
-        telegramActions.appendChild(telegramCancel);
-
-        if(telegramState.linked){
-            var lines = ['وضعیت: ✅ متصل'];
-
-            if(telegramState.telegram_username){
-                lines.push('تلگرام: ' + telegramState.telegram_username);
-            }
-
-            if(telegramState.linked_at){
-                lines.push('متصل شده: ' + telegramState.linked_at);
-            }
-
-            telegramStatusEl.textContent = lines.join('\n');
-
-            var testBtn = document.createElement('button');
-            testBtn.type = 'button';
-            testBtn.className = 'dashModalBtn dashModalBtn--primary';
-            testBtn.id = 'dashTelegramTest';
-            testBtn.textContent = 'ارسال پیام تست';
-            telegramActions.appendChild(testBtn);
-
-            var disconnectBtn = document.createElement('button');
-            disconnectBtn.type = 'button';
-            disconnectBtn.className = 'dashModalBtn dashModalBtn--ghost';
-            disconnectBtn.id = 'dashTelegramDisconnect';
-            disconnectBtn.textContent = 'قطع اتصال';
-            telegramActions.appendChild(disconnectBtn);
-
-            testBtn.addEventListener('click', function(){
-                showTelegramError('');
-                testBtn.disabled = true;
-
-                fetch('profile-api.php', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: 'action=telegram_test'
-                })
-                .then(function(r){ return r.json(); })
-                .then(function(data){
-                    testBtn.disabled = false;
-
-                    if(!data.ok){
-                        showTelegramError(data.error || 'ارسال پیام تست ناموفق بود');
-                        return;
-                    }
-
-                    showTelegramError('پیام تست ارسال شد ✅');
-                    telegramError.classList.add('is-visible');
-                })
-                .catch(function(){
-                    testBtn.disabled = false;
-                    showTelegramError('خطا در ارتباط با سرور');
-                });
-            });
-
-            disconnectBtn.addEventListener('click', function(){
-                if(!window.confirm('اتصال تلگرام قطع شود؟')){
-                    return;
-                }
-
-                disconnectBtn.disabled = true;
-
-                fetch('profile-api.php', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: 'action=telegram_disconnect'
-                })
-                .then(function(r){ return r.json(); })
-                .then(function(data){
-                    disconnectBtn.disabled = false;
-
-                    if(!data.ok){
-                        showTelegramError(data.error || 'قطع اتصال ناموفق بود');
-                        return;
-                    }
-
-                    telegramState.linked = false;
-                    telegramState.telegram_username = '';
-                    telegramState.linked_at = '';
-                    updateTelegramMainMeta();
-                    renderTelegramModal();
-                })
-                .catch(function(){
-                    disconnectBtn.disabled = false;
-                    showTelegramError('خطا در ارتباط با سرور');
-                });
-            });
-
-            return;
-        }
-
-        telegramStatusEl.textContent = 'وضعیت: ❌ متصل نیست';
-
-        var connectBtn = document.createElement('button');
-        connectBtn.type = 'button';
-        connectBtn.className = 'dashModalBtn dashModalBtn--primary';
-        connectBtn.id = 'dashTelegramConnectDynamic';
-        connectBtn.textContent = 'اتصال به تلگرام';
-        telegramActions.appendChild(connectBtn);
-
-        connectBtn.addEventListener('click', function(){
-            showTelegramError('');
-            connectBtn.disabled = true;
-
-            fetch('profile-api.php', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'action=telegram_link'
-            })
-            .then(function(r){ return r.json(); })
-            .then(function(data){
-                connectBtn.disabled = false;
-
-                if(!data.ok){
-                    showTelegramError(data.error || 'ساخت لینک اتصال ناموفق بود');
-                    return;
-                }
-
-                if(data.url){
-                    window.open(data.url, '_blank');
-                }
-            })
-            .catch(function(){
-                connectBtn.disabled = false;
-                showTelegramError('خطا در ارتباط با سرور');
-            });
-        });
-    }
-
-    function openTelegramModal(){
-        if(!telegramModal){
-            return;
-        }
-
-        fetch('profile-api.php?action=telegram_status')
-        .then(function(r){ return r.json(); })
-        .then(function(data){
-            if(data.ok){
-                telegramState = data;
-            }
-
-            updateTelegramMainMeta();
-            renderTelegramModal();
-            telegramModal.classList.add('is-open');
-            telegramModal.setAttribute('aria-hidden', 'false');
-            closeMenu();
-        })
-        .catch(function(){
-            renderTelegramModal();
-            telegramModal.classList.add('is-open');
-            telegramModal.setAttribute('aria-hidden', 'false');
-            closeMenu();
-        });
-    }
-
-    function closeTelegramModal(){
-        if(!telegramModal){
-            return;
-        }
-
-        telegramModal.classList.remove('is-open');
-        telegramModal.setAttribute('aria-hidden', 'true');
-        showTelegramError('');
     }
 
     function openUsernameModal(){
@@ -1405,22 +1170,6 @@ max-width:360px;
 
     if(editUsernameBtn){
         editUsernameBtn.addEventListener('click', openUsernameModal);
-    }
-
-    if(telegramMainBtn){
-        telegramMainBtn.addEventListener('click', openTelegramModal);
-    }
-
-    if(telegramCancel){
-        telegramCancel.addEventListener('click', closeTelegramModal);
-    }
-
-    if(telegramModal){
-        telegramModal.addEventListener('click', function(e){
-            if(e.target === telegramModal){
-                closeTelegramModal();
-            }
-        });
     }
 
     if(usernameCancel){
