@@ -554,43 +554,113 @@ z-index:2100;
 display:flex;
 }
 .dashAnnouncementCard{
-width:min(92vw,420px);
+width:min(92vw,400px);
 background:rgba(18,24,32,.96);
 border:1px solid rgba(148,163,184,.2);
-border-radius:18px;
-padding:18px;
+border-radius:22px;
+padding:20px 18px 16px;
 color:#fff;
-box-shadow:0 20px 50px rgba(0,0,0,.35);
+box-shadow:0 20px 48px rgba(0,0,0,.28);
+backdrop-filter:blur(10px);
+-webkit-backdrop-filter:blur(10px);
+display:flex;
+flex-direction:column;
+align-items:stretch;
 }
-.dashAnnouncementCard h3{
-margin:0 0 10px;
-font-size:18px;
+.dashAnnouncementIcon{
+width:52px;
+height:52px;
+border-radius:50%;
+display:flex;
+align-items:center;
+justify-content:center;
+margin:0 auto 12px;
+flex-shrink:0;
+}
+.dashAnnouncementIcon svg{
+width:26px;
+height:26px;
+display:block;
+}
+.dashAnnouncementTitle{
+margin:0 0 14px;
+font-size:17px;
 font-family:"Lalezar",tahoma,sans-serif;
 font-weight:400;
+line-height:1.45;
+text-align:center;
 }
-.dashAnnouncementCard p{
-margin:0 0 16px;
+.dashAnnouncementBody{
+padding:14px 12px;
+border-radius:14px;
+background:rgba(15,23,42,.72);
+border:1px solid rgba(148,163,184,.14);
+margin-bottom:16px;
+max-height:min(42vh,280px);
+overflow-y:auto;
+-webkit-overflow-scrolling:touch;
+}
+.dashAnnouncementMessage{
+margin:0;
 line-height:1.9;
-font-size:14px;
-color:#e2e8f0;
+font-size:13px;
+color:#cbd5e1;
 white-space:pre-wrap;
+text-align:right;
 }
-.dashAnnouncementCard button{
+.dashAnnouncementBtn{
 width:100%;
-padding:12px;
+padding:12px 16px;
 border:none;
-border-radius:12px;
-background:#22c55e;
-color:#052e16;
+border-radius:14px;
+background:linear-gradient(180deg,#22c55e 0%,#16a34a 100%);
+border:1px solid #166534;
+color:#ecfdf5;
 font-family:tahoma,sans-serif;
 font-size:15px;
 font-weight:700;
 cursor:pointer;
+box-shadow:0 4px 14px rgba(34,197,94,.22);
 }
-.dashAnnouncementCard.is-info{border-color:rgba(56,189,248,.45)}
-.dashAnnouncementCard.is-success{border-color:rgba(34,197,94,.45)}
-.dashAnnouncementCard.is-warning{border-color:rgba(245,158,11,.45)}
-.dashAnnouncementCard.is-special{border-color:rgba(168,85,247,.45)}
+.dashAnnouncementBtn:active{
+transform:scale(.98);
+}
+.dashAnnouncementCard.is-info{
+border-color:rgba(56,189,248,.35);
+box-shadow:0 20px 48px rgba(0,0,0,.28),0 0 0 1px rgba(56,189,248,.08);
+}
+.dashAnnouncementCard.is-info .dashAnnouncementIcon{
+background:rgba(56,189,248,.16);
+color:#38bdf8;
+box-shadow:0 0 0 1px rgba(56,189,248,.22);
+}
+.dashAnnouncementCard.is-success{
+border-color:rgba(34,197,94,.35);
+box-shadow:0 20px 48px rgba(0,0,0,.28),0 0 0 1px rgba(34,197,94,.08);
+}
+.dashAnnouncementCard.is-success .dashAnnouncementIcon{
+background:rgba(34,197,94,.16);
+color:#86efac;
+box-shadow:0 0 0 1px rgba(34,197,94,.22);
+}
+.dashAnnouncementCard.is-warning{
+border-color:rgba(245,158,11,.35);
+box-shadow:0 20px 48px rgba(0,0,0,.28),0 0 0 1px rgba(245,158,11,.08);
+}
+.dashAnnouncementCard.is-warning .dashAnnouncementIcon{
+background:rgba(245,158,11,.16);
+color:#fbbf24;
+box-shadow:0 0 0 1px rgba(245,158,11,.22);
+}
+.dashAnnouncementCard.is-special{
+border-color:rgba(168,85,247,.4);
+box-shadow:0 20px 48px rgba(0,0,0,.28),0 0 0 1px rgba(168,85,247,.12);
+}
+.dashAnnouncementCard.is-special .dashAnnouncementIcon{
+background:rgba(168,85,247,.16);
+color:#c084fc;
+box-shadow:0 0 0 1px rgba(168,85,247,.25);
+}
 @media(max-width:360px){
 .dashPrimary{min-height:92px}
 .dashPrimaryIcon{width:34px;height:34px;font-size:18px}
@@ -732,9 +802,12 @@ cursor:pointer;
 
 <div class="dashAnnouncementModal" id="dashAnnouncementModal" hidden>
 <div class="dashAnnouncementCard is-info" id="dashAnnouncementCard" role="dialog" aria-modal="true" aria-labelledby="dashAnnouncementTitle">
-<h3 id="dashAnnouncementTitle"></h3>
-<p id="dashAnnouncementMessage"></p>
-<button type="button" id="dashAnnouncementDismiss">متوجه شدم</button>
+<div class="dashAnnouncementIcon" id="dashAnnouncementIcon" aria-hidden="true"></div>
+<h3 class="dashAnnouncementTitle" id="dashAnnouncementTitle"></h3>
+<div class="dashAnnouncementBody">
+<p class="dashAnnouncementMessage" id="dashAnnouncementMessage"></p>
+</div>
+<button type="button" class="dashAnnouncementBtn" id="dashAnnouncementDismiss">ادامه</button>
 </div>
 </div>
 
@@ -1255,6 +1328,7 @@ cursor:pointer;
 (function(){
     const modal = document.getElementById('dashAnnouncementModal');
     const card = document.getElementById('dashAnnouncementCard');
+    const iconEl = document.getElementById('dashAnnouncementIcon');
     const titleEl = document.getElementById('dashAnnouncementTitle');
     const messageEl = document.getElementById('dashAnnouncementMessage');
     const dismissBtn = document.getElementById('dashAnnouncementDismiss');
@@ -1266,8 +1340,24 @@ cursor:pointer;
 
     let currentId = '';
 
+    const typeIcons = {
+        info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>',
+        success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+        warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+        special: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+    };
+
     function typeClass(type){
         return 'is-' + (type || 'info');
+    }
+
+    function setModalIcon(type){
+        if(!iconEl){
+            return;
+        }
+
+        const key = type && typeIcons[type] ? type : 'info';
+        iconEl.innerHTML = typeIcons[key];
     }
 
     function renderBanner(item){
@@ -1290,6 +1380,7 @@ cursor:pointer;
         titleEl.textContent = item.title || '';
         messageEl.textContent = item.message || '';
         card.className = 'dashAnnouncementCard ' + typeClass(item.type);
+        setModalIcon(item.type);
         modal.hidden = false;
         modal.classList.add('is-open');
     }
