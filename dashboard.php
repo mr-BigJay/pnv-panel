@@ -18,11 +18,22 @@ require_once __DIR__ . '/profile_lib.php';
 require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/support_lib.php';
 require_once __DIR__ . '/dashboard_lib.php';
-require_once __DIR__ . '/telegram_user_lib.php';
+
+$telegramStatus = ['linked' => false, 'telegram_username' => '', 'linked_at' => ''];
+$telegramFeatureOk = false;
+
+if(is_file(__DIR__ . '/telegram_user_lib.php')){
+    require_once __DIR__ . '/telegram_user_lib.php';
+
+    if(function_exists('tgUserGetTelegramStatus')){
+        $telegramStatus = tgUserGetTelegramStatus($user);
+        $telegramFeatureOk = true;
+    }
+}
 
 $avatarUrl = profileGetUserAvatar($user);
 $hasUnreadSupport = supportUserHasUnread($user);
-$telegramStatus = tgUserGetTelegramStatus($user);
+$telegramLinked = !empty($telegramStatus['linked']);
 
 $dashStats = pnvDashboardUserPaymentStats($user);
 $approvedSubs = intval($dashStats['approved_subs'] ?? 0);
@@ -355,6 +366,23 @@ font-size:14px;
 flex:0 0 auto;
 line-height:1;
 }
+button.dashItem{
+width:100%;
+border:0;
+background:transparent;
+font-family:inherit;
+cursor:pointer;
+text-align:inherit;
+-webkit-tap-highlight-color:transparent;
+}
+.dashItemMeta{
+color:#94a3b8;
+font-size:10px;
+font-weight:600;
+flex:0 0 auto;
+white-space:nowrap;
+}
+.dashItemMeta.is-on{color:#4ade80}
 .dashLogout{
 display:block;
 margin-top:8px;
@@ -603,6 +631,13 @@ max-width:360px;
 </span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
 </a>
+<button type="button" class="dashItem" id="dashTelegramMainBtn">
+<span class="dashItemMain">
+<span class="dashItemIcon">✈</span>
+<span class="dashItemText">اتصال تلگرام</span>
+</span>
+<span class="dashItemMeta<?php echo $telegramLinked ? ' is-on' : ''; ?>" id="dashTelegramMainMeta"><?php echo $telegramLinked ? 'متصل ✅' : 'غیرفعال'; ?></span>
+</button>
 <a class="dashItem" href="coupon.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">%</span>
@@ -684,6 +719,8 @@ max-width:360px;
     var editAvatarBtn = document.getElementById('dashEditAvatarBtn');
     var editUsernameBtn = document.getElementById('dashEditUsernameBtn');
     var telegramBtn = document.getElementById('dashTelegramBtn');
+    var telegramMainBtn = document.getElementById('dashTelegramMainBtn');
+    var telegramMainMeta = document.getElementById('dashTelegramMainMeta');
     var telegramModal = document.getElementById('dashTelegramModal');
     var telegramStatusEl = document.getElementById('dashTelegramStatus');
     var telegramError = document.getElementById('dashTelegramError');
@@ -753,6 +790,21 @@ max-width:360px;
         } else {
             telegramError.textContent = '';
             telegramError.classList.remove('is-visible');
+        }
+    }
+
+    function updateTelegramMainMeta(){
+        if(!telegramMainMeta){
+            return;
+        }
+
+        if(telegramState.linked){
+            telegramMainMeta.textContent = 'متصل ✅';
+            telegramMainMeta.classList.add('is-on');
+        }
+        else{
+            telegramMainMeta.textContent = 'غیرفعال';
+            telegramMainMeta.classList.remove('is-on');
         }
     }
 
@@ -843,6 +895,7 @@ max-width:360px;
                     telegramState.linked = false;
                     telegramState.telegram_username = '';
                     telegramState.linked_at = '';
+                    updateTelegramMainMeta();
                     renderTelegramModal();
                 })
                 .catch(function(){
@@ -904,6 +957,7 @@ max-width:360px;
                 telegramState = data;
             }
 
+            updateTelegramMainMeta();
             renderTelegramModal();
             telegramModal.classList.add('is-open');
             telegramModal.setAttribute('aria-hidden', 'false');
@@ -1356,6 +1410,10 @@ max-width:360px;
 
     if(telegramBtn){
         telegramBtn.addEventListener('click', openTelegramModal);
+    }
+
+    if(telegramMainBtn){
+        telegramMainBtn.addEventListener('click', openTelegramModal);
     }
 
     if(telegramCancel){
