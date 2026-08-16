@@ -13,6 +13,17 @@ if(!function_exists('tgUserFaNum')){
         );
     }
 
+    function tgUserRtlLine($text){
+        $text = (string)$text;
+
+        if($text === ''){
+            return $text;
+        }
+
+        // RIGHT-TO-LEFT MARK — راست‌چین شدن خطوطی که با ایموجی یا لاتین شروع می‌شوند
+        return "\u{200F}" . $text;
+    }
+
     function tgUserLinksPath(){
         return __DIR__ . '/db/telegram_links.json';
     }
@@ -850,29 +861,29 @@ if(!function_exists('tgUserFaNum')){
         $lines = [
             $name,
             '',
-            '⏳ ' . $labels['time'],
+            tgUserRtlLine('⏳ ' . $labels['time']),
         ];
 
         if($labels['volume'] !== ''){
-            $lines[] = '📦 ' . $labels['volume'];
+            $lines[] = tgUserRtlLine('📦 حجم: ' . $labels['volume']);
         }
         else{
-            $lines[] = '📦 ' . tgUserFaNum((string)round(floatval($labels['remain_pct']))) . '٪ حجم باقیمانده';
+            $lines[] = tgUserRtlLine('📦 حجم: ' . tgUserFaNum((string)round(floatval($labels['remain_pct']))) . '٪ باقیمانده');
         }
 
         if(trim((string)($sub['date'] ?? '')) !== ''){
-            $lines[] = '📅 تاریخ: ' . trim((string)$sub['date']) . ' ' . trim((string)($sub['time'] ?? ''));
+            $lines[] = tgUserRtlLine('📅 تاریخ: ' . trim((string)$sub['date']) . ' ' . trim((string)($sub['time'] ?? '')));
         }
 
         if(trim((string)($sub['tracking'] ?? '')) !== ''){
-            $lines[] = '🔖 کد پیگیری: ' . trim((string)$sub['tracking']);
+            $lines[] = tgUserRtlLine('🔖 کد پیگیری: ' . trim((string)$sub['tracking']));
         }
 
         if(trim((string)($sub['plan'] ?? '')) !== ''){
-            $lines[] = '📋 پلن: ' . trim((string)$sub['plan']);
+            $lines[] = tgUserRtlLine('📋 پلن: ' . trim((string)$sub['plan']));
         }
 
-        $lines[] = '✅ وضعیت: فعال';
+        $lines[] = tgUserRtlLine('✅ وضعیت: فعال');
         $lines[] = '';
         $lines[] = 'لینک اشتراک:';
         $lines[] = trim((string)($sub['link'] ?? ''));
