@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>طرح‌های صفحه اتصال تلگرام</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+*{box-sizing:border-box}
+body{
+margin:0;
+padding:24px 16px 48px;
+background:#0b1220;
+font-family:tahoma,system-ui,sans-serif;
+color:#e2e8f0;
+direction:rtl;
+}
+.pageTitle{
+text-align:center;
+font-family:"Lalezar",tahoma,sans-serif;
+font-size:24px;
+margin:0 0 6px;
+}
+.pageSub{
+text-align:center;
+font-size:13px;
+color:#94a3b8;
+margin:0 0 28px;
+line-height:1.9;
+max-width:640px;
+margin-left:auto;
+margin-right:auto;
+}
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+gap:24px;
+max-width:1280px;
+margin:0 auto;
+}
+.cardWrap{
+background:#111827;
+border:1px solid #334155;
+border-radius:20px;
+padding:16px;
+}
+.cardHead{margin-bottom:12px}
+.cardLabel{
+display:inline-flex;
+padding:4px 10px;
+border-radius:999px;
+background:rgba(56,189,248,.14);
+color:#7dd3fc;
+font-size:11px;
+font-weight:700;
+margin-bottom:8px;
+}
+.cardTitle{margin:0;font-size:16px;font-weight:700}
+.cardDesc{margin:6px 0 0;font-size:12px;color:#94a3b8;line-height:1.7}
+.phone{
+background:#171f2e;
+border:1px solid #334155;
+border-radius:28px;
+padding:12px 10px 10px;
+box-shadow:0 20px 50px rgba(0,0,0,.35);
+}
+.phoneBar{
+width:42%;
+height:4px;
+background:#334155;
+border-radius:999px;
+margin:0 auto 10px;
+}
+.phoneScreen{
+background:#0b1220;
+border-radius:20px;
+overflow:hidden;
+min-height:560px;
+padding:14px 12px 16px;
+}
+.backBar{
+display:flex;
+align-items:center;
+gap:8px;
+margin-bottom:14px;
+}
+.backBtn{
+height:34px;
+padding:0 10px;
+border-radius:10px;
+border:1px solid #334155;
+background:#0f172a;
+color:#e2e8f0;
+font-size:11px;
+display:inline-flex;
+align-items:center;
+}
+.backTitle{
+flex:1;
+text-align:center;
+font-family:"Lalezar",tahoma,sans-serif;
+font-size:18px;
+margin-left:34px;
+}
+.btnPrimary{
+width:100%;
+min-height:42px;
+border:0;
+border-radius:12px;
+background:linear-gradient(135deg,#2563eb,#1d4ed8);
+color:#fff;
+font-family:inherit;
+font-size:13px;
+font-weight:700;
+cursor:pointer;
+}
+.btnGhost{
+width:100%;
+min-height:40px;
+border:1px solid #334155;
+border-radius:12px;
+background:transparent;
+color:#e2e8f0;
+font-family:inherit;
+font-size:12px;
+font-weight:700;
+cursor:pointer;
+margin-top:8px;
+}
+.statusOn{color:#22c55e;font-weight:700}
+.statusOff{color:#94a3b8;font-weight:700}
+.sectionTitle{
+font-size:12px;
+color:#64748b;
+font-weight:700;
+margin:16px 0 8px;
+}
+.divider{
+height:1px;
+background:#243044;
+margin:14px 0;
+}
+
+/* A — مینیمال */
+.aMain{
+background:#1e293b;
+border:1px solid #334155;
+border-radius:18px;
+padding:16px 14px;
+text-align:center;
+}
+.aIcon{
+width:52px;height:52px;border-radius:16px;
+background:rgba(56,189,248,.12);
+border:1px solid rgba(56,189,248,.25);
+display:flex;align-items:center;justify-content:center;
+font-size:24px;margin:0 auto 10px;
+}
+.aStatus{font-size:13px;margin-bottom:4px}
+.aMeta{font-size:11px;color:#94a3b8;line-height:1.7;margin-bottom:12px}
+.aFeatures{
+background:#141b26;
+border:1px dashed #334155;
+border-radius:14px;
+padding:10px 12px;
+}
+.aFeature{
+font-size:11px;color:#cbd5e1;line-height:1.8;
+padding:4px 0;
+border-bottom:1px solid rgba(51,65,85,.45);
+}
+.aFeature:last-child{border-bottom:0}
+
+/* B — کارت وضعیت + دکمه */
+.bMain{
+background:linear-gradient(160deg,#1e293b,#152033);
+border:1px solid #334155;
+border-radius:18px;
+padding:14px;
+}
+.bRow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.bRowLabel{font-size:12px;color:#94a3b8}
+.bMeta{font-size:11px;color:#64748b;line-height:1.7;margin-bottom:12px}
+.bFeatures{display:flex;flex-direction:column;gap:6px}
+.bFeat{
+display:flex;gap:8px;align-items:flex-start;
+padding:8px 10px;border-radius:12px;
+background:#141b26;border:1px solid #243044;
+}
+.bFeatIcon{font-size:14px;line-height:1.2}
+.bFeatText{font-size:10px;color:#94a3b8;line-height:1.6}
+.bFeatText strong{display:block;color:#e2e8f0;font-size:11px;margin-bottom:2px}
+
+/* C — تمرکز روی دکمه */
+.cMain{text-align:center;padding:8px 0 12px}
+.cBadge{
+display:inline-flex;align-items:center;gap:6px;
+padding:6px 12px;border-radius:999px;
+font-size:12px;font-weight:700;margin-bottom:10px;
+}
+.cBadge.is-on{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac}
+.cBadge.is-off{background:#1e293b;border:1px solid #334155;color:#94a3b8}
+.cUser{font-size:11px;color:#64748b;margin-bottom:12px}
+.cGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cMini{
+background:#1e293b;border:1px solid #334155;border-radius:12px;
+padding:8px;text-align:center;
+}
+.cMini strong{display:block;font-size:10px;margin-bottom:3px}
+.cMini span{font-size:9px;color:#64748b;line-height:1.5}
+
+/* D — شبیه آیتم داشبورد */
+.dMain{
+background:#1e293b;border:1px solid #334155;border-radius:16px;overflow:hidden;
+}
+.dStatus{
+display:flex;align-items:center;justify-content:space-between;
+padding:12px 14px;border-bottom:1px solid #243044;
+}
+.dStatusMain{display:flex;align-items:center;gap:10px}
+.dStatusIcon{
+width:40px;height:40px;border-radius:12px;
+background:rgba(56,189,248,.12);
+display:flex;align-items:center;justify-content:center;font-size:18px;
+}
+.dStatusTitle{font-size:13px;font-weight:700}
+.dStatusSub{font-size:10px;color:#64748b;margin-top:2px}
+.dActions{padding:12px 14px}
+.dHelp{
+padding:12px 14px 14px;
+background:#141b26;
+border-top:1px solid #243044;
+}
+.dHelpTitle{font-size:11px;color:#64748b;margin-bottom:8px}
+.dHelpList{margin:0;padding:0;list-style:none}
+.dHelpList li{
+font-size:10px;color:#94a3b8;line-height:1.7;
+padding:5px 0 5px 14px;position:relative;
+}
+.dHelpList li::before{
+content:"•";position:absolute;right:0;color:#38bdf8;
+}
+.toggleRow{
+display:flex;gap:8px;justify-content:center;margin-top:16px;
+}
+.toggleRow button{
+border:1px solid #334155;background:#1e293b;color:#94a3b8;
+border-radius:999px;padding:6px 12px;font-size:11px;cursor:pointer;
+}
+.toggleRow button.is-active{background:rgba(56,189,248,.15);border-color:#38bdf8;color:#7dd3fc}
+.note{
+max-width:1280px;margin:24px auto 0;padding:14px 16px;
+border-radius:14px;background:#141b26;border:1px solid #334155;
+font-size:12px;color:#94a3b8;line-height:1.8;text-align:center;
+}
+</style>
+</head>
+<body>
+
+<h1 class="pageTitle">طرح‌های صفحه «اتصال تلگرام»</h1>
+<p class="pageSub">
+۴ طرح با تم تیره پنل — تمرکز روی <strong>اتصال / قطع اتصال</strong> بالای صفحه<br>
+توضیحات و مزایا پایین‌تر و فشرده‌تر<br>
+بگو کدام را پیاده‌سازی کنم: <strong>A</strong>، <strong>B</strong>، <strong>C</strong> یا <strong>D</strong>
+</p>
+
+<div class="grid">
+
+<!-- A -->
+<div class="cardWrap">
+<div class="cardHead">
+<span class="cardLabel">طرح A</span>
+<h2 class="cardTitle">مینیمال — دکمه بزرگ + لیست ساده</h2>
+<p class="cardDesc">ساده‌ترین حالت؛ فقط وضعیت، دکمه اصلی، و ۴ خط توضیح کوتاه پایین.</p>
+</div>
+<div class="phone"><div class="phoneBar"></div><div class="phoneScreen" data-concept="a">
+<div class="backBar"><span class="backBtn">بازگشت</span><div class="backTitle">اتصال تلگرام</div></div>
+<div class="aMain">
+<div class="aIcon">✈</div>
+<div class="aStatus statusOn">✅ متصل</div>
+<div class="aMeta">@Sadeq_Jafari<br>1405/05/26 01:42</div>
+<button class="btnGhost state-disconnect">قطع اتصال</button>
+<button class="btnPrimary state-connect" style="display:none">اتصال به ربات</button>
+</div>
+<div class="sectionTitle">با اتصال چه می‌کنید؟</div>
+<div class="aFeatures">
+<div class="aFeature">📋 مشاهده اشتراک‌ها و وضعیت حجم/زمان</div>
+<div class="aFeature">⏳ اعلان قبل از انقضا یا اتمام حجم</div>
+<div class="aFeature">💬 دریافت پاسخ پشتیبانی در تلگرام</div>
+<div class="aFeature">💳 اطلاع تأیید پرداخت و کمپین‌ها</div>
+</div>
+</div></div>
+</div>
+
+<!-- B -->
+<div class="cardWrap">
+<div class="cardHead">
+<span class="cardLabel">طرح B</span>
+<h2 class="cardTitle">کارت وضعیت — دکمه‌ها بالا، مزایا جمع‌وجور</h2>
+<p class="cardDesc">کارت گرادیانی برای اتصال؛ مزایا به‌صورت ردیف‌های کوچک با آیکون.</p>
+</div>
+<div class="phone"><div class="phoneBar"></div><div class="phoneScreen" data-concept="b">
+<div class="backBar"><span class="backBtn">بازگشت</span><div class="backTitle">اتصال تلگرام</div></div>
+<div class="bMain">
+<div class="bRow"><span class="bRowLabel">وضعیت</span><span class="statusOn state-label">✅ متصل</span></div>
+<div class="bMeta state-meta">تلگرام: @Sadeq_Jafari · 1405/05/26</div>
+<button class="btnPrimary state-connect" style="display:none">اتصال به ربات تلگرام</button>
+<button class="btnPrimary state-test">ارسال پیام تست</button>
+<button class="btnGhost state-disconnect">قطع اتصال</button>
+</div>
+<div class="divider"></div>
+<div class="sectionTitle">مزایای ربات</div>
+<div class="bFeatures">
+<div class="bFeat"><span class="bFeatIcon">📋</span><div class="bFeatText"><strong>مدیریت اشتراک</strong>لیست و جزئیات بدون ورود به سایت</div></div>
+<div class="bFeat"><span class="bFeatIcon">🔔</span><div class="bFeatText"><strong>اعلان هوشمند</strong>انقضا، حجم، پرداخت و پشتیبانی</div></div>
+<div class="bFeat"><span class="bFeatIcon">📢</span><div class="bFeatText"><strong>اطلاع‌رسانی پنل</strong>پیام‌های مهم داشبورد در تلگرام</div></div>
+</div>
+</div></div>
+</div>
+
+<!-- C -->
+<div class="cardWrap">
+<div class="cardHead">
+<span class="cardLabel">طرح C</span>
+<h2 class="cardTitle">مرکزیت دکمه — بج وضعیت + گرید مزایا</h2>
+<p class="cardDesc">بج گرد وضعیت و دکمه برجسته؛ مزایا در ۲ ستون کوچک پایین.</p>
+</div>
+<div class="phone"><div class="phoneBar"></div><div class="phoneScreen" data-concept="c">
+<div class="backBar"><span class="backBtn">بازگشت</span><div class="backTitle">اتصال تلگرام</div></div>
+<div class="cMain">
+<div class="cBadge is-on state-badge">✅ متصل به تلگرام</div>
+<div class="cUser state-meta">@Sadeq_Jafari</div>
+<button class="btnPrimary state-connect" style="display:none;width:88%">اتصال به ربات</button>
+<button class="btnPrimary state-test" style="width:88%">ارسال پیام تست</button>
+<button class="btnGhost state-disconnect" style="width:88%">قطع اتصال</button>
+</div>
+<div class="sectionTitle">چه کمکی می‌کند؟</div>
+<div class="cGrid">
+<div class="cMini"><strong>اشتراک‌ها</strong><span>وضعیت و لینک</span></div>
+<div class="cMini"><strong>اعلان‌ها</strong><span>انقضا و حجم</span></div>
+<div class="cMini"><strong>پشتیبانی</strong><span>پاسخ در تلگرام</span></div>
+<div class="cMini"><strong>پرداخت</strong><span>تأیید خرید</span></div>
+</div>
+</div></div>
+</div>
+
+<!-- D -->
+<div class="cardWrap">
+<div class="cardHead">
+<span class="cardLabel">طرح D</span>
+<h2 class="cardTitle">هماهنگ با داشبورد — کارت یکپارچه</h2>
+<p class="cardDesc">شبیه آیتم‌های داشبورد؛ بخش اتصال بالا، راهنمای بولت‌دار پایین.</p>
+</div>
+<div class="phone"><div class="phoneBar"></div><div class="phoneScreen" data-concept="d">
+<div class="backBar"><span class="backBtn">بازگشت</span><div class="backTitle">اتصال تلگرام</div></div>
+<div class="dMain">
+<div class="dStatus">
+<div class="dStatusMain">
+<div class="dStatusIcon">✈</div>
+<div>
+<div class="dStatusTitle">ربات تلگرام</div>
+<div class="dStatusSub state-meta">@Sadeq_Jafari · متصل</div>
+</div>
+</div>
+<span class="statusOn state-label">✅</span>
+</div>
+<div class="dActions">
+<button class="btnPrimary state-connect" style="display:none">اتصال به تلگرام</button>
+<button class="btnPrimary state-test">ارسال پیام تست</button>
+<button class="btnGhost state-disconnect">قطع اتصال تلگرام</button>
+</div>
+<div class="dHelp">
+<div class="dHelpTitle">بعد از اتصال چه دارید؟</div>
+<ul class="dHelpList">
+<li>مشاهده اشتراک‌ها و مصرف</li>
+<li>اعلان انقضا و اتمام حجم</li>
+<li>پاسخ پشتیبانی و تأیید پرداخت</li>
+<li>دریافت اطلاع‌رسانی‌های پنل</li>
+</ul>
+</div>
+</div>
+</div></div>
+</div>
+
+</div>
+
+<div class="toggleRow">
+<button type="button" class="is-active" data-state="linked">حالت: متصل</button>
+<button type="button" data-state="unlinked">حالت: غیرفعال</button>
+</div>
+
+<p class="note">
+فایل mockup: <code>telegram-page-mockups.html</code> — بعد از انتخاب طرح (A/B/C/D) همان را روی <code>telegram.php</code> پیاده‌سازی می‌کنم.
+</p>
+
+<script>
+(function(){
+    var linked = true;
+    var toggles = document.querySelectorAll('.toggleRow button');
+
+    function applyState(){
+        document.querySelectorAll('.state-label, .aStatus, .statusOn, .statusOff').forEach(function(el){
+            if(el.classList.contains('aStatus')){
+                el.textContent = linked ? '✅ متصل' : '❌ متصل نیست';
+                el.className = linked ? 'aStatus statusOn' : 'aStatus statusOff';
+            }
+        });
+
+        document.querySelectorAll('.state-meta').forEach(function(el){
+            if(linked){
+                if(el.classList.contains('dStatusSub')){
+                    el.textContent = '@Sadeq_Jafari · متصل';
+                } else if(el.classList.contains('cUser')){
+                    el.textContent = '@Sadeq_Jafari';
+                } else if(el.classList.contains('bMeta')){
+                    el.textContent = 'تلگرام: @Sadeq_Jafari · 1405/05/26';
+                } else {
+                    el.innerHTML = '@Sadeq_Jafari<br>1405/05/26 01:42';
+                }
+                el.style.display = '';
+            } else {
+                el.textContent = 'برای دریافت اعلان‌ها، ربات را وصل کنید.';
+                if(el.classList.contains('aMeta')){
+                    el.innerHTML = 'برای دریافت اعلان‌ها، ربات را وصل کنید.';
+                }
+            }
+        });
+
+        document.querySelectorAll('.state-badge').forEach(function(el){
+            el.textContent = linked ? '✅ متصل به تلگرام' : '❌ هنوز متصل نیست';
+            el.className = linked ? 'cBadge is-on state-badge' : 'cBadge is-off state-badge';
+        });
+
+        document.querySelectorAll('.state-label').forEach(function(el){
+            if(!el.classList.contains('aStatus')){
+                el.textContent = linked ? '✅ متصل' : 'غیرفعال';
+                el.className = linked ? 'statusOn state-label' : 'statusOff state-label';
+            }
+        });
+
+        document.querySelectorAll('.dStatusSub.state-meta').forEach(function(el){
+            el.textContent = linked ? '@Sadeq_Jafari · متصل' : 'اتصال برقرار نیست';
+        });
+
+        document.querySelectorAll('.state-connect').forEach(function(el){
+            el.style.display = linked ? 'none' : 'block';
+        });
+        document.querySelectorAll('.state-test, .state-disconnect').forEach(function(el){
+            el.style.display = linked ? 'block' : 'none';
+        });
+    }
+
+    toggles.forEach(function(btn){
+        btn.addEventListener('click', function(){
+            toggles.forEach(function(b){ b.classList.remove('is-active'); });
+            btn.classList.add('is-active');
+            linked = btn.getAttribute('data-state') === 'linked';
+            applyState();
+        });
+    });
+
+    applyState();
+})();
+</script>
+
+</body>
+</html>
