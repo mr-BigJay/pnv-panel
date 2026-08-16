@@ -2,10 +2,13 @@
 # PNV Panel — راه‌اندازی خودکار polling ربات تلگرام + cron اعلان انقضا/حجم
 #
 # یک خط (روی سرور، با root):
-#   bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/main/scripts/setup-telegram-bot.sh)
+#   bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/telegram-user-bot-058b/scripts/setup-telegram-bot.sh)
 #
 # با مسیر مشخص:
 #   ROOT=/var/www/html bash <(curl -Ls .../setup-telegram-bot.sh)
+#
+# فقط deploy فایل‌ها (بدون systemd/cron):
+#   SETUP=0 bash <(curl -Ls .../setup-telegram-bot.sh)
 #
 set -euo pipefail
 
@@ -19,6 +22,7 @@ PHP_BIN="${PHP_BIN:-}"
 REPO="${REPO:-mr-BigJay/pnv-panel}"
 BR="${BR:-cursor/telegram-user-bot-058b}"
 DEPLOY="${DEPLOY:-1}"
+SETUP="${SETUP:-1}"
 
 say(){ echo -e "$*"; }
 die(){ say "!! $*"; exit 1; }
@@ -34,9 +38,8 @@ deploy_file(){
 
 maybe_deploy(){
     [[ "$DEPLOY" == "1" ]] || return 0
-    [[ -f "${ROOT}/telegram_user_lib.php" ]] && return 0
 
-    say ">> فایل‌های ربات روی سرور نیست — deploy از branch ${BR}..."
+    say ">> deploy فایل‌های ربات از branch ${BR}..."
     local files=(
         telegram_poll.php
         telegram_user_lib.php
@@ -63,7 +66,7 @@ if [[ "$(id -u)" -ne 0 ]]; then
 fi
 
 detect_root(){
-    if [[ -n "$ROOT" && -f "${ROOT}/telegram_poll.php" ]]; then
+    if [[ -n "$ROOT" && ( -f "${ROOT}/telegram_poll.php" || -f "${ROOT}/dashboard.php" ) ]]; then
         return 0
     fi
 
@@ -73,14 +76,14 @@ detect_root(){
         /var/www/pnv-panel \
         /var/www/panel \
         /usr/share/nginx/html; do
-        if [[ -f "${candidate}/telegram_poll.php" ]]; then
+        if [[ -f "${candidate}/telegram_poll.php" || -f "${candidate}/dashboard.php" ]]; then
             ROOT="$candidate"
             return 0
         fi
     done
 
     local found
-    found="$(find /var/www -maxdepth 4 -name 'telegram_poll.php' 2>/dev/null | head -n 1 || true)"
+    found="$(find /var/www -maxdepth 4 \( -name 'telegram_poll.php' -o -name 'dashboard.php' \) 2>/dev/null | head -n 1 || true)"
 
     if [[ -n "$found" ]]; then
         ROOT="$(dirname "$found")"
@@ -107,6 +110,14 @@ detect_php(){
 
 detect_root || die "مسیر پنل پیدا نشد. ROOT=/path/to/panel bash $0"
 detect_php || die "php نصب نیست. apt install php-cli php-curl"
+
+maybe_deploy
+
+if [[ "$SETUP" != "1" ]]; then
+    say ""
+    say "=== deploy تمام شد (SETUP=0 — سرویس/cron نصب نشد) ==="
+    exit 0
+fi
 
 POLL_FILE="${ROOT}/telegram_poll.php"
 CRON_FILE="${ROOT}/scripts/telegram_notify_expiry.php"
