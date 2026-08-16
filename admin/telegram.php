@@ -15,6 +15,7 @@ else{
 
 require_once __DIR__ . '/admin_nav.php';
 require_once __DIR__ . '/../telegram_lib.php';
+require_once __DIR__ . '/../telegram_user_lib.php';
 
 $config = telegramLoadConfig();
 $message = '';
@@ -22,6 +23,7 @@ $error = '';
 
 if(isset($_POST['save'])){
 
+    $oldConfig = telegramLoadConfig();
     $config = [
         'enabled' => isset($_POST['enabled']),
         'bot_token' => trim($_POST['bot_token'] ?? ''),
@@ -34,8 +36,16 @@ if(isset($_POST['save'])){
         'xray_vless_uris' => telegramLinesToArray($_POST['xray_vless_uris'] ?? '')
     ];
 
+    $config = tgUserHandleBotConfigChange($oldConfig, $config);
     telegramSaveConfig($config);
     $message = 'تنظیمات بات تلگرام ذخیره شد.';
+
+    if(
+        trim((string)($oldConfig['bot_token'] ?? '')) !== trim((string)($config['bot_token'] ?? ''))
+        || trim(ltrim((string)($oldConfig['bot_username'] ?? ''), '@')) !== trim(ltrim((string)($config['bot_username'] ?? ''), '@'))
+    ){
+        $message .= ' لینک‌های اتصال قبلی باطل شدند؛ کاربران باید دوباره «اتصال به تلگرام» را بزنند.';
+    }
 }
 
 if(isset($_POST['test'])){
@@ -141,7 +151,7 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 
 <label for="bot_username">نام کاربری بات (اختیاری)</label>
 <input type="text" id="bot_username" name="bot_username" value="<?php echo htmlspecialchars($config['bot_username'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="YourPanelBot">
-<div class="hint">اگر خالی باشد از API تلگرام خوانده می‌شود. برای ساخت لینک اتصال کاربران استفاده می‌شود.</div>
+<div class="hint">برای لینک اتصال کاربران استفاده می‌شود. بعد از تغییر توکن یا نام ربات، حتماً ذخیره کنید. اگر خالی باشد از API تلگرام خوانده می‌شود.</div>
 
 <label for="panel_url">آدرس پنل کاربری</label>
 <input type="text" id="panel_url" name="panel_url" value="<?php echo htmlspecialchars($config['panel_url'] ?? 'https://panel.ticketin.ir', ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://panel.ticketin.ir">

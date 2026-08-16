@@ -203,31 +203,128 @@ if(!function_exists('tgUserFaNum')){
             $config = telegramLoadConfig();
         }
 
-        $username = trim((string)($config['bot_username'] ?? ''));
+        $configured = trim(ltrim((string)($config['bot_username'] ?? ''), '@'));
 
-        if($username !== ''){
-            return ltrim($username, '@');
+        if($configured !== ''){
+            return $configured;
         }
 
-        $cacheFile = __DIR__ . '/db/telegram_bot_username.cache';
+        $tokenHash = tgUserBotTokenHash($config);
+        $cached = tgUserLoadBotUsernameCache();
 
-        if(file_exists($cacheFile)){
-            $cached = trim((string)file_get_contents($cacheFile));
-
-            if($cached !== ''){
-                return ltrim($cached, '@');
-            }
+        if(
+            is_array($cached)
+            && ($cached['token_hash'] ?? '') === $tokenHash
+            && trim((string)($cached['username'] ?? '')) !== ''
+        ){
+            return ltrim((string)$cached['username'], '@');
         }
 
         $me = telegramApiRequest('getMe', [], [], $config);
 
         if(!empty($me['ok']) && !empty($me['result']['username'])){
             $username = ltrim((string)$me['result']['username'], '@');
-            @file_put_contents($cacheFile, $username, LOCK_EX);
+            tgUserSaveBotUsernameCache($config, $username);
             return $username;
         }
 
         return '';
+    }
+
+    function tgUserBotTokenHash($config){
+        return hash('sha256', trim((string)($config['bot_token'] ?? '')));
+    }
+
+    function tgUserBotUsernameCachePath(){
+        return __DIR__ . '/db/telegram_bot_username.cache';
+    }
+
+    function tgUserLoadBotUsernameCache(){
+        $path = tgUserBotUsernameCachePath();
+
+        if(!file_exists($path)){
+            return null;
+        }
+
+        $raw = trim((string)file_get_contents($path));
+
+        if($raw === ''){
+            return null;
+        }
+
+        $data = json_decode($raw, true);
+
+        if(is_array($data) && trim((string)($data['username'] ?? '')) !== ''){
+            return $data;
+        }
+
+        return [
+            'username' => ltrim($raw, '@'),
+            'token_hash' => '',
+        ];
+    }
+
+    function tgUserSaveBotUsernameCache($config, $username){
+        $username = trim(ltrim((string)$username, '@'));
+
+        if($username === ''){
+            return;
+        }
+
+        $path = tgUserBotUsernameCachePath();
+        $dir = dirname($path);
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0775, true);
+        }
+
+        file_put_contents(
+            $path,
+            json_encode([
+                'username' => $username,
+                'token_hash' => tgUserBotTokenHash($config),
+                'updated_at' => time(),
+            ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function tgUserClearBotUsernameCache(){
+        $path = tgUserBotUsernameCachePath();
+
+        if(file_exists($path)){
+            @unlink($path);
+        }
+    }
+
+    function tgUserClearLinkTokens(){
+        tgUserSaveLinks([]);
+    }
+
+    function tgUserHandleBotConfigChange($oldConfig, $newConfig){
+        $oldToken = trim((string)($oldConfig['bot_token'] ?? ''));
+        $newToken = trim((string)($newConfig['bot_token'] ?? ''));
+        $oldUser = trim(ltrim((string)($oldConfig['bot_username'] ?? ''), '@'));
+        $newUser = trim(ltrim((string)($newConfig['bot_username'] ?? ''), '@'));
+
+        if($oldToken !== $newToken || $oldUser !== $newUser){
+            tgUserClearBotUsernameCache();
+            tgUserClearLinkTokens();
+        }
+
+        if($newUser === '' && $newToken !== ''){
+            $me = telegramApiRequest('getMe', [], [], $newConfig);
+
+            if(!empty($me['ok']) && !empty($me['result']['username'])){
+                $newConfig['bot_username'] = ltrim((string)$me['result']['username'], '@');
+            }
+        }
+
+        if(trim(ltrim((string)($newConfig['bot_username'] ?? ''), '@')) !== ''){
+            tgUserSaveBotUsernameCache($newConfig, $newConfig['bot_username']);
+        }
+
+        return $newConfig;
     }
 
     function tgUserCreateLinkToken($username){
@@ -243,17 +340,31 @@ if(!function_exists('tgUserFaNum')){
 
         foreach($rows as $row){
             if(strcasecmp((string)($row['username'] ?? ''), $username) === 0 && empty($row['used'])){
-                return [
-                    'ok' => true,
-                    'token' => (string)($row['token'] ?? ''),
-                    'expires_at' => intval($row['expires_at'] ?? 0),
-                ];
+                $existingToken = (string)($row['token'] ?? '');
+                $existingBot = trim(ltrim((string)($row['bot_username'] ?? ''), '@'));
+                $currentBot = tgUserGetBotUsername();
+
+                if($existingToken !== '' && strcasecmp($existingBot, $currentBot) === 0){
+                    return [
+                        'ok' => true,
+                        'token' => $existingToken,
+                        'expires_at' => intval($row['expires_at'] ?? 0),
+                    ];
+                }
             }
         }
+
+        foreach($rows as $i => $row){
+            if(strcasecmp((string)($row['username'] ?? ''), $username) === 0 && empty($row['used'])){
+                unset($rows[$i]);
+            }
+        }
+        $rows = array_values($rows);
 
         $rows[] = [
             'token' => $token,
             'username' => $username,
+            'bot_username' => tgUserGetBotUsername(),
             'created_at' => $now,
             'expires_at' => $now + 900,
             'used' => false,
