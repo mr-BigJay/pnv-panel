@@ -603,6 +603,22 @@ max-width:360px;
 </span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
 </a>
+<?php
+require_once __DIR__ . '/telegram_lib.php';
+$_tgConfig = telegramLoadConfig();
+$_tgEnabled = !empty($_tgConfig['enabled']) && trim((string)($_tgConfig['bot_token'] ?? '')) !== '';
+if($_tgEnabled){
+    $_tgChatId = telegramGetUserChatId($user);
+    $_tgConnected = $_tgChatId !== '';
+?>
+<a class="dashItem" href="telegram-connect.php">
+<span class="dashItemMain">
+<span class="dashItemIcon" style="color:<?php echo $_tgConnected ? '#4ade80' : '#94a3b8'; ?>">✈</span>
+<span class="dashItemText">اتصال تلگرام<?php echo $_tgConnected ? ' <span style="color:#4ade80;font-size:10px;">(متصل)</span>' : ''; ?></span>
+</span>
+<span class="dashItemChevron" aria-hidden="true">‹</span>
+</a>
+<?php } ?>
 </div>
 
 </div>

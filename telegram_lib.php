@@ -23,6 +23,7 @@ if(!function_exists('telegramConfigPath')){
         $defaults = [
             'enabled' => false,
             'bot_token' => '',
+            'bot_username' => '',
             'admin_chat_ids' => '',
             'local_proxy_urls' => [],
             'xray_vless_uris' => []
@@ -1889,5 +1890,261 @@ if(!function_exists('telegramConfigPath')){
         }
 
         // متن‌های آزاد خارج از حالت پاسخ نادیده گرفته می‌شوند
+    }
+
+    // ─── اتصال تلگرام کاربران ──────────────────────────────────────────────────
+
+    function telegramConnectTokensPath(){
+        return __DIR__ . '/db/telegram_connect_tokens.json';
+    }
+
+    function telegramLoadConnectTokens(){
+        $file = telegramConnectTokensPath();
+
+        if(!file_exists($file)){
+            return [];
+        }
+
+        $data = json_decode(file_get_contents($file), true);
+        return is_array($data) ? $data : [];
+    }
+
+    function telegramSaveConnectTokens($tokens){
+        file_put_contents(
+            telegramConnectTokensPath(),
+            json_encode($tokens, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function telegramPruneExpiredTokens($tokens){
+        $now = time();
+        return array_filter($tokens, function($t) use ($now){
+            return intval($t['expires_at'] ?? 0) > $now;
+        });
+    }
+
+    function telegramGenerateConnectToken($username){
+        $username = trim((string)$username);
+
+        if($username === ''){
+            return '';
+        }
+
+        $tokens = telegramLoadConnectTokens();
+        $tokens = telegramPruneExpiredTokens($tokens);
+
+        $token = bin2hex(random_bytes(16));
+        $tokens[$token] = [
+            'username' => $username,
+            'expires_at' => time() + 600
+        ];
+
+        telegramSaveConnectTokens($tokens);
+        return $token;
+    }
+
+    function telegramVerifyConnectToken($token){
+        $token = trim((string)$token);
+
+        if($token === ''){
+            return '';
+        }
+
+        $tokens = telegramLoadConnectTokens();
+
+        if(!isset($tokens[$token])){
+            return '';
+        }
+
+        $entry = $tokens[$token];
+
+        if(intval($entry['expires_at'] ?? 0) <= time()){
+            unset($tokens[$token]);
+            telegramSaveConnectTokens($tokens);
+            return '';
+        }
+
+        $username = trim((string)($entry['username'] ?? ''));
+        unset($tokens[$token]);
+        telegramSaveConnectTokens($tokens);
+
+        return $username;
+    }
+
+    function telegramGetUserChatId($username){
+        $username = trim((string)$username);
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!file_exists($usersFile)){
+            return '';
+        }
+
+        $users = json_decode(file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return '';
+        }
+
+        foreach($users as $user){
+            if(strcasecmp(trim((string)($user['username'] ?? '')), $username) === 0){
+                return trim((string)($user['telegram_chat_id'] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    function telegramSetUserChatId($username, $chatId){
+        $username = trim((string)$username);
+        $chatId = trim((string)$chatId);
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!file_exists($usersFile)){
+            return false;
+        }
+
+        $fp = fopen($usersFile, 'c+');
+
+        if(!$fp){
+            return false;
+        }
+
+        flock($fp, LOCK_EX);
+        $content = stream_get_contents($fp);
+        $users = json_decode($content, true);
+
+        if(!is_array($users)){
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            return false;
+        }
+
+        $found = false;
+
+        foreach($users as &$user){
+            if(strcasecmp(trim((string)($user['username'] ?? '')), $username) === 0){
+                if($chatId === ''){
+                    unset($user['telegram_chat_id']);
+                } else {
+                    $user['telegram_chat_id'] = $chatId;
+                }
+                $found = true;
+            } elseif($chatId !== '' && trim((string)($user['telegram_chat_id'] ?? '')) === $chatId){
+                // یک chat_id فقط برای یک حساب می‌تواند استفاده شود
+                unset($user['telegram_chat_id']);
+            }
+        }
+        unset($user);
+
+        if(!$found){
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            return false;
+        }
+
+        $json = json_encode($users, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        ftruncate($fp, 0);
+        rewind($fp);
+        fwrite($fp, $json);
+        fflush($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+
+        return true;
+    }
+
+    function telegramRemoveUserChatId($username){
+        return telegramSetUserChatId($username, '');
+    }
+
+    function telegramNotifyUser($username, $text, $extra = [], $config = null){
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
+            return false;
+        }
+
+        $chatId = telegramGetUserChatId($username);
+
+        if($chatId === ''){
+            return false;
+        }
+
+        $params = array_merge([
+            'chat_id' => $chatId,
+            'text' => telegramLimitText($text, 4096)
+        ], $extra);
+
+        $result = telegramApiRequest('sendMessage', $params, [], $config);
+        return !empty($result['ok']);
+    }
+
+    function telegramHandleUserStart($chatId, $token, $config = null){
+        $chatId = trim((string)$chatId);
+
+        if($chatId === ''){
+            return;
+        }
+
+        if($token === ''){
+            telegramSendMessage($chatId,
+                "سلام!\n\nبرای اتصال حساب کاربری خود به ربات، از داشبورد پنل وارد بخش «اتصال تلگرام» شوید و دستورالعمل‌ها را دنبال کنید.",
+                [],
+                $config
+            );
+            return;
+        }
+
+        $username = telegramVerifyConnectToken($token);
+
+        if($username === ''){
+            telegramSendMessage($chatId,
+                "❌ لینک اتصال منقضی شده یا نامعتبر است.\n\nلطفاً از داشبورد پنل یک لینک جدید دریافت کنید.",
+                [],
+                $config
+            );
+            return;
+        }
+
+        $ok = telegramSetUserChatId($username, $chatId);
+
+        if(!$ok){
+            telegramSendMessage($chatId,
+                "❌ خطا در ثبت اتصال. لطفاً دوباره تلاش کنید.",
+                [],
+                $config
+            );
+            return;
+        }
+
+        telegramSendMessage($chatId,
+            "✅ حساب کاربری «{$username}» با موفقیت به ربات متصل شد!\n\nاز این پس اطلاع‌رسانی‌های زیر را از طریق این ربات دریافت خواهید کرد:\n• پاسخ پشتیبانی\n• نزدیک شدن به پایان اشتراک\n• کمپین‌ها و اطلاع‌رسانی‌ها",
+            [],
+            $config
+        );
+    }
+
+    function telegramHandleUserText($chatId, $text, $config = null){
+        $chatId = trim((string)$chatId);
+        $text = trim((string)$text);
+
+        if($chatId === '' || $text === ''){
+            return;
+        }
+
+        if(preg_match('/^\/start\s+([a-f0-9]{32})$/i', $text, $m)){
+            telegramHandleUserStart($chatId, $m[1], $config);
+            return;
+        }
+
+        if($text === '/start'){
+            telegramHandleUserStart($chatId, '', $config);
+            return;
+        }
+
+        // سایر پیام‌های کاربران نادیده گرفته می‌شوند
     }
 }

@@ -916,6 +916,47 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportNotifyUserTelegram($username, $replyText){
+
+        $lib = __DIR__ . '/telegram_lib.php';
+
+        if(!is_file($lib)){
+            return;
+        }
+
+        require_once $lib;
+
+        if(!function_exists('telegramNotifyUser')){
+            return;
+        }
+
+        $config = function_exists('telegramLoadConfig') ? telegramLoadConfig() : [];
+
+        if(
+            empty($config['enabled'])
+            || trim((string)($config['bot_token'] ?? '')) === ''
+        ){
+            return;
+        }
+
+        $preview = trim((string)$replyText);
+
+        if(function_exists('mb_strlen') && mb_strlen($preview) > 120){
+            $preview = mb_substr($preview, 0, 120) . '…';
+        } elseif(strlen($preview) > 120){
+            $preview = substr($preview, 0, 120) . '…';
+        }
+
+        $text = "💬 پشتیبانی پاسخ داد\n\n" . $preview . "\n\nبرای مشاهده کامل پاسخ به پنل مراجعه کنید.";
+
+        try{
+            telegramNotifyUser($username, $text, [], $config);
+        }catch(Throwable $e){
+            error_log('support user telegram notify failed: ' . $e->getMessage());
+        }
+
+    }
+
     function supportProcessAdminActions($file, $embedded = false){
 
         $data = supportLoad($file);
@@ -1036,6 +1077,8 @@ if(!function_exists('supportLoad')){
                         $data[$ticketIndex]['status'] = 'answered';
 
                         supportSave($file, $data);
+
+                        supportNotifyUserTelegram($user, $text);
 
                     }
                     $redirect = supportAdminUrl($user, $embedded);

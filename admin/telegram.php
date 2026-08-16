@@ -25,6 +25,7 @@ if(isset($_POST['save'])){
     $config = [
         'enabled' => isset($_POST['enabled']),
         'bot_token' => trim($_POST['bot_token'] ?? ''),
+        'bot_username' => ltrim(trim($_POST['bot_username'] ?? ''), '@'),
         'admin_chat_ids' => trim($_POST['admin_chat_ids'] ?? ''),
         'local_proxy_urls' => telegramLinesToArray($_POST['local_proxy_urls'] ?? ''),
         'xray_vless_uris' => telegramLinesToArray($_POST['xray_vless_uris'] ?? '')
@@ -130,6 +131,10 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <button type="button" id="toggleTokenBtn" onclick="toggleTokenVisibility()">مخفی کردن</button>
 </div>
 <div class="hint">توکن ذخیره‌شده اینجا نمایش داده می‌شود و می‌توانید آن را ویرایش کنید.</div>
+
+<label for="bot_username">یوزرنیم ربات (بدون @)</label>
+<input type="text" id="bot_username" name="bot_username" autocomplete="off" spellcheck="false" value="<?php echo htmlspecialchars($config['bot_username'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="MyPanelBot">
+<div class="hint">یوزرنیم ربات در BotFather؛ برای ساختن لینک اتصال کاربران استفاده می‌شود. بدون @ وارد کنید.</div>
 
 <label for="admin_chat_ids">شناسه چت مدیران</label>
 <input type="text" id="admin_chat_ids" name="admin_chat_ids" value="<?php echo htmlspecialchars($config['admin_chat_ids'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="مثال: 123456789 یا -1001234567890">

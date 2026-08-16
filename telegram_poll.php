@@ -83,11 +83,15 @@ do {
         $chatId = (string)($message['chat']['id'] ?? '');
         $text = trim((string)($message['text'] ?? ''));
 
-        if($chatId === '' || $text === '' || !telegramCanUseBot($chatId, $config)){
+        if($chatId === '' || $text === ''){
             continue;
         }
 
-        telegramHandleAdminText($chatId, $text, $config);
+        if(telegramCanUseBot($chatId, $config)){
+            telegramHandleAdminText($chatId, $text, $config);
+        } else {
+            telegramHandleUserText($chatId, $text, $config);
+        }
     }
 
     // یادآوری خرید/تمدید در انتظار تایید (حدود هر ۵ دقیقه، با حذف پیام قبلی)
