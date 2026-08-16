@@ -598,10 +598,455 @@ if(!function_exists('tgUserFaNum')){
         return strlen($text) > 28 ? substr($text, 0, 25) . '...' : $text;
     }
 
+    function tgUserAnnouncementMsgsPath(){
+        return __DIR__ . '/db/telegram_announcement_msgs.json';
+    }
+
+    function tgUserAnnouncementMsgsLoad(){
+        $path = tgUserAnnouncementMsgsPath();
+
+        if(!file_exists($path)){
+            return [];
+        }
+
+        $data = json_decode((string)file_get_contents($path), true);
+        return is_array($data) ? $data : [];
+    }
+
+    function tgUserAnnouncementMsgsSave($rows){
+        $path = tgUserAnnouncementMsgsPath();
+        $dir = dirname($path);
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0775, true);
+        }
+
+        file_put_contents(
+            $path,
+            json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function tgUserCampaignLibReady(){
+        if(!function_exists('campaignAnnouncementsLoad')){
+            require_once __DIR__ . '/campaign_lib.php';
+        }
+    }
+
+    function tgUserBuildAnnouncementText($row){
+        tgUserCampaignLibReady();
+
+        $title = trim((string)($row['title'] ?? ''));
+        $message = trim((string)($row['message'] ?? ''));
+        $type = campaignAnnouncementTypeLabel($row['type'] ?? 'info');
+        $lines = ['📢 ' . ($title !== '' ? $title : 'اطلاع‌رسانی')];
+
+        if($message !== ''){
+            $lines[] = $message;
+        }
+
+        $lines[] = '';
+        $lines[] = 'نوع: ' . $type;
+
+        return trim(implode("\n", $lines));
+    }
+
+    function tgUserGetTelegramAnnouncements($now = null){
+        tgUserCampaignLibReady();
+
+        $now = $now ?? time();
+        $rows = campaignAnnouncementsLoad();
+        $active = [];
+
+        foreach($rows as $row){
+            if(!is_array($row) || !campaignAnnouncementIsActive($row, $now)){
+                continue;
+            }
+
+            $active[] = $row;
+        }
+
+        usort($active, function($a, $b){
+            $createdDiff = intval($a['created_at'] ?? 0) <=> intval($b['created_at'] ?? 0);
+
+            if($createdDiff !== 0){
+                return $createdDiff;
+            }
+
+            return strcmp((string)($a['id'] ?? ''), (string)($b['id'] ?? ''));
+        });
+
+        return $active;
+    }
+
+    function tgUserShouldReceiveAnnouncement($userRow){
+        if(!is_array($userRow)){
+            return false;
+        }
+
+        if(trim((string)($userRow['telegram_chat_id'] ?? '')) === ''){
+            return false;
+        }
+
+        $prefs = tgUserGetNotifyPrefs($userRow);
+        return !empty($prefs['campaign']);
+    }
+
+    function tgUserDeleteAnnouncementMessage($chatId, $messageId, $config = null){
+        $messageId = intval($messageId);
+
+        if($messageId <= 0){
+            return;
+        }
+
+        telegramDeleteMessage((string)$chatId, $messageId, $config);
+    }
+
+    function tgUserClearMenu($chatId, $config = null){
+        $session = tgUserGetSession($chatId);
+        $menuMessageId = intval($session['menu_message_id'] ?? 0);
+
+        if($menuMessageId > 0){
+            tgUserDeleteAnnouncementMessage($chatId, $menuMessageId, $config);
+        }
+
+        tgUserSetSession($chatId, [
+            'menu_message_id' => 0,
+            'menu_text' => '',
+            'menu_keyboard' => '',
+        ]);
+    }
+
+    function tgUserShowMenu($chatId, $text, $keyboard, $config = null, $forceNew = false){
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        $chatId = (string)$chatId;
+        $session = tgUserGetSession($chatId);
+        $menuMessageId = intval($session['menu_message_id'] ?? 0);
+        $keyboardJson = is_string($keyboard) ? $keyboard : json_encode($keyboard, JSON_UNESCAPED_UNICODE);
+        $extra = ['reply_markup' => $keyboardJson];
+
+        if(!$forceNew && $menuMessageId > 0){
+            $edited = telegramEditMessage($chatId, $menuMessageId, $text, $extra, $config);
+
+            if(
+                !empty($edited['ok'])
+                || stripos((string)($edited['description'] ?? ''), 'message is not modified') !== false
+            ){
+                tgUserSetSession($chatId, [
+                    'menu_message_id' => $menuMessageId,
+                    'menu_text' => $text,
+                    'menu_keyboard' => $keyboardJson,
+                ]);
+                return $edited;
+            }
+        }
+
+        if($menuMessageId > 0){
+            tgUserDeleteAnnouncementMessage($chatId, $menuMessageId, $config);
+        }
+
+        $sent = telegramSendMessage($chatId, $text, $extra, $config);
+        $newId = intval($sent['result']['message_id'] ?? 0);
+
+        if($newId > 0){
+            tgUserSetSession($chatId, [
+                'menu_message_id' => $newId,
+                'menu_text' => $text,
+                'menu_keyboard' => $keyboardJson,
+            ]);
+        }
+
+        return $sent;
+    }
+
+    function tgUserBumpMenu($chatId, $config = null){
+        $session = tgUserGetSession($chatId);
+        $text = trim((string)($session['menu_text'] ?? ''));
+        $keyboard = trim((string)($session['menu_keyboard'] ?? ''));
+
+        if($text === '' || $keyboard === ''){
+            return;
+        }
+
+        tgUserShowMenu($chatId, $text, $keyboard, $config, true);
+    }
+
+    function tgUserSendAnnouncementMessage($chatId, $row, $config = null){
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
+            return 0;
+        }
+
+        $sent = telegramSendMessage((string)$chatId, tgUserBuildAnnouncementText($row), [], $config);
+        return intval($sent['result']['message_id'] ?? 0);
+    }
+
+    function tgUserSyncAnnouncementsForChat($chatId, $username, $config = null){
+        $chatId = (string)$chatId;
+        $username = trim((string)$username);
+
+        if($chatId === '' || $username === ''){
+            return;
+        }
+
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        $userRow = null;
+
+        foreach(profileLoadUsers() as $user){
+            if(strcasecmp((string)($user['username'] ?? ''), $username) === 0){
+                $userRow = $user;
+                break;
+            }
+        }
+
+        if(!$userRow || !tgUserShouldReceiveAnnouncement($userRow)){
+            tgUserPurgeAnnouncementMessagesForChat($chatId, $config);
+            return;
+        }
+
+        $active = tgUserGetTelegramAnnouncements();
+        $activeIds = [];
+
+        foreach($active as $row){
+            $annId = trim((string)($row['id'] ?? ''));
+
+            if($annId !== ''){
+                $activeIds[] = $annId;
+            }
+        }
+
+        $store = tgUserAnnouncementMsgsLoad();
+        $sentNew = false;
+
+        foreach($store as $annId => $chatMap){
+            if(!is_array($chatMap) || !isset($chatMap[$chatId])){
+                continue;
+            }
+
+            if(!in_array((string)$annId, $activeIds, true)){
+                tgUserDeleteAnnouncementMessage($chatId, intval($chatMap[$chatId]), $config);
+                unset($store[$annId][$chatId]);
+
+                if(count($store[$annId]) === 0){
+                    unset($store[$annId]);
+                }
+            }
+        }
+
+        foreach($active as $row){
+            $annId = trim((string)($row['id'] ?? ''));
+
+            if($annId === ''){
+                continue;
+            }
+
+            $existingId = intval($store[$annId][$chatId] ?? 0);
+
+            if($existingId > 0){
+                $edited = telegramEditMessage(
+                    $chatId,
+                    $existingId,
+                    tgUserBuildAnnouncementText($row),
+                    [],
+                    $config
+                );
+
+                if(empty($edited['ok'])){
+                    tgUserDeleteAnnouncementMessage($chatId, $existingId, $config);
+                    unset($store[$annId][$chatId]);
+                    $existingId = 0;
+                }
+            }
+
+            if($existingId > 0){
+                continue;
+            }
+
+            $messageId = tgUserSendAnnouncementMessage($chatId, $row, $config);
+
+            if($messageId > 0){
+                if(!isset($store[$annId]) || !is_array($store[$annId])){
+                    $store[$annId] = [];
+                }
+
+                $store[$annId][$chatId] = $messageId;
+                $sentNew = true;
+            }
+        }
+
+        tgUserAnnouncementMsgsSave($store);
+
+        if($sentNew){
+            tgUserBumpMenu($chatId, $config);
+        }
+    }
+
+    function tgUserPurgeAnnouncementMessagesForChat($chatId, $config = null){
+        $chatId = (string)$chatId;
+        $store = tgUserAnnouncementMsgsLoad();
+        $changed = false;
+
+        foreach($store as $annId => $chatMap){
+            if(!is_array($chatMap) || !isset($chatMap[$chatId])){
+                continue;
+            }
+
+            tgUserDeleteAnnouncementMessage($chatId, intval($chatMap[$chatId]), $config);
+            unset($store[$annId][$chatId]);
+            $changed = true;
+
+            if(count($store[$annId]) === 0){
+                unset($store[$annId]);
+            }
+        }
+
+        if($changed){
+            tgUserAnnouncementMsgsSave($store);
+        }
+    }
+
+    function tgUserPublishAnnouncement($row, $config = null){
+        if(!is_array($row)){
+            return;
+        }
+
+        tgUserCampaignLibReady();
+
+        $annId = trim((string)($row['id'] ?? ''));
+
+        if($annId === '' || ($row['status'] ?? '') !== 'active'){
+            return;
+        }
+
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
+            return;
+        }
+
+        if(!campaignAnnouncementIsActive($row)){
+            return;
+        }
+
+        $store = tgUserAnnouncementMsgsLoad();
+
+        foreach(profileLoadUsers() as $user){
+            if(!tgUserShouldReceiveAnnouncement($user)){
+                continue;
+            }
+
+            $chatId = trim((string)($user['telegram_chat_id'] ?? ''));
+
+            if($chatId === ''){
+                continue;
+            }
+
+            if(intval($store[$annId][$chatId] ?? 0) > 0){
+                continue;
+            }
+
+            $messageId = tgUserSendAnnouncementMessage($chatId, $row, $config);
+
+            if($messageId <= 0){
+                continue;
+            }
+
+            if(!isset($store[$annId]) || !is_array($store[$annId])){
+                $store[$annId] = [];
+            }
+
+            $store[$annId][$chatId] = $messageId;
+            tgUserBumpMenu($chatId, $config);
+        }
+
+        tgUserAnnouncementMsgsSave($store);
+    }
+
+    function tgUserUpdateAnnouncement($row, $config = null){
+        if(!is_array($row)){
+            return;
+        }
+
+        tgUserCampaignLibReady();
+
+        $annId = trim((string)($row['id'] ?? ''));
+
+        if($annId === ''){
+            return;
+        }
+
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        if(($row['status'] ?? '') !== 'active' || !campaignAnnouncementIsActive($row)){
+            tgUserRemoveAnnouncement($annId, $config);
+            return;
+        }
+
+        $store = tgUserAnnouncementMsgsLoad();
+        $chatMap = is_array($store[$annId] ?? null) ? $store[$annId] : [];
+        $text = tgUserBuildAnnouncementText($row);
+
+        foreach($chatMap as $chatId => $messageId){
+            $messageId = intval($messageId);
+
+            if($messageId <= 0){
+                continue;
+            }
+
+            $edited = telegramEditMessage((string)$chatId, $messageId, $text, [], $config);
+
+            if(empty($edited['ok'])){
+                tgUserDeleteAnnouncementMessage($chatId, $messageId, $config);
+                unset($store[$annId][$chatId]);
+            }
+        }
+
+        if(isset($store[$annId]) && count($store[$annId]) === 0){
+            unset($store[$annId]);
+        }
+
+        tgUserAnnouncementMsgsSave($store);
+        tgUserPublishAnnouncement($row, $config);
+    }
+
+    function tgUserRemoveAnnouncement($announcementId, $config = null){
+        $announcementId = trim((string)$announcementId);
+
+        if($announcementId === ''){
+            return;
+        }
+
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        $store = tgUserAnnouncementMsgsLoad();
+        $chatMap = is_array($store[$announcementId] ?? null) ? $store[$announcementId] : [];
+
+        foreach($chatMap as $chatId => $messageId){
+            tgUserDeleteAnnouncementMessage($chatId, intval($messageId), $config);
+        }
+
+        unset($store[$announcementId]);
+        tgUserAnnouncementMsgsSave($store);
+    }
+
     function tgUserSendKeyboardMessage($chatId, $text, $keyboard, $config = null){
-        return telegramSendMessage($chatId, $text, [
-            'reply_markup' => $keyboard,
-        ], $config);
+        return tgUserShowMenu($chatId, $text, $keyboard, $config);
     }
 
     function tgUserLoadSubsBundle($username, $options = []){
@@ -1129,6 +1574,7 @@ if(!function_exists('tgUserFaNum')){
 
             $username = trim((string)($result['username'] ?? ''));
             tgUserSetSession($chatId, ['screen' => 'home', 'username' => $username, 'mode' => '']);
+            tgUserSyncAnnouncementsForChat($chatId, $username, $config);
             tgUserSendKeyboardMessage($chatId, tgUserBuildConnectWelcomeText($username), tgUserMainKeyboard(), $config);
             return;
         }
@@ -1142,6 +1588,7 @@ if(!function_exists('tgUserFaNum')){
 
         if($user){
             tgUserSetSession($chatId, ['screen' => 'home', 'username' => $user['username'], 'mode' => '']);
+            tgUserSyncAnnouncementsForChat($chatId, $user['username'], $config);
             tgUserSendKeyboardMessage($chatId, tgUserBuildHomeText($user['username']), tgUserMainKeyboard(), $config);
             return;
         }
@@ -1167,11 +1614,15 @@ if(!function_exists('tgUserFaNum')){
 
         if($text === '🔌 قطع اتصال تلگرام'){
             tgUserDisconnect($username);
+            tgUserPurgeAnnouncementMessagesForChat($chatId, $config);
+            tgUserClearMenu($chatId, $config);
             tgUserSetSession($chatId, []);
-            telegramSendMessage($chatId, 'اتصال تلگرام قطع شد. برای اتصال مجدد از داشبورد پنل اقدام کنید.', [
-                'reply_markup' => json_encode(['remove_keyboard' => true], JSON_UNESCAPED_UNICODE),
-            ], $config);
-            tgUserSendKeyboardMessage($chatId, tgUserBuildGuestText($config), tgUserReplyMarkup([[tgUserBtnPanel()]]), $config);
+            tgUserSendKeyboardMessage(
+                $chatId,
+                "اتصال تلگرام قطع شد. برای اتصال مجدد از داشبورد پنل اقدام کنید.\n\n" . tgUserBuildGuestText($config),
+                tgUserReplyMarkup([[tgUserBtnPanel()]]),
+                $config
+            );
             return true;
         }
 
@@ -1381,9 +1832,7 @@ if(!function_exists('tgUserFaNum')){
             return ['ok' => false, 'error' => 'ربات غیرفعال است'];
         }
 
-        return telegramSendMessage($chatId, $text, [
-            'reply_markup' => tgUserMainKeyboard(),
-        ], $config);
+        return telegramSendMessage($chatId, $text, [], $config);
     }
 
     function tgUserNotifySupportReply($username, $messageText){
@@ -1423,19 +1872,30 @@ if(!function_exists('tgUserFaNum')){
         tgUserNotifyIfEnabled($username, 'payment', implode("\n", $lines));
     }
 
-    function tgUserNotifyCampaign($title, $message){
-        $title = trim((string)$title);
-        $message = trim((string)$message);
-        $text = trim($title . "\n\n" . $message) . "\n\n🎁";
+    function tgUserNotifyCampaign($title, $message, $row = null){
+        if(is_array($row)){
+            tgUserPublishAnnouncement($row);
+            return;
+        }
 
-        foreach(profileLoadUsers() as $user){
-            $username = trim((string)($user['username'] ?? ''));
+        tgUserCampaignLibReady();
+        $rows = campaignAnnouncementsLoad();
+        $needleTitle = trim((string)$title);
+        $needleMessage = trim((string)$message);
+        $match = null;
 
-            if($username === '' || trim((string)($user['telegram_chat_id'] ?? '')) === ''){
-                continue;
+        foreach($rows as $item){
+            if(
+                trim((string)($item['title'] ?? '')) === $needleTitle
+                && trim((string)($item['message'] ?? '')) === $needleMessage
+            ){
+                $match = $item;
+                break;
             }
+        }
 
-            tgUserNotifyIfEnabled($username, 'campaign', $text);
+        if(is_array($match)){
+            tgUserPublishAnnouncement($match);
         }
     }
 

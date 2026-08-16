@@ -79,15 +79,16 @@ if(isset($_POST['save_announcement'])){
             $isNew = ($id === '');
             campaignAnnouncementsSave($rows);
 
-            if(
-                $isNew
-                && $status === 'active'
-                && is_file(__DIR__ . '/../telegram_user_lib.php')
-            ){
+            if(is_file(__DIR__ . '/../telegram_user_lib.php')){
                 require_once __DIR__ . '/../telegram_user_lib.php';
 
-                if(function_exists('tgUserNotifyCampaign')){
-                    tgUserNotifyCampaign($title, $message);
+                if($isNew){
+                    if($status === 'active' && function_exists('tgUserPublishAnnouncement')){
+                        tgUserPublishAnnouncement($payload);
+                    }
+                }
+                elseif(function_exists('tgUserUpdateAnnouncement')){
+                    tgUserUpdateAnnouncement($payload);
                 }
             }
 
@@ -100,14 +101,30 @@ if(isset($_POST['save_announcement'])){
 if(isset($_GET['toggle'])){
     $toggleId = trim((string)$_GET['toggle']);
     $rows = campaignAnnouncementsLoad();
+    $updatedRow = null;
+
     foreach($rows as $i => $row){
         if(($row['id'] ?? '') === $toggleId){
             $rows[$i]['status'] = ($row['status'] ?? '') === 'active' ? 'inactive' : 'active';
             $rows[$i]['updated_at'] = campaignNow();
+            $updatedRow = $rows[$i];
             break;
         }
     }
+
     campaignAnnouncementsSave($rows);
+
+    if(is_file(__DIR__ . '/../telegram_user_lib.php') && is_array($updatedRow)){
+        require_once __DIR__ . '/../telegram_user_lib.php';
+
+        if(($updatedRow['status'] ?? '') === 'active' && function_exists('tgUserUpdateAnnouncement')){
+            tgUserUpdateAnnouncement($updatedRow);
+        }
+        elseif(function_exists('tgUserRemoveAnnouncement')){
+            tgUserRemoveAnnouncement($toggleId);
+        }
+    }
+
     header('Location: ' . pnvAdminUrl('campaign-announcements.php'));
     exit;
 }
@@ -118,6 +135,12 @@ if(isset($_GET['delete'])){
         return ($row['id'] ?? '') !== $deleteId;
     }));
     campaignAnnouncementsSave($rows);
+
+    if(is_file(__DIR__ . '/../telegram_user_lib.php') && function_exists('tgUserRemoveAnnouncement')){
+        require_once __DIR__ . '/../telegram_user_lib.php';
+        tgUserRemoveAnnouncement($deleteId);
+    }
+
     header('Location: ' . pnvAdminUrl('campaign-announcements.php'));
     exit;
 }
