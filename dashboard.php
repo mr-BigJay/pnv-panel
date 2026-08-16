@@ -513,6 +513,84 @@ accent-color:#2563eb;
 .dashModal--crop{
 max-width:360px;
 }
+.dashAnnouncements{
+display:flex;
+flex-direction:column;
+gap:8px;
+margin-top:4px;
+}
+.dashAnnouncementBanner{
+padding:12px 14px;
+border-radius:14px;
+border:1px solid rgba(148,163,184,.18);
+background:rgba(15,23,42,.55);
+line-height:1.8;
+font-size:13px;
+color:#e2e8f0;
+}
+.dashAnnouncementBanner strong{
+display:block;
+margin-bottom:4px;
+font-size:14px;
+color:#fff;
+}
+.dashAnnouncementBanner.is-info{border-color:rgba(56,189,248,.45)}
+.dashAnnouncementBanner.is-success{border-color:rgba(34,197,94,.45)}
+.dashAnnouncementBanner.is-warning{border-color:rgba(245,158,11,.45)}
+.dashAnnouncementBanner.is-special{border-color:rgba(168,85,247,.45)}
+.dashAnnouncementModal{
+position:fixed;
+inset:0;
+background:rgba(2,6,23,.72);
+backdrop-filter:blur(4px);
+-webkit-backdrop-filter:blur(4px);
+display:none;
+align-items:center;
+justify-content:center;
+padding:16px;
+z-index:2100;
+}
+.dashAnnouncementModal.is-open{
+display:flex;
+}
+.dashAnnouncementCard{
+width:min(92vw,420px);
+background:rgba(18,24,32,.96);
+border:1px solid rgba(148,163,184,.2);
+border-radius:18px;
+padding:18px;
+color:#fff;
+box-shadow:0 20px 50px rgba(0,0,0,.35);
+}
+.dashAnnouncementCard h3{
+margin:0 0 10px;
+font-size:18px;
+font-family:"Lalezar",tahoma,sans-serif;
+font-weight:400;
+}
+.dashAnnouncementCard p{
+margin:0 0 16px;
+line-height:1.9;
+font-size:14px;
+color:#e2e8f0;
+white-space:pre-wrap;
+}
+.dashAnnouncementCard button{
+width:100%;
+padding:12px;
+border:none;
+border-radius:12px;
+background:#22c55e;
+color:#052e16;
+font-family:tahoma,sans-serif;
+font-size:15px;
+font-weight:700;
+cursor:pointer;
+}
+.dashAnnouncementCard.is-info{border-color:rgba(56,189,248,.45)}
+.dashAnnouncementCard.is-success{border-color:rgba(34,197,94,.45)}
+.dashAnnouncementCard.is-warning{border-color:rgba(245,158,11,.45)}
+.dashAnnouncementCard.is-special{border-color:rgba(168,85,247,.45)}
 @media(max-width:360px){
 .dashPrimary{min-height:92px}
 .dashPrimaryIcon{width:34px;height:34px;font-size:18px}
@@ -605,6 +683,8 @@ max-width:360px;
 </a>
 </div>
 
+<div class="dashAnnouncements" id="dashAnnouncements"></div>
+
 </div>
 
 <a class="dashLogout" href="logout.php">خروج</a>
@@ -647,6 +727,14 @@ max-width:360px;
 <button type="button" class="dashModalBtn dashModalBtn--primary" id="avatarCropSave">ذخیره عکس</button>
 </div>
 </div>
+</div>
+</div>
+
+<div class="dashAnnouncementModal" id="dashAnnouncementModal" hidden>
+<div class="dashAnnouncementCard is-info" id="dashAnnouncementCard" role="dialog" aria-modal="true" aria-labelledby="dashAnnouncementTitle">
+<h3 id="dashAnnouncementTitle"></h3>
+<p id="dashAnnouncementMessage"></p>
+<button type="button" id="dashAnnouncementDismiss">متوجه شدم</button>
 </div>
 </div>
 
@@ -1162,6 +1250,98 @@ max-width:360px;
             }
         });
     }
+})();
+
+(function(){
+    const modal = document.getElementById('dashAnnouncementModal');
+    const card = document.getElementById('dashAnnouncementCard');
+    const titleEl = document.getElementById('dashAnnouncementTitle');
+    const messageEl = document.getElementById('dashAnnouncementMessage');
+    const dismissBtn = document.getElementById('dashAnnouncementDismiss');
+    const bannerWrap = document.getElementById('dashAnnouncements');
+
+    if(!modal || !card || !titleEl || !messageEl || !dismissBtn || !bannerWrap){
+        return;
+    }
+
+    let currentId = '';
+
+    function typeClass(type){
+        return 'is-' + (type || 'info');
+    }
+
+    function renderBanner(item){
+        const div = document.createElement('div');
+        div.className = 'dashAnnouncementBanner ' + typeClass(item.type);
+
+        const strong = document.createElement('strong');
+        strong.textContent = item.title || '';
+        div.appendChild(strong);
+
+        const body = document.createElement('div');
+        body.textContent = item.message || '';
+        div.appendChild(body);
+
+        return div;
+    }
+
+    function openModal(item){
+        currentId = item.id || '';
+        titleEl.textContent = item.title || '';
+        messageEl.textContent = item.message || '';
+        card.className = 'dashAnnouncementCard ' + typeClass(item.type);
+        modal.hidden = false;
+        modal.classList.add('is-open');
+    }
+
+    function closeModal(){
+        modal.classList.remove('is-open');
+        modal.hidden = true;
+        currentId = '';
+    }
+
+    dismissBtn.addEventListener('click', function(){
+        if(!currentId){
+            closeModal();
+            return;
+        }
+
+        const body = new URLSearchParams();
+        body.set('action', 'dismiss');
+        body.set('id', currentId);
+
+        fetch('announcement-api.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body.toString()
+        }).finally(function(){
+            closeModal();
+        });
+    });
+
+    modal.addEventListener('click', function(e){
+        if(e.target === modal){
+            closeModal();
+        }
+    });
+
+    fetch('announcement-api.php?action=list', {credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(!data || !data.ok){
+                return;
+            }
+
+            if(data.modal){
+                openModal(data.modal);
+            }
+
+            (data.banners || []).forEach(function(item){
+                bannerWrap.appendChild(renderBanner(item));
+            });
+        })
+        .catch(function(){});
 })();
 </script>
 
