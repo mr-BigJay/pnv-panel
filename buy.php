@@ -889,5 +889,6 @@ document.getElementById('copyAmountBtn').addEventListener('click', function(){
 });
 document.getElementById('copyLinkBtn').addEventListener('click', function(){ copyText(resultLink.textContent.trim(), 'لینک کپی شد'); });
 </script>
+<?php require_once __DIR__ . '/form_validation_fa.php'; pnvFormValidationFaScript(); ?>
 </body>
 </html>

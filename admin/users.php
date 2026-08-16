@@ -1617,6 +1617,8 @@ adminBottomNav(['active' => 'users', 'more_mode' => 'sheet']);
 adminBottomNavScript();
 ?>
 
+<?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
+
 </body>
 
 </html>

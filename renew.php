@@ -1307,5 +1307,6 @@ document.getElementById('copyLinkBtn').addEventListener('click', function(){ cop
     }
 })();
 </script>
+<?php require_once __DIR__ . '/form_validation_fa.php'; pnvFormValidationFaScript(); ?>
 </body>
 </html>

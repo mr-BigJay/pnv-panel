@@ -141,5 +141,7 @@ html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overfl
 })();
 </script>
 
+<?php require_once __DIR__ . '/form_validation_fa.php'; pnvFormValidationFaScript(); ?>
+
 </body>
 </html>

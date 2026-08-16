@@ -48,6 +48,8 @@ maybe_deploy(){
         dashboard.php
         telegram.php
         telegram_ui.css
+        form_validation_fa.js
+        form_validation_fa.php
         support_lib.php
         xui_lib.php
         admin/payments.php

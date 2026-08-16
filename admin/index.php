@@ -250,6 +250,8 @@ required>
 
 </div>
 
+<?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
+
 </body>
 
 </html>
@@ -1309,6 +1311,8 @@ adminBottomNavScript();
     setInterval(checkUnread, 10000);
 })();
 </script>
+
+<?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
 
 </body>
 

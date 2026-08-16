@@ -241,6 +241,11 @@ jalaliDatepicker.startWatch({
             campaignJalaliDatePickerFoot();
         }
 
+        if(!function_exists('pnvFormValidationFaScript')){
+            require_once dirname(__DIR__) . '/form_validation_fa.php';
+        }
+
+        pnvFormValidationFaScript();
         campaignAdminBottomNavFoot();
     }
 

@@ -327,5 +327,7 @@ foreach($allSections as $key => $meta){
 <a class="back" href="<?php echo $h(pnvAdminUrl()); ?>">بازگشت به داشبورد</a>
 </div>
 
+<?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
+
 </body>
 </html>
