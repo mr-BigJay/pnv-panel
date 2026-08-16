@@ -836,23 +836,11 @@ if(!function_exists('tgUserFaNum')){
         $lines = ['اشتراک‌های فعال (' . tgUserFaNum((string)count($subs)) . ')', ''];
 
         foreach($subs as $i => $sub){
-            $name = tgUserSubDisplayName($sub);
-            $labels = tgUserUsageLabels($sub);
-            $warn = !empty($labels['warn']) ? ' ⚠️' : '';
-            $lines[] = tgUserFaNum((string)($i + 1)) . '. ' . $name . $warn;
-            $lines[] = '   ' . $labels['time'];
-
-            if($labels['volume'] !== ''){
-                $lines[] = '   ' . $labels['volume'];
-            }
-            else{
-                $lines[] = '   ' . tgUserFaNum((string)round(floatval($labels['remain_pct']))) . '٪ حجم باقیمانده';
-            }
-
-            $lines[] = '';
+            $lines[] = tgUserFaNum((string)($i + 1)) . '. ' . tgUserSubDisplayName($sub);
         }
 
-        $lines[] = 'برای جزئیات، نام اشتراک را از منوی پایین انتخاب کنید.';
+        $lines[] = '';
+        $lines[] = 'برای جزئیات بیشتر، نام اشتراک را از منوی پایین انتخاب کنید.';
         return trim(implode("\n", $lines));
     }
 
@@ -1280,7 +1268,7 @@ if(!function_exists('tgUserFaNum')){
         }
 
         if($text === tgUserBtnSubs()){
-            $subs = tgUserLoadSubsBundle($username);
+            $subs = tgUserLoadSubsBundle($username, ['skip_usage' => true]);
             tgUserSetSession($chatId, ['screen' => 'subs', 'mode' => '', 'subs_cache' => array_map(function($sub){
                 return [
                     'link' => $sub['link'] ?? '',
