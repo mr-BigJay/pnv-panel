@@ -1656,6 +1656,7 @@ if(!function_exists('tgUserFaNum')){
         }
 
         $prefs = tgUserGetNotifyPrefs($user);
+        tgUserSyncAnnouncementsForChat($chatId, $username, $config);
         tgUserSendKeyboardMessage($chatId, tgUserBuildSettingsText($user), tgUserSettingsKeyboard($prefs), $config);
         return true;
     }
