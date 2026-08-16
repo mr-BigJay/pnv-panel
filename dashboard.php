@@ -578,7 +578,6 @@ max-width:360px;
 <button type="button" class="dashMoreBtn" id="dashMoreBtn" aria-label="منو">⋮</button>
 <div class="dashMoreMenu" id="dashMoreMenu">
 <button type="button" id="dashEditAvatarBtn">ویرایش عکس پروفایل</button>
-<button type="button" id="dashTelegramBtn">اتصال تلگرام</button>
 <button type="button" id="dashEditUsernameBtn">تغییر نام کاربری</button>
 </div>
 </div>
