@@ -39,31 +39,23 @@ $h = static function($value){
 };
 
 $features = [
-    [
-        'title' => 'مدیریت اشتراک‌ها',
-        'text' => 'لیست اشتراک‌های فعال، مشاهده وضعیت زمان و حجم، و دسترسی سریع به لینک اشتراک.',
-    ],
-    [
-        'title' => 'اعلان انقضا و حجم',
-        'text' => 'قبل از اتمام زمان یا حجم اشتراک، به‌صورت خودکار در تلگرام مطلع می‌شوید.',
-    ],
-    [
-        'title' => 'پاسخ پشتیبانی',
-        'text' => 'پاسخ ادمین به تیکت شما مستقیم در تلگرام نمایش داده می‌شود.',
-    ],
-    [
-        'title' => 'تأیید پرداخت',
-        'text' => 'بعد از تأیید خرید یا تمدید، پیام تأیید با جزئیات اشتراک دریافت می‌کنید.',
-    ],
-    [
-        'title' => 'اطلاع‌رسانی‌های پنل',
-        'text' => 'پیام‌های مهم، کمپین‌ها و اطلاعیه‌های داشبورد در تلگرام برای شما ارسال می‌شود.',
-    ],
-    [
-        'title' => 'منوی سریع',
-        'text' => 'بدون ورود به سایت، از منوی پایین صفحه به بخش‌های اصلی دسترسی دارید.',
-    ],
+    '📋 مشاهده اشتراک‌ها و وضعیت حجم/زمان',
+    '⏳ اعلان قبل از انقضا یا اتمام حجم',
+    '💬 دریافت پاسخ پشتیبانی در تلگرام',
+    '💳 اطلاع تأیید پرداخت و کمپین‌ها',
 ];
+
+$metaLines = [];
+
+if($linked){
+    if($telegramUsername !== ''){
+        $metaLines[] = $telegramUsername;
+    }
+
+    if($linkedAt !== ''){
+        $metaLines[] = $linkedAt;
+    }
+}
 
 ?>
 <!DOCTYPE html>
@@ -74,7 +66,7 @@ $features = [
 <title>اتصال تلگرام</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="telegram_ui.css?v=1">
+<link rel="stylesheet" href="telegram_ui.css?v=2">
 </head>
 <body class="telegramPage">
 
@@ -82,65 +74,52 @@ $features = [
 
 <?php userBackBar('dashboard.php', 'اتصال تلگرام'); ?>
 
-<section class="telegramHero">
-<h1 class="telegramHeroTitle">ربات تلگرام پنل</h1>
-<p class="telegramHeroText">با اتصال تلگرام، مدیریت اشتراک و اعلان‌های مهم را سریع‌تر دریافت کنید و دیگر نیازی به بررسی مداوم داشبورد نباشد.</p>
-</section>
-
-<section class="telegramStatusCard">
-<div class="telegramStatusRow">
-<span class="telegramStatusLabel">وضعیت اتصال</span>
-<span class="telegramStatusValue<?php echo $linked ? ' is-on' : ''; ?>" id="tgStatusValue"><?php echo $linked ? 'متصل ✅' : 'غیرفعال'; ?></span>
+<section class="telegramMainCard">
+<div class="telegramMainIcon" aria-hidden="true">✈</div>
+<div class="telegramMainStatus<?php echo $linked ? ' is-on' : ' is-off'; ?>" id="tgStatusValue">
+<?php echo $linked ? '✅ متصل' : '❌ متصل نیست'; ?>
 </div>
-<div class="telegramStatusMeta" id="tgStatusMeta"><?php
-if($linked){
-    $lines = [];
-
-    if($telegramUsername !== ''){
-        $lines[] = 'تلگرام: ' . $telegramUsername;
-    }
-
-    if($linkedAt !== ''){
-        $lines[] = 'متصل شده: ' . $linkedAt;
-    }
-
-    echo $h(implode("\n", $lines));
+<div class="telegramMainMeta<?php echo count($metaLines) === 0 ? ' is-empty' : ''; ?>" id="tgStatusMeta"><?php
+if($linked && count($metaLines) > 0){
+    echo $h(implode("\n", $metaLines));
 }
-else{
-    echo 'هنوز تلگرام شما به پنل متصل نشده است.';
+elseif(!$linked){
+    echo 'برای دریافت اعلان‌ها، ربات را به پنل وصل کنید.';
 }
 ?></div>
-</section>
-
-<section class="telegramSection">
-<h2 class="telegramSectionTitle">چه کمکی به شما می‌کند؟</h2>
-<div class="telegramFeatureList">
-<?php foreach($features as $feature){ ?>
-<div class="telegramFeature">
-<div class="telegramFeatureTitle"><?php echo $h($feature['title']); ?></div>
-<div class="telegramFeatureText"><?php echo $h($feature['text']); ?></div>
-</div>
-<?php } ?>
-</div>
-</section>
 
 <div class="telegramFlash" id="tgFlash"></div>
 
-<div class="telegramActions" id="tgActions">
 <?php if(!$botEnabled){ ?>
-<p class="telegramHint">ربات تلگرام در حال حاضر توسط پشتیبانی فعال نشده است. لطفاً بعداً دوباره تلاش کنید.</p>
-<?php } elseif($linked){ ?>
-<button type="button" class="telegramBtn telegramBtn--primary" id="tgTestBtn">ارسال پیام تست</button>
-<button type="button" class="telegramBtn telegramBtn--ghost" id="tgDisconnectBtn">قطع اتصال تلگرام</button>
+<p class="telegramBotDisabled">ربات تلگرام در حال حاضر فعال نیست. لطفاً بعداً دوباره تلاش کنید.</p>
+<?php } else { ?>
+<div class="telegramActions" id="tgActions">
+<?php if($linked){ ?>
+<button type="button" class="telegramBtn telegramBtn--ghost" id="tgDisconnectBtn">قطع اتصال</button>
+<button type="button" class="telegramLinkBtn" id="tgTestBtn">ارسال پیام تست</button>
 <?php } else { ?>
 <button type="button" class="telegramBtn telegramBtn--primary" id="tgConnectBtn">اتصال به ربات تلگرام</button>
-<?php if($botUsername !== ''){ ?>
-<p class="telegramHint">بعد از کلیک، ربات <?php echo $h('@' . ltrim($botUsername, '@')); ?> در تلگرام باز می‌شود. روی Start بزنید تا اتصال کامل شود.</p>
-<?php } else { ?>
-<p class="telegramHint">بعد از کلیک، صفحه ربات در تلگرام باز می‌شود. روی Start بزنید تا اتصال کامل شود.</p>
-<?php } ?>
+<p class="telegramHint"><?php
+if($botUsername !== ''){
+    echo 'بعد از کلیک، ربات ' . $h('@' . ltrim($botUsername, '@')) . ' باز می‌شود. Start را بزنید.';
+}
+else{
+    echo 'بعد از کلیک، صفحه ربات در تلگرام باز می‌شود. Start را بزنید.';
+}
+?></p>
 <?php } ?>
 </div>
+<?php } ?>
+</section>
+
+<section class="telegramFeatures">
+<h2 class="telegramSectionTitle">با اتصال چه می‌کنید؟</h2>
+<div class="telegramFeatureBox">
+<?php foreach($features as $line){ ?>
+<div class="telegramFeatureLine"><?php echo $h($line); ?></div>
+<?php } ?>
+</div>
+</section>
 
 </div>
 
@@ -166,30 +145,6 @@ else{
 
         flashEl.textContent = msg;
         flashEl.className = 'telegramFlash is-visible' + (kind ? ' is-' + kind : '');
-    }
-
-    function setLinkedState(data){
-        var linked = !!data.linked;
-        if(statusValue){
-            statusValue.textContent = linked ? 'متصل ✅' : 'غیرفعال';
-            statusValue.classList.toggle('is-on', linked);
-        }
-
-        if(statusMeta){
-            if(linked){
-                var lines = [];
-                if(data.telegram_username){
-                    lines.push('تلگرام: ' + data.telegram_username);
-                }
-                if(data.linked_at){
-                    lines.push('متصل شده: ' + data.linked_at);
-                }
-                statusMeta.textContent = lines.join('\n');
-            }
-            else{
-                statusMeta.textContent = 'هنوز تلگرام شما به پنل متصل نشده است.';
-            }
-        }
     }
 
     if(connectBtn){
@@ -242,7 +197,7 @@ else{
                     return;
                 }
 
-                showFlash('پیام تست به تلگرام شما ارسال شد ✅', 'success');
+                showFlash('پیام تست ارسال شد ✅', 'success');
             })
             .catch(function(){
                 testBtn.disabled = false;
@@ -274,9 +229,10 @@ else{
                     return;
                 }
 
-                setLinkedState({linked: false});
-                showFlash('اتصال تلگرام قطع شد.', 'success');
-                window.location.reload();
+                showFlash('اتصال قطع شد.', 'success');
+                window.setTimeout(function(){
+                    window.location.reload();
+                }, 500);
             })
             .catch(function(){
                 disconnectBtn.disabled = false;
