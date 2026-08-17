@@ -1995,7 +1995,7 @@ if(!function_exists('telegramConfigPath')){
         return '';
     }
 
-    function telegramSetUserChatId($username, $chatId){
+    function telegramSetUserChatId($username, $chatId, $extra = []){
         $username = trim((string)$username);
         $chatId = trim((string)$chatId);
         $usersFile = __DIR__ . '/db/users.json';
@@ -2025,14 +2025,21 @@ if(!function_exists('telegramConfigPath')){
         foreach($users as &$user){
             if(strcasecmp(trim((string)($user['username'] ?? '')), $username) === 0){
                 if($chatId === ''){
-                    unset($user['telegram_chat_id']);
+                    unset($user['telegram_chat_id'], $user['telegram_username'], $user['telegram_connected_at']);
                 } else {
                     $user['telegram_chat_id'] = $chatId;
+                    $user['telegram_connected_at'] = time();
+                    if(!empty($extra['tg_username'])){
+                        $user['telegram_username'] = trim((string)$extra['tg_username']);
+                    }
+                    if(!empty($extra['tg_name'])){
+                        $user['telegram_name'] = trim((string)$extra['tg_name']);
+                    }
                 }
                 $found = true;
             } elseif($chatId !== '' && trim((string)($user['telegram_chat_id'] ?? '')) === $chatId){
                 // یک chat_id فقط برای یک حساب می‌تواند استفاده شود
-                unset($user['telegram_chat_id']);
+                unset($user['telegram_chat_id'], $user['telegram_username'], $user['telegram_connected_at']);
             }
         }
         unset($user);
@@ -2052,6 +2059,34 @@ if(!function_exists('telegramConfigPath')){
         fclose($fp);
 
         return true;
+    }
+
+    function telegramGetUserTelegramInfo($username){
+        $username = trim((string)$username);
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!file_exists($usersFile)){
+            return [];
+        }
+
+        $users = json_decode(file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return [];
+        }
+
+        foreach($users as $user){
+            if(strcasecmp(trim((string)($user['username'] ?? '')), $username) === 0){
+                return [
+                    'chat_id'      => trim((string)($user['telegram_chat_id'] ?? '')),
+                    'tg_username'  => trim((string)($user['telegram_username'] ?? '')),
+                    'tg_name'      => trim((string)($user['telegram_name'] ?? '')),
+                    'connected_at' => intval($user['telegram_connected_at'] ?? 0),
+                ];
+            }
+        }
+
+        return [];
     }
 
     function telegramRemoveUserChatId($username){
@@ -2082,7 +2117,7 @@ if(!function_exists('telegramConfigPath')){
         return !empty($result['ok']);
     }
 
-    function telegramHandleUserStart($chatId, $token, $config = null){
+    function telegramHandleUserStart($chatId, $token, $fromInfo = [], $config = null){
         $chatId = trim((string)$chatId);
 
         if($chatId === ''){
@@ -2109,7 +2144,7 @@ if(!function_exists('telegramConfigPath')){
             return;
         }
 
-        $ok = telegramSetUserChatId($username, $chatId);
+        $ok = telegramSetUserChatId($username, $chatId, $fromInfo);
 
         if(!$ok){
             telegramSendMessage($chatId,
@@ -2127,7 +2162,7 @@ if(!function_exists('telegramConfigPath')){
         );
     }
 
-    function telegramHandleUserText($chatId, $text, $config = null){
+    function telegramHandleUserText($chatId, $text, $fromInfo = [], $config = null){
         $chatId = trim((string)$chatId);
         $text = trim((string)$text);
 
@@ -2136,12 +2171,12 @@ if(!function_exists('telegramConfigPath')){
         }
 
         if(preg_match('/^\/start\s+([a-f0-9]{32})$/i', $text, $m)){
-            telegramHandleUserStart($chatId, $m[1], $config);
+            telegramHandleUserStart($chatId, $m[1], $fromInfo, $config);
             return;
         }
 
         if($text === '/start'){
-            telegramHandleUserStart($chatId, '', $config);
+            telegramHandleUserStart($chatId, '', $fromInfo, $config);
             return;
         }
 

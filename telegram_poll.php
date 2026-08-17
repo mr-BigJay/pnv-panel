@@ -90,7 +90,11 @@ do {
         if(telegramCanUseBot($chatId, $config)){
             telegramHandleAdminText($chatId, $text, $config);
         } else {
-            telegramHandleUserText($chatId, $text, $config);
+            $fromInfo = [
+                'tg_username' => trim((string)($message['from']['username'] ?? '')),
+                'tg_name'     => trim((string)($message['from']['first_name'] ?? '')),
+            ];
+            telegramHandleUserText($chatId, $text, $fromInfo, $config);
         }
     }
 
