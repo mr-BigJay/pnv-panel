@@ -464,7 +464,33 @@ display:none;
 }
 .couponResult.is-ok{display:block;background:#14532d}
 .couponResult.is-error{display:block;background:#7f1d1d}
+.couponResult.is-hint{display:block;background:#172554;color:#93c5fd}
 .subSection{margin-bottom:8px}
+/* discount price display on plan chips */
+.planPrice--orig{
+display:block;
+font-size:11px;
+font-weight:400;
+color:#94a3b8;
+text-decoration:line-through;
+}
+.planPrice--disc{
+display:block;
+font-size:13px;
+font-weight:700;
+color:#4ade80;
+}
+.planDiscBadge{
+display:inline-block;
+background:rgba(34,197,94,.15);
+border:1px solid rgba(34,197,94,.3);
+color:#4ade80;
+font-size:10px;
+font-weight:700;
+padding:1px 6px;
+border-radius:5px;
+margin-top:3px;
+}
 
 /* Destination card — segmented bank tabs + green card panel */
 .destCardSection{margin:0 0 14px}

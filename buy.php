@@ -41,7 +41,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=23">
+<link rel="stylesheet" href="plan_step_ui.css?v=24">
 </head>
 <body>
 <div class="box">
@@ -89,14 +89,6 @@ $h = static function($v){
 <div class="planGrid" id="planGrid"></div>
 </div>
 
-<input type="hidden" id="planSelect" value="">
-<button type="button" class="btnNext" id="toStep2" disabled>ادامه ←</button>
-</div>
-
-<!-- STEP 2 -->
-<div class="formStep" id="step2">
-<div class="planSummary" id="planSummary"></div>
-
 <div class="couponSection">
 <label class="couponToggle">
 <input type="checkbox" id="hasCouponCheck" value="1">
@@ -107,6 +99,14 @@ $h = static function($v){
 <div class="couponResult" id="couponResult"></div>
 </div>
 </div>
+
+<input type="hidden" id="planSelect" value="">
+<button type="button" class="btnNext" id="toStep2" disabled>ادامه ←</button>
+</div>
+
+<!-- STEP 2 -->
+<div class="formStep" id="step2">
+<div class="planSummary" id="planSummary"></div>
 
 <div class="destCardSection">
 <div class="destCardTitle">
@@ -266,6 +266,25 @@ let payPollTimer = null;
 let payTickTimer = null;
 let currentPay = null;
 let payCreateInFlight = false;
+let couponState = { applied: false, percent: 0, type: 'percent', value: 0 };
+
+function fmtPrice(thousands){
+    thousands = Math.round(+thousands || 0);
+    if(thousands <= 0) return '۰ تومان';
+    if(thousands < 1000){
+        return thousands.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' هزار تومان';
+    }
+    var m = (thousands / 1000).toFixed(3).replace(/\.?0+$/, '');
+    return m.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' میلیون تومان';
+}
+
+function discountedPrice(original){
+    if(!couponState.applied) return original;
+    if(couponState.type === 'fixed'){
+        return Math.max(0, original - couponState.value);
+    }
+    return Math.round(original * (100 - couponState.percent) / 100);
+}
 
 function escapeHtml(s){
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -316,9 +335,17 @@ function renderPlans(){
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'planChip' + (isLimited ? ' planChip--limited' : '') + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '');
-        btn.innerHTML = '<span class="planCheck">✓</span><span class="planName"></span><span class="planPrice"></span>' + (isLimited ? '<span class="planDays"></span>' : '');
+        const disc = couponState.applied ? discountedPrice(plan.price) : 0;
+        let priceHtml;
+        if(couponState.applied && disc < plan.price){
+            priceHtml = '<span class="planPrice--orig">' + escapeHtml(plan.price_text) + '</span>' +
+                        '<span class="planPrice--disc">' + escapeHtml(fmtPrice(disc)) + '</span>' +
+                        '<span class="planDiscBadge">٪' + couponState.percent + ' تخفیف</span>';
+        } else {
+            priceHtml = '<span class="planPrice">' + escapeHtml(plan.price_text) + '</span>';
+        }
+        btn.innerHTML = '<span class="planCheck">✓</span><span class="planName"></span>' + priceHtml + (isLimited ? '<span class="planDays"></span>' : '');
         btn.querySelector('.planName').textContent = plan.name;
-        btn.querySelector('.planPrice').textContent = plan.price_text;
         if(isLimited){
             const d = btn.querySelector('.planDays');
             if(d) d.textContent = 'مدت: ' + (plan.days_label || '—');
@@ -365,9 +392,14 @@ function showStep(step){
         if(selectedCategory === 'limited'){
             extraHtml += '<div class="planSummaryExtra">مدت: <b>' + escapeHtml(selectedPlan.days_label || '—') + '</b></div>';
         }
+        if(couponState.applied){
+            const disc = discountedPrice(selectedPlan.price);
+            if(disc < selectedPlan.price){
+                extraHtml += '<div class="planSummaryExtra">قیمت با تخفیف: <b>' + escapeHtml(fmtPrice(disc)) + '</b> <small style="text-decoration:line-through;opacity:.7">' + escapeHtml(selectedPlan.price_text) + '</small></div>';
+            }
+        }
         planSummary.innerHTML = renderPlanSummaryHtml(selectedPlan, selectedCategory, extraHtml);
         syncCardBox();
-        validateCoupon();
         ensureInstantPay();
     }
 }
@@ -547,37 +579,68 @@ function fillResult(item){
 function resetCouponResult(){
     couponResult.className = 'couponResult';
     couponResult.textContent = '';
+    couponState = { applied: false, percent: 0, type: 'percent', value: 0 };
 }
 
 function validateCoupon(){
-    const plan = planSelect.value;
     const code = couponCodeInput.value.trim();
-    if(!hasCouponCheck.checked){ resetCouponResult(); return; }
-    if(plan === ''){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'ابتدا پلن را انتخاب کنید'; return; }
-    if(code === ''){ resetCouponResult(); return; }
-    fetch('coupon-api.php?plan=' + encodeURIComponent(plan) + '&code=' + encodeURIComponent(code), { credentials: 'same-origin' })
+    if(!hasCouponCheck.checked){
+        resetCouponResult();
+        renderPlans();
+        return;
+    }
+    if(code === ''){
+        resetCouponResult();
+        renderPlans();
+        return;
+    }
+    // Pick a plan to validate against
+    let planVal = planSelect.value;
+    if(planVal === ''){
+        const cat = selectedCategory;
+        const list = (plansData || []).filter(function(p){ return cat ? p.category === cat : true; });
+        const src = list.length > 0 ? list : (plansData || []);
+        if(src.length === 0){
+            couponResult.className = 'couponResult is-hint';
+            couponResult.textContent = 'ابتدا نوع پلن را انتخاب کنید';
+            return;
+        }
+        planVal = src[0].value;
+    }
+    fetch('coupon-api.php?plan=' + encodeURIComponent(planVal) + '&code=' + encodeURIComponent(code), { credentials: 'same-origin' })
     .then(function(r){ return r.json(); })
     .then(function(data){
-        if(!data.ok){ couponResult.className = 'couponResult is-error'; couponResult.textContent = data.error || 'کد تخفیف معتبر نیست'; return; }
+        if(!data.ok){
+            couponResult.className = 'couponResult is-error';
+            couponResult.textContent = data.error || 'کد تخفیف معتبر نیست';
+            couponState = { applied: false, percent: 0, type: 'percent', value: 0 };
+            renderPlans();
+            return;
+        }
+        couponState = { applied: true, percent: data.percent || 0, type: data.type || 'percent', value: data.value || 0 };
         couponResult.className = 'couponResult is-ok';
-        couponResult.innerHTML = 'تخفیف ' + data.percent + '٪<br>مبلغ پلن: ' + data.original_text + '<br><b>قابل پرداخت تقریبی: ' + data.final_text + '</b>';
+        couponResult.textContent = 'کد تخفیف ' + data.percent + '٪ اعمال شد — قیمت‌ها به‌روز شد';
+        renderPlans();
     })
-    .catch(function(){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'خطا در بررسی کد'; });
+    .catch(function(){
+        couponResult.className = 'couponResult is-error';
+        couponResult.textContent = 'خطا در بررسی کد';
+    });
 }
 
 hasCouponCheck.addEventListener('change', function(){
     if(this.checked){ couponBox.classList.add('is-open'); couponCodeInput.focus(); validateCoupon(); }
-    else { couponBox.classList.remove('is-open'); couponCodeInput.value = ''; resetCouponResult(); }
-    if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
+    else { couponBox.classList.remove('is-open'); couponCodeInput.value = ''; resetCouponResult(); renderPlans(); }
 });
 couponCodeInput.addEventListener('input', function(){
     clearTimeout(couponTimer);
-    couponTimer = setTimeout(function(){
-        validateCoupon();
-        if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
-    }, 450);
+    couponTimer = setTimeout(validateCoupon, 450);
 });
-planSelect.addEventListener('change', validateCoupon);
+planSelect.addEventListener('change', function(){
+    if(hasCouponCheck.checked && couponCodeInput.value.trim() !== ''){
+        validateCoupon();
+    }
+});
 
 function formatRemain(sec){
     sec = Math.max(0, parseInt(sec, 10) || 0);

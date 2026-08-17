@@ -520,6 +520,13 @@ if(!function_exists('instantPayPath')){
             }
 
             if($shouldDelete && empty($items[$i]['csv_purged'])){
+                // آزادسازی رزرو کد تخفیف برای سفارش‌هایی که مهلتشان تمام شده
+                if(in_array($status, ['expired', 'cancelled', 'failed'], true)){
+                    if(!function_exists('checkoutReleaseDiscountOrder')){
+                        require_once __DIR__ . '/pnv_campaign_bootstrap.php';
+                    }
+                    checkoutReleaseDiscountOrder($items[$i]['id'] ?? '');
+                }
                 instantPayDeleteAbandonedCsv($items[$i]);
                 $items[$i]['csv_purged'] = true;
                 $items[$i]['csv_index'] = -1;
