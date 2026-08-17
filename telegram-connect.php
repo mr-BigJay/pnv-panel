@@ -15,6 +15,14 @@ $config = telegramLoadConfig();
 $botEnabled = !empty($config['enabled']) && trim((string)($config['bot_token'] ?? '')) !== '';
 $botUsername = trim((string)($config['bot_username'] ?? ''));
 
+// اگر bot_username تنظیم نشده، از API تلگرام خودکار بگیر
+if($botEnabled && $botUsername === ''){
+    $meResult = telegramApiRequest('getMe', [], [], $config);
+    if(!empty($meResult['ok']) && !empty($meResult['result']['username'])){
+        $botUsername = $meResult['result']['username'];
+    }
+}
+
 $tgInfo = telegramGetUserTelegramInfo($user);
 $chatId = $tgInfo['chat_id'] ?? '';
 $isConnected = $chatId !== '';
@@ -296,17 +304,12 @@ display:none;
 <div class="tgConnMeta" style="font-size:11px;opacity:.7"><?php echo tgH($connectedDate); ?></div>
 <?php } ?>
 <div class="tgActions">
-<?php if($botLink !== ''){ ?>
-<a class="tgBtn tgBtn--tg" href="<?php echo tgH($botLink); ?>" target="_blank" rel="noopener">
+<a class="tgBtn tgBtn--tg<?php echo $botLink === '' ? ' tgBtn--disabled' : ''; ?>"
+   href="<?php echo $botLink !== '' ? tgH($botLink) : '#'; ?>"
+   <?php if($botLink !== ''){ ?>target="_blank" rel="noopener"<?php } else { ?>style="pointer-events:none;opacity:.45"<?php } ?>>
 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
-ربات
+ورود به ربات
 </a>
-<?php } else { ?>
-<a class="tgBtn tgBtn--tg tgBtn--nolink" href="#" style="pointer-events:none;opacity:.45">
-<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
-ربات
-</a>
-<?php } ?>
 <button type="button" class="tgBtn tgBtn--disconnect" id="tgDisconnectBtn">قطع اتصال</button>
 </div>
 </div>
@@ -356,7 +359,7 @@ display:none;
 
 <div class="tgLinkBox" id="tgLinkBox">
 <?php if($botLink !== ''){ ?>
-<a class="tgBtn tgBtn--tg" id="tgBotLink" href="#" target="_blank" rel="noopener">باز کردن ربات تلگرام</a>
+<a class="tgBtn tgBtn--tg" id="tgBotLink" href="#" target="_blank" rel="noopener">ورود به ربات</a>
 <?php } else { ?>
 <div style="display:flex;gap:6px;">
 <input type="text" id="tgTokenInput" readonly style="flex:1;background:rgba(15,23,42,.8);border:1px solid rgba(148,163,184,.2);border-radius:10px;padding:9px 12px;color:#e2e8f0;font-size:12px;font-family:monospace;direction:ltr;outline:none;">
