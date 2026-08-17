@@ -221,6 +221,27 @@ font-size:13px;
 font-weight:600;
 }
 .tgHide{display:none!important}
+.tgConnectedActions{
+display:flex;
+gap:8px;
+margin-top:4px;
+}
+.tgBtn--sm{
+height:36px;
+padding:0 16px;
+font-size:12px;
+font-weight:700;
+border-radius:10px;
+flex:1;
+}
+.tgBtn--outline{
+background:transparent;
+border:1px solid #dc2626;
+color:#fca5a5;
+}
+.tgBtn--outline:hover{
+background:rgba(127,29,29,.4);
+}
 </style>
 </head>
 <body class="userPanel tgConnectPage">
@@ -284,7 +305,12 @@ font-weight:600;
 • نزدیک شدن به پایان اشتراک<br>
 • کمپین‌ها و اطلاع‌رسانی‌ها
 </div>
-<button type="button" class="tgBtn tgBtn--danger" id="tgDisconnectBtn">قطع اتصال تلگرام</button>
+<div class="tgConnectedActions">
+<?php if($botUsername !== ''){ ?>
+<a class="tgBtn tgBtn--telegram tgBtn--sm" href="https://t.me/<?php echo tgH(ltrim($botUsername,'@')); ?>" target="_blank" rel="noopener">باز کردن ربات</a>
+<?php } ?>
+<button type="button" class="tgBtn tgBtn--danger tgBtn--sm tgBtn--outline" id="tgDisconnectBtn">قطع اتصال</button>
+</div>
 </div>
 <?php } ?>
 
