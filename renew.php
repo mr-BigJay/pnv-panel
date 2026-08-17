@@ -1161,7 +1161,10 @@ function ensureInstantPay(forceRestart){
         return;
     }
     if(!forceRestart && currentPay && (currentPay.status === 'waiting' || currentPay.status === 'processing')){
-        if(String(currentPay.card || '') === card){
+        const sameCard = String(currentPay.card || '') === card;
+        const selectedPlan = planSelect.value.trim();
+        const orderPlan = String(currentPay.plan_value || currentPay.plan || '').trim();
+        if(sameCard && orderPlan === selectedPlan){
             return;
         }
     }

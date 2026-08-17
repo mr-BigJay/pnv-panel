@@ -462,6 +462,18 @@ if(!function_exists('couponLoadCoupons')){
 
     function couponFindPlanByValue($planValue, $plans){
 
+        if(!function_exists('pnvFindPlanByValue') && is_file(__DIR__ . '/plan_ui_lib.php')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+
+        if(function_exists('pnvFindPlanByValue')){
+            $plan = pnvFindPlanByValue($planValue, $plans);
+
+            if(is_array($plan)){
+                return $plan;
+            }
+        }
+
         $planValue = trim($planValue);
 
         foreach($plans as $plan){

@@ -2,23 +2,14 @@
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/admin_nav.php';
+require_once __DIR__ . '/../plan_ui_lib.php';
+require_once __DIR__ . '/../instant_pay_lib.php';
 
 pnvAdminRequireAuth();
 
 $plansFile = "../db/plans.json";
 
-if(!file_exists($plansFile)){
-file_put_contents($plansFile,"[]");
-}
-
-$plans = json_decode(
-file_get_contents($plansFile),
-true
-);
-
-if(!is_array($plans)){
-$plans = [];
-}
+$plans = pnvLoadPlans($plansFile);
 
 function formatPrice($price){
 
@@ -77,14 +68,8 @@ $plans[] = [
 
 ];
 
-file_put_contents(
-$plansFile,
-json_encode(
-$plans,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
+$plans = pnvSavePlans($plans, $plansFile);
+instantPayInvalidateStaleOrders($plans);
 
 header("Location: " . pnvAdminUrl('plans.php'));
 exit;
@@ -101,14 +86,8 @@ unset($plans[$id]);
 $plans =
 array_values($plans);
 
-file_put_contents(
-$plansFile,
-json_encode(
-$plans,
-JSON_UNESCAPED_UNICODE|
-JSON_PRETTY_PRINT
-)
-);
+$plans = pnvSavePlans($plans, $plansFile);
+instantPayInvalidateStaleOrders($plans);
 
 header("Location: " . pnvAdminUrl('plans.php'));
 exit;

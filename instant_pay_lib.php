@@ -729,6 +729,124 @@ if(!function_exists('instantPayPath')){
         ]);
     }
 
+    function instantPayResolvePlanPriceThousands($item, $plan){
+        if(!is_array($plan)){
+            return 0;
+        }
+
+        $priceThousands = intval($plan['price'] ?? 0);
+        $discountFinalThousands = intval($item['discount_final_thousands'] ?? 0);
+        $discountSource = trim((string)($item['discount_source'] ?? ''));
+        $discountPercent = intval($item['discount_percent'] ?? 0);
+
+        if($discountFinalThousands > 0 && $discountSource === 'admin_discount'){
+            return max(0, $discountFinalThousands);
+        }
+
+        if($discountPercent > 0 && $discountPercent <= 100 && function_exists('couponApplyDiscountThousands')){
+            return couponApplyDiscountThousands($priceThousands, $discountPercent);
+        }
+
+        return $priceThousands;
+    }
+
+    function instantPayExpectedAmountRial($item, $plan){
+        if(!is_array($item) || !is_array($plan)){
+            return 0;
+        }
+
+        $priceThousands = instantPayResolvePlanPriceThousands($item, $plan);
+        $baseRial = instantPayBaseRial($priceThousands);
+        $code = intval($item['code'] ?? 0);
+
+        return instantPayBuildAmountRial($baseRial, $code);
+    }
+
+    function instantPayOrderMatchesPlans($item, $plans){
+        if(!is_array($item) || !is_array($plans)){
+            return false;
+        }
+
+        $planValue = trim((string)($item['plan_value'] ?? ''));
+        $plan = instantPayFindPlan($planValue, $plans);
+
+        if(!$plan){
+            return false;
+        }
+
+        if(function_exists('pnvPlanSignature')){
+            $storedSignature = trim((string)($item['plan_signature'] ?? ''));
+
+            if($storedSignature !== '' && $storedSignature !== pnvPlanSignature($plan)){
+                return false;
+            }
+        }
+
+        $storedPrice = intval($item['plan_price_thousands'] ?? 0);
+        $currentPrice = instantPayResolvePlanPriceThousands($item, $plan);
+
+        if($storedPrice > 0 && $storedPrice !== $currentPrice){
+            return false;
+        }
+
+        $expectedAmount = instantPayExpectedAmountRial($item, $plan);
+        $itemAmount = instantPayNormalizeItemAmountRial($item);
+
+        return $expectedAmount > 0 && $itemAmount === $expectedAmount;
+    }
+
+    /**
+     * سفارش‌های waiting که با plans.json فعلی هم‌خوان نیستند را لغو می‌کند.
+     */
+    function instantPayInvalidateStaleOrders($plans, $items = null){
+        if(!is_array($plans)){
+            $plans = [];
+        }
+
+        if($items === null){
+            $items = instantPayExpireDue();
+        }
+
+        if(!function_exists('checkoutReleaseDiscountOrder')){
+            require_once __DIR__ . '/pnv_campaign_bootstrap.php';
+        }
+
+        $changed = false;
+        $now = time();
+        $cancelled = 0;
+
+        foreach($items as $i => $item){
+            if(($item['status'] ?? '') !== 'waiting'){
+                continue;
+            }
+
+            if(instantPayOrderMatchesPlans($item, $plans)){
+                continue;
+            }
+
+            $items[$i]['status'] = 'cancelled';
+            $items[$i]['message'] = 'لغو به‌خاطر تغییر پلن';
+            $items[$i]['cancelled_at'] = $now;
+            $changed = true;
+            $cancelled++;
+
+            checkoutReleaseDiscountOrder($items[$i]['id'] ?? '');
+            instantPayDeleteAbandonedCsv($items[$i]);
+            $items[$i]['csv_purged'] = true;
+            $items[$i]['csv_index'] = -1;
+        }
+
+        if($changed){
+            instantPaySave($items);
+            $items = instantPayRebuildCsvIndexes(instantPayLoad());
+        }
+
+        return [
+            'items' => $items,
+            'cancelled' => $cancelled,
+        ];
+    }
+
     function instantPayFindReusableWaiting($username, $opts, $items = null){
         $username = trim((string)$username);
 
@@ -742,6 +860,7 @@ if(!function_exists('instantPayPath')){
 
         $sig = instantPayOptsSignature($opts);
         $now = time();
+        $plans = $opts['plans'] ?? null;
 
         foreach($items as $item){
             if(trim((string)($item['user'] ?? '')) !== $username){
@@ -757,6 +876,10 @@ if(!function_exists('instantPayPath')){
             }
 
             if(instantPayItemSignature($item) !== $sig){
+                continue;
+            }
+
+            if(is_array($plans) && !instantPayOrderMatchesPlans($item, $plans)){
                 continue;
             }
 
@@ -996,6 +1119,7 @@ if(!function_exists('instantPayPath')){
             'card' => $item['card'] ?? '',
             'card_name' => $item['card_name'] ?? '',
             'plan' => $item['plan'] ?? '',
+            'plan_value' => $item['plan_value'] ?? ($item['plan'] ?? ''),
             'subname' => $item['subname'] ?? '',
             'sub' => $item['sub'] ?? '',
             'type' => $item['type'] ?? 'خرید',
@@ -1086,6 +1210,8 @@ if(!function_exists('instantPayPath')){
         }
 
         $items = instantPayExpireDue();
+        instantPayInvalidateStaleOrders($plans, $items);
+        $items = instantPayLoad();
 
         $createOpts = [
             'user' => $username,
@@ -1098,6 +1224,7 @@ if(!function_exists('instantPayPath')){
             'discount_percent' => $discountPercent,
             'discount_source' => $discountSource,
             'discount_final_thousands' => $discountFinalThousands,
+            'plans' => $plans,
         ];
 
         $reusable = instantPayFindReusableWaiting($username, $createOpts, $items);
@@ -1172,6 +1299,8 @@ if(!function_exists('instantPayPath')){
             'sub' => $sub,
             'plan' => $planLabel,
             'plan_value' => $planValue,
+            'plan_signature' => function_exists('pnvPlanSignature') ? pnvPlanSignature($plan) : '',
+            'plan_price_thousands' => $priceThousands,
             'card' => $card,
             'card_name' => $cardName,
             'amount' => $amount,

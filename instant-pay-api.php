@@ -18,11 +18,7 @@ require_once __DIR__ . '/telegram_lib.php';
 $username = $_SESSION['user'];
 $action = trim((string)($_GET['action'] ?? $_POST['action'] ?? 'status'));
 
-$plans = [];
-
-if(file_exists(__DIR__ . '/db/plans.json')){
-    $plans = json_decode(file_get_contents(__DIR__ . '/db/plans.json'), true);
-}
+$plans = function_exists('pnvLoadPlans') ? pnvLoadPlans() : [];
 
 if(!is_array($plans)){
     $plans = [];

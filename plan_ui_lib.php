@@ -944,4 +944,94 @@ if(!function_exists('pnvFormatPlanPrice')){
             'error' => 'این اشتراک نامحدود زمانی است و نمی‌توان آن را با پلن زمان‌دار تمدید کرد.'
         ];
     }
+
+    function pnvPlanSignature($plan){
+        if(!is_array($plan)){
+            return '';
+        }
+
+        $days = trim((string)($plan['days'] ?? ''));
+
+        if($days === ''){
+            $days = 'نامحدود';
+        }
+
+        return implode('|', [
+            trim((string)($plan['name'] ?? '')),
+            (string)intval($plan['price'] ?? 0),
+            $days,
+        ]);
+    }
+
+    function pnvEnsurePlanIds($plans){
+        if(!is_array($plans)){
+            return [];
+        }
+
+        $changed = false;
+
+        foreach($plans as $i => $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $id = trim((string)($plan['id'] ?? ''));
+
+            if($id === ''){
+                try{
+                    $id = 'p' . bin2hex(random_bytes(4));
+                }catch(Throwable $e){
+                    $id = 'p' . substr(md5(uniqid((string)$i, true)), 0, 8);
+                }
+
+                $plans[$i]['id'] = $id;
+                $changed = true;
+            }
+        }
+
+        return ['plans' => array_values($plans), 'changed' => $changed];
+    }
+
+    function pnvLoadPlans($path = null){
+        $path = $path ?? (__DIR__ . '/db/plans.json');
+        $plans = [];
+
+        if(file_exists($path)){
+            $decoded = json_decode(file_get_contents($path), true);
+            $plans = is_array($decoded) ? $decoded : [];
+        }
+
+        $result = pnvEnsurePlanIds($plans);
+
+        if(!empty($result['changed'])){
+            if(!is_dir(dirname($path))){
+                @mkdir(dirname($path), 0755, true);
+            }
+
+            file_put_contents(
+                $path,
+                json_encode($result['plans'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+                LOCK_EX
+            );
+        }
+
+        return $result['plans'];
+    }
+
+    function pnvSavePlans($plans, $path = null){
+        $path = $path ?? (__DIR__ . '/db/plans.json');
+        $result = pnvEnsurePlanIds(is_array($plans) ? $plans : []);
+
+        if(!is_dir(dirname($path))){
+            @mkdir(dirname($path), 0755, true);
+        }
+
+        file_put_contents(
+            $path,
+            json_encode($result['plans'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+
+        return $result['plans'];
+    }
 }

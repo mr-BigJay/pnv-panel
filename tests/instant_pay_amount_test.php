@@ -157,5 +157,46 @@ assertTrue(instantPayAdminRowVisible($expiredRow), 'expired json still visible w
 $meta = instantPayAdminRowStatusMeta($visibleRow);
 assertTrue(($meta['title'] ?? '') === 'در حال بررسی', 'waiting json status label');
 
+// همگام‌سازی پلن: سفارش waiting با قیمت قدیمی باید لغو شود
+$plansOld = [['name' => '10 گیگ', 'price' => 150, 'days' => 'نامحدود', 'id' => 'p1']];
+$plansNew = [['name' => '10 گیگ', 'price' => 200, 'days' => 'نامحدود', 'id' => 'p1']];
+$staleOrder = [
+    'id' => 'stale-plan',
+    'user' => 'demo',
+    'type' => 'خرید',
+    'status' => 'waiting',
+    'plan_value' => '10 گیگ - 150 هزار تومان',
+    'plan_signature' => pnvPlanSignature($plansOld[0]),
+    'plan_price_thousands' => 150,
+    'code' => 1010,
+    'amount' => instantPayBuildAmountRial(instantPayBaseRial(150), 1010),
+    'currency' => 'rial',
+    'expires_at' => time() + 600,
+    'csv_index' => -1,
+    'card' => '6037',
+];
+instantPaySave([$staleOrder]);
+$result = instantPayInvalidateStaleOrders($plansNew);
+assertTrue(intval($result['cancelled'] ?? 0) >= 1, 'stale waiting order cancelled after plan price change');
+$reloaded = instantPayGet('stale-plan');
+assertTrue(is_array($reloaded) && ($reloaded['status'] ?? '') === 'cancelled', 'stale order status cancelled');
+
+$freshOrder = [
+    'id' => 'fresh-plan',
+    'user' => 'demo2',
+    'type' => 'خرید',
+    'status' => 'waiting',
+    'plan_value' => pnvPlanOptionValue($plansNew[0]),
+    'plan_signature' => pnvPlanSignature($plansNew[0]),
+    'plan_price_thousands' => 200,
+    'code' => 2020,
+    'amount' => instantPayBuildAmountRial(instantPayBaseRial(200), 2020),
+    'currency' => 'rial',
+    'expires_at' => time() + 600,
+    'csv_index' => -1,
+    'card' => '6037',
+];
+assertTrue(instantPayOrderMatchesPlans($freshOrder, $plansNew), 'fresh order matches current plans');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);
