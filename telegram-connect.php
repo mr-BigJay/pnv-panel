@@ -20,10 +20,11 @@ $chatId = $tgInfo['chat_id'] ?? '';
 $isConnected = $chatId !== '';
 
 $tgDisplayName = '';
-if(!empty($tgInfo['tg_username'])){
-    $tgDisplayName = '@' . ltrim($tgInfo['tg_username'], '@');
+$rawTgUsername = ltrim(trim((string)($tgInfo['tg_username'] ?? '')), '@');
+if($rawTgUsername !== ''){
+    $tgDisplayName = '@' . $rawTgUsername;
 } elseif(!empty($tgInfo['tg_name'])){
-    $tgDisplayName = $tgInfo['tg_name'];
+    $tgDisplayName = trim((string)$tgInfo['tg_name']);
 }
 
 $connectedDate = '';
@@ -47,6 +48,7 @@ function tgH($v){
 <title>اتصال تلگرام</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
+<link rel="stylesheet" href="user_nav.css?v=1">
 <link rel="stylesheet" href="user_nav.css?v=1">
 <style>
 *{box-sizing:border-box}
