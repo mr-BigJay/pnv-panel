@@ -47,6 +47,7 @@ function tgH($v){
 <title>اتصال تلگرام</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
+<link rel="stylesheet" href="user_nav.css?v=1">
 <style>
 *{box-sizing:border-box}
 html,body{
@@ -64,7 +65,7 @@ align-items:stretch;
 overflow-y:auto;
 }
 .tgPage{
-max-width:400px;
+max-width:420px;
 width:100%;
 margin:0 auto;
 display:flex;
@@ -72,31 +73,22 @@ flex-direction:column;
 gap:14px;
 animation:fadeUp .28s ease;
 }
-@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-/* top bar */
-.tgTopBar{
+.topBar{
 display:flex;
 align-items:center;
-justify-content:space-between;
+gap:8px;
 margin-bottom:2px;
 }
-.tgTopTitle{
-font-size:18px;
-font-weight:700;
+.brand{
+flex:1;
+text-align:center;
+font-family:"Lalezar",tahoma,sans-serif;
+font-size:20px;
+font-weight:400;
 color:#fff;
 }
-.tgBackBtn{
-padding:6px 14px;
-border-radius:10px;
-background:rgba(30,41,59,.8);
-border:1px solid rgba(148,163,184,.18);
-color:#e2e8f0;
-font-family:inherit;
-font-size:13px;
-font-weight:600;
-cursor:pointer;
-text-decoration:none;
-}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* top bar — از استاندارد user_nav استفاده می‌شود */
 /* card */
 .tgCard{
 background:rgba(18,24,32,.75);
@@ -151,30 +143,32 @@ margin-top:12px;
 width:100%;
 }
 .tgBtn{
-display:flex;
+display:inline-flex;
 align-items:center;
 justify-content:center;
 gap:6px;
-padding:10px 16px;
+height:38px;
+padding:0 18px;
 border:none;
-border-radius:12px;
+border-radius:10px;
 font-family:inherit;
 font-size:13px;
 font-weight:700;
 cursor:pointer;
 text-decoration:none;
 transition:opacity .15s;
-flex:1;
+white-space:nowrap;
 }
 .tgBtn:disabled{opacity:.5;cursor:not-allowed}
-.tgBtn--tg{background:#229ED9;color:#fff}
+.tgBtn--tg{background:#229ED9;color:#fff;flex:1}
 .tgBtn--disconnect{
 background:transparent;
-border:1px solid rgba(239,68,68,.5);
+border:1px solid rgba(239,68,68,.45);
 color:#fca5a5;
+flex:1;
 }
-.tgBtn--disconnect:hover{background:rgba(127,29,29,.35)}
-.tgBtn--primary{background:#2563eb;color:#fff;width:100%}
+.tgBtn--disconnect:hover{background:rgba(127,29,29,.3)}
+.tgBtn--primary{background:#2563eb;color:#fff;width:100%;height:44px;border-radius:12px;font-size:14px}
 /* features section */
 .tgFeaturesTitle{
 font-size:13px;
@@ -271,9 +265,10 @@ display:none;
 
 <div class="tgPage">
 
-<div class="tgTopBar">
-<span class="tgTopTitle">اتصال تلگرام</span>
-<a class="tgBackBtn" href="dashboard.php">بازگشت</a>
+<div class="topBar">
+<a class="userBack" href="dashboard.php">بازگشت</a>
+<div class="brand">اتصال تلگرام</div>
+<span class="userBackSpacer" aria-hidden="true"></span>
 </div>
 
 <?php if(!$botEnabled){ ?>
