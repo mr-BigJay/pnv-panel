@@ -21,7 +21,7 @@ $isConnected = $chatId !== '';
 
 $tgDisplayName = '';
 if(!empty($tgInfo['tg_username'])){
-    $tgDisplayName = '@' . $tgInfo['tg_username'];
+    $tgDisplayName = '@' . ltrim($tgInfo['tg_username'], '@');
 } elseif(!empty($tgInfo['tg_name'])){
     $tgDisplayName = $tgInfo['tg_name'];
 }
@@ -301,7 +301,12 @@ display:none;
 <div class="tgActions">
 <?php if($botLink !== ''){ ?>
 <a class="tgBtn tgBtn--tg" href="<?php echo tgH($botLink); ?>" target="_blank" rel="noopener">
-<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+ربات
+</a>
+<?php } else { ?>
+<a class="tgBtn tgBtn--tg tgBtn--nolink" href="#" style="pointer-events:none;opacity:.45">
+<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
 ربات
 </a>
 <?php } ?>
