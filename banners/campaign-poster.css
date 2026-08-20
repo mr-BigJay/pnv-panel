@@ -178,8 +178,9 @@ body{background:#050805;display:flex;justify-content:center;padding:24px}
   font-size:16px;font-weight:800;margin-bottom:8px;
 }
 .planCard .new{
-  font-size:28px;font-weight:800;color:var(--green);
+  font-size:24px;font-weight:800;color:var(--green);
   text-shadow:0 0 12px var(--green-glow);
+  line-height:1.35;
 }
 .page2 .footer{
   margin-top:auto;text-align:center;padding-top:16px;
