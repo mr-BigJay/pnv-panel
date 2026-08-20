@@ -12,7 +12,9 @@ export_png() {
     --headless=new \
     --disable-gpu \
     --hide-scrollbars \
+    --force-color-profile=srgb \
     --window-size=1080,1920 \
+    --virtual-time-budget=8000 \
     --screenshot="$png" \
     "file://$html"
   echo "Wrote $png"

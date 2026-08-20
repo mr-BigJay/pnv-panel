@@ -1,193 +1,179 @@
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#050805;display:flex;justify-content:center;padding:24px}
+body{background:#000;display:flex;justify-content:center;padding:16px}
 .poster{
-  --green:#39ff14;
-  --green-dim:rgba(57,255,20,.12);
-  --green-glow:rgba(57,255,20,.35);
+  --g:#32ff32;
+  --g2:#1ed760;
+  --glow:0 0 18px rgba(50,255,50,.55),0 0 40px rgba(50,255,50,.2);
+  --glow-in:inset 0 0 30px rgba(50,255,50,.08);
   width:1080px;height:1920px;
   position:relative;overflow:hidden;
-  background:#050805;
+  background:#030303;
   color:#fff;
   font-family:"Vazirmatn",tahoma,sans-serif;
   direction:rtl;
 }
-.poster::before{
-  content:"";
-  position:absolute;inset:0;
-  background:
-    radial-gradient(circle at 20% 10%,rgba(57,255,20,.08),transparent 35%),
-    radial-gradient(circle at 80% 90%,rgba(57,255,20,.06),transparent 40%),
-    linear-gradient(180deg,#050805 0%,#0a1208 50%,#050805 100%);
-  pointer-events:none;
+.circuit{
+  position:absolute;inset:0;opacity:.22;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cg fill='none' stroke='%2332ff32' stroke-width='1'%3E%3Cpath d='M0 50h120v30H80v40H40v-40H0'/%3E%3Cpath d='M200 0v80h40v40h-40v80'/%3E%3Cpath d='M300 120h100v30h-60v50h-40z'/%3E%3Cpath d='M60 200h80v30H100v60H60z'/%3E%3Cpath d='M250 250h50v50h50v30H250z'/%3E%3Cpath d='M0 320h60v30H20v50H0z'/%3E%3Cpath d='M350 350h50v50'/%3E%3Ccircle cx='120' cy='50' r='4' fill='%2332ff32'/%3E%3Ccircle cx='200' cy='120' r='4' fill='%2332ff32'/%3E%3Ccircle cx='300' cy='150' r='4' fill='%2332ff32'/%3E%3Ccircle cx='140' cy='230' r='4' fill='%2332ff32'/%3E%3Ccircle cx='350' cy='280' r='4' fill='%2332ff32'/%3E%3C/g%3E%3C/svg%3E") repeat;
 }
-.poster::after{
-  content:"";
-  position:absolute;inset:0;opacity:.18;
-  background-image:
-    linear-gradient(90deg,rgba(57,255,20,.15) 1px,transparent 1px),
-    linear-gradient(rgba(57,255,20,.15) 1px,transparent 1px);
-  background-size:48px 48px;
-  mask-image:radial-gradient(ellipse 80% 70% at 50% 40%,#000 20%,transparent 75%);
+.vignette{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse 90% 80% at 50% 45%,transparent 30%,#000 85%);
   pointer-events:none;
 }
 .inner{
-  position:relative;z-index:1;
-  height:100%;
-  padding:72px 56px 64px;
+  position:relative;z-index:2;
+  height:100%;padding:48px 44px 44px;
   display:flex;flex-direction:column;
 }
-.head{text-align:center;margin-bottom:36px}
-.head h1{
-  font-size:58px;font-weight:800;line-height:1.25;
-  text-shadow:0 0 24px var(--green-glow);
+
+/* ── header ── */
+.head{text-align:center;margin-bottom:24px}
+.head h1{font-size:50px;font-weight:800;line-height:1.3;letter-spacing:-.5px}
+.head .tagline{margin-top:12px;font-size:24px;color:#d1d5db;font-weight:600;
+  display:flex;justify-content:center;align-items:center;gap:0;
 }
-.head .tagline{
-  margin-top:18px;font-size:28px;color:#cbd5e1;
-  display:flex;justify-content:center;gap:14px;flex-wrap:wrap;
-}
-.head .tagline span::before{content:"•";margin-left:14px;color:var(--green)}
-.head .tagline span:first-child::before{content:none;margin:0}
+.head .tagline span+span::before{content:"•";margin:0 12px;color:var(--g)}
+
+/* ── offer box (reference style) ── */
 .offerBox{
-  border:3px solid var(--green);
-  border-radius:20px;
-  padding:32px 24px;
-  text-align:center;
-  box-shadow:0 0 30px var(--green-glow),inset 0 0 40px var(--green-dim);
-  margin-bottom:28px;
+  border:3px solid var(--g);border-radius:22px;
+  padding:22px 20px 18px;text-align:center;
+  box-shadow:var(--glow),var(--glow-in);
+  background:rgba(0,20,0,.35);
+  margin-bottom:14px;
 }
-.offerBox .big{
-  font-size:52px;font-weight:800;color:var(--green);
-  line-height:1.35;
+.offerBox .line1{font-size:40px;font-weight:800;color:var(--g);line-height:1.3}
+.offerBox .line2{font-size:40px;font-weight:800;color:#fff;line-height:1.3}
+.deadlinePill{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  margin:0 auto 18px;
+  padding:10px 24px;border-radius:999px;
+  border:2px solid rgba(50,255,50,.5);
+  background:rgba(0,30,0,.5);
+  font-size:24px;font-weight:700;color:#e5e7eb;
+  width:fit-content;
+  box-shadow:0 0 12px rgba(50,255,50,.15);
 }
-.deadline{
-  display:inline-flex;align-items:center;gap:10px;
-  margin-top:18px;padding:12px 22px;
-  border:1px solid rgba(57,255,20,.45);
-  border-radius:999px;
-  background:rgba(57,255,20,.08);
-  font-size:24px;color:#e2e8f0;
-}
-.codeWrap{
-  margin-bottom:32px;
-  border:2px dashed rgba(57,255,20,.55);
-  border-radius:18px;
-  padding:26px 24px 22px;
-  background:rgba(0,0,0,.35);
+.deadlinePill svg{width:26px;height:26px;stroke:var(--g);fill:none;stroke-width:2}
+
+/* ── coupon ── */
+.coupon{
   position:relative;
+  border:2px dashed rgba(50,255,50,.65);
+  border-radius:18px;padding:20px 18px 16px;
+  background:rgba(0,0,0,.45);
+  text-align:center;margin-bottom:20px;
 }
-.codeWrap .scissors{
-  position:absolute;top:14px;left:18px;
-  font-size:28px;opacity:.85;
+.coupon .scissors{
+  position:absolute;top:12px;left:16px;
+  width:32px;height:32px;opacity:.9;
 }
-.codeWrap .label{font-size:26px;color:#94a3b8;margin-bottom:14px}
-.codeWrap .code{
+.coupon .label{font-size:24px;color:#9ca3af;margin-bottom:12px}
+.coupon .codeBox{
   display:inline-block;
-  padding:14px 28px;
-  border-radius:14px;
-  background:var(--green);
-  color:#052e16;
-  font-size:46px;font-weight:800;
-  letter-spacing:3px;
-  font-family:ui-monospace,monospace;
-  box-shadow:0 0 20px var(--green-glow);
+  padding:12px 36px;border-radius:12px;
+  background:var(--g);color:#041004;
+  font-size:42px;font-weight:800;letter-spacing:2px;
+  font-family:ui-monospace,Consolas,monospace;
+  box-shadow:var(--glow);
 }
-.codeWrap .hint{
-  margin-top:14px;font-size:22px;color:#86efac;
+.coupon .hint{
+  margin-top:12px;font-size:22px;color:#86efac;font-weight:600;
   display:flex;align-items:center;justify-content:center;gap:8px;
 }
-.sectionTitle{
-  font-size:32px;font-weight:800;
+.coupon .hint svg{width:22px;height:22px;stroke:#86efac;fill:none;stroke-width:2}
+
+/* ── why us: 3 columns like reference ── */
+.sectionTitle{font-size:28px;font-weight:800;margin-bottom:12px;text-align:right}
+.whyGrid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
   margin-bottom:18px;
-  color:#fff;
 }
-.features{
-  display:grid;gap:14px;
-  margin-bottom:28px;
+.whyCard{
+  border:2px solid var(--g);border-radius:16px;
+  padding:16px 10px 14px;text-align:center;
+  background:rgba(0,25,0,.4);
+  box-shadow:var(--glow-in),0 0 14px rgba(50,255,50,.12);
+  display:flex;flex-direction:column;align-items:center;min-height:168px;
 }
-.featureCard{
-  border:2px solid rgba(57,255,20,.45);
-  border-radius:16px;
-  padding:18px 20px;
-  background:rgba(57,255,20,.06);
-  display:grid;grid-template-columns:52px 1fr;gap:14px;align-items:start;
-}
-.featureCard .icon{
-  width:52px;height:52px;border-radius:14px;
-  border:2px solid var(--green);
+.whyCard .ico{width:50px;height:50px;margin-bottom:10px;
   display:flex;align-items:center;justify-content:center;
-  font-size:26px;
-  box-shadow:0 0 12px var(--green-glow);
 }
-.featureCard h3{font-size:24px;font-weight:800;color:var(--green);margin-bottom:6px}
-.featureCard p{font-size:21px;line-height:1.75;color:#e2e8f0}
+.whyCard .ico svg{width:48px;height:48px;stroke:var(--g);fill:none;stroke-width:1.8}
+.whyCard p{font-size:17px;line-height:1.55;color:#f3f4f6;font-weight:600}
+.whyCard .sub{font-size:14px;line-height:1.5;color:#86efac;margin-top:6px;font-weight:600}
+
+/* ── referral bar ── */
 .referral{
   margin-top:auto;
-  border:2px solid rgba(57,255,20,.5);
-  border-radius:18px;
-  padding:22px 24px;
-  background:linear-gradient(135deg,rgba(57,255,20,.1),rgba(57,255,20,.04));
-  text-align:center;
-  font-size:26px;line-height:1.85;color:#f1f5f9;
+  border:2px solid var(--g);border-radius:16px;
+  padding:16px 18px;
+  background:rgba(0,25,0,.45);
+  box-shadow:var(--glow-in);
+  display:flex;align-items:center;gap:14px;
 }
-.referral strong{color:var(--green)}
-.cta{margin-top:24px;text-align:center}
-.cta .label{font-size:26px;color:#94a3b8;margin-bottom:14px}
+.referral .sideIco{flex-shrink:0;width:40px;height:40px}
+.referral .sideIco svg{width:40px;height:40px;stroke:var(--g);fill:none;stroke-width:1.6}
+.referral p{
+  flex:1;text-align:center;
+  font-size:22px;line-height:1.65;font-weight:700;color:#f9fafb;
+}
+.referral em{font-style:normal;color:var(--g)}
+
+/* ── cta ── */
+.cta{margin-top:16px;text-align:center}
+.cta .label{font-size:24px;color:#9ca3af;margin-bottom:12px;font-weight:600}
 .cta .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:12px;
-  padding:18px 36px;
-  border-radius:16px;
-  border:2px solid var(--green);
-  background:rgba(57,255,20,.12);
-  color:var(--green);
-  font-size:36px;font-weight:800;
-  box-shadow:0 0 24px var(--green-glow);
-  letter-spacing:1px;
+  width:100%;max-width:920px;
+  padding:16px 24px;border-radius:16px;
+  border:3px solid var(--g);
+  background:linear-gradient(180deg,rgba(50,255,50,.18),rgba(50,255,50,.06));
+  color:var(--g);font-size:34px;font-weight:800;
+  box-shadow:var(--glow);
+  letter-spacing:.5px;
 }
-.page2 .head h1{font-size:48px}
-.page2 .head .sub{font-size:26px;color:#94a3b8;margin-top:10px}
-.page2 .head .sub code{
-  color:var(--green);font-family:ui-monospace,monospace;font-size:28px;
-}
-.group{margin-bottom:22px}
+.cta .btn svg{width:36px;height:36px;stroke:var(--g);fill:none;stroke-width:2}
+
+/* ══════ PAGE 2 — plans (reference card style) ══════ */
+.page2 .inner{padding-top:48px}
+.page2 .head h1{font-size:46px;color:var(--g);text-shadow:var(--glow)}
+.page2 .head .sub{font-size:24px;color:#d1d5db;margin-top:10px;font-weight:600}
+.page2 .head .sub code{color:var(--g);font-family:ui-monospace,monospace;font-size:26px;font-weight:800}
+
+.group{margin-bottom:20px}
 .groupTitle{
-  font-size:28px;font-weight:800;color:var(--green);
-  margin-bottom:12px;padding-right:8px;
-  border-right:4px solid var(--green);
+  font-size:26px;font-weight:800;color:#fff;
+  margin-bottom:10px;text-align:center;
 }
-.planGrid{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
-}
+.planGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .planCard{
-  border:2px solid rgba(57,255,20,.45);
-  border-radius:16px;
-  padding:16px 12px 14px;
-  background:rgba(0,0,0,.4);
-  text-align:center;
-  box-shadow:inset 0 0 20px var(--green-dim);
+  border:2px solid var(--g);border-radius:16px;
+  padding:18px 10px 16px;text-align:center;
+  background:rgba(0,20,0,.45);
+  box-shadow:var(--glow-in),0 0 12px rgba(50,255,50,.1);
+  display:flex;flex-direction:column;align-items:center;
 }
-.planCard .vol{font-size:30px;font-weight:800;margin-bottom:4px}
-.planCard .dur{font-size:18px;color:#94a3b8;margin-bottom:10px;min-height:26px}
-.planCard .old{
-  font-size:20px;color:#64748b;text-decoration:line-through;
-  margin-bottom:6px;
-}
+.planCard .vol{font-size:32px;font-weight:800;margin-bottom:2px}
+.planCard .dur{font-size:17px;color:#9ca3af;margin-bottom:10px;min-height:24px;font-weight:600}
+.planCard .old{font-size:19px;color:#6b7280;text-decoration:line-through;margin-bottom:8px}
 .planCard .badge{
-  display:inline-block;
-  padding:4px 12px;border-radius:8px;
-  background:#fde047;color:#422006;
-  font-size:16px;font-weight:800;margin-bottom:8px;
+  display:inline-block;padding:5px 14px;border-radius:8px;
+  background:#facc15;color:#1c1917;
+  font-size:15px;font-weight:800;margin-bottom:10px;
 }
 .planCard .new{
-  font-size:24px;font-weight:800;color:var(--green);
-  text-shadow:0 0 12px var(--green-glow);
-  line-height:1.35;
+  font-size:26px;font-weight:800;color:var(--g);
+  text-shadow:0 0 10px rgba(50,255,50,.4);
+  line-height:1.3;
 }
-.page2 .footer{
-  margin-top:auto;text-align:center;padding-top:16px;
+.planCard .period{
+  margin-top:auto;padding-top:10px;
+  font-size:17px;color:#d1d5db;font-weight:700;
+  border-top:1px solid rgba(50,255,50,.2);
+  width:100%;
 }
-.page2 .footer .url{
-  font-size:34px;font-weight:800;color:var(--green);
-}
-.page2 .footer .note{
-  margin-top:10px;font-size:22px;color:#64748b;
-}
+.page2 .footer{margin-top:auto;text-align:center;padding-top:14px}
+.page2 .footer .url{font-size:36px;font-weight:800;color:var(--g);text-shadow:var(--glow)}
+.page2 .footer .note{margin-top:8px;font-size:20px;color:#6b7280;font-weight:600}
