@@ -87,8 +87,8 @@ body{background:#000;display:flex;justify-content:center;padding:16px}
 /* ── why us: 3 columns like reference ── */
 .sectionTitle{font-size:28px;font-weight:800;margin-bottom:12px;text-align:right}
 .whyGrid{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
-  margin-bottom:18px;
+  display:grid;grid-template-columns:repeat(2,1fr);gap:12px;
+  margin-bottom:12px;
 }
 .whyCard{
   border:2px solid var(--g);border-radius:16px;
@@ -104,6 +104,17 @@ body{background:#000;display:flex;justify-content:center;padding:16px}
 .whyCard p{font-size:17px;line-height:1.55;color:#f3f4f6;font-weight:600}
 .whyCard .sub{font-size:14px;line-height:1.5;color:#86efac;margin-top:6px;font-weight:600}
 
+.featureStrip{
+  border:2px solid var(--g);border-radius:16px;
+  padding:18px 22px;margin-bottom:18px;
+  background:rgba(0,25,0,.4);
+  box-shadow:var(--glow-in),0 0 14px rgba(50,255,50,.12);
+  display:flex;align-items:center;gap:18px;
+}
+.featureStrip .icoLarge{flex-shrink:0;width:72px;height:72px;display:flex;align-items:center;justify-content:center}
+.featureStrip .icoLarge svg{width:64px;height:64px;stroke:var(--g);fill:none;stroke-width:1.8;filter:drop-shadow(0 0 8px rgba(50,255,50,.45))}
+.featureStrip p{font-size:24px;line-height:1.55;color:#f3f4f6;font-weight:700;text-align:right;flex:1}
+
 /* ── referral bar ── */
 .referral{
   margin-top:auto;
@@ -117,8 +128,9 @@ body{background:#000;display:flex;justify-content:center;padding:16px}
 .referral .sideIco svg{width:40px;height:40px;stroke:var(--g);fill:none;stroke-width:1.6}
 .referral p{
   flex:1;text-align:center;
-  font-size:22px;line-height:1.65;font-weight:700;color:#f9fafb;
+  font-size:23px;line-height:1.7;font-weight:700;color:#f9fafb;
 }
+.referral .line{display:block}
 .referral em{font-style:normal;color:var(--g)}
 
 /* ── cta ── */
