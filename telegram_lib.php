@@ -415,6 +415,54 @@ if(!function_exists('telegramConfigPath')){
         return in_array($text, [telegramAdminBtnBack(), 'بازگشت', '/cancel', 'انصراف'], true);
     }
 
+    function telegramAdminBtnConfirm(){
+        return '✅ تایید';
+    }
+
+    function telegramAdminBtnReject(){
+        return '⛔ رد';
+    }
+
+    function telegramAdminNormalizeBtnText($text){
+        $text = trim((string)$text);
+        $text = preg_replace('/[\x{200e}\x{200f}\x{feff}\x{00a0}]/u', ' ', $text);
+        $text = str_replace(telegramInvisiblePadChar(), '', $text);
+        $text = preg_replace('/\s+/u', ' ', $text);
+
+        return trim($text);
+    }
+
+    function telegramAdminIsConfirmText($text){
+        $text = telegramAdminNormalizeBtnText($text);
+        $labels = [
+            telegramAdminNormalizeBtnText(telegramAdminBtnConfirm()),
+            telegramAdminNormalizeBtnText('✅ تأیید'),
+            'تایید',
+            'تأیید',
+        ];
+
+        if(in_array($text, $labels, true)){
+            return true;
+        }
+
+        return (bool)preg_match('/^✅?\s*ت[أا]?یید$/u', $text);
+    }
+
+    function telegramAdminIsRejectText($text){
+        $text = telegramAdminNormalizeBtnText($text);
+        $labels = [
+            telegramAdminNormalizeBtnText(telegramAdminBtnReject()),
+            'رد',
+            '⛔رد',
+        ];
+
+        if(in_array($text, $labels, true)){
+            return true;
+        }
+
+        return (bool)preg_match('/^⛔?\s*رد$/u', $text);
+    }
+
     function telegramAdminRememberMap($chatId, array $map, array $patch = []){
         $session = telegramGetSession($chatId);
 
@@ -431,8 +479,63 @@ if(!function_exists('telegramConfigPath')){
     function telegramAdminResolveMapAction($chatId, $text){
         $session = telegramGetSession($chatId);
         $map = is_array($session['btn_map'] ?? null) ? $session['btn_map'] : [];
+        $text = trim((string)$text);
 
-        return is_array($map[$text] ?? null) ? $map[$text] : null;
+        if(is_array($map[$text] ?? null)){
+            return $map[$text];
+        }
+
+        $normalized = telegramAdminNormalizeBtnText($text);
+
+        if($normalized !== '' && is_array($map[$normalized] ?? null)){
+            return $map[$normalized];
+        }
+
+        foreach($map as $label => $action){
+            if(!is_array($action)){
+                continue;
+            }
+
+            if(telegramAdminNormalizeBtnText($label) === $normalized){
+                return $action;
+            }
+        }
+
+        return null;
+    }
+
+    function telegramAdminTryPaymentActionFromSession($chatId, $text, $config = null){
+        $session = telegramGetSession($chatId);
+
+        if(!is_array($session) || ($session['screen'] ?? '') !== 'payment_detail'){
+            return false;
+        }
+
+        $csvIndex = intval($session['payment_csv_index'] ?? -1);
+        $kind = trim((string)($session['payment_kind'] ?? 'خرید'));
+
+        if($csvIndex < 0){
+            return false;
+        }
+
+        if(!function_exists('telegramAdminRunXuiAction')){
+            telegramSendMessage($chatId, '❌ ماژول تأیید/رد پرداخت در سرور بارگذاری نشده است.', [
+                'reply_markup' => telegramPaymentDetailKeyboard($kind, $csvIndex),
+            ], $config);
+            return true;
+        }
+
+        if(telegramAdminIsConfirmText($text)){
+            telegramAdminRunXuiAction($chatId, 'ok', $kind, $csvIndex, $config);
+            return true;
+        }
+
+        if(telegramAdminIsRejectText($text)){
+            telegramAdminRunXuiAction($chatId, 'no', $kind, $csvIndex, $config);
+            return true;
+        }
+
+        return false;
     }
 
     // فاصله نامرئی برای پهن‌تر و وسط‌چین شدن دکمه‌ها/متن در کادر تلگرام
@@ -662,7 +765,7 @@ if(!function_exists('telegramConfigPath')){
         $rows = [];
 
         if($csvIndex >= 0){
-            $rows[] = ['✅ تایید', '⛔ رد'];
+            $rows[] = [telegramAdminBtnConfirm(), telegramAdminBtnReject()];
         }
 
         $rows[] = [telegramAdminBtnBack()];
@@ -1106,8 +1209,16 @@ if(!function_exists('telegramConfigPath')){
         ];
 
         if($csvIndex >= 0){
-            $map['✅ تایید'] = ['a' => 'xui_ok', 'kind' => $kind, 'csv_index' => $csvIndex];
-            $map['⛔ رد'] = ['a' => 'xui_no', 'kind' => $kind, 'csv_index' => $csvIndex];
+            $confirmAction = ['a' => 'xui_ok', 'kind' => $kind, 'csv_index' => $csvIndex];
+            $rejectAction = ['a' => 'xui_no', 'kind' => $kind, 'csv_index' => $csvIndex];
+
+            foreach([telegramAdminBtnConfirm(), '✅ تأیید', 'تایید'] as $label){
+                $map[$label] = $confirmAction;
+            }
+
+            foreach([telegramAdminBtnReject(), 'رد'] as $label){
+                $map[$label] = $rejectAction;
+            }
         }
 
         telegramAdminRememberMap($chatId, $map, [
@@ -1800,6 +1911,11 @@ if(!function_exists('telegramConfigPath')){
                 );
                 return true;
             }
+
+            telegramSendMessage($chatId, '❌ ماژول تأیید/رد پرداخت در سرور بارگذاری نشده است.', [
+                'reply_markup' => telegramHomeKeyboard(),
+            ], $config);
+            return true;
         }
 
         return false;
@@ -1820,7 +1936,13 @@ if(!function_exists('telegramConfigPath')){
 
         $mapped = telegramAdminResolveMapAction($chatId, $text);
 
-        if($mapped && telegramAdminHandleAction($chatId, $mapped, $config)){
+        if($mapped){
+            if(telegramAdminHandleAction($chatId, $mapped, $config)){
+                return true;
+            }
+        }
+
+        if(telegramAdminTryPaymentActionFromSession($chatId, $text, $config)){
             return true;
         }
 
@@ -1966,6 +2088,10 @@ if(!function_exists('telegramConfigPath')){
         $text = trim((string)$text);
 
         if(telegramAdminHandleMenuText($chatId, $text, $config)){
+            return;
+        }
+
+        if(telegramAdminTryPaymentActionFromSession($chatId, $text, $config)){
             return;
         }
 
