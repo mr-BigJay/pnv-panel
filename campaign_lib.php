@@ -8,6 +8,48 @@ if(!function_exists('campaignDataPath')){
         return __DIR__ . '/db/' . $name . '.json';
     }
 
+    function campaignDataFileStatus($name){
+        $path = campaignDataPath($name);
+
+        if(!is_file($path)){
+            return 'missing';
+        }
+
+        if(!is_readable($path)){
+            return 'unreadable';
+        }
+
+        return 'ok';
+    }
+
+    function campaignJsonLooksLikeRow($data){
+        if(!is_array($data)){
+            return false;
+        }
+
+        return isset($data['code']) || isset($data['Code']) || isset($data['id']);
+    }
+
+    function campaignJsonNormalizeList($data){
+        if(!is_array($data)){
+            return [];
+        }
+
+        if(campaignJsonLooksLikeRow($data)){
+            return [$data];
+        }
+
+        $out = [];
+
+        foreach($data as $item){
+            if(is_array($item)){
+                $out[] = $item;
+            }
+        }
+
+        return array_values($out);
+    }
+
     function campaignJsonRead($name){
         $path = campaignDataPath($name);
 
@@ -15,8 +57,15 @@ if(!function_exists('campaignDataPath')){
             return [];
         }
 
-        $data = json_decode((string)file_get_contents($path), true);
-        return is_array($data) ? $data : [];
+        if(!is_readable($path)){
+            return [];
+        }
+
+        $raw = (string)file_get_contents($path);
+        $raw = preg_replace('/^\xEF\xBB\xBF/u', '', $raw);
+        $data = json_decode($raw, true);
+
+        return campaignJsonNormalizeList($data);
     }
 
     function campaignJsonWrite($name, $data){
@@ -368,6 +417,10 @@ if(!function_exists('campaignDataPath')){
         $codes = campaignDiscountCodesLoad();
         $row = campaignFindDiscountByCode($codes, $code);
 
+        if(!$row && campaignDataFileStatus('discount_codes') === 'unreadable'){
+            return ['ok' => false, 'error' => 'فایل کدهای تخفیف برای وب‌سرور قابل خواندن نیست. دسترسی db/discount_codes.json را بررسی کنید.'];
+        }
+
         if(!$row){
             return ['ok' => false, 'error' => 'کد تخفیف معتبر نیست'];
         }
@@ -583,7 +636,12 @@ if(!function_exists('campaignDataPath')){
         }
 
         $normalized = campaignNormalizeCode($codeRaw);
-        $row = campaignFindDiscountByCode(campaignDiscountCodesLoad(), $normalized);
+        $codes = campaignDiscountCodesLoad();
+        $row = campaignFindDiscountByCode($codes, $normalized);
+
+        if(!$row && campaignDataFileStatus('discount_codes') === 'unreadable'){
+            return ['ok' => false, 'error' => 'فایل کدهای تخفیف برای وب‌سرور قابل خواندن نیست. دسترسی db/discount_codes.json را بررسی کنید.'];
+        }
 
         if(is_array($row)){
             if(!campaignDiscountIsActiveRow($row)){
