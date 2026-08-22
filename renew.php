@@ -429,7 +429,6 @@ function resolveSubDisplayName(link){
     return shortSubLabel(link);
 }
 
-let couponTimer = null;
 let selectedCategory = '';
 let selectedPlan = null;
 let payPollTimer = null;

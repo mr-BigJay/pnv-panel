@@ -260,7 +260,6 @@ const resultLink = document.getElementById('resultLink');
 const resultQrWrap = document.getElementById('resultQrWrap');
 const resultQrImg = document.getElementById('resultQrImg');
 
-let couponTimer = null;
 let selectedCategory = '';
 let selectedPlan = null;
 let payPollTimer = null;
