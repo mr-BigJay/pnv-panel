@@ -462,9 +462,29 @@ if(!function_exists('couponLoadCoupons')){
 
     function couponFindPlanByValue($planValue, $plans){
 
-        $planValue = trim($planValue);
+        $planValue = trim((string)$planValue);
+
+        if($planValue === '' || !is_array($plans)){
+            return null;
+        }
+
+        if(!function_exists('pnvFindPlanByValue')){
+            $planUiLib = __DIR__ . '/plan_ui_lib.php';
+
+            if(is_file($planUiLib)){
+                require_once $planUiLib;
+            }
+        }
+
+        if(function_exists('pnvFindPlanByValue')){
+            return pnvFindPlanByValue($planValue, $plans);
+        }
 
         foreach($plans as $plan){
+
+            if(!is_array($plan)){
+                continue;
+            }
 
             $value = trim(($plan['name'] ?? '') . ' - ' . couponFormatPriceThousands($plan['price'] ?? 0));
 
