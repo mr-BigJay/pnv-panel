@@ -7,12 +7,19 @@ foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $_
         break;
     }
 }
-if(!function_exists('adminQuickNav')){
-    function adminQuickNav($active = ''){}
-    function adminQuickNavStyles(){}
-    function adminBottomNavStyles(){}
-    function adminBottomNav($options = []){}
-    function adminBottomNavScript(){}
+.users.php stubs - keep admin_nav as source of truth
+if(!function_exists('adminPageEnd')){
+    function adminPageEnd($options = []){
+        if(function_exists('adminBottomNavStyles')){
+            adminBottomNavStyles();
+        }
+        if(function_exists('adminBottomNav')){
+            adminBottomNav($options);
+        }
+        if(function_exists('adminBottomNavScript')){
+            adminBottomNavScript();
+        }
+    }
 }
 require_once "functions.php";
 

@@ -41,6 +41,10 @@ if(!function_exists('adminQuickNav')){
 </style>';
     }
 
+}
+
+if(!function_exists('adminBottomNavStyles')){
+
     function adminBottomNavStyles(){
         static $done = false;
 
@@ -218,11 +222,11 @@ border-color:#7f1d1d;
 color:#fecaca;
 }
 @media(max-width:768px){
-.adminBottomNav{display:block}
+.adminBottomNav{display:block !important}
 body.adminHasBottomNav{padding-bottom:84px}
 body.adminHasBottomNav .content{padding-bottom:84px !important}
 body.adminHasBottomNav .content-support{padding-bottom:0 !important}
-body.adminPageSupport .adminBottomNav{display:none}
+body.adminPageSupport .adminBottomNav{display:none !important}
 body.adminPageSupport{padding-bottom:0}
 }
 </style>';

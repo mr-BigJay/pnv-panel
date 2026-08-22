@@ -265,17 +265,20 @@ exit;
 $page = $_GET['page'] ?? 'dashboard';
 $pnvRootDir = dirname(__DIR__);
 
-foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $__navFile) {
-    if (is_file($__navFile)) {
-        require_once $__navFile;
-        break;
-    }
-}
+require_once __DIR__ . '/admin_nav.php';
 
-if(!function_exists('adminBottomNavStyles')){
-    function adminBottomNavStyles(){}
-    function adminBottomNav($options = []){}
-    function adminBottomNavScript(){}
+if(!function_exists('adminPageEnd')){
+    function adminPageEnd($options = []){
+        if(function_exists('adminBottomNavStyles')){
+            adminBottomNavStyles();
+        }
+        if(function_exists('adminBottomNav')){
+            adminBottomNav($options);
+        }
+        if(function_exists('adminBottomNavScript')){
+            adminBottomNavScript();
+        }
+    }
 }
 
 $supportActionResult = null;
