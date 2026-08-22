@@ -504,6 +504,11 @@ overflow:hidden;
 border:1px solid #334155;
 }
 
+.userCard:has(.dropdown.active){
+overflow:visible;
+z-index:30;
+}
+
 .userCardAccent{
 position:absolute;
 right:0;
@@ -660,7 +665,7 @@ background:#0f172a;
 border-radius:12px;
 padding:10px;
 width:220px;
-z-index:100;
+z-index:1000;
 box-shadow:0 10px 25px rgba(0,0,0,0.4);
 }
 
