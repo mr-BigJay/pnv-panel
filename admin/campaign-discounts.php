@@ -435,22 +435,6 @@ foreach($codes as $row){
     }
     if(typeEl){ typeEl.addEventListener('change', syncType); syncType(); }
 
-    document.querySelectorAll('[data-menu-btn]').forEach(function(btn){
-        btn.addEventListener('click', function(e){
-            e.stopPropagation();
-            const panel = btn.parentElement.querySelector('.campaignMenuPanel');
-            document.querySelectorAll('.campaignMenuPanel.is-open').forEach(function(open){
-                if(open !== panel) open.classList.remove('is-open');
-            });
-            if(panel) panel.classList.toggle('is-open');
-        });
-    });
-    document.addEventListener('click', function(){
-        document.querySelectorAll('.campaignMenuPanel.is-open').forEach(function(panel){
-            panel.classList.remove('is-open');
-        });
-    });
-
     const filterBtn = document.getElementById('filterToggleBtn');
     const filterPanel = document.getElementById('filterPanel');
     if(filterBtn && filterPanel){

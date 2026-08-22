@@ -53,11 +53,12 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignSearchWrap input{width:100%;padding:12px 40px 12px 12px;border:1px solid #334155;border-radius:14px;background:#141b26;color:#f8fafc;font-family:inherit;font-size:14px}
 .campaignFilterBtn{padding:0 14px;border:1px solid #334155;border-radius:14px;background:#242d3d;color:#e2e8f0;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
 .campaignList{display:flex;flex-direction:column;gap:10px;overflow:visible}
-.campaignListItem{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;padding:14px;border:1px solid #334155;border-radius:16px;background:#141b26;overflow:visible;position:relative}
+.campaignListItem{position:relative;padding:14px 52px 14px 14px;border:1px solid #334155;border-radius:16px;background:#141b26;overflow:visible}
+.campaignListItem.is-menu-open{z-index:30}
 .campaignMenuBtn{width:34px;height:34px;border:none;border-radius:10px;background:#242d3d;color:#cbd5e1;font-size:18px;line-height:1;cursor:pointer}
-.campaignMenu{position:relative;z-index:2}
-.campaignMenuPanel{position:absolute;top:calc(100% + 6px);right:0;left:auto;min-width:156px;background:#242d3d;border:1px solid #334155;border-radius:12px;padding:6px;z-index:40;display:none;box-shadow:0 12px 30px rgba(0,0,0,.28)}
-.campaignMenuPanel.is-open{display:block}
+.campaignMenu{position:absolute;top:10px;right:10px;z-index:2}
+.campaignMenuPanel{display:none;min-width:168px;background:#242d3d;border:1px solid #334155;border-radius:12px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.campaignMenuPanel.is-open{display:block;position:fixed;z-index:1100}
 .campaignMenuPanel a,.campaignMenuPanel button{display:block;width:100%;padding:10px 12px;border:none;border-radius:8px;background:transparent;color:#e2e8f0;text-decoration:none;text-align:right;font-family:inherit;font-size:13px;cursor:pointer}
 .campaignMenuPanel a:hover,.campaignMenuPanel button:hover{background:#334155}
 .campaignMenuPanel .is-danger{color:#fca5a5}
@@ -260,7 +261,97 @@ jalaliDatepicker.startWatch({
         }
 
         pnvFormValidationFaScript();
+        campaignAdminMenuScript();
         campaignAdminBottomNavFoot();
+    }
+
+    function campaignAdminMenuScript(){
+        static $done = false;
+
+        if($done){
+            return;
+        }
+
+        $done = true;
+
+        echo <<<'JS'
+<script>
+(function(){
+    function closeCampaignMenus(){
+        document.querySelectorAll('.campaignMenuPanel.is-open').forEach(function(panel){
+            panel.classList.remove('is-open');
+            panel.style.top = '';
+            panel.style.right = '';
+            panel.style.left = '';
+            panel.style.minWidth = '';
+        });
+
+        document.querySelectorAll('.campaignListItem.is-menu-open').forEach(function(item){
+            item.classList.remove('is-menu-open');
+        });
+    }
+
+    function positionCampaignMenuPanel(btn, panel){
+        var rect = btn.getBoundingClientRect();
+        var panelWidth = Math.max(168, panel.offsetWidth || 168);
+        var top = rect.bottom + 6;
+        var right = window.innerWidth - rect.right;
+
+        if(top + panel.offsetHeight > window.innerHeight - 8){
+            top = Math.max(8, rect.top - panel.offsetHeight - 6);
+        }
+
+        if(right + panelWidth > window.innerWidth - 8){
+            right = Math.max(8, window.innerWidth - panelWidth - 8);
+        }
+
+        panel.style.top = Math.round(top) + 'px';
+        panel.style.right = Math.round(right) + 'px';
+        panel.style.left = 'auto';
+        panel.style.minWidth = '168px';
+    }
+
+    document.querySelectorAll('[data-menu-btn]').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+            e.preventDefault();
+            e.stopPropagation();
+
+            var menu = btn.closest('.campaignMenu');
+            var panel = menu ? menu.querySelector('.campaignMenuPanel') : null;
+            var item = btn.closest('.campaignListItem');
+            var willOpen = panel && !panel.classList.contains('is-open');
+
+            closeCampaignMenus();
+
+            if(!willOpen || !panel){
+                return;
+            }
+
+            panel.classList.add('is-open');
+            panel.style.visibility = 'hidden';
+
+            if(item){
+                item.classList.add('is-menu-open');
+            }
+
+            positionCampaignMenuPanel(btn, panel);
+            panel.style.visibility = '';
+        });
+    });
+
+    document.addEventListener('click', closeCampaignMenus);
+
+    document.querySelectorAll('.campaignMenuPanel').forEach(function(panel){
+        panel.addEventListener('click', function(e){
+            e.stopPropagation();
+        });
+    });
+
+    window.addEventListener('resize', closeCampaignMenus);
+    window.addEventListener('scroll', closeCampaignMenus, true);
+})();
+</script>
+JS;
     }
 
     function campaignAdminBodyClass(){
