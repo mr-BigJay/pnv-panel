@@ -22,7 +22,7 @@ $status = '';
 
 foreach($data as $ticket){
 
-    if(($ticket['user'] ?? '') !== $user){
+    if(!supportUsernamesMatch($ticket['user'] ?? '', $user)){
         continue;
     }
 

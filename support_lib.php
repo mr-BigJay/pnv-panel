@@ -337,7 +337,7 @@ if(!function_exists('supportLoad')){
 
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') !== $username){
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 continue;
             }
 
@@ -369,7 +369,7 @@ if(!function_exists('supportLoad')){
 
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') !== $username){
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 continue;
             }
 
@@ -575,11 +575,30 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportNormalizeUsername($username){
+
+        return trim((string)$username);
+
+    }
+
+    function supportUsernamesMatch($left, $right){
+
+        $left = supportNormalizeUsername($left);
+        $right = supportNormalizeUsername($right);
+
+        if($left === '' || $right === ''){
+            return false;
+        }
+
+        return strcasecmp($left, $right) === 0;
+
+    }
+
     function supportFindTicketIndex($data, $username){
 
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') === $username){
+            if(supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 return $i;
             }
 
@@ -589,9 +608,27 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportResolveTicketUsername($data, $username){
+
+        $username = supportNormalizeUsername($username);
+
+        if($username === ''){
+            return '';
+        }
+
+        $ticketIndex = supportFindTicketIndex($data, $username);
+
+        if($ticketIndex >= 0){
+            return supportNormalizeUsername($data[$ticketIndex]['user'] ?? $username);
+        }
+
+        return $username;
+
+    }
+
     function supportEnsureTicket(&$data, $username){
 
-        $username = trim($username);
+        $username = supportNormalizeUsername($username);
 
         if($username === ''){
             return -1;
@@ -1056,10 +1093,12 @@ if(!function_exists('supportLoad')){
         if(
             $redirect === null
             && isset($_GET['user'])
-            && ($_GET['user'] ?? '') !== ''
+            && supportNormalizeUsername($_GET['user'] ?? '') !== ''
         ){
 
-            if(supportMarkSeenByAdmin($data, $_GET['user'])){
+            $viewUser = supportResolveTicketUsername($data, $_GET['user'] ?? '');
+
+            if(supportMarkSeenByAdmin($data, $viewUser)){
                 supportSave($file, $data);
             }
 
@@ -1089,7 +1128,7 @@ if(!function_exists('supportLoad')){
 
                 foreach($data as $i => $ticket){
 
-                    if(($ticket['user'] ?? '') !== $username){
+                    if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                         continue;
                     }
 
@@ -1131,7 +1170,7 @@ if(!function_exists('supportLoad')){
 
                 foreach($data as $i => $ticket){
 
-                    if(($ticket['user'] ?? '') !== $username){
+                    if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                         continue;
                     }
 
@@ -1259,7 +1298,7 @@ if(!function_exists('supportUserHasUnread')){
         }
 
         foreach($data as $ticket){
-            if(strcasecmp(trim((string)($ticket['user'] ?? '')), $username) !== 0){
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 continue;
             }
 

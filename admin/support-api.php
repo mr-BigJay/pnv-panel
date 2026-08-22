@@ -13,10 +13,11 @@ if(!pnvAdminIsLoggedIn()){
 require_once __DIR__ . '/../support_lib.php';
 
 $file = __DIR__ . '/../db/support.json';
-$user = trim($_GET['user'] ?? '');
+$user = supportNormalizeUsername($_GET['user'] ?? '');
 $since = intval($_GET['since'] ?? 0);
 
 $data = supportLoad($file);
+$user = supportResolveTicketUsername($data, $user);
 $messages = [];
 $status = '';
 $unreadUsers = [];
@@ -27,7 +28,7 @@ foreach($data as $ticket){
         $unreadUsers[] = $ticket['user'] ?? '';
     }
 
-    if($user === '' || ($ticket['user'] ?? '') !== $user){
+    if($user === '' || !supportUsernamesMatch($ticket['user'] ?? '', $user)){
         continue;
     }
 

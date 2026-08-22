@@ -40,14 +40,14 @@ if($actionResult['redirect']){
 }
 
 $data = supportSortTickets($actionResult['data']);
-$currentUser = $_GET['user'] ?? '';
+$currentUser = supportResolveTicketUsername($data, $_GET['user'] ?? '');
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=41';
+$cssHref = '../support_ui.css?v=42';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=41';
+$jsHref = '../support_ui.js?v=42';
 
 if(!$supportEmbedded){
 ?>
@@ -90,7 +90,7 @@ if(!$supportEmbedded){
 <?php foreach($data as $ticket){
 
     $ticketUser = $ticket['user'] ?? '';
-    $isActive = $currentUser === $ticketUser;
+    $isActive = supportUsernamesMatch($currentUser, $ticketUser);
     $unread = supportAdminUnreadCount($ticket);
     $preview = supportTicketPreview($ticket);
     $lastTs = supportTicketLastTimestamp($ticket);
@@ -171,7 +171,7 @@ $hasMessages = false;
 
 foreach($data as $ticket){
 
-    if(($ticket['user'] ?? '') !== $currentUser){
+    if(!supportUsernamesMatch($ticket['user'] ?? '', $currentUser)){
         continue;
     }
 

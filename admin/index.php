@@ -875,6 +875,9 @@ padding:0;
 height:100vh;
 overflow:hidden;
 background:#0b1220;
+display:flex;
+flex-direction:column;
+min-height:0;
 }
 
 @media(max-width:768px){

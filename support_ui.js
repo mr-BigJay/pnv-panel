@@ -880,6 +880,7 @@
         }
 
         setInterval(poll, interval);
+        poll();
         scrollToBottomOnOpen(chatEl);
     }
 

@@ -1170,6 +1170,16 @@ padding:0 !important;
 height:100vh;
 overflow:hidden;
 background:var(--msg-bg);
+display:flex;
+flex-direction:column;
+min-height:0;
+}
+
+.content-support .supportPage.supportEmbedded{
+flex:1 1 auto;
+min-height:0;
+height:100%;
+max-height:100%;
 }
 
 .supportChatbox .msgHeader .msgHeaderInfo{
