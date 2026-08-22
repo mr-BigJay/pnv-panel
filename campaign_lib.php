@@ -224,8 +224,14 @@ if(!function_exists('campaignDataPath')){
     function campaignFindDiscountByCode($rows, $code){
         $code = campaignNormalizeCode($code);
 
+        if($code === ''){
+            return null;
+        }
+
         foreach($rows as $row){
-            if(campaignNormalizeCode($row['code'] ?? '') === $code){
+            $rowCode = campaignNormalizeCode($row['code'] ?? ($row['Code'] ?? ''));
+
+            if($rowCode === $code){
                 return $row;
             }
         }
@@ -628,6 +634,11 @@ if(!function_exists('campaignDataPath')){
         }
 
         return ['ok' => false, 'error' => $referral['error'] ?? 'کد تخفیف معتبر نیست'];
+    }
+
+    function checkoutCampaignSystemReady(){
+        return function_exists('campaignDiscountCodesLoad')
+            && function_exists('campaignDiscountInactiveReason');
     }
 
     function checkoutPreviewDiscountCode($username, $code, $plans){

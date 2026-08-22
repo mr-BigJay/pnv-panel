@@ -189,6 +189,17 @@ pointer-events:none !important;
 <input type="text" id="subInput" name="sub" placeholder="لینک اشتراک را وارد کنید" required>
 </div>
 
+<div class="couponSection">
+<label class="couponToggle">
+<input type="checkbox" id="hasCouponCheck" value="1">
+<span>کد تخفیف دارید؟</span>
+</label>
+<div class="couponBox" id="couponBox">
+<input type="text" id="couponCode" placeholder="کد را وارد کنید" autocomplete="off">
+<div class="couponResult" id="couponResult"></div>
+</div>
+</div>
+
 <div class="sectionTitle">نوع پلن را انتخاب کنید</div>
 <div class="catGrid">
 <button type="button" class="catCard" data-cat="unlimited">
@@ -207,17 +218,6 @@ pointer-events:none !important;
 <div class="sectionTitle" id="planListTitle">حجم را انتخاب کنید</div>
 <div class="planEmpty" id="planEmpty">در این دسته پلنی تعریف نشده است</div>
 <div class="planGrid" id="planGrid"></div>
-</div>
-
-<div class="couponSection">
-<label class="couponToggle">
-<input type="checkbox" id="hasCouponCheck" value="1">
-<span>کد تخفیف دارید؟</span>
-</label>
-<div class="couponBox" id="couponBox">
-<input type="text" id="couponCode" placeholder="کد را وارد کنید" autocomplete="off">
-<div class="couponResult" id="couponResult"></div>
-</div>
 </div>
 
 <input type="hidden" id="planSelect" value="">
@@ -981,9 +981,16 @@ function applyCouponResult(data){
     };
     couponResult.className = 'couponResult is-ok';
     if(data.type === 'fixed'){
-        couponResult.textContent = 'کد تخفیف اعمال شد — قیمت‌ها به‌روز شد';
+        couponResult.textContent = 'کد تخفیف اعمال شد — پس از انتخاب پلن قیمت‌ها به‌روز می‌شود';
     } else {
-        couponResult.textContent = 'کد تخفیف ' + (data.percent || 0) + '٪ اعمال شد — قیمت‌ها به‌روز شد';
+        couponResult.textContent = 'کد تخفیف ' + (data.percent || 0) + '٪ تایید شد — پس از انتخاب پلن قیمت‌ها به‌روز می‌شود';
+    }
+    if(planSelect.value !== ''){
+        if(data.type === 'fixed'){
+            couponResult.textContent = 'کد تخفیف اعمال شد — قیمت‌ها به‌روز شد';
+        } else {
+            couponResult.textContent = 'کد تخفیف ' + (data.percent || 0) + '٪ اعمال شد — قیمت‌ها به‌روز شد';
+        }
     }
     renderPlans();
 }
@@ -1007,9 +1014,7 @@ function validateCoupon(){
     } else if(selectedCategory){
         url = 'coupon-api.php?preview=1&code=' + encodeURIComponent(code);
     } else {
-        couponResult.className = 'couponResult is-hint';
-        couponResult.textContent = 'ابتدا نوع پلن را انتخاب کنید';
-        return;
+        url = 'coupon-api.php?base=1&code=' + encodeURIComponent(code);
     }
     fetch(url, { credentials: 'same-origin' })
     .then(function(r){ return r.json(); })
