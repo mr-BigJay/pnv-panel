@@ -53,17 +53,18 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignSearchWrap input{width:100%;padding:12px 40px 12px 12px;border:1px solid #334155;border-radius:14px;background:#141b26;color:#f8fafc;font-family:inherit;font-size:14px}
 .campaignFilterBtn{padding:0 14px;border:1px solid #334155;border-radius:14px;background:#242d3d;color:#e2e8f0;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
 .campaignList{display:flex;flex-direction:column;gap:10px;overflow:visible}
-.campaignListItem{position:relative;padding:14px 52px 14px 14px;border:1px solid #334155;border-radius:16px;background:#141b26;overflow:visible}
+.campaignListItem{position:relative;padding:14px;border:1px solid #334155;border-radius:16px;background:#141b26;overflow:visible}
 .campaignListItem.is-menu-open{z-index:30}
-.campaignMenuBtn{width:34px;height:34px;border:none;border-radius:10px;background:#242d3d;color:#cbd5e1;font-size:18px;line-height:1;cursor:pointer}
-.campaignMenu{position:absolute;top:10px;right:10px;z-index:2}
+.campaignMenuBtn{width:34px;height:34px;border:none;border-radius:10px;background:#242d3d;color:#cbd5e1;font-size:18px;line-height:1;cursor:pointer;flex-shrink:0}
+.campaignMenu{position:relative;flex-shrink:0;z-index:2}
 .campaignMenuPanel{display:none;min-width:180px;width:180px;background:#242d3d;border:1px solid #334155;border-radius:12px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
 .campaignMenuPanel.is-open{display:block}
 .campaignMenuPanel a,.campaignMenuPanel button{display:block;width:100%;padding:10px 12px;border:none;border-radius:8px;background:transparent;color:#e2e8f0;text-decoration:none;text-align:right;font-family:inherit;font-size:13px;cursor:pointer}
 .campaignMenuPanel a:hover,.campaignMenuPanel button:hover{background:#334155}
 .campaignMenuPanel .is-danger{color:#fca5a5}
 .campaignItemTop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
-.campaignItemCode{font-size:16px;font-weight:700;color:#f8fafc}
+.campaignItemHead{flex:1;min-width:0}
+.campaignItemCode{font-size:16px;font-weight:700;color:#f8fafc;line-height:1.5}
 .campaignBadge{display:inline-flex;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700}
 .campaignBadge.is-active{background:rgba(52,211,153,.16);color:#6ee7b7}
 .campaignBadge.is-inactive{background:#334155;color:#94a3b8}
@@ -349,16 +350,16 @@ jalaliDatepicker.startWatch({
         panel.style.minWidth = width + 'px';
         panel.style.zIndex = '1100';
 
-        var left = rect.right - width;
+        var left = rect.left;
         var top = rect.bottom + gap;
         var height = panel.offsetHeight || 160;
 
-        if(left < margin){
-            left = margin;
-        }
-
         if(left + width > window.innerWidth - margin){
             left = window.innerWidth - width - margin;
+        }
+
+        if(left < margin){
+            left = margin;
         }
 
         if(top + height > window.innerHeight - margin){
@@ -382,7 +383,7 @@ jalaliDatepicker.startWatch({
             e.stopPropagation();
 
             var menu = btn.closest('.campaignMenu');
-            var panel = menu ? menu.querySelector('.campaignMenuPanel') : null;
+            var panel = findPanelForMenu(menu);
             var item = btn.closest('.campaignListItem');
             var willOpen = panel && !panel.classList.contains('is-open');
 

@@ -383,6 +383,11 @@ foreach($codes as $row){
     $rowId = urlencode($row['id'] ?? '');
 ?>
 <div class="campaignListItem<?php echo $hiddenClass; ?>">
+<div class="campaignItemTop">
+<div class="campaignItemHead">
+<div class="campaignItemCode"><?php echo htmlspecialchars($row['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
+<span class="campaignBadge <?php echo $isRowActive ? 'is-active' : 'is-inactive'; ?>"><?php echo $isRowActive ? 'فعال' : 'غیرفعال'; ?></span>
+</div>
 <div class="campaignMenu">
 <button type="button" class="campaignMenuBtn" data-menu-btn aria-label="عملیات">⋯</button>
 <div class="campaignMenuPanel">
@@ -390,12 +395,6 @@ foreach($codes as $row){
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php?toggle=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">تغییر وضعیت</a>
 <a class="is-danger" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php?delete=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>" onclick="return confirm('حذف شود؟');">حذف</a>
 </div>
-</div>
-<div>
-<div class="campaignItemTop">
-<div>
-<div class="campaignItemCode"><?php echo htmlspecialchars($row['code'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
-<span class="campaignBadge <?php echo $isRowActive ? 'is-active' : 'is-inactive'; ?>"><?php echo $isRowActive ? 'فعال' : 'غیرفعال'; ?></span>
 </div>
 </div>
 <div class="campaignItemType"><?php echo htmlspecialchars(campaignDiscountTypeLabel($row), ENT_QUOTES, 'UTF-8'); ?></div>
@@ -406,7 +405,6 @@ foreach($codes as $row){
 <div class="campaignItemMeta">
 <div><strong>اعتبار</strong><?php echo htmlspecialchars(campaignDiscountValidityText($row), ENT_QUOTES, 'UTF-8'); ?></div>
 <div><strong>حداقل خرید</strong><?php echo $minTomans > 0 ? number_format($minTomans) . ' تومان' : 'بدون محدودیت'; ?></div>
-</div>
 </div>
 </div>
 <?php } ?>

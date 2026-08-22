@@ -2,7 +2,7 @@
 # Deploy admin campaigns feature — run ON THE SERVER
 set -euo pipefail
 
-BR="${BR:-cursor/admin-campaigns-b94c}"
+BR="${BR:-cursor/telegram-user-bot-058b}"
 BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/${BR}"
 ROOT="${ROOT:-/var/www/html}"
 

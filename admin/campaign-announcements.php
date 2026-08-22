@@ -407,22 +407,21 @@ foreach($rows as $row){
     $rowId = urlencode($row['id'] ?? '');
 ?>
 <div class="campaignListItem<?php echo $hiddenClass; ?>">
-<div class="campaignMenu">
-<button type="button" class="campaignMenuBtn" data-menu-btn aria-label="عملیات">⋯</button>
-<div class="campaignMenuPanel">
-<button type="button" class="jsAnnStatsBtn" data-stats-id="<?php echo htmlspecialchars($row['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-stats-title="<?php echo htmlspecialchars($row['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">آمار نمایش</button>
-<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?edit=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">ویرایش</a>
-<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?toggle=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">تغییر وضعیت</a>
-<a class="is-danger" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?delete=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>" onclick="return confirm('حذف شود؟');">حذف</a>
-</div>
-</div>
-<div>
 <div class="campaignItemTop">
-<div>
+<div class="campaignItemHead">
 <div class="campaignItemCode"><?php echo htmlspecialchars($row['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="campaignItemBadges">
 <span class="campaignBadge is-<?php echo htmlspecialchars($rowType, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars(campaignAnnouncementTypeLabel($rowType), ENT_QUOTES, 'UTF-8'); ?></span>
 <span class="campaignBadge <?php echo $isRowActive ? 'is-active' : 'is-inactive'; ?>"><?php echo $isRowActive ? 'فعال' : 'غیرفعال'; ?></span>
+</div>
+</div>
+<div class="campaignMenu">
+<button type="button" class="campaignMenuBtn" data-menu-btn aria-label="عملیات">⋯</button>
+<div class="campaignMenuPanel">
+<button type="button" class="jsAnnStatsBtn" data-stats-id="<?php echo htmlspecialchars($row['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-stats-title="<?php echo htmlspecialchars($row['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">تعداد نمایش</button>
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?edit=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">ویرایش</a>
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?toggle=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">تغییر وضعیت</a>
+<a class="is-danger" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?delete=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>" onclick="return confirm('حذف شود؟');">حذف</a>
 </div>
 </div>
 </div>
@@ -432,7 +431,6 @@ foreach($rows as $row){
 <div><strong>اولویت</strong><?php echo (int)($row['priority'] ?? 0); ?></div>
 <div><strong>سقف نمایش</strong><?php echo htmlspecialchars(campaignAnnouncementViewsLimitText($row), ENT_QUOTES, 'UTF-8'); ?></div>
 <div><strong>کل نمایش</strong><?php echo (int)(campaignAnnouncementViewStats($row['id'] ?? '')['total_views'] ?? 0); ?></div>
-</div>
 </div>
 </div>
 <?php } ?>
@@ -450,7 +448,7 @@ foreach($rows as $row){
 
 <div class="campaignStatsModalOverlay" id="annStatsModal" aria-hidden="true">
 <div class="campaignStatsModal" role="dialog" aria-modal="true" aria-labelledby="annStatsModalTitle">
-<h3 class="campaignStatsModalTitle" id="annStatsModalTitle">آمار نمایش پیام</h3>
+<h3 class="campaignStatsModalTitle" id="annStatsModalTitle">تعداد نمایش پیام</h3>
 <div class="campaignStatsGrid">
 <div class="campaignStatsBox">
 <div class="campaignStatsNum" id="annStatsTotalViews">0</div>
@@ -499,7 +497,7 @@ foreach($rows as $row){
     }
 
     function openStatsModal(title, total, unique){
-        if(statsTitle) statsTitle.textContent = 'آمار نمایش: ' + title;
+        if(statsTitle) statsTitle.textContent = 'تعداد نمایش: ' + title;
         if(statsTotal) statsTotal.textContent = String(total || 0);
         if(statsUnique) statsUnique.textContent = String(unique || 0);
         if(statsModal){
