@@ -1,6 +1,12 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
+
+$pnvDateBootstrap = dirname(__DIR__) . '/pnv_date_bootstrap.php';
+if(is_file($pnvDateBootstrap)){
+    require_once $pnvDateBootstrap;
+}
+
 foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $__navFile) {
     if (is_file($__navFile)) {
         require_once $__navFile;
@@ -14,7 +20,31 @@ if(!function_exists('adminQuickNav')){
     function adminBottomNav($options = []){}
     function adminBottomNavScript(){}
 }
-require_once "functions.php";
+if(!function_exists('adminBottomNavStyles')){
+    function adminBottomNavStyles(){}
+}
+if(!function_exists('adminBottomNav')){
+    function adminBottomNav($options = []){}
+}
+if(!function_exists('adminBottomNavScript')){
+    function adminBottomNavScript(){}
+}
+if(!function_exists('pnvFormatUserCreatedAt')){
+    function pnvFormatUserCreatedAt($value){
+        $value = trim((string)$value);
+        if($value === ''){
+            return '-';
+        }
+        if(function_exists('pnvParseDateTimeToTimestamp')){
+            $ts = pnvParseDateTimeToTimestamp($value);
+            if($ts > 0 && function_exists('pnvFormatJalaliDate') && function_exists('pnvFormatTehranTime')){
+                return pnvFormatJalaliDate($ts, '/') . ' ' . pnvFormatTehranTime($ts, false);
+            }
+        }
+        return $value;
+    }
+}
+require_once __DIR__ . '/functions.php';
 
 pnvAdminRequireAuth();
 
@@ -261,6 +291,37 @@ if(!function_exists('pnvUsersAvatarInitial')){
 
     function pnvUsersAvatarHue($username){
         return abs(crc32((string)$username)) % 360;
+    }
+
+    function pnvUsersRowId($allUsers, $userRow){
+        if(!is_array($userRow) || !is_array($allUsers)){
+            return '';
+        }
+
+        $needleUser = strtolower(trim((string)($userRow['username'] ?? '')));
+        $needleMobile = trim((string)($userRow['mobile'] ?? ''));
+
+        foreach($allUsers as $id => $row){
+            if(!is_array($row)){
+                continue;
+            }
+
+            if(strtolower(trim((string)($row['username'] ?? ''))) !== $needleUser){
+                continue;
+            }
+
+            if($needleMobile !== '' && trim((string)($row['mobile'] ?? '')) !== $needleMobile){
+                continue;
+            }
+
+            return $id;
+        }
+
+        return '';
+    }
+
+    function pnvUsersEsc($value){
+        return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
     }
 }
 
@@ -1035,11 +1096,7 @@ title="دانلود بکاپ">
 
 <?php foreach($users as $i=>$u){
 
-$realId =
-array_search(
-$u,
-$allUsers
-);
+$realId = pnvUsersRowId($allUsers, $u);
 
 $username = $u['username'] ?? '-';
 $mobile = $u['mobile'] ?? '-';
@@ -1090,9 +1147,9 @@ id="menu<?php echo $i; ?>">
 <button
 type="button"
 onclick="openMobileModal(
-'<?php echo $realId; ?>',
-'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($u['mobile'], ENT_QUOTES); ?>'
+'<?php echo pnvUsersEsc($realId); ?>',
+'<?php echo pnvUsersEsc($u['username'] ?? ''); ?>',
+'<?php echo pnvUsersEsc($u['mobile'] ?? ''); ?>'
 )">
 
 ویرایش شماره موبایل
@@ -1102,9 +1159,9 @@ onclick="openMobileModal(
 <button
 type="button"
 onclick="openRefModal(
-'<?php echo $realId; ?>',
-'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($u['referrer'] ?? '', ENT_QUOTES); ?>'
+'<?php echo pnvUsersEsc($realId); ?>',
+'<?php echo pnvUsersEsc($u['username'] ?? ''); ?>',
+'<?php echo pnvUsersEsc($u['referrer'] ?? ''); ?>'
 )">
 
 ویرایش معرف
@@ -1114,9 +1171,9 @@ onclick="openRefModal(
 <button
 type="button"
 onclick="openPassModal(
-'<?php echo $realId; ?>',
-'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($u['mobile'], ENT_QUOTES); ?>'
+'<?php echo pnvUsersEsc($realId); ?>',
+'<?php echo pnvUsersEsc($u['username'] ?? ''); ?>',
+'<?php echo pnvUsersEsc($u['mobile'] ?? ''); ?>'
 )">
 
 ویرایش رمز عبور
@@ -1127,9 +1184,9 @@ onclick="openPassModal(
 href="#"
 class="deleteBtn"
 onclick="openDeleteModal(
-'<?php echo $realId; ?>',
-'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>',
-'<?php echo htmlspecialchars($u['mobile'], ENT_QUOTES); ?>'
+'<?php echo pnvUsersEsc($realId); ?>',
+'<?php echo pnvUsersEsc($u['username'] ?? ''); ?>',
+'<?php echo pnvUsersEsc($u['mobile'] ?? ''); ?>'
 ); return false;">
 
 حذف کاربر
