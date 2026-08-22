@@ -79,7 +79,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=24">
+<link rel="stylesheet" href="plan_step_ui.css?v=25">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -195,7 +195,10 @@ pointer-events:none !important;
 <span>کد تخفیف دارید؟</span>
 </label>
 <div class="couponBox" id="couponBox">
+<div class="couponRow">
 <input type="text" id="couponCode" placeholder="کد را وارد کنید" autocomplete="off">
+<button type="button" class="couponApplyBtn" id="couponApplyBtn">ثبت</button>
+</div>
 <div class="couponResult" id="couponResult"></div>
 </div>
 </div>
@@ -360,6 +363,7 @@ const stepLine2 = document.getElementById('stepLine2');
 const couponBox = document.getElementById('couponBox');
 const couponResult = document.getElementById('couponResult');
 const couponCodeInput = document.getElementById('couponCode');
+const couponApplyBtn = document.getElementById('couponApplyBtn');
 const hasCouponCheck = document.getElementById('hasCouponCheck');
 const cardTabs = document.getElementById('cardTabs');
 const selectedCardInput = document.getElementById('selectedCard');
@@ -693,9 +697,14 @@ function renderPlans(){
         const disc = couponState.applied ? discountedPrice(plan.price) : 0;
         let priceHtml;
         if(couponState.applied && disc < plan.price){
-            priceHtml = '<span class="planPrice--orig">' + escapeHtml(plan.price_text) + '</span>' +
-                        '<span class="planPrice--disc">' + escapeHtml(fmtPrice(disc)) + '</span>' +
-                        '<span class="planDiscBadge">٪' + couponState.percent + ' تخفیف</span>';
+            const badgeText = couponState.type === 'fixed'
+                ? 'تخفیف ویژه'
+                : ('٪' + couponState.percent + ' تخفیف');
+            priceHtml = '<span class="planPriceWrap">' +
+                        '<span class="planPrice planPrice--orig">' + escapeHtml(plan.price_text) + '</span>' +
+                        '<span class="planPrice planPrice--disc">' + escapeHtml(fmtPrice(disc)) + '</span>' +
+                        '</span>' +
+                        '<span class="planDiscBadge">' + badgeText + '</span>';
         } else {
             priceHtml = '<span class="planPrice">' + escapeHtml(plan.price_text) + '</span>';
         }
@@ -1025,12 +1034,17 @@ function validateCoupon(){
     });
 }
 hasCouponCheck.addEventListener('change', function(){
-    if(this.checked){ couponBox.classList.add('is-open'); couponCodeInput.focus(); validateCoupon(); }
+    if(this.checked){ couponBox.classList.add('is-open'); couponCodeInput.focus(); }
     else { couponBox.classList.remove('is-open'); couponCodeInput.value = ''; resetCouponResult(); renderPlans(); }
 });
-couponCodeInput.addEventListener('input', function(){
-    clearTimeout(couponTimer);
-    couponTimer = setTimeout(validateCoupon, 450);
+if(couponApplyBtn){
+    couponApplyBtn.addEventListener('click', function(){ validateCoupon(); });
+}
+couponCodeInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+        e.preventDefault();
+        validateCoupon();
+    }
 });
 planSelect.addEventListener('change', function(){
     if(hasCouponCheck.checked && couponCodeInput.value.trim() !== ''){
