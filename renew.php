@@ -14,11 +14,7 @@ require_once __DIR__ . '/plan_ui_lib.php';
 require_once __DIR__ . '/instant_pay_lib.php';
 require_once __DIR__ . '/bank_lib.php';
 
-$plans = [];
-
-if(file_exists('db/plans.json')){
-    $plans = json_decode(file_get_contents('db/plans.json'), true);
-}
+$plans = function_exists('pnvLoadPlans') ? pnvLoadPlans() : [];
 
 if(!is_array($plans)){
     $plans = [];
