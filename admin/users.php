@@ -234,6 +234,18 @@ trim($_GET['search'] ?? '');
 $openProfile =
 trim($_GET['openProfile'] ?? '');
 
+$profileUser =
+trim($_GET['profile'] ?? '');
+
+if($profileUser === '' && $openProfile !== ''){
+$profileUser = $openProfile;
+}
+
+$profilePage =
+max(1, intval($_GET['profile_page'] ?? 1));
+
+require_once __DIR__ . '/user-profile-render.php';
+
 if($search != ''){
 
 $users = array_filter($users,function($u) use ($search){
@@ -276,6 +288,16 @@ $users,
 $start,
 $perPage
 );
+
+$profileModalHtml = '';
+
+if($profileUser !== ''){
+$profileModalHtml = pnvAdminUserProfileHtml($profileUser, $profilePage, false, [
+'context' => 'page',
+'search' => $search,
+'list_page' => $page,
+]);
+}
 
 if(!function_exists('pnvUsersAvatarInitial')){
     function pnvUsersAvatarInitial($username){
@@ -633,6 +655,10 @@ font-weight:700;
 cursor:pointer;
 font-family:tahoma;
 white-space:nowrap;
+text-decoration:none;
+display:inline-flex;
+align-items:center;
+justify-content:center;
 }
 
 .userSubsBtn:active{
@@ -1009,9 +1035,19 @@ margin-top:14px;
 flex-wrap:wrap;
 }
 
-.profilePagination button{
+.profilePagination button,
+.profilePagination a{
 background:#334155;
 min-width:38px;
+color:#fff;
+text-decoration:none;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+padding:10px 14px;
+border-radius:10px;
+font-family:tahoma;
+font-size:13px;
 }
 
 .profilePagination .activePage{
@@ -1225,14 +1261,13 @@ onclick="openDeleteModal(
 <?php echo htmlspecialchars($createdLabel, ENT_QUOTES, 'UTF-8'); ?>
 </span>
 
-<button
-type="button"
-class="userSubsBtn"
-onclick="loadProfile(<?php echo json_encode($username, JSON_UNESCAPED_UNICODE); ?>)">
+<a
+href="<?php echo htmlspecialchars(pnvAdminUserProfilePageUrl($username, ['search' => $search, 'list_page' => $page]), ENT_QUOTES, 'UTF-8'); ?>"
+class="userSubsBtn">
 
 اشتراک‌ها
 
-</button>
+</a>
 
 </div>
 
@@ -1566,45 +1601,45 @@ p.type='password';
 
 function loadProfile(user, page = 1){
 
-const url =
-profileApiUrl
-+ '?user='
-+ encodeURIComponent(user)
-+ '&p='
-+ page;
-
-fetch(url, {credentials:'same-origin'})
-.then(function(response){
-if(!response.ok){
-throw new Error('HTTP ' + response.status);
-}
-return response.text();
-})
-.then(function(html){
-
-html = (html || '').trim();
-
-if(html === ''){
-alert('خطا در بارگذاری اشتراک‌ها (پاسخ خالی از سرور)');
-return;
-}
-
-document.getElementById('profileHost').innerHTML = html;
-document.getElementById('profileHost').style.display = 'block';
-document.body.style.overflow = 'hidden';
-
-})
-.catch(function(){
-alert('خطا در بارگذاری اشتراک‌ها');
+const url = pnvAdminUserProfilePageUrl(user, {
+search: <?php echo json_encode($search, JSON_UNESCAPED_UNICODE); ?>,
+list_page: <?php echo max(1, intval($page)); ?>,
+profile_page: page
 });
+
+window.location.href = url;
+
+}
+
+function pnvAdminUserProfilePageUrl(user, options){
+
+options = options || {};
+const params = new URLSearchParams();
+params.set('profile', user);
+
+if(options.search){
+params.set('search', options.search);
+}
+
+if(options.list_page && parseInt(options.list_page, 10) > 1){
+params.set('p', String(options.list_page));
+}
+
+if(options.profile_page && parseInt(options.profile_page, 10) > 1){
+params.set('profile_page', String(options.profile_page));
+}
+
+return usersPageUrl.split('?')[0] + '?' + params.toString();
 
 }
 
 function closeProfileModal(){
 
-document.getElementById('profileHost').innerHTML = '';
-document.getElementById('profileHost').style.display = 'none';
-document.body.style.overflow = '';
+const url = new URL(window.location.href);
+url.searchParams.delete('profile');
+url.searchParams.delete('openProfile');
+url.searchParams.delete('profile_page');
+window.location.href = url.toString();
 
 }
 
@@ -1667,7 +1702,10 @@ return;
 }
 
 alert(data.message || 'لینک حذف شد');
-loadProfile(user);
+window.location.href = pnvAdminUserProfilePageUrl(user, {
+search: <?php echo json_encode($search, JSON_UNESCAPED_UNICODE); ?>,
+list_page: <?php echo max(1, intval($page)); ?>
+});
 })
 .catch(function(){
 alert('خطا در ارتباط با سرور');
@@ -1683,9 +1721,9 @@ closeProfileModal();
 }
 });
 
-<?php if($openProfile !== ''){ ?>
+<?php if($profileModalHtml !== ''){ ?>
 
-loadProfile(<?php echo json_encode($openProfile, JSON_UNESCAPED_UNICODE); ?>);
+document.body.style.overflow = 'hidden';
 
 <?php } ?>
 
@@ -1696,7 +1734,11 @@ adminBottomNav(['active' => 'users', 'more_mode' => 'sheet']);
 adminBottomNavScript();
 ?>
 
-<div id="profileHost"></div>
+<div id="profileHost"<?php echo $profileModalHtml !== '' ? ' style="display:block"' : ''; ?>>
+
+<?php echo $profileModalHtml; ?>
+
+</div>
 
 </body>
 

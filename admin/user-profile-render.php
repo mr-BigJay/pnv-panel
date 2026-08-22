@@ -1,0 +1,344 @@
+<?php
+
+if(!function_exists('pnvAdminUserProfileStatusClass')){
+
+    function pnvAdminUserProfileStatusClass($status){
+
+        if($status === 'تایید شد'){
+            return 'subStatusApproved';
+        }
+
+        if($status === 'رد شد'){
+            return 'subStatusRejected';
+        }
+
+        return 'subStatusPending';
+
+    }
+
+}
+
+if(!function_exists('pnvAdminUserProfileEnsureDateHelpers')){
+
+    function pnvAdminUserProfileEnsureDateHelpers(){
+        $pnvRootDir = dirname(__DIR__);
+
+        if(function_exists('pnvFormatPaymentRowDateTime')){
+            return;
+        }
+
+        $pnvDateBootstrap = $pnvRootDir . '/pnv_date_bootstrap.php';
+        if(is_file($pnvDateBootstrap)){
+            require_once $pnvDateBootstrap;
+        }
+
+        if(!function_exists('pnvFormatPaymentRowDateTime')){
+            function pnvFormatPaymentRowDateTime($row){
+                if(!is_array($row)){
+                    return ['date' => '-', 'time' => '-'];
+                }
+
+                return [
+                    'date' => trim((string)($row[4] ?? '')) !== '' ? trim((string)($row[4] ?? '')) : '-',
+                    'time' => trim((string)($row[5] ?? '')) !== '' ? trim((string)($row[5] ?? '')) : '-',
+                ];
+            }
+        }
+    }
+
+}
+
+if(!function_exists('pnvAdminUserProfileCollect')){
+
+    function pnvAdminUserProfileCollect($username){
+        pnvAdminUserProfileEnsureDateHelpers();
+
+        $pnvRootDir = dirname(__DIR__);
+        $username = trim((string)$username);
+
+        $usersFile = $pnvRootDir . '/db/users.json';
+        if(!is_file($usersFile) && is_file(__DIR__ . '/../db/users.json')){
+            $usersFile = __DIR__ . '/../db/users.json';
+        }
+
+        $paymentsFile = $pnvRootDir . '/invoices/payments.csv';
+        if(!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')){
+            $paymentsFile = __DIR__ . '/../invoices/payments.csv';
+        }
+
+        $users = [];
+        if(is_file($usersFile)){
+            $users = json_decode(file_get_contents($usersFile), true);
+        }
+        if(!is_array($users)){
+            $users = [];
+        }
+
+        $userData = null;
+        foreach($users as $u){
+            if(strtolower(trim($u['username'] ?? '')) === strtolower($username)){
+                $userData = $u;
+                break;
+            }
+        }
+
+        $purchases = [];
+        if(is_file($paymentsFile)){
+            $f = fopen($paymentsFile, 'r');
+            if($f !== false){
+                while(($d = fgetcsv($f)) !== false){
+                    if(
+                        !isset($d[0])
+                        ||
+                        strtolower(trim($d[0])) !== strtolower($username)
+                    ){
+                        continue;
+                    }
+
+                    $type = trim($d[9] ?? 'خرید');
+                    if($type === 'تمدید'){
+                        continue;
+                    }
+
+                    $configName = trim($d[1] ?? '');
+                    if(
+                        stripos($configName, 'https://vip.') !== false
+                        ||
+                        stripos($configName, 'https://vip2.') !== false
+                        ||
+                        stripos($configName, 'https://vip3.') !== false
+                        ||
+                        stripos($configName, 'https://vip4.') !== false
+                    ){
+                        continue;
+                    }
+
+                    $link = trim($d[7] ?? '');
+                    $status = trim($d[6] ?? 'درحال بررسی');
+                    $when = pnvFormatPaymentRowDateTime($d);
+
+                    $purchases[] = [
+                        'config' => $configName,
+                        'plan' => $d[2] ?? '',
+                        'tracking' => $d[3] ?? '',
+                        'date' => $when['date'],
+                        'time' => $when['time'],
+                        'status' => $status,
+                        'link' => $link,
+                        'timestamp' => intval($d[8] ?? 0),
+                        'link_cleared' => ($status === 'تایید شد' && $link === ''),
+                    ];
+                }
+                fclose($f);
+            }
+        }
+
+        usort($purchases, function($a, $b){
+            $aTime = $a['timestamp'] ?: 0;
+            $bTime = $b['timestamp'] ?: 0;
+
+            if($aTime !== $bTime){
+                return $bTime <=> $aTime;
+            }
+
+            return strcmp(
+                ($b['date'] ?? '') . ' ' . ($b['time'] ?? ''),
+                ($a['date'] ?? '') . ' ' . ($a['time'] ?? '')
+            );
+        });
+
+        return [
+            'userData' => $userData,
+            'purchases' => $purchases,
+            'totalCount' => count($purchases),
+        ];
+    }
+
+}
+
+if(!function_exists('pnvAdminUserProfileHtml')){
+
+    function pnvAdminUserProfileHtml($username, $page = 1, $showAll = false, $options = []){
+        $username = trim((string)$username);
+        if($username === ''){
+            return '';
+        }
+
+        $context = (string)($options['context'] ?? 'api');
+        $search = trim((string)($options['search'] ?? ''));
+        $listPage = max(1, intval($options['list_page'] ?? 1));
+
+        $data = pnvAdminUserProfileCollect($username);
+        $userData = $data['userData'];
+        $purchases = $data['purchases'];
+        $totalCount = $data['totalCount'];
+
+        $page = max(1, intval($page));
+        $perPage = 5;
+        $totalPages = max(1, (int)ceil($totalCount / $perPage));
+
+        if($showAll){
+            $purchasesPage = $purchases;
+            $totalPages = 1;
+            $page = 1;
+        }
+        else{
+            $start = ($page - 1) * $perPage;
+            $purchasesPage = array_slice($purchases, $start, $perPage);
+        }
+
+        ob_start();
+        ?>
+<style>
+.subsHint{font-size:12px;line-height:24px;color:#94a3b8;margin:-4px 0 14px}
+.subClearedNote{font-size:13px;line-height:26px;padding:10px;border-radius:10px;background:#1e293b;color:#fbbf24}
+.subLink{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.subLink input{flex:1;min-width:140px;padding:10px;border:none;border-radius:10px;background:#1e293b;color:#fff;font-size:12px}
+.subLink button{border:none;border-radius:10px;background:#22c55e;color:#fff;padding:10px 14px;cursor:pointer;font-family:tahoma;white-space:nowrap}
+.subLink .subClearBtn{background:#dc2626}
+</style>
+
+<div class="profileOverlay" onclick="closeProfileModal()"></div>
+
+<div class="profileModal">
+
+    <div class="profileHeader">
+        👤 اشتراک‌های <?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>
+        <button type="button" class="profileCloseBtn" onclick="closeProfileModal()">✕</button>
+    </div>
+
+    <div class="profileInfo">
+        <div class="infoItem">
+            <span>نام کاربری:</span>
+            <?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+        <div class="infoItem">
+            <span>شماره موبایل:</span>
+            <?php echo htmlspecialchars($userData['mobile'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+        <div class="infoItem">
+            <span>معرف:</span>
+            <?php echo htmlspecialchars($userData['referrer'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+        <div class="infoItem">
+            <span>تعداد خرید:</span>
+            <?php echo $totalCount; ?>
+        </div>
+    </div>
+
+    <div class="subsTitle">📦 لیست اشتراک‌های خریداری‌شده</div>
+    <div class="subsHint">اگر کاربر اشتباه خرید زده به‌جای تمدید، از «حذف لینک» برای پاک کردن لینک قدیمی از پنل کاربر استفاده کنید. سابقه پرداخت باقی می‌ماند.</div>
+
+    <?php if(count($purchasesPage) === 0){ ?>
+    <div class="emptySubs">اشتراکی یافت نشد</div>
+    <?php } ?>
+
+    <?php foreach($purchasesPage as $sub){
+        $status = $sub['status'] ?: 'درحال بررسی';
+        $statusClass = pnvAdminUserProfileStatusClass($status);
+    ?>
+    <div class="subCard">
+        <div class="subTop">
+            <div class="subPlan"><?php echo htmlspecialchars($sub['plan'], ENT_QUOTES, 'UTF-8'); ?></div>
+            <span class="subStatus <?php echo $statusClass; ?>">
+                <?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>
+            </span>
+        </div>
+        <div class="subMeta">
+            <div><b>نام کانفیگ:</b> <?php echo htmlspecialchars($sub['config'], ENT_QUOTES, 'UTF-8'); ?></div>
+            <div><b>پیگیری:</b> <?php echo htmlspecialchars($sub['tracking'], ENT_QUOTES, 'UTF-8'); ?></div>
+            <div><b>تاریخ:</b> <?php echo htmlspecialchars($sub['date'], ENT_QUOTES, 'UTF-8'); ?> - <?php echo htmlspecialchars($sub['time'], ENT_QUOTES, 'UTF-8'); ?></div>
+        </div>
+
+        <?php if($status === 'تایید شد' && $sub['link'] !== ''){ ?>
+        <div class="subLink">
+            <input type="text" readonly value="<?php echo htmlspecialchars($sub['link'], ENT_QUOTES, 'UTF-8'); ?>">
+            <button type="button" onclick="copySub(this)">کپی</button>
+            <button
+                type="button"
+                class="subClearBtn"
+                data-user="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>"
+                data-tracking="<?php echo htmlspecialchars($sub['tracking'], ENT_QUOTES, 'UTF-8'); ?>"
+                data-timestamp="<?php echo intval($sub['timestamp']); ?>"
+                onclick="clearSubLink(this)">
+                حذف لینک
+            </button>
+        </div>
+        <?php } elseif(!empty($sub['link_cleared'])){ ?>
+        <div class="subClearedNote">لینک این اشتراک از پنل کاربر حذف شده است</div>
+        <?php } elseif($status === 'رد شد' && $sub['link'] !== ''){ ?>
+        <div class="subRejectReason">
+            <?php echo htmlspecialchars($sub['link'], ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+        <?php } elseif($status === 'درحال بررسی'){ ?>
+        <div class="subPendingNote">در انتظار تایید پرداخت</div>
+        <?php } ?>
+    </div>
+    <?php } ?>
+
+    <?php if(!$showAll && $totalPages > 1){ ?>
+    <div class="profilePagination">
+        <?php for($i = 1; $i <= $totalPages; $i++){
+            if($context === 'page' && function_exists('pnvAdminUrl')){
+                $query = [
+                    'profile' => $username,
+                    'profile_page' => $i,
+                ];
+                if($search !== ''){
+                    $query['search'] = $search;
+                }
+                if($listPage > 1){
+                    $query['p'] = $listPage;
+                }
+                $href = pnvAdminUrl('users.php?' . http_build_query($query));
+                ?>
+                <a
+                    href="<?php echo htmlspecialchars($href, ENT_QUOTES, 'UTF-8'); ?>"
+                    class="<?php echo $page === $i ? 'activePage' : ''; ?>">
+                    <?php echo $i; ?>
+                </a>
+                <?php
+                continue;
+            }
+            ?>
+            <button
+                type="button"
+                onclick="loadProfile(<?php echo json_encode($username, JSON_UNESCAPED_UNICODE); ?>, <?php echo $i; ?>)"
+                class="<?php echo $page === $i ? 'activePage' : ''; ?>">
+                <?php echo $i; ?>
+            </button>
+        <?php } ?>
+    </div>
+    <?php } ?>
+
+</div>
+        <?php
+        return (string)ob_get_clean();
+    }
+
+}
+
+if(!function_exists('pnvAdminUserProfilePageUrl')){
+
+    function pnvAdminUserProfilePageUrl($username, $options = []){
+        if(!function_exists('pnvAdminUrl')){
+            return 'users.php';
+        }
+
+        $username = trim((string)$username);
+        $query = ['profile' => $username];
+
+        $search = trim((string)($options['search'] ?? ''));
+        if($search !== ''){
+            $query['search'] = $search;
+        }
+
+        $listPage = max(1, intval($options['list_page'] ?? 1));
+        if($listPage > 1){
+            $query['p'] = $listPage;
+        }
+
+        return pnvAdminUrl('users.php?' . http_build_query($query));
+    }
+
+}
