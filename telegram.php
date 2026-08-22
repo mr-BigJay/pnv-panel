@@ -57,6 +57,12 @@ if($linked){
     }
 }
 
+$botUrl = '';
+
+if($botUsername !== ''){
+    $botUrl = 'https://t.me/' . rawurlencode(ltrim($botUsername, '@'));
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -69,7 +75,7 @@ if($linked){
 <title>اتصال تلگرام</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="telegram_ui.css?v=4">
+<link rel="stylesheet" href="telegram_ui.css?v=5">
 </head>
 <body class="telegramPage">
 
@@ -102,7 +108,12 @@ elseif(!$linked){
 <?php } else { ?>
 <div class="telegramActions" id="tgActions">
 <?php if($linked){ ?>
-<button type="button" class="telegramBtn telegramBtn--danger" id="tgDisconnectBtn">قطع اتصال</button>
+<div class="telegramActionsLinked">
+<?php if($botUrl !== ''){ ?>
+<a href="<?php echo $h($botUrl); ?>" target="_blank" rel="noopener noreferrer" class="telegramBtn telegramBtn--telegram" id="tgOpenBotBtn">رفتن به ربات</a>
+<?php } ?>
+<button type="button" class="telegramBtn telegramBtn--danger telegramBtn--compact" id="tgDisconnectBtn">قطع اتصال</button>
+</div>
 <?php } else { ?>
 <button type="button" class="telegramBtn telegramBtn--primary" id="tgConnectBtn">اتصال به ربات تلگرام</button>
 <p class="telegramHint"><?php
