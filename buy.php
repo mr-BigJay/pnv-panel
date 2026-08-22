@@ -41,7 +41,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=23">
+<link rel="stylesheet" href="plan_step_ui.css?v=24">
 </head>
 <body>
 <div class="box">
@@ -68,6 +68,12 @@ $h = static function($v){
 <div class="formStep is-active" id="step1">
 <div class="fieldLabel">نام کانفیگ</div>
 <input type="text" id="subnameInput" placeholder="مثلاً myconfig1" required minlength="5" maxlength="20" pattern="[A-Za-z0-9._-]+" title="فقط حروف لاتین، عدد و . _ - (۵ تا ۲۰ کاراکتر)">
+
+<div class="couponSection couponSection--step1">
+<div class="fieldLabel">کد تخفیف (اختیاری)</div>
+<input type="text" id="couponCode" placeholder="مثال: THISISFORYOU" autocomplete="off">
+<div class="couponResult" id="couponResult"></div>
+</div>
 
 <div class="sectionTitle">نوع پلن را انتخاب کنید</div>
 <div class="catGrid">
@@ -96,17 +102,6 @@ $h = static function($v){
 <!-- STEP 2 -->
 <div class="formStep" id="step2">
 <div class="planSummary" id="planSummary"></div>
-
-<div class="couponSection">
-<label class="couponToggle">
-<input type="checkbox" id="hasCouponCheck" value="1">
-<span>کد تخفیف دارید؟</span>
-</label>
-<div class="couponBox" id="couponBox">
-<input type="text" id="couponCode" placeholder="کد را وارد کنید" autocomplete="off">
-<div class="couponResult" id="couponResult"></div>
-</div>
-</div>
 
 <div class="destCardSection">
 <div class="destCardTitle">
@@ -212,6 +207,7 @@ $h = static function($v){
 </div>
 </div>
 
+<script src="plan_coupon_ui.js?v=1"></script>
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
@@ -233,10 +229,8 @@ const stepTab2 = document.getElementById('stepTab2');
 const stepTab3 = document.getElementById('stepTab3');
 const stepLine1 = document.getElementById('stepLine1');
 const stepLine2 = document.getElementById('stepLine2');
-const couponBox = document.getElementById('couponBox');
 const couponResult = document.getElementById('couponResult');
 const couponCodeInput = document.getElementById('couponCode');
-const hasCouponCheck = document.getElementById('hasCouponCheck');
 const cardTabs = document.getElementById('cardTabs');
 const selectedCardInput = document.getElementById('selectedCard');
 const selectedCardNameInput = document.getElementById('selectedCardName');
@@ -276,9 +270,18 @@ const planSummaryCubeSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="current
 function renderPlanSummaryHtml(plan, category, extraHtml){
     extraHtml = extraHtml || '';
     const typeLabel = category === 'unlimited' ? 'نامحدود زمانی' : 'محدود زمانی';
+    const priceText = PlanCoupon.displayPriceText(plan);
+    const discountInfo = PlanCoupon.getPlanDiscount(plan);
+    let priceLine = escapeHtml(priceText);
+
+    if(discountInfo && discountInfo.allowed){
+        priceLine = '<span class="planPriceOld">' + escapeHtml(plan.price_text) + '</span> ' +
+            '<span class="planPriceNew">' + escapeHtml(discountInfo.final_text) + '</span>';
+    }
+
     return '<div class="planSummaryCard">' +
         '<div class="planSummaryBody">' +
-        '<div class="planSummaryLine1">پلن: <span class="planSummaryHighlight">' + escapeHtml(plan.name) + '</span> — ' + escapeHtml(plan.price_text) + '</div>' +
+        '<div class="planSummaryLine1">پلن: <span class="planSummaryHighlight">' + escapeHtml(plan.name) + '</span> — ' + priceLine + '</div>' +
         '<div class="planSummaryLine2">نوع: ' + typeLabel + '</div>' +
         extraHtml +
         '</div>' +
@@ -313,17 +316,22 @@ function renderPlans(){
         return;
     }
     list.forEach(function(plan){
+        const discountInfo = PlanCoupon.getPlanDiscount(plan);
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'planChip' + (isLimited ? ' planChip--limited' : '') + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '');
+        btn.className = 'planChip' + (isLimited ? ' planChip--limited' : '') + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '') + (discountInfo && discountInfo.allowed ? ' has-discount' : '');
         btn.innerHTML = '<span class="planCheck">✓</span><span class="planName"></span><span class="planPrice"></span>' + (isLimited ? '<span class="planDays"></span>' : '');
         btn.querySelector('.planName').textContent = plan.name;
-        btn.querySelector('.planPrice').textContent = plan.price_text;
+        btn.querySelector('.planPrice').innerHTML = PlanCoupon.planPriceHtml(plan);
         if(isLimited){
             const d = btn.querySelector('.planDays');
             if(d) d.textContent = 'مدت: ' + (plan.days_label || '—');
         }
         btn.addEventListener('click', function(){
+            if(discountInfo && discountInfo.allowed === false){
+                alert('این کد تخفیف برای پلن انتخاب‌شده مجاز نیست');
+                return;
+            }
             selectedPlan = plan;
             planSelect.value = plan.value;
             planSelect.dispatchEvent(new Event('change'));
@@ -367,7 +375,6 @@ function showStep(step){
         }
         planSummary.innerHTML = renderPlanSummaryHtml(selectedPlan, selectedCategory, extraHtml);
         syncCardBox();
-        validateCoupon();
         ensureInstantPay();
     }
 }
@@ -545,39 +552,42 @@ function fillResult(item){
 }
 
 function resetCouponResult(){
-    couponResult.className = 'couponResult';
-    couponResult.textContent = '';
+    PlanCoupon.resetResult(couponResult);
 }
 
 function validateCoupon(){
-    const plan = planSelect.value;
-    const code = couponCodeInput.value.trim();
-    if(!hasCouponCheck.checked){ resetCouponResult(); return; }
-    if(plan === ''){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'ابتدا پلن را انتخاب کنید'; return; }
-    if(code === ''){ resetCouponResult(); return; }
-    fetch('coupon-api.php?plan=' + encodeURIComponent(plan) + '&code=' + encodeURIComponent(code), { credentials: 'same-origin' })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-        if(!data.ok){ couponResult.className = 'couponResult is-error'; couponResult.textContent = data.error || 'کد تخفیف معتبر نیست'; return; }
-        couponResult.className = 'couponResult is-ok';
-        couponResult.innerHTML = 'تخفیف ' + data.percent + '٪<br>مبلغ پلن: ' + data.original_text + '<br><b>قابل پرداخت تقریبی: ' + data.final_text + '</b>';
-    })
-    .catch(function(){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'خطا در بررسی کد'; });
+    return PlanCoupon.validatePreview(couponCodeInput.value, couponResult, {
+        onUpdate: function(){
+            if(PlanCoupon.clearInvalidSelection(selectedPlan, planSelect)){
+                selectedPlan = null;
+            }
+            renderPlans();
+            updateContinueState();
+            if(step2 && step2.classList.contains('is-active')){
+                ensureInstantPay(true);
+            }
+        }
+    });
 }
 
-hasCouponCheck.addEventListener('change', function(){
-    if(this.checked){ couponBox.classList.add('is-open'); couponCodeInput.focus(); validateCoupon(); }
-    else { couponBox.classList.remove('is-open'); couponCodeInput.value = ''; resetCouponResult(); }
-    if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
+PlanCoupon.bindInput(couponCodeInput, couponResult, {
+    onUpdate: function(){
+        if(PlanCoupon.clearInvalidSelection(selectedPlan, planSelect)){
+            selectedPlan = null;
+        }
+        renderPlans();
+        updateContinueState();
+        if(step2 && step2.classList.contains('is-active')){
+            ensureInstantPay(true);
+        }
+    }
 });
-couponCodeInput.addEventListener('input', function(){
-    clearTimeout(couponTimer);
-    couponTimer = setTimeout(function(){
-        validateCoupon();
-        if(step2 && step2.classList.contains('is-active')) ensureInstantPay(true);
-    }, 450);
+
+planSelect.addEventListener('change', function(){
+    if(step2 && step2.classList.contains('is-active')){
+        ensureInstantPay(true);
+    }
 });
-planSelect.addEventListener('change', validateCoupon);
 
 function formatRemain(sec){
     sec = Math.max(0, parseInt(sec, 10) || 0);
@@ -762,10 +772,7 @@ function ensureInstantPay(forceRestart){
         body.set('subname', subname);
         body.set('card', card);
         body.set('card_name', cardName);
-        if(hasCouponCheck.checked){
-            body.set('has_coupon', '1');
-            body.set('coupon_code', couponCodeInput.value.trim());
-        }
+        PlanCoupon.applyToPayBody(body, couponCodeInput);
         fetch('instant-pay-api.php', {
             method: 'POST',
             credentials: 'same-origin',

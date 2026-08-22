@@ -33,6 +33,7 @@ files=(
   "sub-usage-api.php"
   "sub_usage_lib.php"
   "plan_step_ui.css"
+  "plan_coupon_ui.js"
   "instant_pay_lib.php"
   "instant-pay-api.php"
   "coupon_lib.php"

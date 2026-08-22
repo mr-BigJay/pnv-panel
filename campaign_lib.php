@@ -551,6 +551,140 @@ if(!function_exists('campaignDataPath')){
         return couponCalculateForPlan($username, $code, $planValue, $plans);
     }
 
+    function checkoutValidateDiscountCodeBase($username, $code){
+        if(!function_exists('couponFindPlanByValue')){
+            require_once __DIR__ . '/coupon_lib.php';
+        }
+
+        $codeRaw = trim((string)$code);
+        $username = trim((string)$username);
+
+        if($codeRaw === ''){
+            return ['ok' => false, 'error' => 'کد تخفیف را وارد کنید'];
+        }
+
+        if($username === ''){
+            return ['ok' => false, 'error' => 'کاربر نامعتبر است'];
+        }
+
+        $normalized = campaignNormalizeCode($codeRaw);
+        $row = campaignFindDiscountByCode(campaignDiscountCodesLoad(), $normalized);
+
+        if(is_array($row)){
+            if(!campaignDiscountIsActiveRow($row)){
+                return ['ok' => false, 'error' => 'کد تخفیف فعال نیست یا منقضی شده'];
+            }
+
+            $counts = campaignDiscountUsageCounts($row['id']);
+            $maxUses = intval($row['max_uses'] ?? 0);
+
+            if($maxUses > 0 && $counts['total_active'] >= $maxUses){
+                return ['ok' => false, 'error' => 'سقف استفاده از این کد تکمیل شده'];
+            }
+
+            $perUserLimit = intval($row['per_user_limit'] ?? 0);
+
+            if($perUserLimit > 0 && intval($counts['per_user'][$username] ?? 0) >= $perUserLimit){
+                return ['ok' => false, 'error' => 'شما قبلاً از این کد استفاده کرده‌اید'];
+            }
+
+            $type = ($row['type'] ?? '') === 'fixed' ? 'fixed' : 'percent';
+            $value = intval($row['value'] ?? 0);
+
+            return [
+                'ok' => true,
+                'source' => 'admin_discount',
+                'code' => $row['code'],
+                'type' => $type,
+                'value' => $value,
+                'percent' => $type === 'percent' ? $value : 0,
+                'percent_label' => $type === 'percent' ? ($value . '٪') : 'ثابت',
+            ];
+        }
+
+        $referral = couponValidateForUser($username, $codeRaw);
+
+        if(!empty($referral['ok'])){
+            $percent = intval($referral['percent'] ?? 0);
+
+            return [
+                'ok' => true,
+                'source' => 'referral',
+                'code' => $referral['code'],
+                'type' => 'percent',
+                'value' => $percent,
+                'percent' => $percent,
+                'percent_label' => $percent . '٪',
+            ];
+        }
+
+        return ['ok' => false, 'error' => $referral['error'] ?? 'کد تخفیف معتبر نیست'];
+    }
+
+    function checkoutPreviewDiscountCode($username, $code, $plans){
+        if(!function_exists('pnvPlansForStepUi')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+
+        if(!is_array($plans)){
+            $plans = [];
+        }
+
+        $base = checkoutValidateDiscountCodeBase($username, $code);
+
+        if(empty($base['ok'])){
+            return $base;
+        }
+
+        $plansUi = pnvPlansForStepUi($plans);
+        $planMap = [];
+        $allowedCount = 0;
+        $headlinePercent = intval($base['percent'] ?? 0);
+
+        foreach($plansUi as $planUi){
+            $value = trim((string)($planUi['value'] ?? ''));
+
+            if($value === ''){
+                continue;
+            }
+
+            $calc = checkoutCalculateDiscountCode($username, $code, $value, $plans);
+
+            if(!empty($calc['ok'])){
+                $allowedCount++;
+                $headlinePercent = max($headlinePercent, intval($calc['percent'] ?? 0));
+                $planMap[$value] = [
+                    'allowed' => true,
+                    'original' => intval($calc['original'] ?? 0),
+                    'final' => intval($calc['final'] ?? 0),
+                    'original_text' => $calc['original_text'] ?? '',
+                    'final_text' => $calc['final_text'] ?? '',
+                    'percent' => intval($calc['percent'] ?? 0),
+                ];
+            }
+            else{
+                $planMap[$value] = [
+                    'allowed' => false,
+                    'error' => $calc['error'] ?? 'نامعتبر برای این پلن',
+                ];
+            }
+        }
+
+        if($allowedCount === 0){
+            return ['ok' => false, 'error' => 'این کد برای هیچ‌یک از پلن‌های فعلی قابل استفاده نیست'];
+        }
+
+        $result = $base;
+        $result['plans'] = $planMap;
+        $result['percent'] = $headlinePercent;
+
+        if(($base['type'] ?? '') === 'percent'){
+            $result['percent_label'] = $headlinePercent . '٪';
+        }
+
+        return $result;
+    }
+
     function checkoutPrepareDiscountForOrder($username, $code, $planValue, $plans, $orderId){
         if(!function_exists('couponCalculateForPlan')){
             require_once __DIR__ . '/coupon_lib.php';
