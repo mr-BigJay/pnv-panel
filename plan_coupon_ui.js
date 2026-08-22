@@ -1,7 +1,7 @@
 (function(global){
     var state = {
         preview: null,
-        timer: null
+        toggleEl: null
     };
 
     function escapeHtml(text){
@@ -21,8 +21,21 @@
         el.textContent = '';
     }
 
+    function clearPreview(resultEl, callbacks){
+        state.preview = null;
+        resetResult(resultEl);
+
+        if(callbacks && typeof callbacks.onUpdate === 'function'){
+            callbacks.onUpdate(null);
+        }
+    }
+
     function getPlanDiscount(plan){
         if(!state.preview || !state.preview.ok || !plan){
+            return null;
+        }
+
+        if(state.toggleEl && !state.toggleEl.checked){
             return null;
         }
 
@@ -52,6 +65,10 @@
     }
 
     function hasActiveCode(input){
+        if(state.toggleEl && !state.toggleEl.checked){
+            return false;
+        }
+
         return !!(input && String(input.value || '').trim() !== '' && state.preview && state.preview.ok);
     }
 
@@ -84,14 +101,13 @@
         code = String(code || '').trim();
 
         if(code === ''){
-            state.preview = null;
-            resetResult(resultEl);
-
-            if(typeof callbacks.onClear === 'function'){
-                callbacks.onClear();
-            }
-
+            clearPreview(resultEl, callbacks);
             return Promise.resolve(null);
+        }
+
+        if(resultEl){
+            resultEl.className = 'couponResult is-pending';
+            resultEl.textContent = 'در حال بررسی…';
         }
 
         return fetch(
@@ -123,7 +139,7 @@
 
             if(resultEl){
                 resultEl.className = 'couponResult is-ok';
-                resultEl.textContent = 'کد «' + code + '» فعال شد — ' +
+                resultEl.textContent = 'کد «' + code + '» اعمال شد — ' +
                     (data.percent_label || (data.percent ? (data.percent + '٪') : 'تخفیف')) +
                     ' روی پلن‌های مجاز';
             }
@@ -158,17 +174,83 @@
         });
     }
 
-    function bindInput(input, resultEl, callbacks){
-        if(!input){
-            return;
+    function bindStep1Ui(options){
+        options = options || {};
+
+        var toggleCheck = options.toggleCheck;
+        var couponBox = options.couponBox;
+        var input = options.input;
+        var applyBtn = options.applyBtn;
+        var resultEl = options.resultEl;
+        var callbacks = {
+            onUpdate: options.onUpdate,
+            onSuccess: options.onSuccess,
+            onError: options.onError
+        };
+
+        state.toggleEl = toggleCheck || null;
+
+        function setApplyLoading(loading){
+            if(!applyBtn){
+                return;
+            }
+
+            applyBtn.disabled = !!loading;
+            applyBtn.textContent = loading ? '…' : 'اعمال';
         }
 
-        input.addEventListener('input', function(){
-            clearTimeout(state.timer);
-            state.timer = setTimeout(function(){
-                validatePreview(input.value, resultEl, callbacks);
-            }, 450);
-        });
+        function doApply(){
+            if(toggleCheck && !toggleCheck.checked){
+                return;
+            }
+
+            setApplyLoading(true);
+
+            validatePreview(input ? input.value : '', resultEl, callbacks)
+                .finally(function(){
+                    setApplyLoading(false);
+                });
+        }
+
+        if(toggleCheck){
+            toggleCheck.addEventListener('change', function(){
+                if(this.checked){
+                    if(couponBox){
+                        couponBox.classList.add('is-open');
+                    }
+
+                    if(input){
+                        input.focus();
+                    }
+                }
+                else{
+                    if(couponBox){
+                        couponBox.classList.remove('is-open');
+                    }
+
+                    if(input){
+                        input.value = '';
+                    }
+
+                    clearPreview(resultEl, callbacks);
+                }
+            });
+        }
+
+        if(applyBtn){
+            applyBtn.addEventListener('click', function(){
+                doApply();
+            });
+        }
+
+        if(input){
+            input.addEventListener('keydown', function(e){
+                if(e.key === 'Enter'){
+                    e.preventDefault();
+                    doApply();
+                }
+            });
+        }
     }
 
     global.PlanCoupon = {
@@ -181,6 +263,6 @@
         applyToPayBody: applyToPayBody,
         clearInvalidSelection: clearInvalidSelection,
         validatePreview: validatePreview,
-        bindInput: bindInput
+        bindStep1Ui: bindStep1Ui
     };
 })(window);

@@ -83,7 +83,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=24">
+<link rel="stylesheet" href="plan_step_ui.css?v=25">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -194,9 +194,17 @@ pointer-events:none !important;
 </div>
 
 <div class="couponSection couponSection--step1">
-<div class="fieldLabel">کد تخفیف (اختیاری)</div>
-<input type="text" id="couponCode" placeholder="مثال: THISISFORYOU" autocomplete="off">
+<label class="couponToggle">
+<input type="checkbox" id="hasCouponCheck" value="1">
+<span>کد تخفیف دارید؟</span>
+</label>
+<div class="couponBox" id="couponBox">
+<div class="couponRow">
+<input type="text" id="couponCode" placeholder="کد تخفیف را وارد نمایید" autocomplete="off">
+<button type="button" class="couponApplyBtn" id="couponApplyBtn">اعمال</button>
+</div>
 <div class="couponResult" id="couponResult"></div>
+</div>
 </div>
 
 <div class="sectionTitle">نوع پلن را انتخاب کنید</div>
@@ -335,7 +343,7 @@ pointer-events:none !important;
 </div>
 </div>
 
-<script src="plan_coupon_ui.js?v=1"></script>
+<script src="plan_coupon_ui.js?v=2"></script>
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
@@ -358,6 +366,9 @@ const stepLine1 = document.getElementById('stepLine1');
 const stepLine2 = document.getElementById('stepLine2');
 const couponResult = document.getElementById('couponResult');
 const couponCodeInput = document.getElementById('couponCode');
+const hasCouponCheck = document.getElementById('hasCouponCheck');
+const couponBox = document.getElementById('couponBox');
+const couponApplyBtn = document.getElementById('couponApplyBtn');
 const cardTabs = document.getElementById('cardTabs');
 const selectedCardInput = document.getElementById('selectedCard');
 const selectedCardNameInput = document.getElementById('selectedCardName');
@@ -938,33 +949,26 @@ toStep3Btn.addEventListener('click', function(){
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-function resetCouponResult(){ PlanCoupon.resetResult(couponResult); }
-function validateCoupon(){
-    return PlanCoupon.validatePreview(couponCodeInput.value, couponResult, {
-        onUpdate: function(){
-            if(PlanCoupon.clearInvalidSelection(selectedPlan, planSelect)){
-                selectedPlan = null;
-            }
-            renderPlans();
-            updateContinueState();
-            if(step2 && step2.classList.contains('is-active')){
-                ensureInstantPay(true);
-            }
-        }
-    });
-}
-PlanCoupon.bindInput(couponCodeInput, couponResult, {
-    onUpdate: function(){
-        if(PlanCoupon.clearInvalidSelection(selectedPlan, planSelect)){
-            selectedPlan = null;
-        }
-        renderPlans();
-        updateContinueState();
-        if(step2 && step2.classList.contains('is-active')){
-            ensureInstantPay(true);
-        }
+function onCouponUpdate(){
+    if(PlanCoupon.clearInvalidSelection(selectedPlan, planSelect)){
+        selectedPlan = null;
     }
+    renderPlans();
+    updateContinueState();
+    if(step2 && step2.classList.contains('is-active')){
+        ensureInstantPay(true);
+    }
+}
+
+PlanCoupon.bindStep1Ui({
+    toggleCheck: hasCouponCheck,
+    couponBox: couponBox,
+    input: couponCodeInput,
+    applyBtn: couponApplyBtn,
+    resultEl: couponResult,
+    onUpdate: onCouponUpdate
 });
+
 planSelect.addEventListener('change', function(){
     if(step2 && step2.classList.contains('is-active')){
         ensureInstantPay(true);

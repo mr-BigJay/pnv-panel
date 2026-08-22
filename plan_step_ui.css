@@ -437,8 +437,37 @@ border-radius:14px;
 margin-bottom:18px;
 border:1px solid #334155;
 }
-.couponSection--step1 input[type="text"]{
-width:100%;
+.couponSection--step1 .couponToggle{
+display:flex;
+align-items:center;
+gap:10px;
+font-size:15px;
+margin:0;
+cursor:pointer;
+}
+.couponSection--step1 .couponToggle input{
+width:18px;
+height:18px;
+margin:0;
+cursor:pointer;
+flex-shrink:0;
+}
+.couponSection--step1 .couponBox{
+display:none;
+margin-top:10px;
+}
+.couponSection--step1 .couponBox.is-open{
+display:block;
+}
+.couponSection--step1 .couponRow{
+display:flex;
+align-items:stretch;
+gap:8px;
+}
+.couponSection--step1 .couponRow input[type="text"]{
+flex:1 1 auto;
+min-width:0;
+width:auto;
 margin:0;
 padding:12px 14px;
 border:1px solid #334155;
@@ -448,6 +477,23 @@ color:#f8fafc;
 font-family:inherit;
 font-size:14px;
 box-sizing:border-box;
+}
+.couponSection--step1 .couponApplyBtn{
+flex:0 0 auto;
+min-width:72px;
+padding:0 16px;
+border:none;
+border-radius:14px;
+background:#22c55e;
+color:#052e16;
+font-family:inherit;
+font-size:14px;
+font-weight:700;
+cursor:pointer;
+}
+.couponSection--step1 .couponApplyBtn:disabled{
+opacity:.65;
+cursor:not-allowed;
 }
 .couponSection--step1 .couponResult{
 margin-top:10px;
