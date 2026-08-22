@@ -196,7 +196,7 @@
             }
 
             applyBtn.disabled = !!loading;
-            applyBtn.textContent = loading ? '…' : 'اعمال';
+            applyBtn.textContent = loading ? '…' : 'ثبت';
         }
 
         function doApply(){

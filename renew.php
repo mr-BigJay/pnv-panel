@@ -83,7 +83,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=25">
+<link rel="stylesheet" href="plan_step_ui.css?v=26">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -201,7 +201,7 @@ pointer-events:none !important;
 <div class="couponBox" id="couponBox">
 <div class="couponRow">
 <input type="text" id="couponCode" placeholder="کد تخفیف را وارد نمایید" autocomplete="off">
-<button type="button" class="couponApplyBtn" id="couponApplyBtn">اعمال</button>
+<button type="button" class="couponApplyBtn" id="couponApplyBtn">ثبت</button>
 </div>
 <div class="couponResult" id="couponResult"></div>
 </div>
@@ -343,7 +343,7 @@ pointer-events:none !important;
 </div>
 </div>
 
-<script src="plan_coupon_ui.js?v=2"></script>
+<script src="plan_coupon_ui.js?v=3"></script>
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
