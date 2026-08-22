@@ -1,10 +1,33 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/../subscription_lib.php';
+
+$pnvRootDir = dirname(__DIR__);
+
+if(!function_exists('pnvFormatPaymentRowDateTime')){
+    $pnvDateBootstrap = $pnvRootDir . '/pnv_date_bootstrap.php';
+    if(is_file($pnvDateBootstrap)){
+        require_once $pnvDateBootstrap;
+    }
+    if(!function_exists('pnvFormatPaymentRowDateTime')){
+        function pnvFormatPaymentRowDateTime($row){
+            if(!is_array($row)){
+                return ['date' => '-', 'time' => '-'];
+            }
+
+            return [
+                'date' => trim((string)($row[4] ?? '')) !== '' ? trim((string)($row[4] ?? '')) : '-',
+                'time' => trim((string)($row[5] ?? '')) !== '' ? trim((string)($row[5] ?? '')) : '-',
+            ];
+        }
+    }
+}
 
 if(!pnvAdminIsLoggedIn()){
     http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<div class="profileOverlay" onclick="typeof closeProfileModal===\'function\'&&closeProfileModal()"></div>';
+    echo '<div class="profileModal"><p style="padding:16px;text-align:center">دسترسی مجاز نیست. صفحه را رفرش کنید و دوباره وارد شوید.</p></div>';
     exit;
 }
 
@@ -19,6 +42,14 @@ if($username === ''){
 if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['clear_link'])){
     header('Content-Type: application/json; charset=utf-8');
 
+    $subscriptionLib = $pnvRootDir . '/subscription_lib.php';
+    if(!is_file($subscriptionLib)){
+        echo json_encode(['ok' => false, 'error' => 'ماژول اشتراک در دسترس نیست'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    require_once $subscriptionLib;
+
     $result = pnvClearUserSubscriptionLink(
         $username,
         trim((string)($_POST['tracking'] ?? '')),
@@ -29,8 +60,15 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['clear_link'])){
     exit;
 }
 
-$usersFile = '../db/users.json';
-$paymentsFile = '../invoices/payments.csv';
+$usersFile = $pnvRootDir . '/db/users.json';
+if(!is_file($usersFile) && is_file(__DIR__ . '/../db/users.json')){
+    $usersFile = __DIR__ . '/../db/users.json';
+}
+
+$paymentsFile = $pnvRootDir . '/invoices/payments.csv';
+if(!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')){
+    $paymentsFile = __DIR__ . '/../invoices/payments.csv';
+}
 
 $users = [];
 
@@ -59,9 +97,11 @@ foreach($users as $u){
 
 $purchases = [];
 
-if(file_exists($paymentsFile)){
+if(is_file($paymentsFile)){
 
     $f = fopen($paymentsFile, 'r');
+
+    if($f !== false){
 
     while(($d = fgetcsv($f)) !== false){
 
@@ -114,6 +154,8 @@ if(file_exists($paymentsFile)){
     }
 
     fclose($f);
+
+    }
 
 }
 

@@ -1275,8 +1275,6 @@ id="modalContent"></div>
 
 </div>
 
-<div id="profileHost"></div>
-
 <script>
 
 const usersPageUrl = <?php echo json_encode(pnvAdminUrl('users.php'), JSON_UNESCAPED_UNICODE); ?>;
@@ -1568,20 +1566,32 @@ p.type='password';
 
 function loadProfile(user, page = 1){
 
-fetch(
-profileApiUrl + '?user='
+const url =
+profileApiUrl
++ '?user='
 + encodeURIComponent(user)
 + '&p='
-+ page,
-{credentials:'same-origin'}
-)
++ page;
+
+fetch(url, {credentials:'same-origin'})
 .then(function(response){
+if(!response.ok){
+throw new Error('HTTP ' + response.status);
+}
 return response.text();
 })
 .then(function(html){
 
+html = (html || '').trim();
+
+if(html === ''){
+alert('خطا در بارگذاری اشتراک‌ها (پاسخ خالی از سرور)');
+return;
+}
+
 document.getElementById('profileHost').innerHTML = html;
 document.getElementById('profileHost').style.display = 'block';
+document.body.style.overflow = 'hidden';
 
 })
 .catch(function(){
@@ -1594,6 +1604,7 @@ function closeProfileModal(){
 
 document.getElementById('profileHost').innerHTML = '';
 document.getElementById('profileHost').style.display = 'none';
+document.body.style.overflow = '';
 
 }
 
@@ -1666,6 +1677,12 @@ button.textContent = 'حذف لینک';
 
 }
 
+document.addEventListener('keydown', function(e){
+if(e.key === 'Escape'){
+closeProfileModal();
+}
+});
+
 <?php if($openProfile !== ''){ ?>
 
 loadProfile(<?php echo json_encode($openProfile, JSON_UNESCAPED_UNICODE); ?>);
@@ -1678,6 +1695,8 @@ loadProfile(<?php echo json_encode($openProfile, JSON_UNESCAPED_UNICODE); ?>);
 adminBottomNav(['active' => 'users', 'more_mode' => 'sheet']);
 adminBottomNavScript();
 ?>
+
+<div id="profileHost"></div>
 
 </body>
 
