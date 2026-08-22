@@ -15,7 +15,8 @@ $username = $_SESSION['user'];
 $action = trim((string)($_GET['action'] ?? $_POST['action'] ?? 'list'));
 
 if($action === 'list'){
-    $rows = campaignUserAnnouncements($username);
+    $loginSession = campaignAnnouncementLoginSessionId();
+    $rows = campaignUserAnnouncements($username, $loginSession);
     $modal = null;
     $banners = [];
 
@@ -27,12 +28,15 @@ if($action === 'list'){
             'type' => $row['type'] ?? 'info',
             'type_label' => campaignAnnouncementTypeLabel($row['type'] ?? 'info'),
             'is_read' => !empty($row['is_read']),
+            'should_show' => !empty($row['should_show']),
+            'view_count' => intval($row['view_count'] ?? 0),
+            'max_views_per_user' => intval($row['max_views_per_user'] ?? 0),
         ];
 
-        if($modal === null && empty($row['is_read'])){
+        if($modal === null && !empty($row['should_show'])){
             $modal = $item;
         }
-        else{
+        elseif(!empty($row['should_show'])){
             $banners[] = $item;
         }
     }
@@ -53,8 +57,10 @@ if($action === 'dismiss'){
         exit;
     }
 
-    campaignAnnouncementMarkRead($username, $id);
-    echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+    $loginSession = campaignAnnouncementLoginSessionId();
+    $ok = campaignAnnouncementMarkRead($username, $id, $loginSession);
+
+    echo json_encode(['ok' => $ok], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

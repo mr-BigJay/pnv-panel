@@ -627,19 +627,86 @@ if(!function_exists('campaignDataPath')){
         return $map[$type] ?? 'اطلاع‌رسانی';
     }
 
-    function campaignUserAnnouncements($username){
+    function campaignAnnouncementLoginSessionId($forceNew = false){
+        if($forceNew || empty($_SESSION['announcement_login_id'])){
+            $_SESSION['announcement_login_id'] = 'al_' . bin2hex(random_bytes(8));
+        }
+
+        return (string)$_SESSION['announcement_login_id'];
+    }
+
+    function campaignAnnouncementMaxViewsPerUser($row){
+        $max = intval($row['max_views_per_user'] ?? 0);
+
+        return max(0, $max);
+    }
+
+    function campaignAnnouncementUserViewCount($reads, $username, $announcementId){
+        $username = trim((string)$username);
+        $announcementId = trim((string)$announcementId);
+        $count = 0;
+
+        foreach($reads as $read){
+            if(
+                ($read['user'] ?? '') === $username
+                && ($read['announcement_id'] ?? '') === $announcementId
+            ){
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    function campaignAnnouncementShownThisLogin($reads, $username, $announcementId, $loginSession){
+        $username = trim((string)$username);
+        $announcementId = trim((string)$announcementId);
+        $loginSession = trim((string)$loginSession);
+
+        if($loginSession === ''){
+            return false;
+        }
+
+        foreach($reads as $read){
+            if(
+                ($read['user'] ?? '') === $username
+                && ($read['announcement_id'] ?? '') === $announcementId
+                && ($read['login_session'] ?? '') === $loginSession
+            ){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function campaignAnnouncementShouldShow($row, $username, $reads, $loginSession){
+        $announcementId = trim((string)($row['id'] ?? ''));
+
+        if($announcementId === ''){
+            return false;
+        }
+
+        $maxViews = campaignAnnouncementMaxViewsPerUser($row);
+        $viewCount = campaignAnnouncementUserViewCount($reads, $username, $announcementId);
+
+        if($maxViews > 0 && $viewCount >= $maxViews){
+            return false;
+        }
+
+        if(campaignAnnouncementShownThisLogin($reads, $username, $announcementId, $loginSession)){
+            return false;
+        }
+
+        return true;
+    }
+
+    function campaignUserAnnouncements($username, $loginSession = null){
         $username = trim((string)$username);
         $now = campaignNow();
         $rows = campaignAnnouncementsLoad();
         $reads = campaignAnnouncementReadsLoad();
-        $readMap = [];
-
-        foreach($reads as $read){
-            if(($read['user'] ?? '') === $username){
-                $readMap[$read['announcement_id'] ?? ''] = $read;
-            }
-        }
-
+        $loginSession = trim((string)($loginSession ?? campaignAnnouncementLoginSessionId()));
         $active = [];
 
         foreach($rows as $row){
@@ -647,8 +714,20 @@ if(!function_exists('campaignDataPath')){
                 continue;
             }
 
-            $row['is_read'] = !empty($readMap[$row['id'] ?? '']);
-            $row['read_at'] = intval($readMap[$row['id'] ?? '']['read_at'] ?? 0);
+            $announcementId = $row['id'] ?? '';
+            $viewCount = campaignAnnouncementUserViewCount($reads, $username, $announcementId);
+            $shouldShow = campaignAnnouncementShouldShow($row, $username, $reads, $loginSession);
+
+            $row['view_count'] = $viewCount;
+            $row['max_views_per_user'] = campaignAnnouncementMaxViewsPerUser($row);
+            $row['should_show'] = $shouldShow;
+            $row['is_read'] = !$shouldShow;
+            $row['shown_this_login'] = campaignAnnouncementShownThisLogin(
+                $reads,
+                $username,
+                $announcementId,
+                $loginSession
+            );
             $active[] = $row;
         }
 
@@ -666,7 +745,7 @@ if(!function_exists('campaignDataPath')){
         return $active;
     }
 
-    function campaignAnnouncementMarkRead($username, $announcementId){
+    function campaignAnnouncementMarkRead($username, $announcementId, $loginSession = null){
         $username = trim((string)$username);
         $announcementId = trim((string)$announcementId);
 
@@ -674,12 +753,31 @@ if(!function_exists('campaignDataPath')){
             return false;
         }
 
+        $loginSession = trim((string)($loginSession ?? campaignAnnouncementLoginSessionId()));
         $reads = campaignAnnouncementReadsLoad();
+        $rows = campaignAnnouncementsLoad();
+        $row = null;
 
-        foreach($reads as $read){
-            if(($read['user'] ?? '') === $username && ($read['announcement_id'] ?? '') === $announcementId){
-                return true;
+        foreach($rows as $item){
+            if(($item['id'] ?? '') === $announcementId){
+                $row = $item;
+                break;
             }
+        }
+
+        if(!is_array($row)){
+            return false;
+        }
+
+        if(campaignAnnouncementShownThisLogin($reads, $username, $announcementId, $loginSession)){
+            return true;
+        }
+
+        $maxViews = campaignAnnouncementMaxViewsPerUser($row);
+        $viewCount = campaignAnnouncementUserViewCount($reads, $username, $announcementId);
+
+        if($maxViews > 0 && $viewCount >= $maxViews){
+            return false;
         }
 
         $reads[] = [
@@ -687,10 +785,36 @@ if(!function_exists('campaignDataPath')){
             'announcement_id' => $announcementId,
             'user' => $username,
             'read_at' => campaignNow(),
+            'login_session' => $loginSession,
         ];
 
         campaignAnnouncementReadsSave($reads);
         return true;
+    }
+
+    function campaignAnnouncementViewStats($announcementId){
+        $announcementId = trim((string)$announcementId);
+        $reads = campaignAnnouncementReadsLoad();
+        $totalViews = 0;
+        $users = [];
+
+        foreach($reads as $read){
+            if(($read['announcement_id'] ?? '') !== $announcementId){
+                continue;
+            }
+
+            $totalViews++;
+            $user = trim((string)($read['user'] ?? ''));
+
+            if($user !== ''){
+                $users[$user] = true;
+            }
+        }
+
+        return [
+            'total_views' => $totalViews,
+            'unique_users' => count($users),
+        ];
     }
 
     function campaignOverviewStats(){

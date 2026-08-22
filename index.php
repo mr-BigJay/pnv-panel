@@ -114,6 +114,14 @@ $hash
 $_SESSION['user'] =
 $u['username'];
 
+if(file_exists(__DIR__ . '/campaign_lib.php')){
+    require_once __DIR__ . '/campaign_lib.php';
+
+    if(function_exists('campaignAnnouncementLoginSessionId')){
+        campaignAnnouncementLoginSessionId(true);
+    }
+}
+
 $login = true;
 
 header("Location: dashboard.php");

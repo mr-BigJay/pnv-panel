@@ -19,7 +19,7 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:16px}
 .campaignTab{display:flex;align-items:center;justify-content:center;min-height:42px;padding:8px 6px;border-radius:14px;background:#242d3d;color:#cbd5e1;text-decoration:none;font-size:12px;font-weight:600;text-align:center;line-height:1.5;border:1px solid #334155}
 .campaignTab.is-active{background:#34d399;border-color:#34d399;color:#052e16;box-shadow:0 8px 24px rgba(52,211,153,.18)}
-.campaignCard{background:#1f2937;border:1px solid #334155;border-radius:18px;padding:16px;margin-bottom:16px}
+.campaignCard{background:#1f2937;border:1px solid #334155;border-radius:18px;padding:16px;margin-bottom:16px;overflow:visible}
 .campaignCardHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
 .campaignCardTitle{margin:0;font-size:18px;font-weight:700;color:#f8fafc}
 .campaignCardIcon{width:38px;height:38px;border-radius:12px;background:rgba(52,211,153,.14);color:#34d399;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -52,11 +52,11 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignSearchWrap svg{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:#64748b}
 .campaignSearchWrap input{width:100%;padding:12px 40px 12px 12px;border:1px solid #334155;border-radius:14px;background:#141b26;color:#f8fafc;font-family:inherit;font-size:14px}
 .campaignFilterBtn{padding:0 14px;border:1px solid #334155;border-radius:14px;background:#242d3d;color:#e2e8f0;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
-.campaignList{display:flex;flex-direction:column;gap:10px}
-.campaignListItem{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;padding:14px;border:1px solid #334155;border-radius:16px;background:#141b26}
+.campaignList{display:flex;flex-direction:column;gap:10px;overflow:visible}
+.campaignListItem{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;padding:14px;border:1px solid #334155;border-radius:16px;background:#141b26;overflow:visible;position:relative}
 .campaignMenuBtn{width:34px;height:34px;border:none;border-radius:10px;background:#242d3d;color:#cbd5e1;font-size:18px;line-height:1;cursor:pointer}
-.campaignMenu{position:relative}
-.campaignMenuPanel{position:absolute;top:calc(100% + 6px);left:0;min-width:140px;background:#242d3d;border:1px solid #334155;border-radius:12px;padding:6px;z-index:20;display:none;box-shadow:0 12px 30px rgba(0,0,0,.28)}
+.campaignMenu{position:relative;z-index:2}
+.campaignMenuPanel{position:absolute;top:calc(100% + 6px);right:0;left:auto;min-width:156px;background:#242d3d;border:1px solid #334155;border-radius:12px;padding:6px;z-index:40;display:none;box-shadow:0 12px 30px rgba(0,0,0,.28)}
 .campaignMenuPanel.is-open{display:block}
 .campaignMenuPanel a,.campaignMenuPanel button{display:block;width:100%;padding:10px 12px;border:none;border-radius:8px;background:transparent;color:#e2e8f0;text-decoration:none;text-align:right;font-family:inherit;font-size:13px;cursor:pointer}
 .campaignMenuPanel a:hover,.campaignMenuPanel button:hover{background:#334155}
@@ -101,6 +101,15 @@ body.campaignAdmin .jdp-container .jdp-btn-today,body.campaignAdmin .jdp-contain
 body.campaignAdmin .jdp-container .jdp-time-container select{background:#141b26;color:#f8fafc;border:1px solid #334155;border-radius:8px}
 body.campaignAdmin .jdp-container .jdp-month,body.campaignAdmin .jdp-container .jdp-year{color:#f8fafc}
 body.campaignAdmin .jdp-container .jdp-icon-plus,body.campaignAdmin .jdp-container .jdp-icon-minus{filter:invert(1)}
+.campaignStatsModalOverlay{display:none;position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:16px}
+.campaignStatsModalOverlay.is-open{display:flex}
+.campaignStatsModal{width:100%;max-width:360px;background:#1f2937;border:1px solid #334155;border-radius:18px;padding:18px;box-shadow:0 20px 48px rgba(0,0,0,.35)}
+.campaignStatsModalTitle{margin:0 0 14px;font-size:17px;font-weight:700;color:#f8fafc;text-align:center}
+.campaignStatsGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.campaignStatsBox{padding:14px;border:1px solid #334155;border-radius:14px;background:#141b26;text-align:center}
+.campaignStatsNum{font-size:28px;font-weight:700;color:#34d399;margin-bottom:4px}
+.campaignStatsLabel{font-size:12px;color:#94a3b8;line-height:1.6}
+.campaignStatsClose{width:100%;margin-top:14px;padding:12px;border:none;border-radius:14px;background:#242d3d;color:#e2e8f0;font-family:inherit;font-size:14px;cursor:pointer}
 </style>';
     }
 

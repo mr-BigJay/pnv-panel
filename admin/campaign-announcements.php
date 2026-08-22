@@ -7,6 +7,26 @@ require_once __DIR__ . '/../campaign_lib.php';
 
 pnvAdminRequireAuth();
 
+if(isset($_GET['stats'])){
+    header('Content-Type: application/json; charset=utf-8');
+
+    $statsId = trim((string)($_GET['stats'] ?? ''));
+
+    if($statsId === ''){
+        echo json_encode(['ok' => false, 'error' => 'شناسه پیام نامعتبر است'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $stats = campaignAnnouncementViewStats($statsId);
+
+    echo json_encode([
+        'ok' => true,
+        'total_views' => intval($stats['total_views'] ?? 0),
+        'unique_users' => intval($stats['unique_users'] ?? 0),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $rows = campaignAnnouncementsLoad();
 $flash = '';
 $editId = trim((string)($_GET['edit'] ?? ''));
@@ -32,6 +52,8 @@ if(isset($_POST['save_announcement'])){
     $status = !empty($_POST['status_active']) ? 'active' : 'inactive';
     $startsAt = campaignParseDateTime($_POST['starts_at'] ?? '');
     $expiresAt = campaignParseDateTime($_POST['expires_at'] ?? '');
+    $maxViewsRaw = trim((string)($_POST['max_views_per_user'] ?? ''));
+    $maxViewsPerUser = $maxViewsRaw === '' ? 0 : max(0, intval($maxViewsRaw));
 
     if(!in_array($type, ['info', 'success', 'warning', 'special'], true)){
         $type = 'info';
@@ -50,6 +72,7 @@ if(isset($_POST['save_announcement'])){
             'priority' => $priority,
             'starts_at' => $startsAt,
             'expires_at' => $expiresAt,
+            'max_views_per_user' => $maxViewsPerUser,
             'status' => $status,
             'updated_at' => $now,
         ];
@@ -198,6 +221,16 @@ function campaignAnnouncementValidityText($row){
     return implode(' ', $parts);
 }
 
+function campaignAnnouncementViewsLimitText($row){
+    $max = intval($row['max_views_per_user'] ?? 0);
+
+    if($max <= 0){
+        return 'هر بار ورود تا پایان اعتبار';
+    }
+
+    return $max . ' بار برای هر کاربر';
+}
+
 function campaignAnnouncementMessageExcerpt($row, $limit = 120){
     $message = trim(preg_replace('/\s+/u', ' ', (string)($row['message'] ?? '')));
 
@@ -272,6 +305,14 @@ $isActive = ($editRow['status'] ?? 'active') === 'active';
 </div>
 <p class="campaignHint">عدد بزرگ‌تر = نمایش بالاتر در داشبورد کاربر</p>
 </div>
+</div>
+<div class="campaignField">
+<label class="campaignLabel">تعداد نمایش به هر کاربر (اختیاری)</label>
+<div class="campaignInputWrap">
+<?php echo campaignIconList(); ?>
+<input class="campaignInput" name="max_views_per_user" type="number" min="0" placeholder="خالی = هر بار ورود تا پایان اعتبار" value="<?php echo (int)($editRow['max_views_per_user'] ?? 0) > 0 ? (int)($editRow['max_views_per_user']) : ''; ?>">
+</div>
+<p class="campaignHint">خالی بگذارید: با هر ورود موفق یک‌بار تا پایان محدوده اعتبار. اگر عدد وارد کنید، حداکثر همان تعداد بار (هر بار یک‌بار در ورود) نمایش داده می‌شود.</p>
 </div>
 </div>
 
@@ -369,6 +410,7 @@ foreach($rows as $row){
 <div class="campaignMenu">
 <button type="button" class="campaignMenuBtn" data-menu-btn aria-label="عملیات">⋯</button>
 <div class="campaignMenuPanel">
+<button type="button" class="jsAnnStatsBtn" data-stats-id="<?php echo htmlspecialchars($row['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-stats-title="<?php echo htmlspecialchars($row['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">آمار نمایش</button>
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?edit=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">ویرایش</a>
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?toggle=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>">تغییر وضعیت</a>
 <a class="is-danger" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php?delete=' . $rowId), ENT_QUOTES, 'UTF-8'); ?>" onclick="return confirm('حذف شود؟');">حذف</a>
@@ -388,6 +430,8 @@ foreach($rows as $row){
 <div class="campaignItemMeta">
 <div><strong>اعتبار</strong><?php echo htmlspecialchars(campaignAnnouncementValidityText($row), ENT_QUOTES, 'UTF-8'); ?></div>
 <div><strong>اولویت</strong><?php echo (int)($row['priority'] ?? 0); ?></div>
+<div><strong>سقف نمایش</strong><?php echo htmlspecialchars(campaignAnnouncementViewsLimitText($row), ENT_QUOTES, 'UTF-8'); ?></div>
+<div><strong>کل نمایش</strong><?php echo (int)(campaignAnnouncementViewStats($row['id'] ?? '')['total_views'] ?? 0); ?></div>
 </div>
 </div>
 </div>
@@ -402,6 +446,23 @@ foreach($rows as $row){
 <?php } ?>
 </div>
 
+</div>
+
+<div class="campaignStatsModalOverlay" id="annStatsModal" aria-hidden="true">
+<div class="campaignStatsModal" role="dialog" aria-modal="true" aria-labelledby="annStatsModalTitle">
+<h3 class="campaignStatsModalTitle" id="annStatsModalTitle">آمار نمایش پیام</h3>
+<div class="campaignStatsGrid">
+<div class="campaignStatsBox">
+<div class="campaignStatsNum" id="annStatsTotalViews">0</div>
+<div class="campaignStatsLabel">تعداد کل نمایش</div>
+</div>
+<div class="campaignStatsBox">
+<div class="campaignStatsNum" id="annStatsUniqueUsers">0</div>
+<div class="campaignStatsLabel">کاربران یکتا</div>
+</div>
+</div>
+<button type="button" class="campaignStatsClose" id="annStatsClose">بستن</button>
+</div>
 </div>
 
 <script>
@@ -439,6 +500,77 @@ foreach($rows as $row){
             panel.classList.remove('is-open');
         });
     });
+
+    document.querySelectorAll('.campaignMenuPanel').forEach(function(panel){
+        panel.addEventListener('click', function(e){
+            e.stopPropagation();
+        });
+    });
+
+    const statsModal = document.getElementById('annStatsModal');
+    const statsTitle = document.getElementById('annStatsModalTitle');
+    const statsTotal = document.getElementById('annStatsTotalViews');
+    const statsUnique = document.getElementById('annStatsUniqueUsers');
+    const statsClose = document.getElementById('annStatsClose');
+    const statsUrlBase = <?php echo json_encode(pnvAdminUrl('campaign-announcements.php'), JSON_UNESCAPED_UNICODE); ?>;
+
+    function closeStatsModal(){
+        if(!statsModal) return;
+        statsModal.classList.remove('is-open');
+        statsModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function openStatsModal(title, total, unique){
+        if(statsTitle) statsTitle.textContent = 'آمار نمایش: ' + title;
+        if(statsTotal) statsTotal.textContent = String(total || 0);
+        if(statsUnique) statsUnique.textContent = String(unique || 0);
+        if(statsModal){
+            statsModal.classList.add('is-open');
+            statsModal.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    document.querySelectorAll('.jsAnnStatsBtn').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+            e.stopPropagation();
+            document.querySelectorAll('.campaignMenuPanel.is-open').forEach(function(panel){
+                panel.classList.remove('is-open');
+            });
+
+            const id = btn.getAttribute('data-stats-id') || '';
+            const title = btn.getAttribute('data-stats-title') || 'پیام';
+
+            if(!id){
+                return;
+            }
+
+            fetch(statsUrlBase + '?stats=' + encodeURIComponent(id), {credentials:'same-origin'})
+                .then(function(res){ return res.json(); })
+                .then(function(data){
+                    if(!data || !data.ok){
+                        alert((data && data.error) ? data.error : 'خطا در دریافت آمار');
+                        return;
+                    }
+
+                    openStatsModal(title, data.total_views, data.unique_users);
+                })
+                .catch(function(){
+                    alert('خطا در ارتباط با سرور');
+                });
+        });
+    });
+
+    if(statsClose){
+        statsClose.addEventListener('click', closeStatsModal);
+    }
+
+    if(statsModal){
+        statsModal.addEventListener('click', function(e){
+            if(e.target === statsModal){
+                closeStatsModal();
+            }
+        });
+    }
 
     const filterBtn = document.getElementById('filterToggleBtn');
     const filterPanel = document.getElementById('filterPanel');

@@ -495,6 +495,32 @@ color:#fff;
 opacity:.6;
 cursor:not-allowed;
 }
+.dashAnnModal{
+border-top:3px solid #38bdf8;
+}
+.dashAnnModal.is-success{border-top-color:#34d399}
+.dashAnnModal.is-warning{border-top-color:#f59e0b}
+.dashAnnModal.is-special{border-top-color:#a855f7}
+.dashAnnType{
+display:inline-flex;
+padding:4px 10px;
+border-radius:999px;
+font-size:11px;
+font-weight:700;
+margin-bottom:10px;
+background:rgba(56,189,248,.16);
+color:#7dd3fc;
+}
+.dashAnnModal.is-success .dashAnnType{background:rgba(52,211,153,.16);color:#6ee7b7}
+.dashAnnModal.is-warning .dashAnnType{background:rgba(245,158,11,.16);color:#fcd34d}
+.dashAnnModal.is-special .dashAnnType{background:rgba(168,85,247,.16);color:#d8b4fe}
+.dashAnnMessage{
+margin:0;
+font-size:14px;
+line-height:1.9;
+color:#e2e8f0;
+white-space:pre-wrap;
+}
 .dashAvatarInput{
 display:none;
 }
@@ -688,6 +714,17 @@ max-width:360px;
 <button type="button" class="dashModalBtn dashModalBtn--ghost" id="avatarCropCancel">انصراف</button>
 <button type="button" class="dashModalBtn dashModalBtn--primary" id="avatarCropSave">ذخیره عکس</button>
 </div>
+</div>
+</div>
+</div>
+
+<div class="dashModalOverlay" id="dashAnnouncementModal" aria-hidden="true">
+<div class="dashModal dashAnnModal is-info" id="dashAnnouncementDialog" role="dialog" aria-modal="true" aria-labelledby="dashAnnouncementTitle">
+<span class="dashAnnType" id="dashAnnouncementType">اطلاع‌رسانی</span>
+<h2 class="dashModalTitle" id="dashAnnouncementTitle">پیام</h2>
+<div class="dashAnnMessage" id="dashAnnouncementMessage"></div>
+<div class="dashModalActions">
+<button type="button" class="dashModalBtn dashModalBtn--primary" id="dashAnnouncementDismiss">متوجه شدم</button>
 </div>
 </div>
 </div>
@@ -1204,6 +1241,121 @@ max-width:360px;
             }
         });
     }
+
+    var annModal = document.getElementById('dashAnnouncementModal');
+    var annDialog = document.getElementById('dashAnnouncementDialog');
+    var annTitle = document.getElementById('dashAnnouncementTitle');
+    var annMessage = document.getElementById('dashAnnouncementMessage');
+    var annType = document.getElementById('dashAnnouncementType');
+    var annDismiss = document.getElementById('dashAnnouncementDismiss');
+    var annQueue = [];
+    var annCurrent = null;
+
+    function closeAnnouncementModal(){
+        if(!annModal){
+            return;
+        }
+
+        annModal.classList.remove('is-open');
+        annModal.setAttribute('aria-hidden', 'true');
+        annCurrent = null;
+    }
+
+    function showAnnouncementItem(item){
+        if(!item || !annModal || !annDialog){
+            return;
+        }
+
+        annCurrent = item;
+        var type = item.type || 'info';
+
+        annDialog.className = 'dashModal dashAnnModal is-' + type;
+
+        if(annType){
+            annType.textContent = item.type_label || 'اطلاع‌رسانی';
+        }
+
+        if(annTitle){
+            annTitle.textContent = item.title || 'پیام';
+        }
+
+        if(annMessage){
+            annMessage.textContent = item.message || '';
+        }
+
+        annModal.classList.add('is-open');
+        annModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function showNextAnnouncement(){
+        if(annCurrent || !annQueue.length){
+            return;
+        }
+
+        showAnnouncementItem(annQueue.shift());
+    }
+
+    function dismissCurrentAnnouncement(){
+        if(!annCurrent){
+            closeAnnouncementModal();
+            return;
+        }
+
+        var dismissedId = annCurrent.id;
+        var body = new URLSearchParams();
+        body.append('action', 'dismiss');
+        body.append('id', dismissedId);
+
+        fetch('announcement-api.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: body.toString(),
+            credentials: 'same-origin'
+        })
+        .finally(function(){
+            closeAnnouncementModal();
+            showNextAnnouncement();
+        });
+    }
+
+    if(annDismiss){
+        annDismiss.addEventListener('click', dismissCurrentAnnouncement);
+    }
+
+    if(annModal){
+        annModal.addEventListener('click', function(e){
+            if(e.target === annModal){
+                dismissCurrentAnnouncement();
+            }
+        });
+    }
+
+    fetch('announcement-api.php?action=list', {credentials:'same-origin'})
+        .then(function(res){
+            return res.json();
+        })
+        .then(function(data){
+            if(!data || !data.ok){
+                return;
+            }
+
+            annQueue = [];
+
+            if(data.modal){
+                annQueue.push(data.modal);
+            }
+
+            if(Array.isArray(data.banners)){
+                data.banners.forEach(function(item){
+                    annQueue.push(item);
+                });
+            }
+
+            showNextAnnouncement();
+        })
+        .catch(function(){});
 })();
 </script>
 
