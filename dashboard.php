@@ -84,13 +84,16 @@ overflow:hidden;
 box-sizing:border-box;
 }
 .dashPage{
-flex:0 0 auto;
+flex:1;
+min-height:0;
 display:flex;
 flex-direction:column;
 max-width:400px;
 width:100%;
 margin:0 auto;
 animation:dashIn .3s ease;
+overflow-y:auto;
+-webkit-overflow-scrolling:touch;
 }
 @keyframes dashIn{
 from{opacity:0;transform:translateY(6px)}
@@ -338,9 +341,12 @@ display:flex;
 align-items:center;
 justify-content:center;
 background:rgba(30,41,59,.9);
-color:#93c5fd;
+color:#38bdf8;
 font-size:11px;
 font-weight:700;
+}
+.dashItemIcon svg{
+width:14px;height:14px;fill:currentColor;display:block;
 }
 .dashItemText{
 font-size:12px;
@@ -619,7 +625,7 @@ max-width:360px;
 </a>
 <a class="dashItem" href="telegram.php">
 <span class="dashItemMain">
-<span class="dashItemIcon">✈</span>
+<span class="dashItemIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9.04 15.31l-.39 3.45c.56 0 .8-.24 1.09-.53l2.62-2.49 5.44 3.98c1 .55 1.72.26 1.97-.92l3.58-16.79h.01c.32-1.48-.54-2.06-1.5-1.7L2.6 9.44c-1.45.56-1.43 1.36-.25 1.72l4.98 1.55L18.9 6.1c.66-.43 1.26-.19.77.27"/></svg></span>
 <span class="dashItemText">اتصال تلگرام</span>
 </span>
 <span class="dashItemMeta<?php echo $telegramLinked ? ' is-on' : ''; ?>"><?php echo $telegramLinked ? 'متصل ✅' : 'غیرفعال'; ?></span>

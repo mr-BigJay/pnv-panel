@@ -2084,4 +2084,34 @@ if(!function_exists('tgUserFaNum')){
         }
     }
 
+    function tgUserAdminLinkedStats(){
+        $users = profileLoadUsers();
+        $linked = [];
+
+        foreach($users as $user){
+            $chatId = trim((string)($user['telegram_chat_id'] ?? ''));
+
+            if($chatId === ''){
+                continue;
+            }
+
+            $linked[] = [
+                'username' => trim((string)($user['username'] ?? '')),
+                'telegram_username' => trim((string)($user['telegram_username'] ?? '')),
+                'chat_id' => $chatId,
+                'linked_at' => trim((string)($user['telegram_linked_at'] ?? '')),
+            ];
+        }
+
+        usort($linked, function($a, $b){
+            return strcmp($b['linked_at'] ?? '', $a['linked_at'] ?? '');
+        });
+
+        return [
+            'total_users' => count($users),
+            'linked_count' => count($linked),
+            'linked_users' => $linked,
+        ];
+    }
+
 }

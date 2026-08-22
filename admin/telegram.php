@@ -93,6 +93,12 @@ function telegramTextAreaValue($items){
     return htmlspecialchars(implode("\n", is_array($items) ? $items : []), ENT_QUOTES, 'UTF-8');
 }
 
+$linkedStats = function_exists('tgUserAdminLinkedStats') ? tgUserAdminLinkedStats() : [
+    'total_users' => 0,
+    'linked_count' => 0,
+    'linked_users' => [],
+];
+
 ?>
 
 <!DOCTYPE html>
@@ -120,7 +126,18 @@ textarea{min-height:100px;resize:vertical;direction:ltr;text-align:left}
 .msg{background:#166534}.err{background:#991b1b}
 button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;background:#22c55e;color:#fff;font:inherit;font-size:17px;cursor:pointer;text-align:center;text-decoration:none;margin-top:14px}
 .test{background:#2563eb}.back{background:#334155;margin-top:20px}
-@media(max-width:600px){body{padding:10px}.box{padding:22px 16px;border-radius:16px}h2{font-size:22px}.tokenRow{flex-direction:column}.tokenRow button{width:100%;padding:12px}}
+.statsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 22px}
+.statCard{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:16px;text-align:center}
+.statNum{font-size:32px;font-weight:700;color:#4ade80;line-height:1.2}
+.statLabel{font-size:13px;color:#94a3b8;margin-top:6px}
+.linkedBox{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;margin-bottom:22px}
+.linkedBox h3{margin:0 0 12px;font-size:16px;color:#e2e8f0}
+.linkedTable{width:100%;border-collapse:collapse;font-size:13px}
+.linkedTable th,.linkedTable td{padding:10px 8px;border-bottom:1px solid #1e293b;text-align:right}
+.linkedTable th{color:#94a3b8;font-weight:600}
+.linkedTable tr:last-child td{border-bottom:0}
+.linkedEmpty{color:#94a3b8;font-size:14px;line-height:1.8;padding:8px 0}
+@media(max-width:600px){body{padding:10px}.box{padding:22px 16px;border-radius:16px}h2{font-size:22px}.tokenRow{flex-direction:column}.tokenRow button{width:100%;padding:12px}.statsGrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -131,6 +148,48 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 
 <?php if($message !== ''){ ?><div class="msg"><?php echo htmlspecialchars($message, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
 <?php if($error !== ''){ ?><div class="err"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
+
+<div class="statsGrid">
+<div class="statCard">
+<div class="statNum"><?php echo (int)$linkedStats['linked_count']; ?></div>
+<div class="statLabel">کاربر متصل به ربات</div>
+</div>
+<div class="statCard">
+<div class="statNum"><?php echo (int)$linkedStats['total_users']; ?></div>
+<div class="statLabel">کل کاربران پنل</div>
+</div>
+</div>
+
+<div class="linkedBox">
+<h3>کاربران متصل به ربات اطلاع‌رسانی</h3>
+<?php if(count($linkedStats['linked_users'] ?? []) === 0){ ?>
+<div class="linkedEmpty">هنوز کاربری از داشبورد «اتصال تلگرام» را فعال نکرده است.</div>
+<?php } else { ?>
+<div style="overflow-x:auto">
+<table class="linkedTable">
+<thead>
+<tr>
+<th>نام کاربری</th>
+<th>تلگرام</th>
+<th>تاریخ اتصال</th>
+</tr>
+</thead>
+<tbody>
+<?php foreach($linkedStats['linked_users'] as $row){
+    $tgUser = trim((string)($row['telegram_username'] ?? ''));
+    $tgLabel = $tgUser !== '' ? '@' . $tgUser : '—';
+?>
+<tr>
+<td><?php echo htmlspecialchars($row['username'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+<td><?php echo htmlspecialchars($tgLabel, ENT_QUOTES, 'UTF-8'); ?></td>
+<td><?php echo htmlspecialchars($row['linked_at'] ?? '—', ENT_QUOTES, 'UTF-8'); ?></td>
+</tr>
+<?php } ?>
+</tbody>
+</table>
+</div>
+<?php } ?>
+</div>
 
 <form method="post">
 <label class="toggle">
