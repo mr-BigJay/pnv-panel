@@ -10,20 +10,23 @@ if(!isset($_SESSION['user'])){
 }
 
 require_once __DIR__ . '/coupon_lib.php';
+require_once __DIR__ . '/plan_ui_lib.php';
 require_once __DIR__ . '/pnv_campaign_bootstrap.php';
 
 $username = $_SESSION['user'];
 $code = trim($_GET['code'] ?? $_POST['code'] ?? '');
 $plan = trim($_GET['plan'] ?? $_POST['plan'] ?? '');
+$preview = !empty($_GET['preview']) || !empty($_POST['preview']);
 
-$plans = [];
-
-if(file_exists(__DIR__ . '/db/plans.json')){
-    $plans = json_decode(file_get_contents(__DIR__ . '/db/plans.json'), true);
-}
+$plans = function_exists('pnvLoadPlans') ? pnvLoadPlans() : [];
 
 if(!is_array($plans)){
     $plans = [];
+}
+
+if($preview && $plan === ''){
+    echo json_encode(checkoutPreviewDiscountCode($username, $code, $plans), JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 if($plan === ''){

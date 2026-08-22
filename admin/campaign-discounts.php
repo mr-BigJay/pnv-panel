@@ -217,7 +217,7 @@ if(($editRow['type'] ?? '') === 'fixed'){
     $editValue = $editValue * 1000;
 }
 
-$isActive = ($editRow['status'] ?? 'active') === 'active';
+$isActive = !$editRow || (($editRow['status'] ?? 'active') === 'active');
 
 ?>
 <!DOCTYPE html>
@@ -379,7 +379,7 @@ foreach($codes as $row){
     $percent = ($maxUses > 0) ? min(100, (int)round(($used / $maxUses) * 100)) : 0;
     $useLabel = $maxUses > 0 ? ($used . ' / ' . $maxUses) : ($used . ' / ∞');
     $minTomans = intval($row['minimum_purchase_amount'] ?? 0) * 1000;
-    $isRowActive = ($row['status'] ?? '') === 'active';
+    $isRowActive = campaignDiscountIsActiveRow($row);
     $rowId = urlencode($row['id'] ?? '');
 ?>
 <div class="campaignListItem<?php echo $hiddenClass; ?>">

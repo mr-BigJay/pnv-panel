@@ -13,10 +13,7 @@ require_once __DIR__ . '/plan_ui_lib.php';
 require_once __DIR__ . '/bank_lib.php';
 require_once __DIR__ . '/instant_pay_lib.php';
 
-$plans = [];
-if(file_exists('db/plans.json')){
-    $plans = json_decode(file_get_contents('db/plans.json'), true);
-}
+$plans = function_exists('pnvLoadPlans') ? pnvLoadPlans() : [];
 if(!is_array($plans)){ $plans = []; }
 $plansUi = pnvPlansForStepUi($plans);
 
@@ -582,6 +579,29 @@ function resetCouponResult(){
     couponState = { applied: false, percent: 0, type: 'percent', value: 0 };
 }
 
+function applyCouponResult(data){
+    if(!data || !data.ok){
+        couponResult.className = 'couponResult is-error';
+        couponResult.textContent = (data && data.error) || 'کد تخفیف معتبر نیست';
+        couponState = { applied: false, percent: 0, type: 'percent', value: 0 };
+        renderPlans();
+        return;
+    }
+    couponState = {
+        applied: true,
+        percent: data.percent || 0,
+        type: data.type || 'percent',
+        value: data.value || 0
+    };
+    couponResult.className = 'couponResult is-ok';
+    if(data.type === 'fixed'){
+        couponResult.textContent = 'کد تخفیف اعمال شد — قیمت‌ها به‌روز شد';
+    } else {
+        couponResult.textContent = 'کد تخفیف ' + (data.percent || 0) + '٪ اعمال شد — قیمت‌ها به‌روز شد';
+    }
+    renderPlans();
+}
+
 function validateCoupon(){
     const code = couponCodeInput.value.trim();
     if(!hasCouponCheck.checked){
@@ -594,34 +614,20 @@ function validateCoupon(){
         renderPlans();
         return;
     }
-    // Pick a plan to validate against
-    let planVal = planSelect.value;
-    if(planVal === ''){
-        const cat = selectedCategory;
-        const list = (plansData || []).filter(function(p){ return cat ? p.category === cat : true; });
-        const src = list.length > 0 ? list : (plansData || []);
-        if(src.length === 0){
-            couponResult.className = 'couponResult is-hint';
-            couponResult.textContent = 'ابتدا نوع پلن را انتخاب کنید';
-            return;
-        }
-        planVal = src[0].value;
+    const planVal = planSelect.value;
+    let url = '';
+    if(planVal !== ''){
+        url = 'coupon-api.php?plan=' + encodeURIComponent(planVal) + '&code=' + encodeURIComponent(code);
+    } else if(selectedCategory){
+        url = 'coupon-api.php?preview=1&code=' + encodeURIComponent(code);
+    } else {
+        couponResult.className = 'couponResult is-hint';
+        couponResult.textContent = 'ابتدا نوع پلن را انتخاب کنید';
+        return;
     }
-    fetch('coupon-api.php?plan=' + encodeURIComponent(planVal) + '&code=' + encodeURIComponent(code), { credentials: 'same-origin' })
+    fetch(url, { credentials: 'same-origin' })
     .then(function(r){ return r.json(); })
-    .then(function(data){
-        if(!data.ok){
-            couponResult.className = 'couponResult is-error';
-            couponResult.textContent = data.error || 'کد تخفیف معتبر نیست';
-            couponState = { applied: false, percent: 0, type: 'percent', value: 0 };
-            renderPlans();
-            return;
-        }
-        couponState = { applied: true, percent: data.percent || 0, type: data.type || 'percent', value: data.value || 0 };
-        couponResult.className = 'couponResult is-ok';
-        couponResult.textContent = 'کد تخفیف ' + data.percent + '٪ اعمال شد — قیمت‌ها به‌روز شد';
-        renderPlans();
-    })
+    .then(applyCouponResult)
     .catch(function(){
         couponResult.className = 'couponResult is-error';
         couponResult.textContent = 'خطا در بررسی کد';
