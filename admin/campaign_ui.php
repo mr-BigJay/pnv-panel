@@ -57,8 +57,8 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignListItem.is-menu-open{z-index:30}
 .campaignMenuBtn{width:34px;height:34px;border:none;border-radius:10px;background:#242d3d;color:#cbd5e1;font-size:18px;line-height:1;cursor:pointer}
 .campaignMenu{position:absolute;top:10px;right:10px;z-index:2}
-.campaignMenuPanel{display:none;min-width:168px;background:#242d3d;border:1px solid #334155;border-radius:12px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
-.campaignMenuPanel.is-open{display:block;position:fixed;z-index:1100}
+.campaignMenuPanel{display:none;min-width:180px;width:180px;background:#242d3d;border:1px solid #334155;border-radius:12px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.campaignMenuPanel.is-open{display:block}
 .campaignMenuPanel a,.campaignMenuPanel button{display:block;width:100%;padding:10px 12px;border:none;border-radius:8px;background:transparent;color:#e2e8f0;text-decoration:none;text-align:right;font-family:inherit;font-size:13px;cursor:pointer}
 .campaignMenuPanel a:hover,.campaignMenuPanel button:hover{background:#334155}
 .campaignMenuPanel .is-danger{color:#fca5a5}
@@ -277,13 +277,60 @@ jalaliDatepicker.startWatch({
         echo <<<'JS'
 <script>
 (function(){
+    var panelHomes = new WeakMap();
+
+    function rememberPanelHome(panel){
+        if(!panel || panelHomes.has(panel)){
+            return;
+        }
+
+        if(panel.parentElement){
+            panelHomes.set(panel, panel.parentElement);
+        }
+    }
+
+    function restorePanelHome(panel){
+        var home = panelHomes.get(panel);
+
+        if(home && panel.parentElement !== home){
+            home.appendChild(panel);
+        }
+    }
+
+    function findPanelForMenu(menu){
+        if(!menu){
+            return null;
+        }
+
+        var panel = menu.querySelector('.campaignMenuPanel');
+
+        if(panel){
+            return panel;
+        }
+
+        var panels = document.querySelectorAll('.campaignMenuPanel');
+
+        for(var i = 0; i < panels.length; i++){
+            if(panelHomes.get(panels[i]) === menu){
+                return panels[i];
+            }
+        }
+
+        return null;
+    }
+
     function closeCampaignMenus(){
         document.querySelectorAll('.campaignMenuPanel.is-open').forEach(function(panel){
             panel.classList.remove('is-open');
+            panel.style.position = '';
             panel.style.top = '';
-            panel.style.right = '';
             panel.style.left = '';
+            panel.style.right = '';
+            panel.style.width = '';
             panel.style.minWidth = '';
+            panel.style.zIndex = '';
+            panel.style.visibility = '';
+            restorePanelHome(panel);
         });
 
         document.querySelectorAll('.campaignListItem.is-menu-open').forEach(function(item){
@@ -293,23 +340,41 @@ jalaliDatepicker.startWatch({
 
     function positionCampaignMenuPanel(btn, panel){
         var rect = btn.getBoundingClientRect();
-        var panelWidth = Math.max(168, panel.offsetWidth || 168);
-        var top = rect.bottom + 6;
-        var right = window.innerWidth - rect.right;
+        var gap = 6;
+        var margin = 8;
+        var width = 180;
 
-        if(top + panel.offsetHeight > window.innerHeight - 8){
-            top = Math.max(8, rect.top - panel.offsetHeight - 6);
+        panel.style.position = 'fixed';
+        panel.style.width = width + 'px';
+        panel.style.minWidth = width + 'px';
+        panel.style.zIndex = '1100';
+
+        var left = rect.right - width;
+        var top = rect.bottom + gap;
+        var height = panel.offsetHeight || 160;
+
+        if(left < margin){
+            left = margin;
         }
 
-        if(right + panelWidth > window.innerWidth - 8){
-            right = Math.max(8, window.innerWidth - panelWidth - 8);
+        if(left + width > window.innerWidth - margin){
+            left = window.innerWidth - width - margin;
         }
 
+        if(top + height > window.innerHeight - margin){
+            top = rect.top - height - gap;
+        }
+
+        if(top < margin){
+            top = margin;
+        }
+
+        panel.style.left = Math.round(left) + 'px';
         panel.style.top = Math.round(top) + 'px';
-        panel.style.right = Math.round(right) + 'px';
-        panel.style.left = 'auto';
-        panel.style.minWidth = '168px';
+        panel.style.right = 'auto';
     }
+
+    document.querySelectorAll('.campaignMenuPanel').forEach(rememberPanelHome);
 
     document.querySelectorAll('[data-menu-btn]').forEach(function(btn){
         btn.addEventListener('click', function(e){
@@ -327,6 +392,8 @@ jalaliDatepicker.startWatch({
                 return;
             }
 
+            rememberPanelHome(panel);
+            document.body.appendChild(panel);
             panel.classList.add('is-open');
             panel.style.visibility = 'hidden';
 
