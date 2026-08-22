@@ -346,5 +346,6 @@ h1{font-size:20px}
 <a class="back" href="<?php echo xuiAdminH($backUrl); ?>">بازگشت به مدیریت</a>
 
 </div>
+<?php adminPageEnd(['active' => 'xui', 'more_mode' => 'sheet']); ?>
 </body>
 </html>

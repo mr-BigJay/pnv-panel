@@ -250,5 +250,6 @@ function toggleTokenVisibility(){
     }
 }
 </script>
+<?php adminPageEnd(['active' => 'telegram', 'more_mode' => 'sheet']); ?>
 </body>
 </html>

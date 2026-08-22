@@ -513,7 +513,7 @@ class="back">
 </div>
 
 <?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
-
+<?php adminPageEnd(['active' => 'plans', 'more_mode' => 'sheet']); ?>
 </body>
 
 </html>

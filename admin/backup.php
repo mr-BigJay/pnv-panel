@@ -328,6 +328,6 @@ foreach($allSections as $key => $meta){
 </div>
 
 <?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
-
+<?php adminPageEnd(['active' => 'backup', 'more_mode' => 'sheet']); ?>
 </body>
 </html>

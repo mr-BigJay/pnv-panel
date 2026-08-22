@@ -1613,8 +1613,7 @@ loadProfile(<?php echo json_encode($openProfile, JSON_UNESCAPED_UNICODE); ?>);
 </script>
 
 <?php
-adminBottomNav(['active' => 'users', 'more_mode' => 'sheet']);
-adminBottomNavScript();
+adminPageEnd(['active' => 'users', 'more_mode' => 'sheet']);
 ?>
 
 <?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>

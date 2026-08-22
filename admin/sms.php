@@ -396,6 +396,6 @@ body{padding:10px}
 </script>
 
 <?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
-
+<?php adminPageEnd(['active' => 'sms', 'more_mode' => 'sheet']); ?>
 </body>
 </html>

@@ -218,6 +218,11 @@ jalaliDatepicker.startWatch({
     }
 
     function campaignAdminBottomNavFoot(){
+        if(function_exists('adminPageEnd')){
+            adminPageEnd(['active' => 'campaigns', 'more_mode' => 'sheet']);
+            return;
+        }
+
         if(function_exists('adminBottomNav')){
             adminBottomNav(['active' => 'campaigns', 'more_mode' => 'sheet']);
         }

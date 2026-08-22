@@ -42,6 +42,14 @@ if(!function_exists('adminQuickNav')){
     }
 
     function adminBottomNavStyles(){
+        static $done = false;
+
+        if($done){
+            return;
+        }
+
+        $done = true;
+
         echo '<style>
 .adminBottomNav{
 display:none;
@@ -58,16 +66,26 @@ padding-bottom:env(safe-area-inset-bottom,0);
 display:flex;
 align-items:stretch;
 min-height:64px;
+direction:rtl;
 }
 .adminBottomNavPrimary{
 flex:1;
 display:flex;
 align-items:stretch;
 border-top:3px solid #22c55e;
+min-width:0;
+}
+.adminBottomNavDashboard{
+width:22%;
+max-width:96px;
+display:flex;
+align-items:stretch;
+border-top:3px solid #334155;
+border-right:1px solid #1e293b;
 }
 .adminBottomNavMore{
-width:26%;
-max-width:108px;
+width:22%;
+max-width:96px;
 display:flex;
 align-items:center;
 justify-content:center;
@@ -240,8 +258,10 @@ body.adminPageSupport{padding-bottom:0}
             ],
         ];
 
+        $dashboardHref = pnvAdminUrl();
+        $dashboardActive = ($active === 'dashboard' || $active === '');
+
         $moreLinks = [
-            ['key' => 'dashboard', 'label' => 'داشبورد', 'href' => pnvAdminUrl()],
             ['key' => 'users', 'label' => 'کاربران', 'href' => pnvAdminUrl('users.php')],
             ['key' => 'plans', 'label' => 'پلن‌ها', 'href' => pnvAdminUrl('plans.php')],
             ['key' => 'campaigns', 'label' => 'کمپین‌ها', 'href' => pnvAdminUrl('campaigns.php')],
@@ -273,6 +293,14 @@ body.adminPageSupport{padding-bottom:0}
         }
 
         echo '</div>';
+
+        echo '<div class="adminBottomNavDashboard">';
+        echo '<a class="adminBottomNavItem' . ($dashboardActive ? ' is-active' : '') . '" href="' . htmlspecialchars($dashboardHref, ENT_QUOTES, 'UTF-8') . '">';
+        echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/></svg>';
+        echo '<span>داشبورد</span>';
+        echo '</a>';
+        echo '</div>';
+
         echo '<div class="adminBottomNavMore">';
         echo '<button type="button" class="adminBottomNavMoreBtn" id="adminBottomMoreBtn" data-more-mode="' . htmlspecialchars($moreMode, ENT_QUOTES, 'UTF-8') . '" aria-label="بیشتر">';
         echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
@@ -373,6 +401,19 @@ body.adminPageSupport{padding-bottom:0}
 })();
 </script>
 JS;
+    }
+
+    function adminPageEnd($options = []){
+        static $rendered = false;
+
+        if($rendered){
+            return;
+        }
+
+        $rendered = true;
+        adminBottomNavStyles();
+        adminBottomNav($options);
+        adminBottomNavScript();
     }
 
 }

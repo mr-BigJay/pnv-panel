@@ -1234,8 +1234,11 @@ name="uploadcsv">
 </div>
 
 <?php
-$adminBottomActive = in_array($page, ['support', 'renews', 'payments'], true) ? $page : '';
-adminBottomNav([
+$adminBottomActive = 'dashboard';
+if(in_array($page, ['support', 'renews', 'payments'], true)){
+    $adminBottomActive = $page;
+}
+adminPageEnd([
     'active' => $adminBottomActive,
     'more_mode' => 'sidebar',
     'badges' => [
@@ -1244,7 +1247,6 @@ adminBottomNav([
         'payments' => $pendingPaymentsCount,
     ],
 ]);
-adminBottomNavScript();
 ?>
 
 <script>

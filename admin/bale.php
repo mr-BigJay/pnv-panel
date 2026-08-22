@@ -202,5 +202,6 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 
 <a class="back" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php', ENT_QUOTES, 'UTF-8'); ?>">بازگشت به مدیریت</a>
 </div>
+<?php adminPageEnd(['active' => 'bale', 'more_mode' => 'sheet']); ?>
 </body>
 </html>

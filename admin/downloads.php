@@ -513,7 +513,7 @@ xhr.send(formData);
 </script>
 
 <?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
-
+<?php adminPageEnd(['active' => 'downloads', 'more_mode' => 'sheet']); ?>
 </body>
 
 </html>
