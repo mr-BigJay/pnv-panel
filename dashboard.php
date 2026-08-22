@@ -521,6 +521,14 @@ line-height:1.9;
 color:#e2e8f0;
 white-space:pre-wrap;
 }
+.dashAnnModal .dashModalActions{
+justify-content:center;
+}
+.dashAnnModal .dashModalBtn{
+flex:0 0 auto;
+min-width:120px;
+padding:0 28px;
+}
 .dashAvatarInput{
 display:none;
 }
@@ -724,7 +732,7 @@ max-width:360px;
 <h2 class="dashModalTitle" id="dashAnnouncementTitle">پیام</h2>
 <div class="dashAnnMessage" id="dashAnnouncementMessage"></div>
 <div class="dashModalActions">
-<button type="button" class="dashModalBtn dashModalBtn--primary" id="dashAnnouncementDismiss">متوجه شدم</button>
+<button type="button" class="dashModalBtn dashModalBtn--primary" id="dashAnnouncementDismiss">ادامه</button>
 </div>
 </div>
 </div>
