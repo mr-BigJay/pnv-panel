@@ -401,6 +401,16 @@ if(!function_exists('tgUserFaNum')){
         return 'https://t.me/' . rawurlencode($username) . '?start=link_' . rawurlencode($token);
     }
 
+    function tgUserBuildBotPublicUrl($config = null){
+        $username = tgUserGetBotUsername($config);
+
+        if($username === ''){
+            return '';
+        }
+
+        return 'https://t.me/' . rawurlencode(ltrim($username, '@'));
+    }
+
     function tgUserGetTelegramStatus($username){
         $users = profileLoadUsers();
         $index = profileFindUserIndex($users, $username);

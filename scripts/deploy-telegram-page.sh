@@ -35,3 +35,9 @@ fi
 say ""
 say "Done. Hard-refresh: Ctrl+Shift+R"
 say "Test: ${ROOT}/telegram.php"
+say "Expected HTML marker: pnv-telegram-ui:6"
+if grep -q 'pnv-telegram-ui:6' "${ROOT}/telegram.php" 2>/dev/null; then
+  say "  verify OK (telegram.php updated)"
+else
+  say "  !! verify FAILED — telegram.php on disk may still be old"
+fi

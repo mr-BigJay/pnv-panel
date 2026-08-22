@@ -17,9 +17,11 @@ $username = (string)$_SESSION['user'];
 $action = trim((string)($_POST['action'] ?? $_GET['action'] ?? ''));
 
 if($action === 'telegram_status'){
+    $config = telegramLoadConfig();
     $status = tgUserGetTelegramStatus($username);
-    $status['bot_enabled'] = !empty(telegramLoadConfig()['enabled']);
-    $status['bot_username'] = tgUserGetBotUsername();
+    $status['bot_enabled'] = !empty($config['enabled']);
+    $status['bot_username'] = tgUserGetBotUsername($config);
+    $status['bot_url'] = tgUserBuildBotPublicUrl($config);
     echo json_encode(['ok' => true] + $status, JSON_UNESCAPED_UNICODE);
     exit;
 }

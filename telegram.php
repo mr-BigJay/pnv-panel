@@ -28,6 +28,10 @@ if(is_file(__DIR__ . '/telegram_user_lib.php')){
     if(function_exists('tgUserGetBotUsername')){
         $botUsername = tgUserGetBotUsername($config);
     }
+
+    if(function_exists('tgUserBuildBotPublicUrl')){
+        $botUrl = tgUserBuildBotPublicUrl($config);
+    }
 }
 
 $linked = !empty($telegramStatus['linked']);
@@ -57,12 +61,6 @@ if($linked){
     }
 }
 
-$botUrl = '';
-
-if($botUsername !== ''){
-    $botUrl = 'https://t.me/' . rawurlencode(ltrim($botUsername, '@'));
-}
-
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -75,9 +73,15 @@ if($botUsername !== ''){
 <title>اتصال تلگرام</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="telegram_ui.css?v=5">
+<link rel="stylesheet" href="telegram_ui.css?v=6">
+<style>
+.telegramActionsLinked{display:flex;flex-direction:row;align-items:stretch;gap:10px;width:100%;margin-top:4px}
+.telegramActionsLinked .telegramBtn--telegram{flex:1 1 auto;width:auto!important;min-width:0;background:#229ed9!important;color:#fff!important;box-shadow:0 8px 22px rgba(34,158,217,.28)}
+.telegramActionsLinked .telegramBtn--compact{flex:0 0 auto;width:auto!important;min-width:92px;max-width:42%;min-height:40px;padding:0 12px;font-size:12px;font-weight:600}
+</style>
 </head>
 <body class="telegramPage">
+<!-- pnv-telegram-ui:6 -->
 
 <div class="telegramApp">
 
@@ -109,9 +113,7 @@ elseif(!$linked){
 <div class="telegramActions" id="tgActions">
 <?php if($linked){ ?>
 <div class="telegramActionsLinked">
-<?php if($botUrl !== ''){ ?>
-<a href="<?php echo $h($botUrl); ?>" target="_blank" rel="noopener noreferrer" class="telegramBtn telegramBtn--telegram" id="tgOpenBotBtn">رفتن به ربات</a>
-<?php } ?>
+<a href="<?php echo $botUrl !== '' ? $h($botUrl) : '#'; ?>" target="_blank" rel="noopener noreferrer" class="telegramBtn telegramBtn--telegram" id="tgOpenBotBtn"<?php echo $botUrl === '' ? ' data-needs-url="1"' : ''; ?>>رفتن به ربات</a>
 <button type="button" class="telegramBtn telegramBtn--danger telegramBtn--compact" id="tgDisconnectBtn">قطع اتصال</button>
 </div>
 <?php } else { ?>
@@ -147,6 +149,7 @@ else{
     var statusMeta = document.getElementById('tgStatusMeta');
     var connectBtn = document.getElementById('tgConnectBtn');
     var disconnectBtn = document.getElementById('tgDisconnectBtn');
+    var openBotBtn = document.getElementById('tgOpenBotBtn');
 
     function showFlash(msg, kind){
         if(!flashEl){
@@ -161,6 +164,34 @@ else{
 
         flashEl.textContent = msg;
         flashEl.className = 'telegramFlash is-visible' + (kind ? ' is-' + kind : '');
+    }
+
+    if(openBotBtn){
+        openBotBtn.addEventListener('click', function(e){
+            if(!openBotBtn.getAttribute('data-needs-url')){
+                return;
+            }
+
+            e.preventDefault();
+            fetch('profile-api.php?action=telegram_status', {credentials:'same-origin'})
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    var username = (data && data.bot_username) ? String(data.bot_username).replace(/^@+/, '') : '';
+
+                    if(!username){
+                        showFlash('آدرس ربات در دسترس نیست', 'error');
+                        return;
+                    }
+
+                    var url = 'https://t.me/' + encodeURIComponent(username);
+                    openBotBtn.removeAttribute('data-needs-url');
+                    openBotBtn.setAttribute('href', url);
+                    window.open(url, '_blank');
+                })
+                .catch(function(){
+                    showFlash('خطا در باز کردن ربات', 'error');
+                });
+        });
     }
 
     if(connectBtn){
