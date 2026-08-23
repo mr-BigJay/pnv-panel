@@ -131,6 +131,32 @@ if(isset($_POST['test'])){
     }
 }
 
+$parsePreview = null;
+
+if(isset($_POST['parse_test'])){
+    require_once __DIR__ . '/../instant_pay_lib.php';
+    $sample = trim((string)($_POST['parse_sample'] ?? ''));
+
+    if($sample === ''){
+        $error = 'متن نمونه واریز را وارد کنید.';
+    }
+    else{
+        $amounts = baleExtractRialAmounts($sample);
+        $looksDeposit = baleLooksLikeDeposit($sample);
+        $looksPostBank = baleLooksLikePostBankNotice($sample);
+        $matchResult = instantPayHandleDepositText($sample, pnvNowParts());
+
+        $parsePreview = [
+            'amounts' => $amounts,
+            'looks_deposit' => $looksDeposit,
+            'looks_postbank' => $looksPostBank,
+            'match' => $matchResult,
+        ];
+    }
+}
+
+$webhookLogTail = function_exists('baleReadWebhookLogTail') ? baleReadWebhookLogTail(25) : [];
+
 $tokenMasked = trim((string)($config['bot_token'] ?? ''));
 if($tokenMasked !== ''){
     $tokenMasked = substr($tokenMasked, 0, 6) . str_repeat('•', max(8, strlen($tokenMasked) - 10)) . substr($tokenMasked, -4);
@@ -161,6 +187,9 @@ input.ltr{direction:ltr;text-align:left}
 button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;background:#22c55e;color:#fff;font:inherit;font-size:17px;cursor:pointer;text-align:center;text-decoration:none;margin-top:14px}
 .test{background:#2563eb}.hook{background:#7c3aed}.back{background:#334155;margin-top:20px}
 .steps{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:16px;line-height:2;color:#cbd5e1;font-size:14px;margin-bottom:18px}
+.logbox{background:#0f172a;border:1px solid #334155;border-radius:12px;padding:12px;font-family:monospace;font-size:12px;line-height:1.7;direction:ltr;text-align:left;max-height:240px;overflow:auto;color:#cbd5e1;white-space:pre-wrap;word-break:break-word}
+textarea{width:100%;min-height:120px;border:0;border-radius:12px;padding:14px;background:#0f172a;color:#fff;font:inherit;font-size:14px;direction:rtl}
+.parse{background:#0ea5e9}
 @media(max-width:600px){body{padding:10px}.box{padding:22px 16px}}
 </style>
 </head>
@@ -175,11 +204,28 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <?php if($error !== ''){ ?><div class="err"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
 
 <div class="steps">
-۱. در بله به بازو بروید و <b>/start</b> بزنید<br>
-۲. تنظیمات را ذخیره و Webhook را ثبت کنید<br>
-۳. هر پیام واریز <b>@postbank_bot</b> را به بازو <b>فوروارد</b> کنید<br>
+۱. در بله به بازو <b>@Jay24x7Pusbank_bot</b> بروید و <b>/start</b> بزنید<br>
+۲. تنظیمات را ذخیره کنید، «فعال‌سازی» را تیک بزنید، و Webhook را ثبت کنید<br>
+۳. هر پیام واریز <b>@postbank_bot</b> را به بازو <b>فوروارد</b> کنید (در چت خصوصی یا گروه)<br>
 ۴. اگر ۴ رقم آخر مبلغ با سفارش باز یکی باشد، پرداخت خودکار تأیید می‌شود
 </div>
+
+<?php if(is_array($parsePreview)){ ?>
+<div class="hint">
+<b>نتیجه تست پارس:</b><br>
+مبالغ: <?php echo htmlspecialchars(json_encode($parsePreview['amounts'] ?? [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?><br>
+شبیه واریز: <?php echo !empty($parsePreview['looks_deposit']) ? 'بله' : 'خیر'; ?> |
+پست‌بانک: <?php echo !empty($parsePreview['looks_postbank']) ? 'بله' : 'خیر'; ?><br>
+مچ: <?php echo htmlspecialchars(json_encode($parsePreview['match'] ?? [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>
+</div>
+<?php } ?>
+
+<?php if(count($webhookLogTail) > 0){ ?>
+<label>آخرین رویدادهای Webhook</label>
+<div class="logbox"><?php echo htmlspecialchars(implode("\n", $webhookLogTail), ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } else { ?>
+<div class="hint">لاگ Webhook خالی است. بعد از فوروارد پیام واریز، اینجا رویدادها دیده می‌شوند.</div>
+<?php } ?>
 
 <form method="post">
 <label class="toggle">
@@ -229,6 +275,12 @@ if(!empty($liveWebhook['ok'])){
 <button type="submit" name="set_webhook" class="hook">ثبت Webhook در بله</button>
 <button type="submit" name="check_webhook" class="hook">بررسی Webhook</button>
 <button type="submit" name="test" class="test">تست ارتباط و ارسال پیام</button>
+</form>
+
+<form method="post" style="margin-top:18px">
+<label for="parse_sample">تست پارس پیام واریز (کپی متن @postbank_bot)</label>
+<textarea id="parse_sample" name="parse_sample" placeholder="متن پیام پست‌بانک را اینجا بچسبانید"><?php echo htmlspecialchars((string)($_POST['parse_sample'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
+<button type="submit" name="parse_test" class="parse">تست پارس مبلغ</button>
 </form>
 
 <a class="back" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php', ENT_QUOTES, 'UTF-8'); ?>">بازگشت به مدیریت</a>

@@ -15,7 +15,9 @@ files=(
   "instant_pay_lib.php"
   "instant-pay-api.php"
   "admin/bale.php"
+  "admin/diag-bale.php"
   "bigjay_controller/bale.php"
+  "bigjay_controller/diag-bale.php"
 )
 
 for rel in "${files[@]}"; do

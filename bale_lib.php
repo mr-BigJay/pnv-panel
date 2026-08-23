@@ -75,6 +75,88 @@ if(!function_exists('baleConfigPath')){
         return in_array($chatId, $ids, true);
     }
 
+    function baleMessageSenderId($message){
+        if(!is_array($message)){
+            return '';
+        }
+
+        foreach(['from', 'from_user'] as $key){
+            if(empty($message[$key]) || !is_array($message[$key])){
+                continue;
+            }
+
+            $id = trim((string)($message[$key]['id'] ?? ''));
+
+            if($id !== ''){
+                return $id;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * ادمین می‌تواند در چت خصوصی یا گروه فوروارد کند؛ chat.id گروه با user.id فرق دارد.
+     */
+    function baleIsAdminMessage($message, $config = null){
+        if(!is_array($message)){
+            return false;
+        }
+
+        $chatId = (string)($message['chat']['id'] ?? '');
+        $senderId = baleMessageSenderId($message);
+        $ids = baleAdminChatIds($config);
+
+        if(count($ids) === 0){
+            return true;
+        }
+
+        if($chatId !== '' && in_array($chatId, $ids, true)){
+            return true;
+        }
+
+        if($senderId !== '' && in_array($senderId, $ids, true)){
+            return true;
+        }
+
+        return false;
+    }
+
+    function baleRememberAdminIds($config, $message){
+        if(!is_array($message)){
+            return $config;
+        }
+
+        $ids = baleAdminChatIds($config);
+        $add = [];
+
+        $chatId = trim((string)($message['chat']['id'] ?? ''));
+        $senderId = baleMessageSenderId($message);
+
+        if($chatId !== ''){
+            $add[] = $chatId;
+        }
+
+        if($senderId !== '' && $senderId !== $chatId){
+            $add[] = $senderId;
+        }
+
+        if(count($add) === 0){
+            return $config;
+        }
+
+        foreach($add as $id){
+            if(!in_array($id, $ids, true)){
+                $ids[] = $id;
+            }
+        }
+
+        $config['admin_chat_ids'] = implode(',', $ids);
+        baleSaveConfig($config);
+
+        return baleLoadConfig();
+    }
+
     function baleApiRequest($method, $params = [], $config = null){
         if($config === null){
             $config = baleLoadConfig();
@@ -171,7 +253,7 @@ if(!function_exists('baleConfigPath')){
             }
         }
 
-        foreach(['reply_to_message', 'forward_from_message', 'external_reply'] as $nestedKey){
+        foreach(['reply_to_message', 'forward_from_message', 'external_reply', 'quote'] as $nestedKey){
             if(empty($message[$nestedKey]) || !is_array($message[$nestedKey])){
                 continue;
             }
@@ -179,10 +261,17 @@ if(!function_exists('baleConfigPath')){
             $parts = array_merge($parts, baleCollectMessageTextParts($message[$nestedKey], $depth + 1));
         }
 
-        if(!empty($message['external_reply']) && is_array($message['external_reply'])){
+        // API جدیدتر (شبیه تلگرام): forward_origin.message
+        if(!empty($message['forward_origin']) && is_array($message['forward_origin'])){
+            $origin = $message['forward_origin'];
+
+            if(!empty($origin['message']) && is_array($origin['message'])){
+                $parts = array_merge($parts, baleCollectMessageTextParts($origin['message'], $depth + 1));
+            }
+
             foreach(['text', 'caption'] as $key){
-                if(!empty($message['external_reply'][$key]) && is_string($message['external_reply'][$key])){
-                    $part = trim($message['external_reply'][$key]);
+                if(!empty($origin[$key]) && is_string($origin[$key])){
+                    $part = trim($origin[$key]);
 
                     if($part !== ''){
                         $parts[] = $part;
@@ -192,6 +281,38 @@ if(!function_exists('baleConfigPath')){
         }
 
         return $parts;
+    }
+
+    function baleMessageDebugSummary($message){
+        if(!is_array($message)){
+            return [];
+        }
+
+        $text = baleExtractMessageText($message);
+        $preview = $text;
+
+        if($preview !== '' && function_exists('mb_substr')){
+            $preview = mb_substr($preview, 0, 80);
+        }
+        elseif($preview !== ''){
+            $preview = substr($preview, 0, 80);
+        }
+
+        return [
+            'message_id' => $message['message_id'] ?? null,
+            'chat_id' => $message['chat']['id'] ?? null,
+            'chat_type' => $message['chat']['type'] ?? null,
+            'from_id' => baleMessageSenderId($message),
+            'forward' => baleForwardSourceLabel($message),
+            'has_text' => $text !== '',
+            'text_len' => strlen($text),
+            'preview' => $preview,
+            'keys' => array_values(array_intersect(array_keys($message), [
+                'text', 'caption', 'forward_from', 'forward_from_chat',
+                'forward_from_message_id', 'forward_date', 'forward_origin',
+                'reply_to_message', 'forward_from_message', 'external_reply', 'quote',
+            ])),
+        ];
     }
 
     function baleExtractMessageText($message){
@@ -225,6 +346,35 @@ if(!function_exists('baleConfigPath')){
 
             if($title !== ''){
                 return $title;
+            }
+        }
+
+        if(!empty($message['forward_origin']) && is_array($message['forward_origin'])){
+            $origin = $message['forward_origin'];
+            $originChat = $origin['chat'] ?? ($origin['sender_chat'] ?? null);
+
+            if(is_array($originChat)){
+                $username = trim((string)($originChat['username'] ?? ''));
+
+                if($username !== ''){
+                    return '@' . ltrim($username, '@');
+                }
+
+                $title = trim((string)($originChat['title'] ?? ''));
+
+                if($title !== ''){
+                    return $title;
+                }
+            }
+
+            $originUser = $origin['sender_user'] ?? null;
+
+            if(is_array($originUser)){
+                $username = trim((string)($originUser['username'] ?? ''));
+
+                if($username !== ''){
+                    return '@' . ltrim($username, '@');
+                }
             }
         }
 
@@ -275,6 +425,24 @@ if(!function_exists('baleConfigPath')){
         }
 
         @file_put_contents(baleWebhookLogPath(), $line . "\n", FILE_APPEND | LOCK_EX);
+    }
+
+    function baleReadWebhookLogTail($maxLines = 30){
+        $path = baleWebhookLogPath();
+
+        if(!is_file($path)){
+            return [];
+        }
+
+        $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+        if(!is_array($lines)){
+            return [];
+        }
+
+        $maxLines = max(1, intval($maxLines));
+
+        return array_slice($lines, -$maxLines);
     }
 
     function baleGetWebhookInfo($config = null){

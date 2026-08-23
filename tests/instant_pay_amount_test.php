@@ -78,6 +78,27 @@ $nestedReply = [
 ];
 assertTrue(baleExtractMessageText($nestedReply) === $sample2, 'reply_to_message text extracted');
 
+$groupForward = [
+    'text' => $sample1,
+    'chat' => ['id' => '-100999', 'type' => 'group'],
+    'from' => ['id' => '555001'],
+    'forward_from_chat' => ['username' => 'postbank_bot'],
+];
+assertTrue(baleIsAdminMessage($groupForward, ['admin_chat_ids' => '555001']), 'group forward allowed by sender user id');
+assertTrue(!baleIsAdminMessage($groupForward, ['admin_chat_ids' => '-100999']), 'wrong admin id rejected');
+
+$forwardOrigin = [
+    'text' => $sample1,
+    'chat' => ['id' => '555001', 'type' => 'private'],
+    'forward_origin' => [
+        'type' => 'channel',
+        'chat' => ['username' => 'postbank_bot'],
+        'message' => ['text' => $sample1],
+    ],
+];
+assertTrue(baleExtractMessageText($forwardOrigin) !== '', 'forward_origin nested text extracted');
+assertTrue(baleForwardSourceLabel($forwardOrigin) === '@postbank_bot', 'forward_origin source label');
+
 // پارس فرمت‌های دیگر
 $samples = [
     'واریز 1,499,280 ریال به حساب شما' => 1499280,

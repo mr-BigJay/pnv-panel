@@ -41,24 +41,27 @@ if(!is_array($message)){
 $chatId = (string)($message['chat']['id'] ?? '');
 $text = baleExtractMessageText($message);
 
+baleLogWebhookEvent('incoming', baleMessageDebugSummary($message));
+
 // bootstrap: اگر ادمین هنوز chat_id ندارد، از اولین پیام ذخیره کن
 $adminIds = baleAdminChatIds($config);
 $bootstrapped = false;
 
 if(count($adminIds) === 0 && $chatId !== ''){
-    $config['admin_chat_ids'] = $chatId;
-    baleSaveConfig($config);
+    $config = baleRememberAdminIds($config, $message);
     $adminIds = baleAdminChatIds($config);
     $bootstrapped = true;
     baleSendMessage($chatId, "✅ شناسه چت شما ذخیره شد: {$chatId}\nاز این به بعد پیام‌های واریز پست‌بانک را به همین بازو فوروارد کنید.", [], $config);
     // ادامه بده تا اگر همین پیام واریز بود، مچ شود
 }
 
-if(!baleIsAdminChat($chatId, $config)){
+if(!baleIsAdminMessage($message, $config)){
     $allowed = baleAdminChatIds($config);
+    $senderId = baleMessageSenderId($message);
 
     baleLogWebhookEvent('unauthorized_chat', [
         'chat_id' => $chatId,
+        'from_id' => $senderId,
         'allowed' => $allowed,
         'forward' => baleForwardSourceLabel($message),
     ]);
@@ -67,38 +70,37 @@ if(!baleIsAdminChat($chatId, $config)){
         baleSendMessage(
             $chatId,
             "⛔️ این چت برای تأیید خودکار مجاز نیست.\n"
-            . "شناسه چت شما: {$chatId}\n"
+            . "شناسه چت: {$chatId}\n"
+            . ($senderId !== '' ? "شناسه فرستنده: {$senderId}\n" : '')
             . "شناسه‌های مجاز در پنل: " . (count($allowed) ? implode(', ', $allowed) : '—') . "\n\n"
-            . "در پنل ادمین → بله → «خواندن شناسه از بله» را بزنید یا همین عدد را در «شناسه چت مدیر» ذخیره کنید.",
+            . "در پنل ادمین → بله → «خواندن شناسه از بله» را بزنید یا همین اعداد را در «شناسه چت مدیر» ذخیره کنید.\n"
+            . "اگر در گروه فوروارد می‌کنید، شناسه گروه یا شناسه کاربری خودتان باید در لیست باشد.",
             [],
             $config
         );
     }
 
-    echo json_encode(['ok' => false, 'error' => 'unauthorized chat', 'chat_id' => $chatId]);
+    echo json_encode(['ok' => false, 'error' => 'unauthorized chat', 'chat_id' => $chatId, 'from_id' => $senderId]);
     exit;
 }
 
 if($text === '/start' || $text === 'start'){
     // همیشه chat_id را نشان بده تا ادمین بتواند در پنل ذخیره کند
-    if($chatId !== '' && !in_array($chatId, $adminIds, true)){
-        $ids = $adminIds;
-        $ids[] = $chatId;
-        $config['admin_chat_ids'] = implode(',', array_values(array_unique($ids)));
-        baleSaveConfig($config);
-        $adminIds = baleAdminChatIds($config);
-    }
+    $config = baleRememberAdminIds($config, $message);
+    $adminIds = baleAdminChatIds($config);
+    $senderId = baleMessageSenderId($message);
 
     baleSendMessage(
         $chatId,
         "ربات پرداخت آنی فعال است.\n"
-        . "شناسه چت شما: {$chatId}\n\n"
-        . "همین عدد را در پنل ادمین → بله → «شناسه چت مدیر» ذخیره کنید.\n"
+        . "شناسه چت: {$chatId}\n"
+        . ($senderId !== '' && $senderId !== $chatId ? "شناسه کاربری شما: {$senderId}\n" : '')
+        . "\nهمین عدد(ها) را در پنل ادمین → بله → «شناسه چت مدیر» ذخیره کنید.\n"
         . "بعد پیام‌های واریز @postbank_bot را به همین بازو فوروارد کنید.",
         [],
         $config
     );
-    echo json_encode(['ok' => true, 'start' => true, 'chat_id' => $chatId, 'bootstrapped' => $bootstrapped]);
+    echo json_encode(['ok' => true, 'start' => true, 'chat_id' => $chatId, 'from_id' => $senderId, 'bootstrapped' => $bootstrapped]);
     exit;
 }
 
@@ -175,6 +177,26 @@ if(!empty($result['ok'])){
 }
 
 if(!empty($result['ignored'])){
+    $forwardLabel = baleForwardSourceLabel($message);
+    $isPostBank = function_exists('baleLooksLikePostBankForward') && baleLooksLikePostBankForward($message);
+
+    if($isPostBank || $forwardLabel !== ''){
+        baleSendMessage(
+            $chatId,
+            "ℹ️ پیام فوروارد دریافت شد ولی شبیه واریز تشخیص داده نشد.\n"
+            . ($forwardLabel !== '' ? "منبع: {$forwardLabel}\n" : '')
+            . "لطفاً پیام @postbank_bot را با «فوروارد» (نه کپی) بفرستید.\n"
+            . "اگر متن دیده نمی‌شود، متن پیام را کپی و به‌صورت پیام عادی ارسال کنید.",
+            [],
+            $config
+        );
+        baleLogWebhookEvent('ignored_not_deposit', [
+            'chat_id' => $chatId,
+            'forward' => $forwardLabel,
+            'preview' => function_exists('mb_substr') ? mb_substr($text, 0, 120) : substr($text, 0, 120),
+        ]);
+    }
+
     echo json_encode(['ok' => true, 'ignored' => true]);
     exit;
 }
