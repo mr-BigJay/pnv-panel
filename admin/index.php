@@ -1272,7 +1272,6 @@ if(in_array($page, ['support', 'renews', 'payments'], true)){
 }
 adminPageEnd([
     'active' => $adminBottomActive,
-    'more_mode' => 'sidebar',
     'badges' => [
         'support' => $supportUnreadCount,
         'renews' => $pendingRenewsCount,
