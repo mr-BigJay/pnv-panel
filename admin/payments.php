@@ -207,7 +207,11 @@ if(isset($_POST['approve_payment'])){
         $redirectPer = 20;
     }
 
-    $xuiConfig = xuiLoadConfig();
+    if(!function_exists('xuiLoadConfig') && is_file(__DIR__ . '/../xui_lib.php')){
+        require_once __DIR__ . '/../xui_lib.php';
+    }
+
+    $xuiConfig = function_exists('xuiLoadConfig') ? xuiLoadConfig() : [];
 
     if(function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])){
 
@@ -1105,7 +1109,8 @@ content='<div style="background:#450a0a;padding:14px;border-radius:12px;line-hei
 }
 else{
 content=
-'<form method="POST">'+
+'<form method="POST" action="'+paymentsListBase+'">'+
+'<input type="hidden" name="page" value="payments">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
 '<input type="hidden" name="approve_index" value="'+id+'">'+
 '<input type="text" name="approve_link" id="approveLink" placeholder="لینک اشتراک">'+
@@ -1114,7 +1119,8 @@ content=
 '<button type="submit" name="approve_payment" class="green">تایید</button>'+
 '</div></form>'+
 '<hr style="margin:20px 0;border-color:#334155;">'+
-'<form method="POST">'+
+'<form method="POST" action="'+paymentsListBase+'">'+
+'<input type="hidden" name="page" value="payments">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
 '<input type="hidden" name="reject_index" value="'+id+'">'+
 '<select name="reject_reason">'+

@@ -307,6 +307,32 @@ exit;
 
 }
 
+// تأیید/رد/حذف لیست خرید و تمدید — قبل از خروجی HTML (وگرنه redirect خراب می‌شود)
+if(
+    isset($_POST['approve_payment'])
+    || isset($_POST['reject_payment'])
+    || isset($_GET['deletepayment'])
+){
+    $actionPage = $_GET['page'] ?? $_POST['page'] ?? '';
+
+    if($actionPage === 'payments' || $actionPage === 'renews'){
+        ob_start();
+
+        foreach([
+            __DIR__ . '/' . $actionPage . '.php',
+            __DIR__ . '/../admin/' . $actionPage . '.php',
+        ] as $actionFile){
+            if(is_file($actionFile)){
+                include $actionFile;
+                break;
+            }
+        }
+
+        ob_end_clean();
+        exit;
+    }
+}
+
 $plansFile = $pnvRootDir . '/db/plans.json';
 $cardsFile = $pnvRootDir . '/db/cards.json';
 $usersFile = $pnvRootDir . '/db/users.json';

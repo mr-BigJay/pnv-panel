@@ -1060,7 +1060,8 @@ openModal(
 '<p><b>کاربر:</b> '+user+'</p>'+
 '<p><b>موبایل:</b> '+mobile+'</p>'+
 '<p><b>پلن:</b> '+plan+'</p>'+
-'<form method="POST">'+
+'<form method="POST" action="'+renewsPageUrl+'">'+
+'<input type="hidden" name="page" value="renews">'+
 '<input type="hidden" name="approve_index" value="'+id+'">'+
 '<input type="text" name="approve_link" placeholder="لینک تمدید">'+
 '<div class="modalBtns">'+
@@ -1068,7 +1069,8 @@ openModal(
 '</div>'+
 '</form>'+
 '<hr style="margin:15px 0;">'+
-'<form method="POST">'+
+'<form method="POST" action="'+renewsPageUrl+'">'+
+'<input type="hidden" name="page" value="renews">'+
 '<input type="hidden" name="reject_index" value="'+id+'">'+
 '<select name="reject_reason">'+
 '<option value="اطلاعات پرداخت اشتباه است">اطلاعات پرداخت اشتباه است</option>'+
