@@ -19,7 +19,8 @@ require_once __DIR__ . '/../bale_lib.php';
 $config = baleLoadConfig();
 $message = '';
 $error = '';
-$webhookUrl = 'https://panel.ticketin.ir/bale-webhook.php';
+$webhookUrl = function_exists('baleWebhookPublicUrl') ? baleWebhookPublicUrl() : 'https://panel.ticketin.ir/bale-webhook.php';
+$webhookInfo = null;
 
 if(isset($_POST['save'])){
     $token = trim((string)($_POST['bot_token'] ?? ''));
@@ -53,6 +54,19 @@ if(isset($_POST['set_webhook'])){
     }
     else{
         $error = $result['description'] ?? 'ثبت Webhook ناموفق بود';
+    }
+}
+
+if(isset($_POST['check_webhook'])){
+    $config = baleLoadConfig();
+    $webhookInfo = baleGetWebhookInfo($config);
+
+    if(empty($webhookInfo['ok'])){
+        $error = $webhookInfo['description'] ?? 'دریافت وضعیت Webhook ناموفق بود';
+    }
+    else{
+        $info = $webhookInfo['result'] ?? [];
+        $message = 'Webhook فعلی: ' . ($info['url'] ?? '—');
     }
 }
 
@@ -194,9 +208,26 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 
 <div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></div>
 
+<?php
+$liveWebhook = baleGetWebhookInfo($config);
+if(!empty($liveWebhook['ok'])){
+    $info = $liveWebhook['result'] ?? [];
+    $liveUrl = trim((string)($info['url'] ?? ''));
+    $pending = intval($info['pending_update_count'] ?? 0);
+    $lastError = trim((string)($info['last_error_message'] ?? ''));
+?>
+<div class="hint">
+وضعیت Webhook در بله:<br>
+<code><?php echo htmlspecialchars($liveUrl !== '' ? $liveUrl : 'ثبت نشده', ENT_QUOTES, 'UTF-8'); ?></code><br>
+<?php if($pending > 0){ ?>پیام‌های در صف: <?php echo $pending; ?><br><?php } ?>
+<?php if($lastError !== ''){ ?><span style="color:#fecaca">آخرین خطا: <?php echo htmlspecialchars($lastError, ENT_QUOTES, 'UTF-8'); ?></span><?php } ?>
+</div>
+<?php } ?>
+
 <button type="submit" name="save">ذخیره تنظیمات</button>
 <button type="submit" name="fetch_chat" class="test">خواندن شناسه چت از بله</button>
 <button type="submit" name="set_webhook" class="hook">ثبت Webhook در بله</button>
+<button type="submit" name="check_webhook" class="hook">بررسی Webhook</button>
 <button type="submit" name="test" class="test">تست ارتباط و ارسال پیام</button>
 </form>
 

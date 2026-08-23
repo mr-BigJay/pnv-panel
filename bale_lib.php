@@ -154,37 +154,131 @@ if(!function_exists('baleConfigPath')){
         return (bool)preg_match('/' . preg_quote($needle, '/') . '/iu', $haystack);
     }
 
-    function baleExtractMessageText($message){
-        if(!is_array($message)){
-            return '';
+    function baleCollectMessageTextParts($message, $depth = 0){
+        if(!is_array($message) || $depth > 5){
+            return [];
         }
 
         $parts = [];
 
         foreach(['text', 'caption'] as $key){
             if(!empty($message[$key]) && is_string($message[$key])){
-                $parts[] = trim($message[$key]);
-            }
-        }
+                $part = trim($message[$key]);
 
-        // بعضی فورواردها متن را داخل پیام اصلی می‌گذارند
-        foreach(['forward_from_message', 'reply_to_message'] as $nestedKey){
-            if(empty($message[$nestedKey]) || !is_array($message[$nestedKey])){
-                continue;
-            }
-
-            foreach(['text', 'caption'] as $key){
-                if(!empty($message[$nestedKey][$key]) && is_string($message[$nestedKey][$key])){
-                    $parts[] = trim($message[$nestedKey][$key]);
+                if($part !== ''){
+                    $parts[] = $part;
                 }
             }
         }
 
+        foreach(['reply_to_message', 'forward_from_message', 'external_reply'] as $nestedKey){
+            if(empty($message[$nestedKey]) || !is_array($message[$nestedKey])){
+                continue;
+            }
+
+            $parts = array_merge($parts, baleCollectMessageTextParts($message[$nestedKey], $depth + 1));
+        }
+
+        if(!empty($message['external_reply']) && is_array($message['external_reply'])){
+            foreach(['text', 'caption'] as $key){
+                if(!empty($message['external_reply'][$key]) && is_string($message['external_reply'][$key])){
+                    $part = trim($message['external_reply'][$key]);
+
+                    if($part !== ''){
+                        $parts[] = $part;
+                    }
+                }
+            }
+        }
+
+        return $parts;
+    }
+
+    function baleExtractMessageText($message){
+        if(!is_array($message)){
+            return '';
+        }
+
+        $parts = baleCollectMessageTextParts($message);
         $parts = array_values(array_unique(array_filter($parts, static function($part){
             return $part !== '';
         })));
 
         return count($parts) > 0 ? implode("\n", $parts) : '';
+    }
+
+    function baleForwardSourceLabel($message){
+        if(!is_array($message)){
+            return '';
+        }
+
+        $chat = $message['forward_from_chat'] ?? null;
+
+        if(is_array($chat)){
+            $username = trim((string)($chat['username'] ?? ''));
+
+            if($username !== ''){
+                return '@' . ltrim($username, '@');
+            }
+
+            $title = trim((string)($chat['title'] ?? ''));
+
+            if($title !== ''){
+                return $title;
+            }
+        }
+
+        $from = $message['forward_from'] ?? null;
+
+        if(is_array($from)){
+            $username = trim((string)($from['username'] ?? ''));
+
+            if($username !== ''){
+                return '@' . ltrim($username, '@');
+            }
+
+            $name = trim((string)($from['first_name'] ?? ''));
+
+            if($name !== ''){
+                return $name;
+            }
+        }
+
+        return '';
+    }
+
+    function baleLooksLikePostBankForward($message){
+        if(!is_array($message)){
+            return false;
+        }
+
+        $source = strtolower(baleForwardSourceLabel($message));
+
+        if($source !== '' && (strpos($source, 'postbank') !== false || strpos($source, 'post') !== false)){
+            return true;
+        }
+
+        $text = baleExtractMessageText($message);
+
+        return $text !== '' && function_exists('baleLooksLikePostBankNotice') && baleLooksLikePostBankNotice($text);
+    }
+
+    function baleWebhookLogPath(){
+        return __DIR__ . '/db/bale_webhook.log';
+    }
+
+    function baleLogWebhookEvent($event, $context = []){
+        $line = date('c') . ' ' . $event;
+
+        if(is_array($context) && count($context) > 0){
+            $line .= ' ' . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        @file_put_contents(baleWebhookLogPath(), $line . "\n", FILE_APPEND | LOCK_EX);
+    }
+
+    function baleGetWebhookInfo($config = null){
+        return baleApiRequest('getWebhookInfo', [], $config);
     }
 
     /**

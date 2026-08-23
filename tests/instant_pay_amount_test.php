@@ -63,6 +63,21 @@ $forwarded = [
 ];
 assertTrue(baleExtractMessageText($forwarded) !== '', 'forwarded postbank text extracted');
 
+$forwardTop = [
+    'text' => $sample1,
+    'forward_from_chat' => ['username' => 'postbank_bot'],
+    'chat' => ['id' => '1']
+];
+assertTrue(baleExtractMessageText($forwardTop) === $sample1, 'top-level forwarded text extracted');
+assertTrue(baleLooksLikePostBankForward($forwardTop), 'postbank forward detected by username');
+
+$nestedReply = [
+    'text' => '',
+    'reply_to_message' => ['text' => $sample2],
+    'chat' => ['id' => '1']
+];
+assertTrue(baleExtractMessageText($nestedReply) === $sample2, 'reply_to_message text extracted');
+
 // پارس فرمت‌های دیگر
 $samples = [
     'واریز 1,499,280 ریال به حساب شما' => 1499280,

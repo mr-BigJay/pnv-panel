@@ -19,8 +19,13 @@ if(!is_array($update)){
 }
 
 $config = baleLoadConfig();
+$tokenConfigured = trim((string)($config['bot_token'] ?? '')) !== '';
 
-if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
+if(empty($config['enabled']) || !$tokenConfigured){
+    baleLogWebhookEvent('ignored_disabled', [
+        'enabled' => !empty($config['enabled']),
+        'has_token' => $tokenConfigured,
+    ]);
     echo json_encode(['ok' => false, 'error' => 'bale disabled']);
     exit;
 }
@@ -50,7 +55,27 @@ if(count($adminIds) === 0 && $chatId !== ''){
 }
 
 if(!baleIsAdminChat($chatId, $config)){
-    echo json_encode(['ok' => false, 'error' => 'unauthorized chat']);
+    $allowed = baleAdminChatIds($config);
+
+    baleLogWebhookEvent('unauthorized_chat', [
+        'chat_id' => $chatId,
+        'allowed' => $allowed,
+        'forward' => baleForwardSourceLabel($message),
+    ]);
+
+    if($chatId !== ''){
+        baleSendMessage(
+            $chatId,
+            "⛔️ این چت برای تأیید خودکار مجاز نیست.\n"
+            . "شناسه چت شما: {$chatId}\n"
+            . "شناسه‌های مجاز در پنل: " . (count($allowed) ? implode(', ', $allowed) : '—') . "\n\n"
+            . "در پنل ادمین → بله → «خواندن شناسه از بله» را بزنید یا همین عدد را در «شناسه چت مدیر» ذخیره کنید.",
+            [],
+            $config
+        );
+    }
+
+    echo json_encode(['ok' => false, 'error' => 'unauthorized chat', 'chat_id' => $chatId]);
     exit;
 }
 
@@ -78,18 +103,51 @@ if($text === '/start' || $text === 'start'){
 }
 
 if($text === ''){
-    baleSendMessage(
-        $chatId,
-        "⚠️ متن پیام خوانده نشد.\n"
-        . "لطفاً پیام واریز @postbank_bot را با گزینه «فوروارد» (نه کپی) به همین بازو بفرستید.",
-        [],
-        $config
-    );
+    $forwardLabel = baleForwardSourceLabel($message);
+    $hint = "⚠️ متن پیام واریز خوانده نشد.\n";
+
+    if($forwardLabel !== ''){
+        $hint .= "منبع فوروارد: {$forwardLabel}\n";
+    }
+
+    $hint .= "لطفاً پیام @postbank_bot را با «فوروارد» بفرستید.\n"
+        . "اگر باز هم خالی بود، متن پیام را کپی و به‌صورت پیام عادی بفرستید.";
+
+    baleSendMessage($chatId, $hint, [], $config);
+    baleLogWebhookEvent('empty_text', [
+        'chat_id' => $chatId,
+        'forward' => $forwardLabel,
+        'message_id' => $message['message_id'] ?? null,
+    ]);
     echo json_encode(['ok' => true, 'ignored' => 'empty text', 'bootstrapped' => $bootstrapped]);
     exit;
 }
 
-$result = instantPayHandleDepositText($text, pnvNowParts());
+baleLogWebhookEvent('deposit_text', [
+    'chat_id' => $chatId,
+    'forward' => baleForwardSourceLabel($message),
+    'preview' => function_exists('mb_substr') ? mb_substr($text, 0, 120) : substr($text, 0, 120),
+]);
+
+try{
+    $result = instantPayHandleDepositText($text, pnvNowParts());
+}
+catch(Throwable $e){
+    baleLogWebhookEvent('handler_exception', [
+        'chat_id' => $chatId,
+        'error' => $e->getMessage(),
+    ]);
+
+    baleSendMessage(
+        $chatId,
+        "⚠️ خطای داخلی هنگام پردازش واریز.\n" . $e->getMessage(),
+        [],
+        $config
+    );
+
+    echo json_encode(['ok' => false, 'error' => 'handler exception']);
+    exit;
+}
 
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];
