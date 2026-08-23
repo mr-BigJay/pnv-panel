@@ -1618,6 +1618,35 @@ if(!function_exists('instantPayPath')){
         return $list;
     }
 
+    function instantPayListMatchableOrders($limit = 8){
+        $items = instantPayExpireDue();
+        $now = time();
+        $out = [];
+
+        foreach($items as $item){
+            if(!instantPayItemMatchable($item, $now)){
+                continue;
+            }
+
+            $view = instantPayPublicView($item);
+            $out[] = [
+                'id' => $item['id'] ?? '',
+                'user' => $item['user'] ?? '',
+                'amount' => intval($view['amount'] ?? ($item['amount'] ?? 0)),
+                'amount_text' => $view['amount_text'] ?? '',
+                'code' => intval($item['code'] ?? 0),
+                'status' => $item['status'] ?? '',
+                'plan' => $item['plan'] ?? '',
+            ];
+
+            if(count($out) >= max(1, intval($limit))){
+                break;
+            }
+        }
+
+        return $out;
+    }
+
     function instantPayHandleDepositText($text, $meta = []){
         $text = trim((string)$text);
 
@@ -1659,6 +1688,7 @@ if(!function_exists('instantPayPath')){
             'amounts' => $amounts,
             'candidates' => $candidates,
             'debug' => instantPayMatchDebugSnapshot($amounts),
+            'open_orders' => instantPayListMatchableOrders(),
         ];
     }
 

@@ -2,6 +2,10 @@
 
 if(!function_exists('baleConfigPath')){
 
+    function baleParserVersion(){
+        return 'postbank-plus-v7';
+    }
+
     function baleConfigPath(){
         return __DIR__ . '/db/bale.json';
     }
@@ -12,11 +16,34 @@ if(!function_exists('baleConfigPath')){
             'bot_token' => '',
             'admin_chat_ids' => '',
             'webhook_secret' => '',
+            'ingest_secret' => '',
             'bot_username' => 'Jay24x7Pusbank_bot',
             'forward_hint' => 'پیام واریز @postbank_bot را به این بازو فوروارد کنید',
             'pay_window_seconds' => 1800,
-            'match_grace_seconds' => 0
+            'match_grace_seconds' => 0,
+            'auto_listener_enabled' => false
         ];
+    }
+
+    function baleEnsureIngestSecret($config = null){
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        $secret = trim((string)($config['ingest_secret'] ?? ''));
+
+        if($secret === ''){
+            try{
+                $secret = bin2hex(random_bytes(24));
+            }catch(Throwable $e){
+                $secret = sha1(uniqid('bale', true));
+            }
+
+            $config['ingest_secret'] = $secret;
+            baleSaveConfig($config);
+        }
+
+        return $secret;
     }
 
     function baleLoadConfig(){
@@ -425,6 +452,29 @@ if(!function_exists('baleConfigPath')){
         }
 
         @file_put_contents(baleWebhookLogPath(), $line . "\n", FILE_APPEND | LOCK_EX);
+        baleTrimWebhookLog();
+    }
+
+    /** سازگار با postbank-ingest.php و listener پایتون */
+    function baleWebhookLog($line){
+        $row = date('c') . ' ' . trim((string)$line) . "\n";
+        @file_put_contents(baleWebhookLogPath(), $row, FILE_APPEND | LOCK_EX);
+        baleTrimWebhookLog();
+    }
+
+    function baleTrimWebhookLog(){
+        $path = baleWebhookLogPath();
+
+        if(!is_file($path) || @filesize($path) <= 500000){
+            return;
+        }
+
+        $lines = @file($path, FILE_IGNORE_NEW_LINES);
+
+        if(is_array($lines) && count($lines) > 200){
+            $keep = array_slice($lines, -200);
+            @file_put_contents($path, implode("\n", $keep) . "\n", LOCK_EX);
+        }
     }
 
     function baleReadWebhookLogTail($maxLines = 30){
@@ -457,6 +507,11 @@ if(!function_exists('baleConfigPath')){
 
         if($text === ''){
             return '';
+        }
+
+        // listener گاهی خطوط را با | جدا می‌کند
+        if(strpos($text, '|') !== false && strpos($text, "\n") === false){
+            $text = preg_replace('/\s*\|\s*/u', "\n", $text);
         }
 
         $text = strtr($text, [

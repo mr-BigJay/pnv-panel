@@ -85,7 +85,8 @@ $groupForward = [
     'forward_from_chat' => ['username' => 'postbank_bot'],
 ];
 assertTrue(baleIsAdminMessage($groupForward, ['admin_chat_ids' => '555001']), 'group forward allowed by sender user id');
-assertTrue(!baleIsAdminMessage($groupForward, ['admin_chat_ids' => '-100999']), 'wrong admin id rejected');
+assertTrue(baleIsAdminMessage($groupForward, ['admin_chat_ids' => '-100999']), 'group forward allowed by group chat id');
+assertTrue(!baleIsAdminMessage($groupForward, ['admin_chat_ids' => '999888']), 'wrong admin id rejected');
 
 $forwardOrigin = [
     'text' => $sample1,

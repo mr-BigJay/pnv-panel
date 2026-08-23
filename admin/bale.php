@@ -38,6 +38,8 @@ if(isset($_POST['save'])){
         'pay_window_seconds' => max(60, intval($_POST['pay_window_seconds'] ?? 1800)),
         'match_grace_seconds' => max(0, intval($_POST['match_grace_seconds'] ?? 0)),
         'webhook_secret' => $config['webhook_secret'] ?? '',
+        'ingest_secret' => $config['ingest_secret'] ?? '',
+        'auto_listener_enabled' => isset($_POST['auto_listener_enabled']),
         'forward_hint' => $config['forward_hint'] ?? ''
     ];
 
@@ -156,6 +158,12 @@ if(isset($_POST['parse_test'])){
 }
 
 $webhookLogTail = function_exists('baleReadWebhookLogTail') ? baleReadWebhookLogTail(25) : [];
+$ingestSecret = baleEnsureIngestSecret($config);
+$ingestUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'panel.ticketin.ir') . '/postbank-ingest.php';
+$listenerEnvPath = __DIR__ . '/../db/postbank-listener.env';
+$listenerSessionPath = __DIR__ . '/../db/bale_user_session.bale';
+$listenerEnvExists = is_file($listenerEnvPath);
+$listenerSessionExists = is_file($listenerSessionPath) && filesize($listenerSessionPath) > 8;
 
 $tokenMasked = trim((string)($config['bot_token'] ?? ''));
 if($tokenMasked !== ''){
@@ -204,10 +212,9 @@ textarea{width:100%;min-height:120px;border:0;border-radius:12px;padding:14px;ba
 <?php if($error !== ''){ ?><div class="err"><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div><?php } ?>
 
 <div class="steps">
-۱. در بله به بازو <b>@Jay24x7Pusbank_bot</b> بروید و <b>/start</b> بزنید<br>
-۲. تنظیمات را ذخیره کنید، «فعال‌سازی» را تیک بزنید، و Webhook را ثبت کنید<br>
-۳. هر پیام واریز <b>@postbank_bot</b> را به بازو <b>فوروارد</b> کنید (در چت خصوصی یا گروه)<br>
-۴. اگر ۴ رقم آخر مبلغ با سفارش باز یکی باشد، پرداخت خودکار تأیید می‌شود
+<b>روش ۱ — تمام‌اتوماتیک (پیشنهادی):</b> Listener پایتون پیام @postbank_bot را می‌خواند و به پنل می‌فرستد.<br>
+<b>روش ۲ — دستی:</b> هر پیام واریز @postbank_bot را به @Jay24x7Pusbank_bot فوروارد کنید.<br>
+در هر دو حالت، مبلغ واریزی باید <b>دقیقاً</b> همان عدد صفحه پرداخت باشد.
 </div>
 
 <?php if(is_array($parsePreview)){ ?>
@@ -228,6 +235,11 @@ textarea{width:100%;min-height:120px;border:0;border-radius:12px;padding:14px;ba
 <?php } ?>
 
 <form method="post">
+<label class="toggle">
+<input type="checkbox" name="auto_listener_enabled" <?php echo !empty($config['auto_listener_enabled']) ? 'checked' : ''; ?>>
+<span>Listener اتوماتیک پست‌بانک فعال است (روی سرور)</span>
+</label>
+
 <label class="toggle">
 <input type="checkbox" name="enabled" <?php echo !empty($config['enabled']) ? 'checked' : ''; ?>>
 <span>فعال‌سازی پرداخت آنی بله</span>
@@ -252,7 +264,19 @@ textarea{width:100%;min-height:120px;border:0;border-radius:12px;padding:14px;ba
 <input class="ltr" type="number" id="match_grace_seconds" name="match_grace_seconds" min="0" value="<?php echo intval($config['match_grace_seconds'] ?? 0); ?>">
 <div class="hint">۰ = خودکار (حداقل ۳۰ دقیقه یا دوبرابر مهلت پرداخت). اگر کاربر دیر واریز کرد، در این بازه هنوز تأیید خودکار کار می‌کند.</div>
 
-<div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></div>
+<div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code><br><br>
+آدرس Ingest اتوماتیک:<br><code><?php echo htmlspecialchars($ingestUrl, ENT_QUOTES, 'UTF-8'); ?></code><br>
+کلید Ingest (برای Listener):<br><code><?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?></code><br><br>
+وضعیت Listener روی سرور:<br>
+• env: <?php echo $listenerEnvExists ? '✅' : '❌'; ?> db/postbank-listener.env<br>
+• session: <?php echo $listenerSessionExists ? '✅' : '❌'; ?> db/bale_user_session.bale<br><br>
+<b>راه‌اندازی listener (یک‌بار روی سرور):</b><br>
+<code>pip3 install -r tools/requirements-postbank.txt</code><br>
+<code>python3 tools/postbank_bale_listener.py --login --session /var/www/html/db/bale_user_session.bale</code><br>
+<code>printf 'POSTBANK_INGEST_SECRET=%s\n' '<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>' &gt; db/postbank-listener.env &amp;&amp; chmod 600 db/postbank-listener.env</code><br>
+<code>cp tools/postbank-listener.service /etc/systemd/system/ &amp;&amp; systemctl daemon-reload &amp;&amp; systemctl enable --now postbank-listener</code><br>
+<code>systemctl status postbank-listener --no-pager</code>
+</div>
 
 <?php
 $liveWebhook = baleGetWebhookInfo($config);

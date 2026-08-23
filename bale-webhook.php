@@ -157,6 +157,13 @@ if(!empty($result['ok'])){
     $raw = $paidId !== '' ? instantPayGet($paidId) : null;
     $userLabel = is_array($raw) ? ($raw['user'] ?? '-') : '-';
 
+    baleLogWebhookEvent('deposit_paid', [
+        'chat_id' => $chatId,
+        'id' => $paidId,
+        'amount' => $result['matched_amount'] ?? null,
+        'via' => $result['matched_via'] ?? '',
+    ]);
+
     $msg = "✅ پرداخت تأیید شد\n"
         . 'کاربر: ' . $userLabel . "\n"
         . 'مبلغ: ' . ($item['amount_text'] ?? '-') . "\n"
@@ -208,6 +215,27 @@ $parsedText = is_array($parsed) && count($parsed) ? implode('، ', array_map(sta
 }, $parsed)) : '—';
 $debug = is_array($result['debug'] ?? null) ? $result['debug'] : [];
 $debugText = '';
+$openOrders = is_array($result['open_orders'] ?? null) ? $result['open_orders'] : [];
+$openText = '';
+
+if($openOrders){
+    $openText = "\nسفارش‌های قابل مچ:\n";
+
+    foreach(array_slice($openOrders, 0, 6) as $order){
+        $openText .= '• ' . ($order['amount_text'] ?? number_format(intval($order['amount'] ?? 0))) . ' ریال'
+            . ' | ' . ($order['user'] ?? '-')
+            . ' | کد ' . ($order['code'] ?? '-')
+            . "\n";
+    }
+}
+
+baleLogWebhookEvent('deposit_no_match', [
+    'chat_id' => $chatId,
+    'error' => $err,
+    'amounts' => $parsed,
+    'waiting' => intval($debug['waiting'] ?? 0),
+    'matchable' => intval($debug['matchable'] ?? 0),
+]);
 
 if($debug){
     $debugText = "\n"
@@ -233,7 +261,7 @@ else{
         $chatId,
         "⚠️ پیام دریافت شد ولی سفارش مچ نشد.\n"
         . $err . "\n"
-        . 'مبالغ خوانده‌شده: ' . $parsedText . $debugText . "\n"
+        . 'مبالغ خوانده‌شده: ' . $parsedText . $debugText . $openText . "\n"
         . "نکته: کاربر باید دقیقاً همان مبلغ صفحه را کارت‌به‌کارت کند و پیام @postbank_bot را فوروارد کنید.",
         [],
         $config
