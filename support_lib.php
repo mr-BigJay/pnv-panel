@@ -285,6 +285,54 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportGetUserProfileSummary($username){
+
+        $username = supportNormalizeUsername($username);
+        $summary = [
+            'username' => $username,
+            'mobile' => '-',
+            'exists' => false,
+        ];
+
+        if($username === ''){
+            return $summary;
+        }
+
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!is_file($usersFile)){
+            return $summary;
+        }
+
+        $users = json_decode((string)file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return $summary;
+        }
+
+        foreach($users as $user){
+
+            if(!is_array($user)){
+                continue;
+            }
+
+            $stored = supportNormalizeUsername($user['username'] ?? '');
+
+            if($stored === '' || !supportUsernamesMatch($stored, $username)){
+                continue;
+            }
+
+            $summary['username'] = $stored;
+            $summary['mobile'] = trim((string)($user['mobile'] ?? '')) ?: '-';
+            $summary['exists'] = true;
+            break;
+
+        }
+
+        return $summary;
+
+    }
+
     function supportSortTickets($data){
 
         usort($data, function($a, $b){
