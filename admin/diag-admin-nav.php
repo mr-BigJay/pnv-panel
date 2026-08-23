@@ -1,8 +1,7 @@
 <?php
 /**
  * تشخیص خطای admin_nav — بعد از رفع مشکل حذف کنید.
- * https://panel.ticketin.ir/bigjay_controller/../admin/diag-admin-nav.php
- * یا: https://panel.ticketin.ir/admin/diag-admin-nav.php
+ * https://panel.ticketin.ir/bigjay_controller/diag-admin-nav.php
  */
 
 header('Content-Type: text/plain; charset=utf-8');
