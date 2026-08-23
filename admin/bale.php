@@ -157,6 +157,32 @@ if(isset($_POST['parse_test'])){
     }
 }
 
+if(isset($_POST['confirm_deposit'])){
+    require_once __DIR__ . '/../instant_pay_lib.php';
+    $sample = trim((string)($_POST['parse_sample'] ?? ''));
+
+    if($sample === ''){
+        $error = 'متن واریز را وارد کنید.';
+    }
+    else{
+        $matchResult = instantPayHandleDepositText($sample, pnvNowParts());
+
+        if(!empty($matchResult['ok'])){
+            $item = $matchResult['item'] ?? [];
+            $message = 'پرداخت از متن واریز تأیید شد: ' . ($item['user'] ?? '-') . ' | ' . ($item['amount_text'] ?? '-');
+        }
+        else{
+            $error = 'تأیید نشد: ' . ($matchResult['error'] ?? 'مچ پیدا نشد');
+            $parsePreview = [
+                'amounts' => baleExtractRialAmounts($sample),
+                'looks_deposit' => baleLooksLikeDeposit($sample),
+                'looks_postbank' => baleLooksLikePostBankNotice($sample),
+                'match' => $matchResult,
+            ];
+        }
+    }
+}
+
 $webhookLogTail = function_exists('baleReadWebhookLogTail') ? baleReadWebhookLogTail(25) : [];
 $ingestSecret = baleEnsureIngestSecret($config);
 $ingestUrl = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'panel.ticketin.ir') . '/postbank-ingest.php';
@@ -302,9 +328,10 @@ if(!empty($liveWebhook['ok'])){
 </form>
 
 <form method="post" style="margin-top:18px">
-<label for="parse_sample">تست پارس پیام واریز (کپی متن @postbank_bot)</label>
+<label for="parse_sample">تست / تأیید دستی از متن واریز (کپی پیام @postbank_bot)</label>
 <textarea id="parse_sample" name="parse_sample" placeholder="متن پیام پست‌بانک را اینجا بچسبانید"><?php echo htmlspecialchars((string)($_POST['parse_sample'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
 <button type="submit" name="parse_test" class="parse">تست پارس مبلغ</button>
+<button type="submit" name="confirm_deposit" class="hook">تأیید پرداخت از این متن</button>
 </form>
 
 <a class="back" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl() : 'index.php', ENT_QUOTES, 'UTF-8'); ?>">بازگشت به مدیریت</a>

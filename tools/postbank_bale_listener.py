@@ -3,23 +3,8 @@
 شنونده تمام‌اتوماتیک پیام واریز پست‌بانک از اکانت بله صاحب کارت.
 
 Bot API نمی‌تواند چت @postbank_bot را بخواند؛ این سرویس با سشن همان
-اکانتی که اعلان واریز را می‌گیرد، پیام را می‌خواند، به پنل می‌فرستد
-و در صورت نیاز همان پیام را به بازوی پرداخت فوروارد می‌کند.
-
-نصب:
-  pip3 install -r tools/requirements-postbank.txt
-
-لاگین یک‌بار (تعاملی روی سرور):
-  python3 tools/postbank_bale_listener.py --login \
-    --session /var/www/html/db/bale_user_session.bale
-
-اجرای دائم:
-  export POSTBANK_INGEST_SECRET='...'
-  python3 tools/postbank_bale_listener.py \
-    --session /var/www/html/db/bale_user_session.bale \
-    --ingest-url https://panel.ticketin.ir/postbank-ingest.php \
-    --ingest-secret "$POSTBANK_INGEST_SECRET" \
-    --forward-bot Jay24x7Pusbank_bot
+اکانتی که اعلان واریز را می‌گیرد، پیام را می‌خواند و به postbank-ingest.php
+می‌فرستد. پنل خودش از طریق Bot API به ادمین اطلاع می‌دهد.
 """
 
 import argparse
@@ -41,23 +26,42 @@ except ImportError as exc:
 
 LOG = logging.getLogger("postbank-listener")
 
-DEPOSIT_HINTS = (
-    "واریز",
-    "واريز",
-    "پست بانک",
-    "پست‌بانک",
-    "مانده",
-    "بستانکار",
-)
+POSTBANK_USERNAMES = {"postbank_bot", "postbank"}
 
 
-def looks_like_deposit(text):
+def looks_like_postbank_deposit(text):
     t = (text or "").strip()
     if not t:
         return False
     if re.search(r"\+\s*\d{1,3}(?:,\d{3})+", t):
+        if any(h in t for h in ("پست", "واریز", "واريز", "مانده", "کارت")):
+            return True
+    if ("پست" in t or "post" in t.lower()) and ("واریز" in t or "واريز" in t):
         return True
-    return any(h in t for h in DEPOSIT_HINTS)
+    return False
+
+
+def message_sender_username(msg):
+    for attr in ("from_user", "sender", "user"):
+        obj = getattr(msg, attr, None)
+        if obj is None:
+            continue
+        username = getattr(obj, "username", None)
+        if username:
+            return str(username).strip().lower().lstrip("@")
+    peer = getattr(msg, "peer_id", None) or getattr(msg, "peer", None)
+    if peer is not None:
+        username = getattr(peer, "username", None)
+        if username:
+            return str(username).strip().lower().lstrip("@")
+    return ""
+
+
+def should_process_message(msg, text):
+    sender = message_sender_username(msg)
+    if sender in POSTBANK_USERNAMES:
+        return True
+    return looks_like_postbank_deposit(text)
 
 
 async def post_ingest(url, secret, text, source="aiobale-userbot"):
@@ -66,7 +70,7 @@ async def post_ingest(url, secret, text, source="aiobale-userbot"):
         "X-Postbank-Ingest-Secret": secret,
     }
     payload = {"text": text, "source": source}
-    timeout = aiohttp.ClientTimeout(total=30)
+    timeout = aiohttp.ClientTimeout(total=45)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(
             url,
@@ -111,14 +115,34 @@ async def resolve_bot_peer(client, cache, bot_username):
     return cache.chat_id, cache.chat_type
 
 
-async def forward_deposit_to_bot(client, cache, msg, bot_username):
+async def deliver_deposit_to_bot(client, cache, msg, text, bot_username):
     if not bot_username:
         return False
 
     chat_id, chat_type = await resolve_bot_peer(client, cache, bot_username)
-    await msg.forward_to(chat_id=chat_id, chat_type=chat_type)
-    LOG.info("Forwarded deposit message to bot @%s", bot_username.lstrip("@"))
-    return True
+
+    try:
+        await msg.forward_to(chat_id=chat_id, chat_type=chat_type)
+        LOG.info("Forwarded deposit to @%s", bot_username.lstrip("@"))
+        return True
+    except Exception as exc:
+        LOG.warning("Forward failed (%s), trying send_message", exc)
+
+    send = getattr(client, "send_message", None)
+    if send is None:
+        LOG.error("client.send_message unavailable")
+        return False
+
+    try:
+        try:
+            await send(chat_id=chat_id, text=text, chat_type=chat_type)
+        except TypeError:
+            await send(chat_id, text)
+        LOG.info("Sent deposit text to @%s via send_message", bot_username.lstrip("@"))
+        return True
+    except Exception as exc2:
+        LOG.error("send_message to bot failed: %s", exc2)
+        return False
 
 
 def run_login(session_file):
@@ -147,7 +171,7 @@ def run_listener(session_file, ingest_url, ingest_secret, forward_bot_username):
         if not text:
             text = str(getattr(msg, "caption", "") or "").strip()
 
-        if not looks_like_deposit(text):
+        if not should_process_message(msg, text):
             return
 
         key = re.sub(r"\s+", " ", text)[:240]
@@ -158,28 +182,33 @@ def run_listener(session_file, ingest_url, ingest_secret, forward_bot_username):
         if len(recent) > 300:
             recent.clear()
 
-        LOG.info("Deposit candidate len=%s preview=%s", len(text), key[:120])
+        sender = message_sender_username(msg)
+        LOG.info("Deposit from @%s len=%s preview=%s", sender or "?", len(text), key[:120])
 
-        ingest_ok = False
+        ingest_result = {}
         try:
-            result = await post_ingest(ingest_url, ingest_secret, text)
+            ingest_result = await post_ingest(ingest_url, ingest_secret, text)
             LOG.info(
-                "Ingest http=%s paid=%s err=%s",
-                result.get("_http"),
-                result.get("paid"),
-                result.get("error"),
+                "Ingest http=%s paid=%s ok=%s err=%s",
+                ingest_result.get("_http"),
+                ingest_result.get("paid"),
+                ingest_result.get("ok"),
+                ingest_result.get("error"),
             )
-            ingest_ok = result.get("_http") == 200 and (result.get("ok") or result.get("paid"))
+            if ingest_result.get("_http") == 401:
+                LOG.error("Ingest unauthorized — update POSTBANK_INGEST_SECRET in db/postbank-listener.env")
         except Exception as exc:
             LOG.exception("Ingest failed: %s", exc)
 
-        if forward_bot_username:
+        paid = bool(ingest_result.get("paid")) or (
+            ingest_result.get("_http") == 200 and ingest_result.get("ok") is True
+        )
+
+        if forward_bot_username and not paid:
             try:
-                await forward_deposit_to_bot(client, bot_cache, msg, forward_bot_username)
+                await deliver_deposit_to_bot(client, bot_cache, msg, text, forward_bot_username)
             except Exception as exc:
-                LOG.warning("Forward to bot failed: %s", exc)
-                if not ingest_ok:
-                    LOG.error("Both ingest and forward failed for deposit message")
+                LOG.error("Deliver to bot failed: %s", exc)
 
     LOG.info(
         "Listening… session=%s ingest=%s forward_bot=%s",
@@ -201,7 +230,7 @@ def parse_args(argv=None):
     p.add_argument(
         "--forward-bot",
         default=os.environ.get("POSTBANK_FORWARD_BOT", "Jay24x7Pusbank_bot"),
-        help="Bot username to forward deposit messages to (empty to disable)",
+        help="Bot username to forward deposit messages to when ingest did not pay (empty to disable)",
     )
     p.add_argument("--login", action="store_true", help="One-time interactive phone login")
     p.add_argument("--log-level", default="INFO")

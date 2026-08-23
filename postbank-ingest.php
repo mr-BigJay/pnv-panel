@@ -39,6 +39,7 @@ elseif(isset($_GET['secret'])){
 }
 
 if($provided === '' || !hash_equals($secret, $provided)){
+    baleWebhookLog('INGEST_AUTH_FAIL source=' . $source);
     http_response_code(401);
     echo json_encode(['ok' => false, 'error' => 'unauthorized'], JSON_UNESCAPED_UNICODE);
     exit;
@@ -93,6 +94,11 @@ if(!empty($result['ok'])){
         baleSendMessage($notifyChat, $msg, [], $config);
     }
 
+    baleNotifyAdminDeposit($config, $text, [
+        'status' => 'paid',
+        'detail' => 'پرداخت تأیید شد | کاربر: ' . $userLabel . ' | مبلغ: ' . ($item['amount_text'] ?? '-'),
+    ]);
+
     baleWebhookLog('INGEST_PAID id=' . $paidId . ' amount=' . ($result['matched_amount'] ?? ''));
 
     echo json_encode([
@@ -145,6 +151,13 @@ if($notifyChat !== '' && empty($result['ignored'])){
         $config
     );
 }
+
+baleNotifyAdminDeposit($config, $text, [
+    'status' => empty($result['ignored']) ? 'no_match' : 'info',
+    'detail' => empty($result['ignored'])
+        ? ('مچ نشد: ' . $err . ' | مبالغ: ' . $parsedText)
+        : ((string)($result['error'] ?? 'ignored')),
+]);
 
 baleWebhookLog('INGEST_NO_MATCH err=' . $err . ' amounts=' . json_encode($parsed, JSON_UNESCAPED_UNICODE));
 

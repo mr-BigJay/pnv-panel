@@ -683,6 +683,57 @@ if(!function_exists('baleConfigPath')){
         return false;
     }
 
+    function baleNotifyAdminDeposit($config, $text, $summary = []){
+        $ids = baleAdminChatIds($config);
+
+        if(count($ids) === 0){
+            return false;
+        }
+
+        $status = (string)($summary['status'] ?? 'info');
+        $detail = trim((string)($summary['detail'] ?? ''));
+        $icon = 'ℹ️';
+
+        if($status === 'paid'){
+            $icon = '✅';
+        }
+        elseif($status === 'no_match'){
+            $icon = '⚠️';
+        }
+        elseif($status === 'error'){
+            $icon = '❌';
+        }
+
+        $msg = $icon . " واریز پست‌بانک (اتوماتیک)\n";
+
+        if($detail !== ''){
+            $msg .= $detail . "\n\n";
+        }
+
+        $preview = $text;
+
+        if(function_exists('mb_substr')){
+            $preview = mb_substr($preview, 0, 900);
+        }
+        else{
+            $preview = substr($preview, 0, 900);
+        }
+
+        $msg .= $preview;
+
+        $sent = false;
+
+        foreach($ids as $chatId){
+            $result = baleSendMessage($chatId, $msg, [], $config);
+
+            if(!empty($result['ok'])){
+                $sent = true;
+            }
+        }
+
+        return $sent;
+    }
+
     function baleWebhookPublicUrl(){
         $host = $_SERVER['HTTP_HOST'] ?? 'panel.ticketin.ir';
         $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
