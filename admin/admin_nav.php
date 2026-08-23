@@ -333,8 +333,6 @@ body.adminPageSupport{padding-bottom:0}
 </style>';
     }
 
-    }
-
     function adminMgmtMenuItems($options = []){
         if(!function_exists('pnvAdminUrl')){
             return [];
