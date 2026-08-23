@@ -333,6 +333,10 @@ body.adminPageSupport{padding-bottom:0}
 </style>';
     }
 
+}
+
+if(!function_exists('adminMgmtMenuItems')){
+
     function adminMgmtMenuItems($options = []){
         if(!function_exists('pnvAdminUrl')){
             return [];
@@ -407,7 +411,7 @@ body.adminPageSupport{padding-bottom:0}
             ],
             [
                 'key' => 'bale',
-                'label' => 'بله — پرداخت آنی',
+                'label' => 'بله - پرداخت آنی',
                 'href' => pnvAdminUrl('bale.php'),
                 'icon' => '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h.01"/>',
             ],
@@ -440,6 +444,10 @@ body.adminPageSupport{padding-bottom:0}
 
         return $items;
     }
+
+}
+
+if(!function_exists('adminMgmtDrawer')){
 
     function adminMgmtDrawer($options = []){
         static $rendered = false;
@@ -488,6 +496,10 @@ body.adminPageSupport{padding-bottom:0}
         echo '</aside>';
         echo '</div>';
     }
+
+}
+
+if(!function_exists('adminBottomNav')){
 
     function adminBottomNav($options = []){
         if(!function_exists('pnvAdminUrl')){
@@ -555,11 +567,17 @@ body.adminPageSupport{padding-bottom:0}
         echo '</div>';
         echo '</nav>';
 
-        adminMgmtDrawer(array_merge($options, [
-            'active' => $active,
-            'badges' => $badges,
-        ]));
+        if(function_exists('adminMgmtDrawer')){
+            adminMgmtDrawer(array_merge($options, [
+                'active' => $active,
+                'badges' => $badges,
+            ]));
+        }
     }
+
+}
+
+if(!function_exists('adminBottomNavScript')){
 
     function adminBottomNavScript(){
         echo <<<'JS'
@@ -675,6 +693,10 @@ body.adminPageSupport{padding-bottom:0}
 </script>
 JS;
     }
+
+}
+
+if(!function_exists('adminPageEnd')){
 
     function adminPageEnd($options = []){
         static $rendered = false;
