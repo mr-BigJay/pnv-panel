@@ -24,8 +24,6 @@ files=(
   "tools/requirements-postbank.txt"
   "tools/README-postbank-auto.md"
 )
-
-for rel in "${files[@]}"; do
   dest="${ROOT}/${rel}"
   mkdir -p "$(dirname "$dest")"
   curl -fsSL "${BASE}/${rel}" -o "${dest}"

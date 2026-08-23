@@ -41,7 +41,10 @@ if(!is_array($message)){
 $chatId = (string)($message['chat']['id'] ?? '');
 $text = baleExtractMessageText($message);
 
-baleLogWebhookEvent('incoming', baleMessageDebugSummary($message));
+baleLogWebhookEvent('incoming', array_merge(
+    baleMessageDebugSummary($message),
+    ['via_listener' => !empty($_SERVER['HTTP_X_POSTBANK_LISTENER'])]
+));
 
 // bootstrap: اگر ادمین هنوز chat_id ندارد، از اولین پیام ذخیره کن
 $adminIds = baleAdminChatIds($config);

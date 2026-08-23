@@ -243,6 +243,22 @@ textarea{width:100%;min-height:120px;border:0;border-radius:12px;padding:14px;ba
 در هر دو حالت، مبلغ واریزی باید <b>دقیقاً</b> همان عدد صفحه پرداخت باشد.
 </div>
 
+<?php if($listenerEnvExists && $listenerSessionExists){ ?>
+<div class="hint" style="border-color:#854d0e;background:#422006;color:#fde68a">
+Listener باید env کامل داشته باشد. بعد از deploy:<br>
+<code>cat &gt; /var/www/html/db/postbank-listener.env &lt;&lt;'EOF'
+POSTBANK_INGEST_SECRET=<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_ADMIN_CHAT_ID=<?php echo htmlspecialchars((string)($config['admin_chat_ids'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_WEBHOOK_URL=<?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?>
+
+EOF
+chmod 600 /var/www/html/db/postbank-listener.env
+systemctl restart postbank-listener</code>
+</div>
+<?php } ?>
+
 <?php if(is_array($parsePreview)){ ?>
 <div class="hint">
 <b>نتیجه تست پارس:</b><br>
@@ -299,7 +315,15 @@ textarea{width:100%;min-height:120px;border:0;border-radius:12px;padding:14px;ba
 <b>راه‌اندازی listener (یک‌بار روی سرور):</b><br>
 <code>pip3 install -r tools/requirements-postbank.txt</code><br>
 <code>python3 tools/postbank_bale_listener.py --login --session /var/www/html/db/bale_user_session.bale</code><br>
-<code>printf 'POSTBANK_INGEST_SECRET=%s\n' '<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>' &gt; db/postbank-listener.env &amp;&amp; chmod 600 db/postbank-listener.env</code><br>
+<code>cat &gt; db/postbank-listener.env &lt;&lt;'EOF'
+POSTBANK_INGEST_SECRET=<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_ADMIN_CHAT_ID=<?php echo htmlspecialchars(trim(explode(',', (string)($config['admin_chat_ids'] ?? ''))[0]), ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_WEBHOOK_URL=<?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?>
+
+EOF
+chmod 600 db/postbank-listener.env</code><br>
 <code>cp tools/postbank-listener.service /etc/systemd/system/ &amp;&amp; systemctl daemon-reload &amp;&amp; systemctl enable --now postbank-listener</code><br>
 <code>systemctl status postbank-listener --no-pager</code>
 </div>
