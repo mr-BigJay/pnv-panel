@@ -1784,6 +1784,53 @@ if(!function_exists('telegramConfigPath')){
         return telegramSendToAdmins($header);
     }
 
+    function telegramDeleteWebhook($config = null){
+        return telegramApiRequest('deleteWebhook', ['drop_pending_updates' => false], [], $config);
+    }
+
+    function telegramGetWebhookInfo($config = null){
+        return telegramApiRequest('getWebhookInfo', [], [], $config);
+    }
+
+    /**
+     * این پنل با polling (telegram_poll.php) کار می‌کند؛ webhook باید خالی باشد.
+     */
+    function telegramEnsurePollingMode($config = null){
+        if($config === null){
+            $config = telegramLoadConfig();
+        }
+
+        $info = telegramGetWebhookInfo($config);
+
+        if(empty($info['ok'])){
+            return $info;
+        }
+
+        $url = trim((string)(($info['result'] ?? [])['url'] ?? ''));
+
+        if($url === ''){
+            return ['ok' => true, 'mode' => 'polling', 'webhook' => ''];
+        }
+
+        $deleted = telegramDeleteWebhook($config);
+
+        if(empty($deleted['ok'])){
+            return [
+                'ok' => false,
+                'mode' => 'webhook_conflict',
+                'webhook' => $url,
+                'description' => $deleted['description'] ?? 'حذف webhook ناموفق بود',
+            ];
+        }
+
+        return ['ok' => true, 'mode' => 'polling', 'webhook_removed' => $url];
+    }
+
+    function telegramPollLog($line){
+        $path = __DIR__ . '/db/telegram_poll.log';
+        @file_put_contents($path, date('c') . ' ' . trim((string)$line) . "\n", FILE_APPEND | LOCK_EX);
+    }
+
     function telegramSetCommands($config = null){
         // منوی بصری؛ فقط استارت برای باز کردن صفحه اصلی
         return telegramApiRequest('setMyCommands', [

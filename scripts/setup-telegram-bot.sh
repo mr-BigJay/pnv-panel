@@ -44,6 +44,7 @@ maybe_deploy(){
         telegram_poll.php
         telegram_user_lib.php
         telegram_lib.php
+        telegram_poll.php
         profile-api.php
         dashboard.php
         telegram.php
@@ -187,6 +188,14 @@ fi
 
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" >/dev/null
+
+say ">> حذف webhook تلگرام (polling)..."
+if "$PHP_BIN" -r "require '${ROOT}/telegram_lib.php'; \$r=telegramEnsurePollingMode(); echo json_encode(\$r, JSON_UNESCAPED_UNICODE);" 2>/dev/null; then
+    say ">> webhook OK"
+else
+    say "!! حذف webhook ناموفق — در ادمین → تلگرام دکمه «حذف Webhook» را بزنید"
+fi
+
 systemctl restart "$SERVICE_NAME"
 
 sleep 1

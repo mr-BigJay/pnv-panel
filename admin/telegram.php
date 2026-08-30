@@ -40,11 +40,36 @@ if(isset($_POST['save'])){
     telegramSaveConfig($config);
     $message = 'تنظیمات بات تلگرام ذخیره شد.';
 
+    if(!empty($config['enabled']) && trim((string)($config['bot_token'] ?? '')) !== ''){
+        $pollMode = telegramEnsurePollingMode($config);
+
+        if(!empty($pollMode['webhook_removed'])){
+            $message .= ' Webhook قبلی حذف شد (polling فعال).';
+        }
+        elseif(empty($pollMode['ok'])){
+            $error = $pollMode['description'] ?? 'تداخل webhook — دکمه «حذف Webhook» را بزنید.';
+        }
+    }
+
     if(
         trim((string)($oldConfig['bot_token'] ?? '')) !== trim((string)($config['bot_token'] ?? ''))
         || trim(ltrim((string)($oldConfig['bot_username'] ?? ''), '@')) !== trim(ltrim((string)($config['bot_username'] ?? ''), '@'))
     ){
         $message .= ' لینک‌های اتصال قبلی باطل شدند؛ کاربران باید دوباره «اتصال به تلگرام» را بزنند.';
+    }
+}
+
+if(isset($_POST['delete_webhook'])){
+    $config = telegramLoadConfig();
+    $result = telegramEnsurePollingMode($config);
+
+    if(!empty($result['ok'])){
+        $message = !empty($result['webhook_removed'])
+            ? ('Webhook حذف شد: ' . $result['webhook_removed'] . ' — حالا سرویس polling را restart کنید.')
+            : 'Webhook خالی بود؛ polling آماده است.';
+    }
+    else{
+        $error = $result['description'] ?? 'حذف Webhook ناموفق بود';
     }
 }
 
@@ -98,6 +123,27 @@ $linkedStats = function_exists('tgUserAdminLinkedStats') ? tgUserAdminLinkedStat
     'linked_count' => 0,
     'linked_users' => [],
 ];
+
+$webhookInfo = null;
+$webhookUrl = '';
+
+if(trim((string)($config['bot_token'] ?? '')) !== ''){
+    $webhookInfo = telegramGetWebhookInfo($config);
+
+    if(!empty($webhookInfo['ok'])){
+        $webhookUrl = trim((string)(($webhookInfo['result'] ?? [])['url'] ?? ''));
+    }
+}
+
+$pollLogTail = [];
+
+if(is_file(__DIR__ . '/../db/telegram_poll.log')){
+    $lines = @file(__DIR__ . '/../db/telegram_poll.log', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+    if(is_array($lines)){
+        $pollLogTail = array_slice($lines, -12);
+    }
+}
 
 ?>
 
@@ -191,6 +237,22 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <?php } ?>
 </div>
 
+<div class="hint">
+<b>حالت دریافت پیام:</b> polling (<code>telegram_poll.php --loop</code>)<br>
+<?php if($webhookUrl !== ''){ ?>
+<span style="color:#fecaca">⚠️ Webhook فعال است — /start کار نمی‌کند تا حذف شود:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></span>
+<?php } else { ?>
+Webhook خالی است ✅ (polling می‌تواند پیام بگیرد)
+<?php } ?>
+<br><br>
+سرویس سرور: <code>systemctl status pnv-telegram-poll</code><br>
+لاگ: <code>tail -f /var/log/pnv-telegram-poll.log</code>
+</div>
+
+<?php if(count($pollLogTail) > 0){ ?>
+<div class="hint" style="direction:ltr;text-align:left;font-family:monospace;font-size:12px;line-height:1.6;white-space:pre-wrap"><?php echo htmlspecialchars(implode("\n", $pollLogTail), ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } ?>
+
 <form method="post">
 <label class="toggle">
 <input type="checkbox" name="enabled" <?php echo !empty($config['enabled']) ? 'checked' : ''; ?>>
@@ -231,6 +293,7 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <div class="hint">این لینک‌ها برای ثبت و مدیریت پراکسی‌های اختصاصی بات هستند. راه‌اندازی سرویس Xray محلی از آن‌ها باید یک‌بار روی سرور انجام شود؛ صرف ذخیره لینک، پراکسی را فعال نمی‌کند.</div>
 
 <button type="submit" name="save">ذخیره تنظیمات</button>
+<button type="submit" name="delete_webhook" class="test" style="background:#7c3aed">حذف Webhook (فعال‌سازی Polling)</button>
 <button type="submit" name="test" class="test">ارسال پیام آزمایشی و ثبت منوی بات</button>
 </form>
 

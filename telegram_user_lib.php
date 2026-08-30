@@ -800,6 +800,10 @@ if(!function_exists('tgUserFaNum')){
         $sent = telegramSendMessage($chatId, $text, $extra, $config);
         $newId = intval($sent['result']['message_id'] ?? 0);
 
+        if($newId <= 0 && empty($sent['ok']) && function_exists('telegramPollLog')){
+            telegramPollLog('sendMessage fail chat=' . $chatId . ' err=' . ($sent['description'] ?? ''));
+        }
+
         if($newId > 0){
             tgUserSetSession($chatId, [
                 'menu_message_id' => $newId,
