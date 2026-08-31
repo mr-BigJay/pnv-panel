@@ -4,7 +4,31 @@ require_once __DIR__ . '/xui_lib.php';
 
 if(!function_exists('telegramXuiActionKeyboard')){
 
+    function telegramXuiResultKeyboard($kind, $index){
+        if(function_exists('telegramReplyKeyboard') && function_exists('telegramAdminBtnBack')){
+            return telegramReplyKeyboard([
+                [telegramAdminBtnBack()],
+            ]);
+        }
+
+        $backMenu = ($kind === 'تمدید') ? 'menu:renews' : 'menu:buys';
+
+        return json_encode([
+            'inline_keyboard' => [
+                [
+                    ['text' => 'بازگشت', 'callback_data' => $backMenu]
+                ]
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
     function telegramXuiActionKeyboard($kind, $index){
+        if(function_exists('telegramReplyKeyboard') && function_exists('telegramAdminBtnBack')){
+            return telegramReplyKeyboard([
+                [telegramAdminBtnBack()],
+            ]);
+        }
+
         $prefix = ($kind === 'تمدید') ? 'renew' : 'buy';
 
         return json_encode([
@@ -41,7 +65,6 @@ if(!function_exists('telegramXuiActionKeyboard')){
                 return $i;
             }
 
-            // آخرین مورد هم‌نوع همین کاربر به‌عنوان پشتیبان
             $fallback = $i;
         }
 
@@ -72,6 +95,14 @@ if(!function_exists('telegramXuiActionKeyboard')){
             $lines[] = 'حجم: ' . $result['gb'] . 'GB';
         }
 
+        if(!empty($result['days'])){
+            $lines[] = 'مدت: ' . $result['days'] . ' روز';
+        }
+
+        if(!empty($result['recreated'])){
+            $lines[] = '♻️ اشتراک حذف‌شده دوباره ساخته شد';
+        }
+
         if(!empty($result['link'])){
             $lines[] = '';
             $lines[] = $result['link'];
@@ -80,16 +111,10 @@ if(!function_exists('telegramXuiActionKeyboard')){
         return implode("\n", $lines);
     }
 
-    function telegramHandleXuiCallback($data, $chatId, $messageId, $config = null){
-        if(!preg_match('/^xui(ok|no):(buy|renew):(\d+)$/', (string)$data, $m)){
-            return false;
-        }
-
-        $action = $m[1];
-        $kindKey = $m[2];
-        $index = intval($m[3]);
-        $kind = ($kindKey === 'renew') ? 'تمدید' : 'خرید';
-        $backMenu = ($kindKey === 'renew') ? 'menu:renews' : 'menu:buys';
+    function telegramAdminRunXuiAction($chatId, $action, $kind, $index, $config = null){
+        $index = intval($index);
+        $kind = trim((string)$kind);
+        $action = ($action === 'no') ? 'no' : 'ok';
 
         if($action === 'no'){
             $payments = xuiLoadPayments();
@@ -115,37 +140,60 @@ if(!function_exists('telegramXuiActionKeyboard')){
             }
         }
 
-        $keyboard = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => 'بازگشت', 'callback_data' => $backMenu]
-                ]
-            ]
-        ], JSON_UNESCAPED_UNICODE);
+        $keyboard = telegramXuiResultKeyboard($kind, $index);
 
-        if(function_exists('telegramEditMessage')){
-            $edited = telegramEditMessage($chatId, $messageId, $text, [
+        if(function_exists('telegramShowPage')){
+            telegramShowPage($chatId, $text, $keyboard, $config);
+        }
+        elseif(function_exists('telegramSendMessage')){
+            telegramSendMessage($chatId, $text, [
                 'reply_markup' => $keyboard
             ], $config);
+        }
+
+        if(function_exists('telegramAdminRememberMap') && function_exists('telegramAdminBtnBack')){
+            telegramAdminRememberMap($chatId, [
+                telegramAdminBtnBack() => ['a' => 'payments', 'kind' => $kind],
+            ], [
+                'screen' => 'xui_result',
+                'payment_kind' => $kind,
+                'mode' => '',
+            ]);
+        }
+        elseif(function_exists('telegramUpdateSessionScreen')){
+            telegramUpdateSessionScreen($chatId, [
+                'screen' => 'xui_result',
+            ]);
+        }
+
+        return true;
+    }
+
+    function telegramHandleXuiCallback($data, $chatId, $messageId, $config = null){
+        if(!preg_match('/^xui(ok|no):(buy|renew):(\d+)$/', (string)$data, $m)){
+            return false;
+        }
+
+        $action = $m[1] === 'ok' ? 'ok' : 'no';
+        $kind = ($m[2] === 'renew') ? 'تمدید' : 'خرید';
+        $index = intval($m[3]);
+
+        if($messageId > 0 && function_exists('telegramEditMessage')){
+            $preview = ($action === 'no') ? ('⛔ ' . $kind . ' در حال رد...') : ('✅ ' . $kind . ' در حال تایید...');
+            $edited = telegramEditMessage($chatId, $messageId, $preview, [], $config);
 
             if(!empty($edited['ok']) && function_exists('telegramUpdateSessionScreen')){
                 telegramUpdateSessionScreen($chatId, [
                     'screen' => 'xui_result',
-                    'screen_message_id' => intval($messageId)
+                    'screen_message_id' => intval($messageId),
                 ]);
-                return true;
             }
         }
 
-        if(function_exists('telegramShowPage')){
-            telegramShowPage($chatId, $text, $keyboard, $config, $messageId);
-            return true;
-        }
+        telegramAdminRunXuiAction($chatId, $action, $kind, $index, $config);
 
-        if(function_exists('telegramSendMessage')){
-            telegramSendMessage($chatId, $text, [
-                'reply_markup' => $keyboard
-            ], $config);
+        if($messageId > 0 && function_exists('telegramDeleteMessage')){
+            telegramDeleteMessage($chatId, $messageId, $config);
         }
 
         return true;
