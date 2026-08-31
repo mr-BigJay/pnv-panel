@@ -1520,7 +1520,103 @@ if(!function_exists('xuiConfigPath')){
         return $expiry;
     }
 
-    function xuiAdjustClientTrafficLegacy($server, $client, $addGb){
+    function xuiComputeRenewedExpiryMs($client, $addDays){
+        $addDays = max(0, intval($addDays));
+
+        if($addDays <= 0){
+            return 0;
+        }
+
+        $nowMs = intval(microtime(true) * 1000);
+        $currentMs = xuiClientExpiryMs($client);
+        $baseMs = ($currentMs > $nowMs) ? $currentMs : $nowMs;
+
+        return $baseMs + ($addDays * 86400000);
+    }
+
+    function xuiUpdateClientExpiry($server, $client, $addDays){
+        $email = trim((string)($client['email'] ?? ''));
+        $clientId = trim((string)($client['id'] ?? ''));
+        $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
+        $addDays = max(0, intval($addDays));
+
+        if($addDays <= 0){
+            return ['ok' => true, 'skipped' => true];
+        }
+
+        if($email === '' || $clientId === '' || $inboundId <= 0){
+            return [
+                'ok' => false,
+                'error' => 'اطلاعات کلاینت برای تمدید زمان ناقص است'
+            ];
+        }
+
+        $newExpiryMs = xuiComputeRenewedExpiryMs($client, $addDays);
+
+        if($newExpiryMs <= 0){
+            return [
+                'ok' => false,
+                'error' => 'محاسبه تاریخ انقضای جدید ناموفق بود'
+            ];
+        }
+
+        $updated = $client;
+        unset($updated['_inbound_id']);
+        $updated['expiryTime'] = $newExpiryMs;
+        $updated['enable'] = true;
+
+        if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
+            $updated['subId'] = $client['subId'];
+        }
+
+        $result = xuiApiRequest($server, 'POST', '/panel/api/inbounds/updateClient/' . rawurlencode($clientId), [
+            'id' => $inboundId,
+            'settings' => json_encode([
+                'clients' => [$updated]
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        ]);
+
+        if(empty($result['success'])){
+            return [
+                'ok' => false,
+                'error' => $result['msg'] ?? 'تمدید زمان با updateClient ناموفق بود'
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'raw' => $result,
+            'method' => 'updateClientExpiry',
+            'expiryTime' => $newExpiryMs
+        ];
+    }
+
+    function xuiResolvePlanDays($planText){
+        $days = xuiParsePlanDays($planText);
+
+        if($days > 0){
+            return $days;
+        }
+
+        if(!function_exists('pnvFindPlanByValue')){
+            $planUiLib = __DIR__ . '/plan_ui_lib.php';
+            if(is_file($planUiLib)){
+                require_once $planUiLib;
+            }
+        }
+
+        if(function_exists('pnvFindPlanByValue') && function_exists('pnvPlanIsUnlimited')){
+            $plan = pnvFindPlanByValue($planText, xuiLoadPlansCatalog());
+
+            if(is_array($plan) && !pnvPlanIsUnlimited($plan)){
+                return max(0, intval($plan['days'] ?? 0));
+            }
+        }
+
+        return 0;
+    }
+
+    function xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays = 0){
         $email = trim((string)($client['email'] ?? ''));
         $clientId = trim((string)($client['id'] ?? ''));
         $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
@@ -1539,6 +1635,16 @@ if(!function_exists('xuiConfigPath')){
         $currentTotal = xuiClientTotalBytes($client);
         $updated['totalGB'] = $currentTotal + $addBytes;
         $updated['enable'] = true;
+
+        $addDays = max(0, intval($addDays));
+
+        if($addDays > 0){
+            $newExpiryMs = xuiComputeRenewedExpiryMs($client, $addDays);
+
+            if($newExpiryMs > 0){
+                $updated['expiryTime'] = $newExpiryMs;
+            }
+        }
 
         if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
             $updated['subId'] = $client['subId'];
@@ -1570,33 +1676,58 @@ if(!function_exists('xuiConfigPath')){
         $email = trim((string)$email);
         $errors = [];
         $addDays = max(0, intval($addDays));
+        $bytesAdjusted = false;
 
         if($email !== ''){
             $result = xuiApiRequest($server, 'POST', '/panel/api/clients/bulkAdjust', [
                 'emails' => [$email],
-                'addDays' => $addDays,
+                'addDays' => 0,
                 'addBytes' => $bytes
             ]);
 
             if(!empty($result['success'])){
-                return [
-                    'ok' => true,
-                    'raw' => $result,
-                    'method' => 'bulkAdjust'
-                ];
+                $bytesAdjusted = true;
             }
-
-            $errors[] = 'bulkAdjust: ' . ($result['msg'] ?? 'ناموفق');
+            else{
+                $errors[] = 'bulkAdjust: ' . ($result['msg'] ?? 'ناموفق');
+            }
         }
 
-        if(is_array($client)){
-            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb);
+        if(!$bytesAdjusted && is_array($client)){
+            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays);
 
             if(!empty($legacy['ok'])){
                 return $legacy;
             }
 
             $errors[] = 'updateClient: ' . ($legacy['error'] ?? 'ناموفق');
+        }
+
+        if($bytesAdjusted){
+            if($addDays > 0 && is_array($client)){
+                $extended = xuiUpdateClientExpiry($server, $client, $addDays);
+
+                if(empty($extended['ok'])){
+                    return [
+                        'ok' => false,
+                        'error' => 'حجم اضافه شد اما تمدید زمان ناموفق بود: '
+                            . ($extended['error'] ?? 'نامشخص')
+                    ];
+                }
+
+                return [
+                    'ok' => true,
+                    'raw' => $extended['raw'] ?? null,
+                    'method' => 'bulkAdjust+updateClientExpiry',
+                    'expiryTime' => $extended['expiryTime'] ?? 0
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'raw' => $result ?? null,
+                'method' => 'bulkAdjust'
+            ];
         }
 
         return [
@@ -1668,7 +1799,7 @@ if(!function_exists('xuiConfigPath')){
         $subLink = trim((string)($paymentRow[1] ?? ''));
         $planText = trim((string)($paymentRow[2] ?? ''));
         $gb = xuiParsePlanGb($planText);
-        $days = xuiParsePlanDays($planText);
+        $days = xuiResolvePlanDays($planText);
 
         if($gb <= 0){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
@@ -1716,7 +1847,8 @@ if(!function_exists('xuiConfigPath')){
             'email' => $email,
             'sub_id' => $parsed['sub_id'],
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'days' => $days
         ];
     }
 
