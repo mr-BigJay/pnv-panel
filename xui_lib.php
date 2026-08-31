@@ -1381,7 +1381,7 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
-    function xuiCreateClient($server, $email, $gb, $subId = ''){
+    function xuiCreateClient($server, $email, $gb, $subId = '', $options = []){
         $email = xuiSanitizeClientEmail($email);
 
         if($email === ''){
@@ -1393,14 +1393,23 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $inboundId = intval($server['inbound_id'] ?? 1);
-        $bytes = xuiGbToBytes($gb);
+        $options = is_array($options) ? $options : [];
+
+        if(isset($options['total_bytes']) && intval($options['total_bytes']) > 0){
+            $bytes = intval($options['total_bytes']);
+        }
+        else{
+            $bytes = xuiGbToBytes($gb);
+        }
+
+        $expiryTime = max(0, intval($options['expiry_ms'] ?? 0));
         $uuid = xuiGenerateUuid();
 
         $client = [
             'id' => $uuid,
             'email' => $email,
             'enable' => true,
-            'expiryTime' => 0,
+            'expiryTime' => $expiryTime,
             'totalGB' => $bytes,
             'limitIp' => 0,
             'subId' => $subId,
@@ -1738,6 +1747,175 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
+    function xuiRenewStatsFromLink($subLink){
+        if(!function_exists('subUsageFetchFromSubUserinfo')){
+            $subUsageLib = __DIR__ . '/sub_usage_lib.php';
+            if(is_file($subUsageLib)){
+                require_once $subUsageLib;
+            }
+        }
+
+        if(!function_exists('subUsageFetchFromSubUserinfo')){
+            return [
+                'remaining_bytes' => 0,
+                'expiry_ms' => 0,
+            ];
+        }
+
+        $info = subUsageFetchFromSubUserinfo($subLink);
+
+        if(!is_array($info)){
+            return [
+                'remaining_bytes' => 0,
+                'expiry_ms' => 0,
+            ];
+        }
+
+        $used = max(0, floatval($info['used'] ?? 0));
+        $total = max(0, floatval($info['total'] ?? 0));
+
+        return [
+            'remaining_bytes' => max(0, intval($total - $used)),
+            'expiry_ms' => max(0, intval($info['expiry_ms'] ?? 0)),
+        ];
+    }
+
+    function xuiResolveRenewClientEmail($username, $subLink){
+        $username = trim((string)$username);
+        $subLink = trim((string)$subLink);
+
+        if(!function_exists('pnvFindSubCachedClientEmail')){
+            $planUiLib = __DIR__ . '/plan_ui_lib.php';
+            if(is_file($planUiLib)){
+                require_once $planUiLib;
+            }
+        }
+
+        if(function_exists('pnvFindSubCachedClientEmail')){
+            $email = trim((string)pnvFindSubCachedClientEmail($subLink));
+
+            if($email !== ''){
+                return $email;
+            }
+        }
+
+        if(function_exists('pnvFindSubClientEmail')){
+            $email = trim((string)pnvFindSubClientEmail($subLink));
+
+            if($email !== ''){
+                return $email;
+            }
+        }
+
+        $configName = '';
+
+        if(function_exists('pnvFindSubNameFromCsv')){
+            $configName = trim((string)pnvFindSubNameFromCsv($username, $subLink));
+        }
+
+        if($configName === ''){
+            $parsed = xuiParseSubLink($subLink);
+            $configName = trim((string)($parsed['sub_id'] ?? ''));
+
+            if($configName === ''){
+                $configName = $username !== '' ? $username : ('sub' . xuiGenerateSubId(6));
+            }
+        }
+
+        $mobile = xuiGetUserMobile($username);
+
+        return xuiBuildClientEmail($configName, $mobile);
+    }
+
+    function xuiComputeRecreateRenewSpecs($subLink, $planGb, $planDays){
+        $planGb = max(0, intval($planGb));
+        $planDays = max(0, intval($planDays));
+        $stats = xuiRenewStatsFromLink($subLink);
+        $totalBytes = max(0, intval($stats['remaining_bytes'])) + xuiGbToBytes($planGb);
+        $expiryMs = 0;
+
+        if($planDays > 0){
+            $nowMs = intval(microtime(true) * 1000);
+            $currentMs = max(0, intval($stats['expiry_ms']));
+            $baseMs = ($currentMs > $nowMs) ? $currentMs : $nowMs;
+            $expiryMs = $baseMs + ($planDays * 86400000);
+        }
+
+        return [
+            'total_bytes' => $totalBytes,
+            'expiry_ms' => $expiryMs,
+            'remaining_bytes' => max(0, intval($stats['remaining_bytes'])),
+        ];
+    }
+
+    function xuiEnsureUniqueClientEmail($server, $email){
+        $email = xuiSanitizeClientEmail($email);
+
+        if($email === ''){
+            return $email;
+        }
+
+        $exists = xuiApiRequest($server, 'GET', '/panel/api/clients/get/' . rawurlencode($email));
+
+        if(empty($exists['success'])){
+            return $email;
+        }
+
+        return xuiSanitizeClientEmail($email . '_r' . substr(xuiGenerateSubId(4), 0, 4));
+    }
+
+    function xuiRecreateRenewClient($server, $paymentRow, $parsed, $gb, $days){
+        $username = trim((string)($paymentRow[0] ?? ''));
+        $subLink = trim((string)($paymentRow[1] ?? ''));
+        $subId = trim((string)($parsed['sub_id'] ?? ''));
+        $email = xuiResolveRenewClientEmail($username, $subLink);
+        $email = xuiEnsureUniqueClientEmail($server, $email);
+
+        if($email === ''){
+            return ['ok' => false, 'error' => 'نام کلاینت برای بازسازی اشتراک پیدا نشد'];
+        }
+
+        $specs = xuiComputeRecreateRenewSpecs($subLink, $gb, $days);
+        $subIdsToTry = [];
+
+        if($subId !== ''){
+            $subIdsToTry[] = $subId;
+        }
+
+        $subIdsToTry[] = xuiGenerateSubId(16);
+        $errors = [];
+
+        foreach(array_values(array_unique($subIdsToTry)) as $candidateSubId){
+            $created = xuiCreateClient($server, $email, 0, $candidateSubId, [
+                'total_bytes' => $specs['total_bytes'],
+                'expiry_ms' => $specs['expiry_ms'],
+            ]);
+
+            if(!empty($created['ok'])){
+                return [
+                    'ok' => true,
+                    'link' => $created['link'],
+                    'email' => $created['email'],
+                    'sub_id' => $created['sub_id'],
+                    'server_id' => $server['id'] ?? '',
+                    'gb' => $gb,
+                    'days' => $days,
+                    'recreated' => true,
+                    'remaining_bytes' => $specs['remaining_bytes'],
+                    'total_bytes' => $specs['total_bytes'],
+                    'expiry_ms' => $specs['expiry_ms'],
+                ];
+            }
+
+            $errors[] = ($created['error'] ?? 'بازسازی ناموفق بود') . ' [subId=' . $candidateSubId . ']';
+        }
+
+        return [
+            'ok' => false,
+            'error' => 'بازسازی اشتراک حذف‌شده ناموفق بود. ' . implode(' | ', $errors)
+        ];
+    }
+
     function xuiProvisionBuy($paymentRow){
         $config = xuiLoadConfig();
 
@@ -1826,7 +2004,7 @@ if(!function_exists('xuiConfigPath')){
         $client = xuiFindClientBySubId($server, $parsed['sub_id'], $subLink);
 
         if(!$client){
-            return ['ok' => false, 'error' => 'کاربر با Sub ID پیدا نشد: ' . $parsed['sub_id']];
+            return xuiRecreateRenewClient($server, $paymentRow, $parsed, $gb, $days, $config);
         }
 
         $email = trim((string)($client['email'] ?? ''));
