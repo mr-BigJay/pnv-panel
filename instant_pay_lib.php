@@ -1187,7 +1187,14 @@ if(!function_exists('instantPayPath')){
         $items[] = $item;
         instantPaySave($items);
 
-        // اطلاع تلگرام فقط بعد از تأیید پرداخت ارسال می‌شود (نه در شروع مهلت)
+        if(function_exists('telegramNotifyNewPayment')){
+            try{
+                telegramNotifyNewPayment($type, $row);
+            }
+            catch(Throwable $e){
+                error_log('instant pay telegram create notify failed: ' . $e->getMessage());
+            }
+        }
 
         return [
             'ok' => true,

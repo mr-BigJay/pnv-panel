@@ -587,6 +587,80 @@ if(!function_exists('telegramConfigPath')){
         return $status !== 'تایید شد' && $status !== 'رد شد';
     }
 
+    function telegramEnsureInstantPayLib(){
+        if(function_exists('instantPayAdminRowIsInProgress')){
+            return;
+        }
+
+        $lib = __DIR__ . '/instant_pay_lib.php';
+
+        if(is_file($lib)){
+            require_once $lib;
+        }
+    }
+
+    function telegramPaymentRowCountsAsPending($row){
+        if(!is_array($row)){
+            return false;
+        }
+
+        $status = trim((string)($row[6] ?? 'درحال بررسی'));
+
+        if(!telegramIsPendingStatus($status)){
+            return false;
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') !== 0){
+            return true;
+        }
+
+        telegramEnsureInstantPayLib();
+
+        if(function_exists('instantPayFindJsonByTracking')){
+            $user = trim((string)($row[0] ?? ''));
+            $item = instantPayFindJsonByTracking($user, $tracking);
+
+            if(is_array($item)){
+                $jsonStatus = (string)($item['status'] ?? '');
+
+                if(in_array($jsonStatus, ['cancelled', 'failed', 'expired', 'paid'], true)){
+                    return false;
+                }
+            }
+        }
+
+        if(function_exists('instantPayAdminRowIsInProgress')){
+            return instantPayAdminRowIsInProgress($row);
+        }
+
+        $created = intval($row[8] ?? 0);
+        $maxAge = function_exists('instantPayAdminVisibilitySeconds')
+            ? instantPayAdminVisibilitySeconds()
+            : 3600;
+
+        if($created <= 0 || (time() - $created) > $maxAge){
+            return false;
+        }
+
+        return true;
+    }
+
+    function telegramReminderResetKind($kind){
+        $kind = trim((string)$kind);
+
+        if($kind !== 'خرید' && $kind !== 'تمدید'){
+            return;
+        }
+
+        $state = telegramLoadRemindersState();
+        $entry = telegramReminderKindState($state, $kind);
+        $entry['last_sent_at'] = time();
+        $state[$kind] = $entry;
+        telegramSaveRemindersState($state);
+    }
+
     function telegramPaymentRowToItem($row, $csvIndex, $fallbackType = 'خرید'){
         $username = trim((string)($row[0] ?? ''));
         $type = trim((string)($row[9] ?? ''));
@@ -635,7 +709,7 @@ if(!function_exists('telegramConfigPath')){
             $type = trim((string)($row[9] ?? ''));
             $status = trim((string)($row[6] ?? 'درحال بررسی'));
 
-            if(!telegramIsPendingStatus($status) || !telegramPaymentTypeMatches($type, $kind)){
+            if(!telegramPaymentRowCountsAsPending($row) || !telegramPaymentTypeMatches($type, $kind)){
                 $csvIndex++;
                 continue;
             }
@@ -1267,7 +1341,13 @@ if(!function_exists('telegramConfigPath')){
             $text = "🔔 " . telegramFormatPaymentDetail($item, $kind);
         }
 
-        return telegramSendToAdmins($text);
+        $results = telegramSendToAdmins($text);
+
+        if($kind === 'خرید' || $kind === 'تمدید'){
+            telegramReminderResetKind($kind);
+        }
+
+        return $results;
     }
 
     function telegramRemindersPath(){
@@ -1409,6 +1489,16 @@ if(!function_exists('telegramConfigPath')){
 
         if(count(telegramAdminChatIds($config)) === 0){
             return;
+        }
+
+        telegramEnsureInstantPayLib();
+
+        if(function_exists('instantPayExpireDue')){
+            instantPayExpireDue();
+        }
+
+        if(function_exists('instantPayPurgeStaleAdminRows')){
+            instantPayPurgeStaleAdminRows();
         }
 
         $state = telegramLoadRemindersState();
