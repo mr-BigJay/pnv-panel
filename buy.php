@@ -38,7 +38,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=26">
+<link rel="stylesheet" href="plan_step_ui.css?v=27">
 </head>
 <body>
 <div class="box">
@@ -80,6 +80,7 @@ $h = static function($v){
 </div>
 </div>
 
+<div id="planCatSection">
 <div class="sectionTitle">نوع پلن را انتخاب کنید</div>
 <div class="catGrid">
 <button type="button" class="catCard" data-cat="unlimited">
@@ -92,6 +93,7 @@ $h = static function($v){
 <span class="catTitle">محدود زمانی</span>
 <span class="catDesc">مدت مشخص (روز / ماه)</span>
 </button>
+</div>
 </div>
 
 <div class="planBlock" id="planBlock">
@@ -222,6 +224,8 @@ const planSelect = document.getElementById('planSelect');
 const planGrid = document.getElementById('planGrid');
 const planEmpty = document.getElementById('planEmpty');
 const planListTitle = document.getElementById('planListTitle');
+const planBlockEl = document.getElementById('planBlock');
+const planCatSection = document.getElementById('planCatSection');
 const planSummary = document.getElementById('planSummary');
 const toStep2Btn = document.getElementById('toStep2');
 const toStep3Btn = document.getElementById('toStep3');
@@ -309,17 +313,38 @@ function updateContinueState(){
     toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
 }
 
+function planCategoryOf(plan){
+    if(!plan || typeof plan !== 'object'){ return ''; }
+    if(plan.category === 'unlimited' || plan.category === 'limited'){ return plan.category; }
+    const days = String(plan.days || '').trim();
+    if(!days || days === 'نامحدود' || days === 'نامحدود زمانی' || days.toLowerCase() === 'unlimited'){ return 'unlimited'; }
+    const normalized = days.replace(/[۰-۹]/g, function(ch){ return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(ch)); })
+        .replace(/[٠-٩]/g, function(ch){ return String('٠١٢٣٤٥٦٧٨٩'.indexOf(ch)); });
+    if(/^\d+$/.test(normalized)){ return parseInt(normalized, 10) > 0 ? 'limited' : 'unlimited'; }
+    return 'limited';
+}
+
+function selectCategory(cat){
+    selectedCategory = cat || '';
+    document.querySelectorAll('.catCard').forEach(function(el){
+        el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+    });
+}
+
 function planCountsByCategory(){
     const counts = { unlimited: 0, limited: 0 };
     (plansData || []).forEach(function(p){
-        if(p.category === 'unlimited'){ counts.unlimited++; }
-        else if(p.category === 'limited'){ counts.limited++; }
+        const cat = planCategoryOf(p);
+        if(cat === 'unlimited'){ counts.unlimited++; }
+        else if(cat === 'limited'){ counts.limited++; }
     });
     return counts;
 }
 
 function initPlanCategories(){
     const counts = planCountsByCategory();
+    const available = ['unlimited', 'limited'].filter(function(cat){ return (counts[cat] || 0) > 0; });
+
     document.querySelectorAll('.catCard').forEach(function(card){
         const cat = card.getAttribute('data-cat');
         const hasPlans = (counts[cat] || 0) > 0;
@@ -330,39 +355,42 @@ function initPlanCategories(){
         }
     });
 
-    const available = ['unlimited', 'limited'].filter(function(cat){ return (counts[cat] || 0) > 0; });
+    if(planCatSection){
+        planCatSection.hidden = available.length <= 1;
+    }
 
     if(available.length === 1){
-        selectedCategory = available[0];
-        document.querySelectorAll('.catCard').forEach(function(el){
-            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
-        });
+        selectCategory(available[0]);
         renderPlans();
         return;
     }
 
     if(available.length === 0){
-        selectedCategory = '';
+        selectCategory('');
         selectedPlan = null;
         planSelect.value = '';
-        if(planBlock){ planBlock.classList.add('is-visible'); }
-        planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است.';
+        if(planBlockEl){ planBlockEl.classList.add('is-visible'); }
+        planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است. از پنل ادمین → پلن‌ها، حداقل یک پلن اضافه کنید.';
         planEmpty.classList.add('is-visible');
         updateContinueState();
+        return;
+    }
+
+    if(!selectedCategory || (counts[selectedCategory] || 0) === 0){
+        selectCategory('');
     }
 }
 
 function renderPlans(){
     planGrid.innerHTML = '';
     planEmpty.classList.remove('is-visible');
-    const planBlock = document.getElementById('planBlock');
     if(!selectedCategory){
-        if(planBlock) planBlock.classList.remove('is-visible');
+        if(planBlockEl){ planBlockEl.classList.remove('is-visible'); }
         updateContinueState();
         return;
     }
-    if(planBlock) planBlock.classList.add('is-visible');
-    const list = (plansData || []).filter(function(p){ return p.category === selectedCategory; });
+    if(planBlockEl){ planBlockEl.classList.add('is-visible'); }
+    const list = (plansData || []).filter(function(p){ return planCategoryOf(p) === selectedCategory; });
     const isLimited = selectedCategory === 'limited';
     if(planListTitle){
         planListTitle.textContent = isLimited ? 'حجم و مدت را انتخاب کنید' : 'حجم را انتخاب کنید';
@@ -370,12 +398,12 @@ function renderPlans(){
     if(list.length === 0){
         const counts = planCountsByCategory();
         const other = selectedCategory === 'limited' ? 'unlimited' : 'limited';
-        const otherLabel = other === 'limited' ? 'محدود زمانی' : 'نامحدود زمانی';
         if((counts[other] || 0) > 0){
-            planEmpty.textContent = 'در این دسته پلنی تعریف نشده. دسته «' + otherLabel + '» را انتخاب کنید.';
-        } else {
-            planEmpty.textContent = 'در این دسته پلنی تعریف نشده است.';
+            selectCategory(other);
+            renderPlans();
+            return;
         }
+        planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است. از پنل ادمین → پلن‌ها، حداقل یک پلن اضافه کنید.';
         planEmpty.classList.add('is-visible');
         selectedPlan = null;
         planSelect.value = '';
@@ -422,8 +450,7 @@ document.querySelectorAll('.catCard').forEach(function(card){
     card.addEventListener('click', function(){
         if(card.hidden || card.classList.contains('is-empty')){ return; }
         selectedCategory = card.getAttribute('data-cat');
-        document.querySelectorAll('.catCard').forEach(function(el){ el.classList.remove('is-active'); });
-        card.classList.add('is-active');
+        selectCategory(selectedCategory);
         selectedPlan = null;
         planSelect.value = '';
         planSelect.dispatchEvent(new Event('change'));

@@ -205,6 +205,9 @@ margin-bottom:26px;
 .catCard[hidden]{
 display:none !important;
 }
+#planCatSection[hidden]{
+display:none !important;
+}
 .catCard{
 position:relative;
 width:100%;

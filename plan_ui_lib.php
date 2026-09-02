@@ -28,14 +28,27 @@ if(!function_exists('pnvFormatPlanPrice')){
         return $million . ' میلیون';
     }
 
-    function pnvPlanIsUnlimited($plan){
-        $days = trim((string)($plan['days'] ?? ''));
+    function pnvNormalizePlanDaysString($days){
+        $days = trim((string)$days);
+        $persian = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+        $arabic = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        $ascii = ['0','1','2','3','4','5','6','7','8','9'];
 
-        if($days === '' || $days === 'نامحدود' || strcasecmp($days, 'unlimited') === 0){
+        return str_replace($arabic, $ascii, str_replace($persian, $ascii, $days));
+    }
+
+    function pnvPlanIsUnlimited($plan){
+        $days = pnvNormalizePlanDaysString($plan['days'] ?? '');
+
+        if($days === '' || $days === 'نامحدود' || $days === 'نامحدود زمانی' || strcasecmp($days, 'unlimited') === 0){
             return true;
         }
 
-        return intval($days) <= 0;
+        if(preg_match('/^\d+$/', $days)){
+            return intval($days) <= 0;
+        }
+
+        return false;
     }
 
     function pnvPlanDaysLabel($plan){
@@ -43,7 +56,7 @@ if(!function_exists('pnvFormatPlanPrice')){
             return 'نامحدود زمانی';
         }
 
-        $days = trim((string)($plan['days'] ?? ''));
+        $days = pnvNormalizePlanDaysString($plan['days'] ?? '');
 
         if($days === ''){
             return '—';
@@ -950,7 +963,7 @@ if(!function_exists('pnvFormatPlanPrice')){
             return '';
         }
 
-        $days = trim((string)($plan['days'] ?? ''));
+        $days = pnvNormalizePlanDaysString($plan['days'] ?? '');
 
         if($days === ''){
             $days = 'نامحدود';

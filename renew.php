@@ -79,7 +79,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=26">
+<link rel="stylesheet" href="plan_step_ui.css?v=27">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -203,6 +203,7 @@ pointer-events:none !important;
 </div>
 </div>
 
+<div id="planCatSection">
 <div class="sectionTitle">نوع پلن را انتخاب کنید</div>
 <div class="catGrid">
 <button type="button" class="catCard" data-cat="unlimited">
@@ -215,6 +216,7 @@ pointer-events:none !important;
 <span class="catTitle">محدود زمانی</span>
 <span class="catDesc">مدت مشخص (روز / ماه)</span>
 </button>
+</div>
 </div>
 
 <div class="planBlock" id="planBlock">
@@ -349,6 +351,8 @@ const planSelect = document.getElementById('planSelect');
 const planGrid = document.getElementById('planGrid');
 const planEmpty = document.getElementById('planEmpty');
 const planListTitle = document.getElementById('planListTitle');
+const planBlockEl = document.getElementById('planBlock');
+const planCatSection = document.getElementById('planCatSection');
 const planSummary = document.getElementById('planSummary');
 const toStep2Btn = document.getElementById('toStep2');
 const toStep3Btn = document.getElementById('toStep3');
@@ -556,16 +560,10 @@ function syncCategoryLocks(){
     }
     // اگر نوع مشخص است، دسته سازگار را خودکار باز کن
     if(subTimeCategory === 'unlimited' && !selectedCategory){
-        selectedCategory = 'unlimited';
-        document.querySelectorAll('.catCard').forEach(function(el){
-            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
-        });
+        selectCategory('unlimited');
     }
     if(subTimeCategory === 'limited' && !selectedCategory){
-        selectedCategory = 'limited';
-        document.querySelectorAll('.catCard').forEach(function(el){
-            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
-        });
+        selectCategory('limited');
     }
     try{ renderPlans(); }catch(err){ console && console.warn && console.warn(err); }
     try{ updateContinueState(); }catch(err){}
@@ -666,11 +664,30 @@ function updateContinueState(){
     toStep2Btn.disabled = !!(locked || !hasPlan);
 }
 
+function planCategoryOf(plan){
+    if(!plan || typeof plan !== 'object'){ return ''; }
+    if(plan.category === 'unlimited' || plan.category === 'limited'){ return plan.category; }
+    const days = String(plan.days || '').trim();
+    if(!days || days === 'نامحدود' || days === 'نامحدود زمانی' || days.toLowerCase() === 'unlimited'){ return 'unlimited'; }
+    const normalized = days.replace(/[۰-۹]/g, function(ch){ return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(ch)); })
+        .replace(/[٠-٩]/g, function(ch){ return String('٠١٢٣٤٥٦٧٨٩'.indexOf(ch)); });
+    if(/^\d+$/.test(normalized)){ return parseInt(normalized, 10) > 0 ? 'limited' : 'unlimited'; }
+    return 'limited';
+}
+
+function selectCategory(cat){
+    selectedCategory = cat || '';
+    document.querySelectorAll('.catCard').forEach(function(el){
+        el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+    });
+}
+
 function planCountsByCategory(){
     const counts = { unlimited: 0, limited: 0 };
     (plansData || []).forEach(function(p){
-        if(p.category === 'unlimited'){ counts.unlimited++; }
-        else if(p.category === 'limited'){ counts.limited++; }
+        const cat = planCategoryOf(p);
+        if(cat === 'unlimited'){ counts.unlimited++; }
+        else if(cat === 'limited'){ counts.limited++; }
     });
     return counts;
 }
@@ -682,6 +699,9 @@ function isCategoryLocked(cat){
 
 function initPlanCategories(){
     const counts = planCountsByCategory();
+    const availableAll = ['unlimited', 'limited'].filter(function(cat){ return (counts[cat] || 0) > 0; });
+    const available = availableAll.filter(function(cat){ return !isCategoryLocked(cat); });
+
     document.querySelectorAll('.catCard').forEach(function(card){
         const cat = card.getAttribute('data-cat');
         const hasPlans = (counts[cat] || 0) > 0;
@@ -697,59 +717,55 @@ function initPlanCategories(){
         }
     });
 
-    if((counts.unlimited || 0) + (counts.limited || 0) === 0){
-        selectedCategory = '';
+    if(planCatSection){
+        planCatSection.hidden = availableAll.length <= 1;
+    }
+
+    if(availableAll.length === 0){
+        selectCategory('');
         selectedPlan = null;
         if(planSelect) planSelect.value = '';
-        const planBlock = document.getElementById('planBlock');
-        if(planBlock){ planBlock.classList.add('is-visible'); }
+        if(planBlockEl){ planBlockEl.classList.add('is-visible'); }
         if(planEmpty){
-            planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است.';
+            planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است. از پنل ادمین → پلن‌ها، حداقل یک پلن اضافه کنید.';
             planEmpty.classList.add('is-visible');
         }
         updateContinueState();
         return;
     }
 
-    const available = ['unlimited', 'limited'].filter(function(cat){
-        return (counts[cat] || 0) > 0 && !isCategoryLocked(cat);
-    });
-
-    if(available.length === 1 && !selectedCategory){
-        selectedCategory = available[0];
-        document.querySelectorAll('.catCard').forEach(function(el){
-            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
-        });
+    if(available.length === 1 && (!selectedCategory || isCategoryLocked(selectedCategory))){
+        selectCategory(available[0]);
+    } else if(selectedCategory && ((counts[selectedCategory] || 0) === 0 || isCategoryLocked(selectedCategory))){
+        selectCategory(available[0] || '');
     }
 }
 
 function renderPlans(){
     planGrid.innerHTML = '';
     planEmpty.classList.remove('is-visible');
-    const planBlock = document.getElementById('planBlock');
     if(!selectedCategory){
-        if(planBlock) planBlock.classList.remove('is-visible');
+        if(planBlockEl){ planBlockEl.classList.remove('is-visible'); }
         updateContinueState();
         return;
     }
-    const categoryLocked = (
-        (subTimeCategory !== 'limited' && selectedCategory === 'limited') ||
-        (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
-    );
-    if(planBlock) planBlock.classList.add('is-visible');
-    const list = (plansData || []).filter(function(p){ return p.category === selectedCategory; });
+    const categoryLocked = isCategoryLocked(selectedCategory);
+    if(planBlockEl){ planBlockEl.classList.add('is-visible'); }
+    const list = (plansData || []).filter(function(p){ return planCategoryOf(p) === selectedCategory; });
     const isLimited = selectedCategory === 'limited';
     if(planListTitle) planListTitle.textContent = isLimited ? 'حجم و مدت را انتخاب کنید' : 'حجم را انتخاب کنید';
     if(list.length === 0){
         const counts = planCountsByCategory();
         const other = selectedCategory === 'limited' ? 'unlimited' : 'limited';
-        const otherLabel = other === 'limited' ? 'محدود زمانی' : 'نامحدود زمانی';
         if((counts[other] || 0) > 0 && !isCategoryLocked(other)){
-            planEmpty.textContent = 'در این دسته پلنی تعریف نشده. دسته «' + otherLabel + '» را انتخاب کنید.';
-        } else if(categoryLocked){
+            selectCategory(other);
+            renderPlans();
+            return;
+        }
+        if(categoryLocked){
             planEmpty.textContent = lockMessageFor(selectedCategory).replace(/<[^>]+>/g, '');
         } else {
-            planEmpty.textContent = 'در این دسته پلنی تعریف نشده است.';
+            planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است. از پنل ادمین → پلن‌ها، حداقل یک پلن اضافه کنید.';
         }
         planEmpty.classList.add('is-visible');
         selectedPlan = null;
@@ -810,9 +826,7 @@ document.querySelectorAll('.catCard').forEach(function(card){
             return;
         }
         hideCatLockHint();
-        selectedCategory = cat;
-        document.querySelectorAll('.catCard').forEach(function(el){ el.classList.remove('is-active'); });
-        card.classList.add('is-active');
+        selectCategory(cat);
         selectedPlan = null; planSelect.value = '';
         planSelect.dispatchEvent(new Event('change'));
         renderPlans();
