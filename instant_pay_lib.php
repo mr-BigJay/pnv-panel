@@ -197,6 +197,115 @@ if(!function_exists('instantPayPath')){
         return ($now - $expires) <= instantPayMatchGraceSeconds();
     }
 
+    function instantPayProcessingTimeoutSeconds(){
+        return 180;
+    }
+
+    function instantPayProcessingIsStale($item, $now = null){
+        if(($item['status'] ?? '') !== 'processing'){
+            return false;
+        }
+
+        $now = $now ?? time();
+        $started = intval($item['processing_at'] ?? 0);
+
+        if($started <= 0){
+            $started = intval($item['created_at'] ?? 0);
+        }
+
+        if($started <= 0){
+            return true;
+        }
+
+        return ($now - $started) >= instantPayProcessingTimeoutSeconds();
+    }
+
+    function instantPayRecoverStaleProcessing($items = null){
+        if($items === null){
+            $items = instantPayLoad();
+        }
+
+        $now = time();
+        $changed = false;
+
+        foreach($items as $i => $item){
+            if(!instantPayProcessingIsStale($item, $now)){
+                continue;
+            }
+
+            $items[$i]['status'] = 'failed';
+            $items[$i]['message'] = 'تأیید نیمه‌کاره؛ دوباره تلاش می‌شود';
+            $changed = true;
+        }
+
+        if($changed){
+            instantPaySave($items);
+        }
+
+        return $items;
+    }
+
+    /**
+     * بعد از تأیید CSV (AUTO)، ردیف JSON را هم paid کن — مثلاً تأیید از پنل/ربات ادمین.
+     */
+    function instantPaySyncJsonAfterCsvApproval($csvIndex, $row, $result = []){
+        if(!is_array($row)){
+            return false;
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') !== 0){
+            return false;
+        }
+
+        $csvIndex = intval($csvIndex);
+        $userKey = strtolower(trim((string)($row[0] ?? '')));
+        $trackingKey = instantPayNormalizeTracking($tracking);
+        $link = trim((string)($result['link'] ?? ($row[7] ?? '')));
+        $items = instantPayLoad();
+        $changed = false;
+
+        foreach($items as $i => $item){
+            $matches = false;
+
+            if($csvIndex >= 0 && intval($item['csv_index'] ?? -1) === $csvIndex){
+                $matches = true;
+            }
+            elseif(
+                $userKey !== ''
+                && strtolower(trim((string)($item['user'] ?? ''))) === $userKey
+                && instantPayNormalizeTracking(instantPayTrackingCode($item)) === $trackingKey
+            ){
+                $matches = true;
+            }
+
+            if(!$matches){
+                continue;
+            }
+
+            if(($item['status'] ?? '') === 'paid'){
+                return true;
+            }
+
+            $items[$i]['status'] = 'paid';
+            $items[$i]['paid_at'] = time();
+            $items[$i]['link'] = $link;
+            $items[$i]['message'] = 'پرداخت تأیید شد';
+            $items[$i]['csv_index'] = $csvIndex;
+            $items[$i]['csv_purged'] = false;
+            unset($items[$i]['processing_at']);
+            $changed = true;
+            break;
+        }
+
+        if($changed){
+            instantPaySave($items);
+        }
+
+        return $changed;
+    }
+
     function instantPayItemMatchable($item, $now = null){
         $now = $now ?? time();
         $status = (string)($item['status'] ?? '');
@@ -864,6 +973,8 @@ if(!function_exists('instantPayPath')){
             $items = instantPayLoad();
         }
 
+        $items = instantPayRecoverStaleProcessing($items);
+
         $now = time();
         $changed = false;
 
@@ -1225,6 +1336,10 @@ if(!function_exists('instantPayPath')){
             return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
         }
 
+        if(($found['status'] ?? '') === 'processing' && !instantPayProcessingIsStale($found)){
+            return ['ok' => false, 'error' => 'سفارش در حال پردازش است؛ چند لحظه صبر کنید'];
+        }
+
         if(!$force && !instantPayItemMatchable($found)){
             return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . ($found['status'] ?? '') . ')'];
         }
@@ -1262,6 +1377,7 @@ if(!function_exists('instantPayPath')){
 
         // اول وضعیت را روی processing بگذار تا UI هنوز «تأیید شد» نگوید
         $items[$idx]['status'] = 'processing';
+        $items[$idx]['processing_at'] = time();
         $items[$idx]['message'] = 'در حال صدور اشتراک…';
         instantPaySave($items);
 
@@ -1324,31 +1440,38 @@ if(!function_exists('instantPayPath')){
         }
 
         $row = $payments[$csvIndex];
+        $user = trim((string)($row[0] ?? ''));
+        $tracking = trim((string)($row[3] ?? ''));
 
         if(!instantPayCsvRowPending($row)){
             $status = trim((string)($row[6] ?? ''));
 
             if($status === 'تایید شد'){
                 $link = trim((string)($row[7] ?? ''));
-                return [
-                    'ok' => true,
-                    'already' => true,
-                    'item' => [
+                instantPaySyncJsonAfterCsvApproval($csvIndex, $row, ['ok' => true, 'link' => $link]);
+
+                $jsonItem = instantPayFindJsonByTracking($user, $tracking);
+                $publicItem = is_array($jsonItem) && !empty($jsonItem['id'])
+                    ? instantPayPublicView($jsonItem)
+                    : [
                         'status' => 'paid',
                         'ready' => true,
                         'link' => $link,
                         'amount_text' => number_format(instantPayCsvRowAmountRial($row)) . ' ریال',
                         'plan' => trim((string)($row[2] ?? '')),
                         'code' => preg_replace('/^AUTO-/i', '', trim((string)($row[3] ?? ''))),
-                    ],
+                    ];
+
+                return [
+                    'ok' => true,
+                    'already' => true,
+                    'item' => $publicItem,
                 ];
             }
 
             return ['ok' => false, 'error' => 'رد CSV قابل تأیید نیست (' . $status . ')'];
         }
 
-        $user = trim((string)($row[0] ?? ''));
-        $tracking = trim((string)($row[3] ?? ''));
         $jsonItem = instantPayFindJsonByTracking($user, $tracking);
 
         if(is_array($jsonItem) && !empty($jsonItem['id'])){
@@ -1443,10 +1566,7 @@ if(!function_exists('instantPayPath')){
             $result = instantPayMarkPaid($item['id'], $payload);
             $result['matched_amount'] = $amount;
             $result['matched_via'] = 'json';
-
-            if(!empty($result['ok'])){
-                return $result;
-            }
+            return $result;
         }
 
         $csvMatch = instantPayFindCsvMatchByAmount($amount);
@@ -1695,6 +1815,14 @@ if(!function_exists('instantPayPath')){
                     if(!instantPayWithinMatchGrace($item, $now)){
                         return 'سفارش این مبلغ منقضی شده است. از ادمین تأیید کنید یا مبلغ جدید بسازید.';
                     }
+                }
+
+                if($status === 'processing' && !instantPayProcessingIsStale($item, $now)){
+                    return 'سفارش این مبلغ در حال صدور است؛ چند لحظه صبر کنید.';
+                }
+
+                if($status === 'failed'){
+                    return 'تأیید خودکار ناموفق بود: ' . trim((string)($item['message'] ?? 'خطای XUI')) . ' — دوباره فوروارد کنید یا از ادمین تأیید کنید.';
                 }
             }
         }

@@ -1764,11 +1764,22 @@ if(!function_exists('xuiConfigPath')){
         $status = trim((string)($row[6] ?? ''));
 
         if($status === 'تایید شد'){
-            return [
+            $link = $row[7] ?? '';
+            $result = [
                 'ok' => true,
                 'already' => true,
-                'link' => $row[7] ?? ''
+                'link' => $link
             ];
+
+            if(!function_exists('instantPaySyncJsonAfterCsvApproval') && is_file(__DIR__ . '/instant_pay_lib.php')){
+                require_once __DIR__ . '/instant_pay_lib.php';
+            }
+
+            if(function_exists('instantPaySyncJsonAfterCsvApproval')){
+                instantPaySyncJsonAfterCsvApproval($index, $row, $result);
+            }
+
+            return $result;
         }
 
         if($type === 'تمدید'){
@@ -1830,6 +1841,10 @@ if(!function_exists('xuiConfigPath')){
                 $notifyRow[7] = $result['link'] ?? ($notifyRow[7] ?? '');
 
                 if(trim((string)($notifyRow[4] ?? '')) === '' || trim((string)($notifyRow[5] ?? '')) === ''){
+                    if(!function_exists('pnvNowParts') && is_file(__DIR__ . '/pnv_date_bootstrap.php')){
+                        require_once __DIR__ . '/pnv_date_bootstrap.php';
+                    }
+
                     if(function_exists('pnvNowParts')){
                         $nowParts = pnvNowParts();
                         $notifyRow[4] = $notifyRow[4] ?: ($nowParts['date'] ?? '');
@@ -1843,6 +1858,14 @@ if(!function_exists('xuiConfigPath')){
             catch(Throwable $e){
                 error_log('xui approve telegram admin notify failed: ' . $e->getMessage());
             }
+        }
+
+        if(!function_exists('instantPaySyncJsonAfterCsvApproval') && is_file(__DIR__ . '/instant_pay_lib.php')){
+            require_once __DIR__ . '/instant_pay_lib.php';
+        }
+
+        if(function_exists('instantPaySyncJsonAfterCsvApproval')){
+            instantPaySyncJsonAfterCsvApproval($index, $payments[$index], $result);
         }
 
         return $result;

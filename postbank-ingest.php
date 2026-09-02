@@ -39,7 +39,7 @@ elseif(isset($_GET['secret'])){
 }
 
 if($provided === '' || !hash_equals($secret, $provided)){
-    baleWebhookLog('INGEST_AUTH_FAIL source=' . $source);
+    baleWebhookLog('INGEST_AUTH_FAIL');
     http_response_code(401);
     echo json_encode(['ok' => false, 'error' => 'unauthorized'], JSON_UNESCAPED_UNICODE);
     exit;
@@ -141,15 +141,28 @@ if(count($openOrders) > 0){
 }
 
 if($notifyChat !== '' && empty($result['ignored'])){
-    baleSendMessage(
-        $notifyChat,
-        "⚠️ واریز اتوماتیک خوانده شد ولی مچ نشد.\n"
-        . $err . "\n"
-        . 'مبالغ: ' . $parsedText
-        . $openLines,
-        [],
-        $config
-    );
+    if(!empty($result['matched_amount']) && empty($result['ok'])){
+        baleSendMessage(
+            $notifyChat,
+            "⚠️ واریز دیده شد ولی آماده‌سازی اشتراک ناموفق بود.\n"
+            . $err . "\n"
+            . 'مبلغ مچ‌شده: ' . number_format(intval($result['matched_amount'])) . " ریال\n"
+            . 'مبالغ: ' . $parsedText,
+            [],
+            $config
+        );
+    }
+    else{
+        baleSendMessage(
+            $notifyChat,
+            "⚠️ واریز اتوماتیک خوانده شد ولی مچ نشد.\n"
+            . $err . "\n"
+            . 'مبالغ: ' . $parsedText
+            . $openLines,
+            [],
+            $config
+        );
+    }
 }
 
 baleNotifyAdminDeposit($config, $text, [
