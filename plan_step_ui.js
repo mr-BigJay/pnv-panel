@@ -12,32 +12,21 @@
         return 'limited';
     }
 
-    function sortPlans(list){
-        return list.slice().sort(function(a, b){
-            const ca = planCategoryOf(a);
-            const cb = planCategoryOf(b);
-            if(ca !== cb){ return ca === 'unlimited' ? -1 : 1; }
-            return (parseInt(a.price, 10) || 0) - (parseInt(b.price, 10) || 0);
+    function planCountsByCategory(plansData){
+        const counts = { unlimited: 0, limited: 0 };
+        (plansData || []).forEach(function(p){
+            const cat = planCategoryOf(p);
+            if(cat === 'unlimited'){ counts.unlimited++; }
+            else if(cat === 'limited'){ counts.limited++; }
         });
+        return counts;
     }
 
-    function filterRenewPlans(plans, subTimeCategory){
-        const list = Array.isArray(plans) ? plans : [];
-        if(subTimeCategory === 'unlimited'){
-            return list.filter(function(p){ return planCategoryOf(p) === 'unlimited'; });
-        }
-        if(subTimeCategory === 'limited'){
-            return list.filter(function(p){ return planCategoryOf(p) === 'limited'; });
-        }
-        return list;
+    function categoryLabel(cat){
+        return cat === 'limited' ? 'محدود زمانی' : 'نامحدود زمانی';
     }
 
-    function isRenewPlanLocked(plan, subTimeCategory){
-        if(!subTimeCategory || subTimeCategory === 'unknown'){ return false; }
-        return planCategoryOf(plan) !== subTimeCategory;
-    }
-
-    function initPlanPicker(options){
+    function initCategoryPlanPicker(options){
         options = options || {};
         const plansData = options.plansData || [];
         const planGrid = options.planGrid;
@@ -47,85 +36,140 @@
         const planSelect = options.planSelect;
         const mode = options.mode === 'renew' ? 'renew' : 'buy';
         const getSubTimeCategory = typeof options.getSubTimeCategory === 'function' ? options.getSubTimeCategory : null;
+        const isCategoryLocked = typeof options.isCategoryLocked === 'function' ? options.isCategoryLocked : function(){ return false; };
+        const onCategoryLockedClick = typeof options.onCategoryLockedClick === 'function' ? options.onCategoryLockedClick : null;
         const onSelectionChange = typeof options.onSelectionChange === 'function' ? options.onSelectionChange : null;
-        const onLockedClick = typeof options.onLockedClick === 'function' ? options.onLockedClick : null;
         const fmtPrice = typeof options.fmtPrice === 'function' ? options.fmtPrice : function(v){ return String(v); };
         const discountedPrice = typeof options.discountedPrice === 'function' ? options.discountedPrice : function(v){ return v; };
         const getCouponState = typeof options.getCouponState === 'function' ? options.getCouponState : function(){ return { applied: false }; };
         const escapeHtml = typeof options.escapeHtml === 'function' ? options.escapeHtml : function(s){ return String(s || ''); };
+        const getEmptyCategoryMessage = typeof options.getEmptyCategoryMessage === 'function' ? options.getEmptyCategoryMessage : null;
 
+        let selectedCategory = '';
         let selectedPlan = null;
 
+        function getSelectedCategory(){ return selectedCategory; }
         function getSelectedPlan(){ return selectedPlan; }
-        function getSelectedCategory(){ return selectedPlan ? planCategoryOf(selectedPlan) : ''; }
 
-        function clearSelection(){
+        function selectCategory(cat, silent){
+            selectedCategory = cat || '';
+            document.querySelectorAll('.catCard').forEach(function(el){
+                el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+            });
+            if(!silent && onSelectionChange){
+                onSelectionChange(selectedPlan, selectedCategory);
+            }
+        }
+
+        function clearPlanSelection(){
             selectedPlan = null;
             if(planSelect){ planSelect.value = ''; }
-            if(onSelectionChange){ onSelectionChange(null, ''); }
         }
 
-        function selectPlan(plan){
-            selectedPlan = plan || null;
-            if(planSelect){ planSelect.value = plan ? plan.value : ''; }
-            if(onSelectionChange){ onSelectionChange(selectedPlan, getSelectedCategory()); }
+        function notifySelection(){
+            if(onSelectionChange){
+                onSelectionChange(selectedPlan, selectedCategory);
+            }
         }
 
-        function emptyMessage(subCat){
-            if(!plansData.length){
-                return 'هنوز پلنی در پنل تعریف نشده است. از پنل ادمین → پلن‌ها، حداقل یک پلن اضافه کنید.';
-            }
-            if(mode === 'renew'){
-                if(subCat === 'unlimited'){
-                    return 'پلن نامحدود زمانی برای تمدید این اشتراک تعریف نشده است.';
+        function initCategories(){
+            const counts = planCountsByCategory(plansData);
+            const total = (counts.unlimited || 0) + (counts.limited || 0);
+
+            document.querySelectorAll('.catCard').forEach(function(card){
+                const cat = card.getAttribute('data-cat');
+                const hasPlans = (counts[cat] || 0) > 0;
+                card.hidden = !hasPlans;
+                card.classList.toggle('is-empty', !hasPlans);
+                if(!hasPlans){
+                    card.classList.remove('is-active');
+                    if(selectedCategory === cat){
+                        selectedCategory = '';
+                        clearPlanSelection();
+                    }
                 }
-                if(subCat === 'limited'){
-                    return 'پلن محدود زمانی برای تمدید این اشتراک تعریف نشده است.';
+            });
+
+            if(total === 0){
+                selectCategory('', true);
+                clearPlanSelection();
+                if(planBlockEl){ planBlockEl.classList.add('is-visible'); }
+                if(planEmpty){
+                    planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است.';
+                    planEmpty.classList.add('is-visible');
                 }
+                notifySelection();
+                return;
             }
-            return 'پلنی برای نمایش وجود ندارد.';
+
+            const available = ['unlimited', 'limited'].filter(function(cat){
+                return (counts[cat] || 0) > 0 && !isCategoryLocked(cat);
+            });
+
+            if(available.length === 1 && (!selectedCategory || isCategoryLocked(selectedCategory) || !(counts[selectedCategory] || 0))){
+                selectCategory(available[0], true);
+            } else if(selectedCategory && (!(counts[selectedCategory] || 0) || isCategoryLocked(selectedCategory))){
+                selectCategory(available[0] || '', true);
+            }
         }
 
         function renderPlans(){
             if(!planGrid || !planEmpty){ return; }
 
+            initCategories();
+
             planGrid.innerHTML = '';
             planEmpty.classList.remove('is-visible');
 
-            const subCat = getSubTimeCategory ? getSubTimeCategory() : '';
-            let list = sortPlans(plansData);
-            if(mode === 'renew'){
-                list = sortPlans(filterRenewPlans(plansData, subCat));
+            if(!selectedCategory){
+                if(planBlockEl){ planBlockEl.classList.remove('is-visible'); }
+                notifySelection();
+                return;
             }
+
+            const categoryLocked = isCategoryLocked(selectedCategory);
+            const isLimited = selectedCategory === 'limited';
+            const list = (plansData || []).filter(function(p){ return planCategoryOf(p) === selectedCategory; });
 
             if(planBlockEl){ planBlockEl.classList.add('is-visible'); }
             if(planListTitle){
-                planListTitle.textContent = mode === 'renew' ? 'پلن تمدید را انتخاب کنید' : 'پلن را انتخاب کنید';
+                planListTitle.textContent = isLimited ? 'حجم و مدت را انتخاب کنید' : 'حجم را انتخاب کنید';
             }
 
-            if(!list.length){
-                planEmpty.textContent = emptyMessage(subCat);
+            if(list.length === 0){
+                const counts = planCountsByCategory(plansData);
+                const other = selectedCategory === 'limited' ? 'unlimited' : 'limited';
+                if((counts[other] || 0) > 0 && !isCategoryLocked(other)){
+                    selectCategory(other, true);
+                    renderPlans();
+                    return;
+                }
+                if(getEmptyCategoryMessage && categoryLocked){
+                    planEmpty.textContent = getEmptyCategoryMessage(selectedCategory);
+                } else if((counts[other] || 0) > 0){
+                    planEmpty.textContent = 'در این دسته پلنی تعریف نشده. دسته «' + categoryLabel(other) + '» را انتخاب کنید.';
+                } else {
+                    planEmpty.textContent = 'در این دسته پلنی تعریف نشده است.';
+                }
                 planEmpty.classList.add('is-visible');
-                clearSelection();
+                clearPlanSelection();
+                notifySelection();
                 return;
             }
 
             if(selectedPlan && !list.some(function(p){ return p.value === selectedPlan.value; })){
-                clearSelection();
+                clearPlanSelection();
             }
 
             const couponState = getCouponState();
 
             list.forEach(function(plan){
-                const cat = planCategoryOf(plan);
-                const isLimited = cat === 'limited';
-                const locked = mode === 'renew' && isRenewPlanLocked(plan, subCat);
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'planChip planChip--typed'
-                    + (isLimited ? ' planChip--limited' : ' planChip--unlimited')
+                btn.className = 'planChip'
+                    + (isLimited ? ' planChip--limited' : '')
                     + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '')
-                    + (locked ? ' is-locked' : '');
+                    + (categoryLocked ? ' is-locked' : '');
 
                 const disc = couponState.applied ? discountedPrice(plan.price) : 0;
                 let priceHtml;
@@ -142,44 +186,90 @@
                     priceHtml = '<span class="planPrice">' + escapeHtml(plan.price_text) + '</span>';
                 }
 
-                btn.innerHTML = '<span class="planCheck">✓</span><span class="planName"></span>' + priceHtml + '<span class="planDays"></span>';
+                btn.innerHTML = '<span class="planCheck">✓</span><span class="planName"></span>' + priceHtml + (isLimited ? '<span class="planDays"></span>' : '');
                 btn.querySelector('.planName').textContent = plan.name;
-                const daysEl = btn.querySelector('.planDays');
-                if(daysEl){
-                    daysEl.textContent = plan.days_label || (isLimited ? '—' : 'نامحدود زمانی');
+                if(isLimited){
+                    const d = btn.querySelector('.planDays');
+                    if(d){ d.textContent = 'مدت: ' + (plan.days_label || '—'); }
                 }
 
                 btn.addEventListener('click', function(){
-                    if(locked){
-                        if(onLockedClick){ onLockedClick(cat); }
+                    if(categoryLocked){
+                        if(onCategoryLockedClick){ onCategoryLockedClick(selectedCategory); }
                         return;
                     }
-                    selectPlan(plan);
-                    if(planSelect){ planSelect.dispatchEvent(new Event('change')); }
+                    selectedPlan = plan;
+                    if(planSelect){ planSelect.value = plan.value; planSelect.dispatchEvent(new Event('change')); }
                     renderPlans();
                 });
 
                 planGrid.appendChild(btn);
             });
 
-            if(onSelectionChange){ onSelectionChange(selectedPlan, getSelectedCategory()); }
+            notifySelection();
         }
+
+        function syncRenewCategory(subTimeCategory){
+            if(mode !== 'renew'){ return; }
+            document.querySelectorAll('.catCard').forEach(function(card){
+                const cat = card.getAttribute('data-cat');
+                const locked = isCategoryLocked(cat);
+                card.classList.toggle('is-locked', locked);
+                if(locked && card.classList.contains('is-active')){
+                    card.classList.remove('is-active');
+                    if(selectedCategory === cat){
+                        selectedCategory = '';
+                        clearPlanSelection();
+                    }
+                }
+            });
+            if(subTimeCategory === 'unlimited' && !selectedCategory){
+                selectCategory('unlimited', true);
+            }
+            if(subTimeCategory === 'limited' && !selectedCategory){
+                selectCategory('limited', true);
+            }
+            if(selectedCategory){
+                const activeCard = document.querySelector('.catCard[data-cat="' + selectedCategory + '"]');
+                if(activeCard && activeCard.classList.contains('is-locked')){
+                    selectedCategory = '';
+                    clearPlanSelection();
+                }
+            }
+            renderPlans();
+        }
+
+        document.querySelectorAll('.catCard').forEach(function(card){
+            card.addEventListener('click', function(){
+                if(card.hidden || card.classList.contains('is-empty')){ return; }
+                const cat = card.getAttribute('data-cat');
+                if(isCategoryLocked(cat)){
+                    if(onCategoryLockedClick){ onCategoryLockedClick(cat); }
+                    return;
+                }
+                selectCategory(cat, true);
+                clearPlanSelection();
+                if(planSelect){ planSelect.dispatchEvent(new Event('change')); }
+                renderPlans();
+            });
+        });
 
         renderPlans();
 
         return {
             renderPlans: renderPlans,
-            getSelectedPlan: getSelectedPlan,
+            syncRenewCategory: syncRenewCategory,
             getSelectedCategory: getSelectedCategory,
-            clearSelection: clearSelection,
-            selectPlan: selectPlan,
+            getSelectedPlan: getSelectedPlan,
+            selectCategory: selectCategory,
+            clearPlanSelection: clearPlanSelection,
             planCategoryOf: planCategoryOf
         };
     }
 
     global.PnvPlanUi = {
         planCategoryOf: planCategoryOf,
-        filterRenewPlans: filterRenewPlans,
-        initPlanPicker: initPlanPicker
+        planCountsByCategory: planCountsByCategory,
+        initCategoryPlanPicker: initCategoryPlanPicker
     };
 })(window);

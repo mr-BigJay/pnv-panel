@@ -38,7 +38,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=28">
+<link rel="stylesheet" href="plan_step_ui.css?v=29">
 </head>
 <body>
 <div class="box">
@@ -80,9 +80,23 @@ $h = static function($v){
 </div>
 </div>
 
-<div class="planBlock is-visible" id="planBlock">
-<div class="sectionTitle" id="planListTitle">پلن را انتخاب کنید</div>
-<div class="planEmpty" id="planEmpty">پلنی برای نمایش وجود ندارد</div>
+<div class="sectionTitle">نوع پلن را انتخاب کنید</div>
+<div class="catGrid">
+<button type="button" class="catCard" data-cat="unlimited">
+<span class="catCheck">✓</span><span class="catIcon">∞</span>
+<span class="catTitle">نامحدود زمانی</span>
+<span class="catDesc">بدون محدودیت در زمان استفاده</span>
+</button>
+<button type="button" class="catCard" data-cat="limited">
+<span class="catCheck">✓</span><span class="catIcon">⏱</span>
+<span class="catTitle">محدود زمانی</span>
+<span class="catDesc">مدت مشخص (روز / ماه)</span>
+</button>
+</div>
+
+<div class="planBlock" id="planBlock">
+<div class="sectionTitle" id="planListTitle">حجم را انتخاب کنید</div>
+<div class="planEmpty" id="planEmpty">در این دسته پلنی تعریف نشده است</div>
 <div class="planGrid" id="planGrid"></div>
 </div>
 
@@ -198,7 +212,7 @@ $h = static function($v){
 </div>
 </div>
 
-<script src="plan_step_ui.js?v=1"></script>
+<script src="plan_step_ui.js?v=2"></script>
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
@@ -248,8 +262,8 @@ const resultLink = document.getElementById('resultLink');
 const resultQrWrap = document.getElementById('resultQrWrap');
 const resultQrImg = document.getElementById('resultQrImg');
 
-let selectedPlan = null;
 let selectedCategory = '';
+let selectedPlan = null;
 let planPicker = null;
 let payPollTimer = null;
 let payTickTimer = null;
@@ -295,10 +309,10 @@ function renderPlanSummaryHtml(plan, category, extraHtml){
 }
 
 function updateContinueState(){
-    toStep2Btn.disabled = !(selectedPlan && planSelect.value);
+    toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
 }
 
-planPicker = PnvPlanUi.initPlanPicker({
+planPicker = PnvPlanUi.initCategoryPlanPicker({
     mode: 'buy',
     plansData: plansData,
     planGrid: planGrid,
@@ -312,7 +326,7 @@ planPicker = PnvPlanUi.initPlanPicker({
     escapeHtml: escapeHtml,
     onSelectionChange: function(plan, category){
         selectedPlan = plan;
-        selectedCategory = category || '';
+        selectedCategory = category || (plan ? PnvPlanUi.planCategoryOf(plan) : '');
         updateContinueState();
     }
 });
