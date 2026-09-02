@@ -198,5 +198,28 @@ $freshOrder = [
 ];
 assertTrue(instantPayOrderMatchesPlans($freshOrder, $plansNew), 'fresh order matches current plans');
 
+$processingFresh = [
+    'id' => 'proc-fresh',
+    'status' => 'processing',
+    'processing_at' => time(),
+    'created_at' => time(),
+    'expires_at' => time() + 600,
+];
+assertTrue(!instantPayItemMatchable($processingFresh), 'fresh processing is not matchable');
+assertTrue(!instantPayProcessingIsStale($processingFresh), 'fresh processing is not stale');
+
+$processingStale = [
+    'id' => 'proc-stale',
+    'status' => 'processing',
+    'processing_at' => time() - instantPayProcessingTimeoutSeconds() - 5,
+    'created_at' => time() - 3600,
+    'expires_at' => time() - 60,
+];
+assertTrue(instantPayProcessingIsStale($processingStale), 'old processing is stale');
+instantPaySave([$processingStale]);
+instantPayRecoverStaleProcessing();
+$reloaded = instantPayLoad()[0] ?? [];
+assertTrue(($reloaded['status'] ?? '') === 'failed', 'stale processing recovered to failed');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);
