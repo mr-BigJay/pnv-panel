@@ -1819,6 +1819,32 @@ if(!function_exists('xuiConfigPath')){
             tgUserNotifyPaymentApproved($username, $subName, $planText, $type === 'تمدید');
         }
 
+        if(!function_exists('telegramNotifyNewPayment') && is_file(__DIR__ . '/telegram_lib.php')){
+            require_once __DIR__ . '/telegram_lib.php';
+        }
+
+        if(function_exists('telegramNotifyNewPayment')){
+            try{
+                $notifyRow = $payments[$index];
+                $notifyRow[6] = 'تایید شد';
+                $notifyRow[7] = $result['link'] ?? ($notifyRow[7] ?? '');
+
+                if(trim((string)($notifyRow[4] ?? '')) === '' || trim((string)($notifyRow[5] ?? '')) === ''){
+                    if(function_exists('pnvNowParts')){
+                        $nowParts = pnvNowParts();
+                        $notifyRow[4] = $notifyRow[4] ?: ($nowParts['date'] ?? '');
+                        $notifyRow[5] = $notifyRow[5] ?: ($nowParts['time'] ?? '');
+                    }
+                }
+
+                $notifyKind = ($type === 'تمدید') ? 'تمدید' : 'خرید';
+                telegramNotifyNewPayment($notifyKind, $notifyRow, ['confirmed' => true]);
+            }
+            catch(Throwable $e){
+                error_log('xui approve telegram admin notify failed: ' . $e->getMessage());
+            }
+        }
+
         return $result;
     }
 

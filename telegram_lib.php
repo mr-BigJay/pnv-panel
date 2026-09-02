@@ -785,10 +785,18 @@ if(!function_exists('telegramConfigPath')){
         return $kind === 'تمدید' ? '♻️' : '🛒';
     }
 
-    function telegramFormatPaymentDetail($item, $kind, $reportMode = false){
-        $title = $reportMode
-            ? ('📋 ' . telegramReportTitle($kind))
-            : (telegramPaymentEmoji($kind) . ' ' . telegramPaymentTitle($kind));
+    function telegramFormatPaymentDetail($item, $kind, $reportMode = false, $notifyMode = false){
+        if($notifyMode){
+            $title = !empty($item['confirmed'])
+                ? ('✅ ' . ($kind === 'تمدید' ? 'تمدید تأیید شد' : 'خرید تأیید شد'))
+                : ('🔔 ' . ($kind === 'تمدید' ? 'تمدید جدید' : 'خرید جدید'));
+        }
+        else{
+            $title = $reportMode
+                ? ('📋 ' . telegramReportTitle($kind))
+                : (telegramPaymentEmoji($kind) . ' ' . telegramPaymentTitle($kind));
+        }
+
         $label = $kind === 'تمدید' ? 'لینک اشتراک' : 'نام کانفیگ';
         $lines = [
             $title,
@@ -806,6 +814,12 @@ if(!function_exists('telegramConfigPath')){
         $lines[] = 'تاریخ: ' . trim(($item['date'] ?? '') . ' ' . ($item['time'] ?? ''));
         $lines[] = 'وضعیت: ' . ($item['status'] ?? 'درحال بررسی');
 
+        $amount = intval($item['amount'] ?? 0);
+
+        if($amount > 0){
+            $lines[] = 'مبلغ: ' . number_format($amount) . ' ریال';
+        }
+
         if(!empty($item['coupon'])){
             $lines[] = 'کد تخفیف: ' . $item['coupon'];
             if($item['discount'] !== ''){
@@ -813,7 +827,14 @@ if(!function_exists('telegramConfigPath')){
             }
         }
 
-        if($reportMode){
+        if($notifyMode){
+            $link = trim((string)($item['link'] ?? ''));
+
+            if($link !== '' && ($item['status'] ?? '') === 'تایید شد'){
+                $lines[] = 'لینک: ' . $link;
+            }
+        }
+        elseif($reportMode){
             $note = trim((string)($item['note'] ?? ''));
 
             if($note !== '' && ($item['status'] ?? '') === 'رد شد'){
@@ -1311,6 +1332,7 @@ if(!function_exists('telegramConfigPath')){
         $confirmed = !empty($opts['confirmed']);
         $username = trim((string)($row[0] ?? ''));
         $created = intval($row[8] ?? time());
+        $kind = ($kind === 'تمدید') ? 'تمدید' : 'خرید';
         $item = [
             'username' => $username,
             'mobile' => telegramGetUserMobile($username),
@@ -1324,23 +1346,12 @@ if(!function_exists('telegramConfigPath')){
             'type' => $kind,
             'coupon' => trim((string)($row[10] ?? '')),
             'discount' => trim((string)($row[11] ?? '')),
-            'link' => trim((string)($row[7] ?? ''))
+            'link' => trim((string)($row[7] ?? '')),
+            'amount' => intval($row[12] ?? 0),
+            'confirmed' => $confirmed,
         ];
 
-        if($confirmed){
-            $text = "✅ پرداخت تأیید شد — " . telegramFormatPaymentDetail($item, $kind);
-            if($item['link'] !== ''){
-                $text .= "\n\nلینک:\n" . $item['link'];
-            }
-            $amount = intval($row[12] ?? 0);
-            if($amount > 0){
-                $text .= "\nمبلغ: " . number_format($amount) . ' ریال';
-            }
-        }
-        else{
-            $text = "🔔 " . telegramFormatPaymentDetail($item, $kind);
-        }
-
+        $text = telegramFormatPaymentDetail($item, $kind, false, true);
         $results = telegramSendToAdmins($text);
 
         if($kind === 'خرید' || $kind === 'تمدید'){

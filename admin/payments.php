@@ -266,6 +266,15 @@ if(isset($_POST['approve_payment'])){
         }
     }
 
+    if(isset($payments[$index]) && is_file(__DIR__ . '/../telegram_lib.php')){
+        require_once __DIR__ . '/../telegram_lib.php';
+
+        if(function_exists('telegramNotifyNewPayment')){
+            $notifyKind = trim((string)($payments[$index][9] ?? '')) === 'تمدید' ? 'تمدید' : 'خرید';
+            telegramNotifyNewPayment($notifyKind, $payments[$index], ['confirmed' => true]);
+        }
+    }
+
     $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
     header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 
