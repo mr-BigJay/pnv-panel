@@ -927,7 +927,7 @@ function cancelPayBeacon(id){
 const userBackLink = document.querySelector('.userBack');
 if(userBackLink){
     userBackLink.addEventListener('click', function(){
-        // مبلغ کدگذاری‌شده بلافاصله منقضی/لغو شود
+        // فقط UI را پاک کن؛ سفارش waiting تا پایان مهلت ۳۰+۱۰ دقیقه فعال می‌ماند
         resetPaySession();
     });
 }
@@ -1057,7 +1057,6 @@ function stopPayWatchers(){ if(payPollTimer){clearInterval(payPollTimer);payPoll
 
 function resetPaySession(){
     stopPayWatchers();
-    const cancelId = currentPay && currentPay.id ? currentPay.id : '';
     currentPay = null;
     payCreateInFlight = false;
     if(payCreating) payCreating.classList.remove('is-visible');
@@ -1069,9 +1068,6 @@ function resetPaySession(){
     if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
     const restartBtn = document.getElementById('restartPayBtn');
     if(restartBtn) restartBtn.hidden = true;
-    if(cancelId){
-        cancelPayBeacon(cancelId);
-    }
 }
 
 function renderPay(item){
@@ -1184,7 +1180,7 @@ function ensureInstantPay(forceRestart){
         showPayCreateError('لینک اشتراک را وارد کنید');
         return;
     }
-    if(!forceRestart && currentPay && (currentPay.status === 'waiting' || currentPay.status === 'processing')){
+    if(!forceRestart && currentPay && (currentPay.status === 'waiting' || currentPay.status === 'processing' || currentPay.status === 'expired')){
         const sameCard = String(currentPay.card || '') === card;
         const selectedPlan = planSelect.value.trim();
         const orderPlan = String(currentPay.plan_value || currentPay.plan || '').trim();
@@ -1209,7 +1205,6 @@ function ensureInstantPay(forceRestart){
         if(instantApproved) instantApproved.hidden = true;
     }
 
-    const prevId = currentPay && currentPay.id ? currentPay.id : '';
     stopPayWatchers();
     currentPay = null;
 
@@ -1260,19 +1255,7 @@ function ensureInstantPay(forceRestart){
         });
     };
 
-    if(prevId){
-        const body = new URLSearchParams();
-        body.set('action', 'cancel');
-        body.set('id', prevId);
-        fetch('instant-pay-api.php', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: body.toString()
-        }).finally(startCreate);
-    } else {
-        startCreate();
-    }
+    startCreate();
 }
 
 function copyText(t, msg, opts){

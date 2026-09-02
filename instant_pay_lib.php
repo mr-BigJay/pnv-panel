@@ -57,7 +57,7 @@ if(!function_exists('instantPayPath')){
             return $n;
         }
 
-        return max(1800, instantPayWindowSeconds($config) * 2);
+        return 600;
     }
 
     function instantPayMaxOrderAgeSeconds($config = null){
@@ -638,6 +638,10 @@ if(!function_exists('instantPayPath')){
             return false;
         }
 
+        if(is_array($item) && (string)($item['status'] ?? '') === 'expired' && !instantPayItemMatchable($item, $now)){
+            return false;
+        }
+
         return true;
     }
 
@@ -867,11 +871,13 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if(($item['status'] ?? '') !== 'waiting'){
+            $status = (string)($item['status'] ?? '');
+
+            if(!in_array($status, ['waiting', 'expired'], true)){
                 continue;
             }
 
-            if(intval($item['expires_at'] ?? 0) < $now){
+            if(!instantPayItemMatchable($item, $now)){
                 continue;
             }
 
