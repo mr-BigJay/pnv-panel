@@ -38,7 +38,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=25">
+<link rel="stylesheet" href="plan_step_ui.css?v=26">
 </head>
 <body>
 <div class="box">
@@ -309,6 +309,49 @@ function updateContinueState(){
     toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
 }
 
+function planCountsByCategory(){
+    const counts = { unlimited: 0, limited: 0 };
+    (plansData || []).forEach(function(p){
+        if(p.category === 'unlimited'){ counts.unlimited++; }
+        else if(p.category === 'limited'){ counts.limited++; }
+    });
+    return counts;
+}
+
+function initPlanCategories(){
+    const counts = planCountsByCategory();
+    document.querySelectorAll('.catCard').forEach(function(card){
+        const cat = card.getAttribute('data-cat');
+        const hasPlans = (counts[cat] || 0) > 0;
+        card.hidden = !hasPlans;
+        card.classList.toggle('is-empty', !hasPlans);
+        if(!hasPlans){
+            card.classList.remove('is-active');
+        }
+    });
+
+    const available = ['unlimited', 'limited'].filter(function(cat){ return (counts[cat] || 0) > 0; });
+
+    if(available.length === 1){
+        selectedCategory = available[0];
+        document.querySelectorAll('.catCard').forEach(function(el){
+            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+        });
+        renderPlans();
+        return;
+    }
+
+    if(available.length === 0){
+        selectedCategory = '';
+        selectedPlan = null;
+        planSelect.value = '';
+        if(planBlock){ planBlock.classList.add('is-visible'); }
+        planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است.';
+        planEmpty.classList.add('is-visible');
+        updateContinueState();
+    }
+}
+
 function renderPlans(){
     planGrid.innerHTML = '';
     planEmpty.classList.remove('is-visible');
@@ -325,6 +368,14 @@ function renderPlans(){
         planListTitle.textContent = isLimited ? 'حجم و مدت را انتخاب کنید' : 'حجم را انتخاب کنید';
     }
     if(list.length === 0){
+        const counts = planCountsByCategory();
+        const other = selectedCategory === 'limited' ? 'unlimited' : 'limited';
+        const otherLabel = other === 'limited' ? 'محدود زمانی' : 'نامحدود زمانی';
+        if((counts[other] || 0) > 0){
+            planEmpty.textContent = 'در این دسته پلنی تعریف نشده. دسته «' + otherLabel + '» را انتخاب کنید.';
+        } else {
+            planEmpty.textContent = 'در این دسته پلنی تعریف نشده است.';
+        }
         planEmpty.classList.add('is-visible');
         selectedPlan = null;
         planSelect.value = '';
@@ -369,6 +420,7 @@ function renderPlans(){
 
 document.querySelectorAll('.catCard').forEach(function(card){
     card.addEventListener('click', function(){
+        if(card.hidden || card.classList.contains('is-empty')){ return; }
         selectedCategory = card.getAttribute('data-cat');
         document.querySelectorAll('.catCard').forEach(function(el){ el.classList.remove('is-active'); });
         card.classList.add('is-active');
@@ -378,6 +430,8 @@ document.querySelectorAll('.catCard').forEach(function(card){
         renderPlans();
     });
 });
+
+initPlanCategories();
 
 function showStep(step){
     step1.classList.toggle('is-active', step === 1);

@@ -79,7 +79,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=25">
+<link rel="stylesheet" href="plan_step_ui.css?v=26">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -529,6 +529,7 @@ function resolveSubTimeCategory(link){
 }
 
 function syncCategoryLocks(){
+    initPlanCategories();
     document.querySelectorAll('.catCard').forEach(function(card){
         var cat = card.getAttribute('data-cat');
         var locked = false;
@@ -665,6 +666,63 @@ function updateContinueState(){
     toStep2Btn.disabled = !!(locked || !hasPlan);
 }
 
+function planCountsByCategory(){
+    const counts = { unlimited: 0, limited: 0 };
+    (plansData || []).forEach(function(p){
+        if(p.category === 'unlimited'){ counts.unlimited++; }
+        else if(p.category === 'limited'){ counts.limited++; }
+    });
+    return counts;
+}
+
+function isCategoryLocked(cat){
+    return (subTimeCategory !== 'limited' && cat === 'limited') ||
+           (subTimeCategory === 'limited' && cat === 'unlimited');
+}
+
+function initPlanCategories(){
+    const counts = planCountsByCategory();
+    document.querySelectorAll('.catCard').forEach(function(card){
+        const cat = card.getAttribute('data-cat');
+        const hasPlans = (counts[cat] || 0) > 0;
+        card.hidden = !hasPlans;
+        card.classList.toggle('is-empty', !hasPlans);
+        if(!hasPlans){
+            card.classList.remove('is-active');
+            if(selectedCategory === cat){
+                selectedCategory = '';
+                selectedPlan = null;
+                if(planSelect) planSelect.value = '';
+            }
+        }
+    });
+
+    if((counts.unlimited || 0) + (counts.limited || 0) === 0){
+        selectedCategory = '';
+        selectedPlan = null;
+        if(planSelect) planSelect.value = '';
+        const planBlock = document.getElementById('planBlock');
+        if(planBlock){ planBlock.classList.add('is-visible'); }
+        if(planEmpty){
+            planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است.';
+            planEmpty.classList.add('is-visible');
+        }
+        updateContinueState();
+        return;
+    }
+
+    const available = ['unlimited', 'limited'].filter(function(cat){
+        return (counts[cat] || 0) > 0 && !isCategoryLocked(cat);
+    });
+
+    if(available.length === 1 && !selectedCategory){
+        selectedCategory = available[0];
+        document.querySelectorAll('.catCard').forEach(function(el){
+            el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+        });
+    }
+}
+
 function renderPlans(){
     planGrid.innerHTML = '';
     planEmpty.classList.remove('is-visible');
@@ -683,9 +741,21 @@ function renderPlans(){
     const isLimited = selectedCategory === 'limited';
     if(planListTitle) planListTitle.textContent = isLimited ? 'حجم و مدت را انتخاب کنید' : 'حجم را انتخاب کنید';
     if(list.length === 0){
+        const counts = planCountsByCategory();
+        const other = selectedCategory === 'limited' ? 'unlimited' : 'limited';
+        const otherLabel = other === 'limited' ? 'محدود زمانی' : 'نامحدود زمانی';
+        if((counts[other] || 0) > 0 && !isCategoryLocked(other)){
+            planEmpty.textContent = 'در این دسته پلنی تعریف نشده. دسته «' + otherLabel + '» را انتخاب کنید.';
+        } else if(categoryLocked){
+            planEmpty.textContent = lockMessageFor(selectedCategory).replace(/<[^>]+>/g, '');
+        } else {
+            planEmpty.textContent = 'در این دسته پلنی تعریف نشده است.';
+        }
         planEmpty.classList.add('is-visible');
-        selectedPlan = null; planSelect.value = '';
-        updateContinueState(); return;
+        selectedPlan = null;
+        if(planSelect) planSelect.value = '';
+        updateContinueState();
+        return;
     }
     list.forEach(function(plan){
         const btn = document.createElement('button');
@@ -732,11 +802,9 @@ function renderPlans(){
 
 document.querySelectorAll('.catCard').forEach(function(card){
     card.addEventListener('click', function(){
+        if(card.hidden || card.classList.contains('is-empty')){ return; }
         const cat = card.getAttribute('data-cat');
-        const locked = (
-            (subTimeCategory !== 'limited' && cat === 'limited') ||
-            (subTimeCategory === 'limited' && cat === 'unlimited')
-        );
+        const locked = isCategoryLocked(cat);
         if(locked){
             showCatLockHint(cat);
             return;

@@ -202,6 +202,9 @@ grid-template-columns:1fr 1fr;
 gap:12px;
 margin-bottom:26px;
 }
+.catCard[hidden]{
+display:none !important;
+}
 .catCard{
 position:relative;
 width:100%;
