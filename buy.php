@@ -38,7 +38,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=27">
+<link rel="stylesheet" href="plan_step_ui.css?v=28">
 </head>
 <body>
 <div class="box">
@@ -80,25 +80,9 @@ $h = static function($v){
 </div>
 </div>
 
-<div id="planCatSection">
-<div class="sectionTitle">نوع پلن را انتخاب کنید</div>
-<div class="catGrid">
-<button type="button" class="catCard" data-cat="unlimited">
-<span class="catCheck">✓</span><span class="catIcon">∞</span>
-<span class="catTitle">نامحدود زمانی</span>
-<span class="catDesc">بدون محدودیت در زمان استفاده</span>
-</button>
-<button type="button" class="catCard" data-cat="limited">
-<span class="catCheck">✓</span><span class="catIcon">⏱</span>
-<span class="catTitle">محدود زمانی</span>
-<span class="catDesc">مدت مشخص (روز / ماه)</span>
-</button>
-</div>
-</div>
-
-<div class="planBlock" id="planBlock">
-<div class="sectionTitle" id="planListTitle">حجم را انتخاب کنید</div>
-<div class="planEmpty" id="planEmpty">در این دسته پلنی تعریف نشده است</div>
+<div class="planBlock is-visible" id="planBlock">
+<div class="sectionTitle" id="planListTitle">پلن را انتخاب کنید</div>
+<div class="planEmpty" id="planEmpty">پلنی برای نمایش وجود ندارد</div>
 <div class="planGrid" id="planGrid"></div>
 </div>
 
@@ -214,6 +198,7 @@ $h = static function($v){
 </div>
 </div>
 
+<script src="plan_step_ui.js?v=1"></script>
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
 const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
@@ -225,7 +210,6 @@ const planGrid = document.getElementById('planGrid');
 const planEmpty = document.getElementById('planEmpty');
 const planListTitle = document.getElementById('planListTitle');
 const planBlockEl = document.getElementById('planBlock');
-const planCatSection = document.getElementById('planCatSection');
 const planSummary = document.getElementById('planSummary');
 const toStep2Btn = document.getElementById('toStep2');
 const toStep3Btn = document.getElementById('toStep3');
@@ -264,8 +248,9 @@ const resultLink = document.getElementById('resultLink');
 const resultQrWrap = document.getElementById('resultQrWrap');
 const resultQrImg = document.getElementById('resultQrImg');
 
-let selectedCategory = '';
 let selectedPlan = null;
+let selectedCategory = '';
+let planPicker = null;
 let payPollTimer = null;
 let payTickTimer = null;
 let currentPay = null;
@@ -310,155 +295,31 @@ function renderPlanSummaryHtml(plan, category, extraHtml){
 }
 
 function updateContinueState(){
-    toStep2Btn.disabled = !(selectedCategory && selectedPlan && planSelect.value);
+    toStep2Btn.disabled = !(selectedPlan && planSelect.value);
 }
 
-function planCategoryOf(plan){
-    if(!plan || typeof plan !== 'object'){ return ''; }
-    if(plan.category === 'unlimited' || plan.category === 'limited'){ return plan.category; }
-    const days = String(plan.days || '').trim();
-    if(!days || days === 'نامحدود' || days === 'نامحدود زمانی' || days.toLowerCase() === 'unlimited'){ return 'unlimited'; }
-    const normalized = days.replace(/[۰-۹]/g, function(ch){ return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(ch)); })
-        .replace(/[٠-٩]/g, function(ch){ return String('٠١٢٣٤٥٦٧٨٩'.indexOf(ch)); });
-    if(/^\d+$/.test(normalized)){ return parseInt(normalized, 10) > 0 ? 'limited' : 'unlimited'; }
-    return 'limited';
-}
-
-function selectCategory(cat){
-    selectedCategory = cat || '';
-    document.querySelectorAll('.catCard').forEach(function(el){
-        el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
-    });
-}
-
-function planCountsByCategory(){
-    const counts = { unlimited: 0, limited: 0 };
-    (plansData || []).forEach(function(p){
-        const cat = planCategoryOf(p);
-        if(cat === 'unlimited'){ counts.unlimited++; }
-        else if(cat === 'limited'){ counts.limited++; }
-    });
-    return counts;
-}
-
-function initPlanCategories(){
-    const counts = planCountsByCategory();
-    const available = ['unlimited', 'limited'].filter(function(cat){ return (counts[cat] || 0) > 0; });
-
-    document.querySelectorAll('.catCard').forEach(function(card){
-        const cat = card.getAttribute('data-cat');
-        const hasPlans = (counts[cat] || 0) > 0;
-        card.hidden = !hasPlans;
-        card.classList.toggle('is-empty', !hasPlans);
-        if(!hasPlans){
-            card.classList.remove('is-active');
-        }
-    });
-
-    if(planCatSection){
-        planCatSection.hidden = available.length <= 1;
-    }
-
-    if(available.length === 1){
-        selectCategory(available[0]);
-        renderPlans();
-        return;
-    }
-
-    if(available.length === 0){
-        selectCategory('');
-        selectedPlan = null;
-        planSelect.value = '';
-        if(planBlockEl){ planBlockEl.classList.add('is-visible'); }
-        planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است. از پنل ادمین → پلن‌ها، حداقل یک پلن اضافه کنید.';
-        planEmpty.classList.add('is-visible');
+planPicker = PnvPlanUi.initPlanPicker({
+    mode: 'buy',
+    plansData: plansData,
+    planGrid: planGrid,
+    planEmpty: planEmpty,
+    planBlockEl: planBlockEl,
+    planListTitle: planListTitle,
+    planSelect: planSelect,
+    fmtPrice: fmtPrice,
+    discountedPrice: discountedPrice,
+    getCouponState: function(){ return couponState; },
+    escapeHtml: escapeHtml,
+    onSelectionChange: function(plan, category){
+        selectedPlan = plan;
+        selectedCategory = category || '';
         updateContinueState();
-        return;
     }
-
-    if(!selectedCategory || (counts[selectedCategory] || 0) === 0){
-        selectCategory('');
-    }
-}
-
-function renderPlans(){
-    planGrid.innerHTML = '';
-    planEmpty.classList.remove('is-visible');
-    if(!selectedCategory){
-        if(planBlockEl){ planBlockEl.classList.remove('is-visible'); }
-        updateContinueState();
-        return;
-    }
-    if(planBlockEl){ planBlockEl.classList.add('is-visible'); }
-    const list = (plansData || []).filter(function(p){ return planCategoryOf(p) === selectedCategory; });
-    const isLimited = selectedCategory === 'limited';
-    if(planListTitle){
-        planListTitle.textContent = isLimited ? 'حجم و مدت را انتخاب کنید' : 'حجم را انتخاب کنید';
-    }
-    if(list.length === 0){
-        const counts = planCountsByCategory();
-        const other = selectedCategory === 'limited' ? 'unlimited' : 'limited';
-        if((counts[other] || 0) > 0){
-            selectCategory(other);
-            renderPlans();
-            return;
-        }
-        planEmpty.textContent = 'هنوز پلنی در پنل تعریف نشده است. از پنل ادمین → پلن‌ها، حداقل یک پلن اضافه کنید.';
-        planEmpty.classList.add('is-visible');
-        selectedPlan = null;
-        planSelect.value = '';
-        updateContinueState();
-        return;
-    }
-    list.forEach(function(plan){
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'planChip' + (isLimited ? ' planChip--limited' : '') + (selectedPlan && selectedPlan.value === plan.value ? ' is-active' : '');
-        const disc = couponState.applied ? discountedPrice(plan.price) : 0;
-        let priceHtml;
-        if(couponState.applied && disc < plan.price){
-            const badgeText = couponState.type === 'fixed'
-                ? 'تخفیف ویژه'
-                : ('٪' + couponState.percent + ' تخفیف');
-            priceHtml = '<span class="planPriceWrap">' +
-                        '<span class="planPrice planPrice--orig">' + escapeHtml(plan.price_text) + '</span>' +
-                        '<span class="planPrice planPrice--disc">' + escapeHtml(fmtPrice(disc)) + '</span>' +
-                        '</span>' +
-                        '<span class="planDiscBadge">' + badgeText + '</span>';
-        } else {
-            priceHtml = '<span class="planPrice">' + escapeHtml(plan.price_text) + '</span>';
-        }
-        btn.innerHTML = '<span class="planCheck">✓</span><span class="planName"></span>' + priceHtml + (isLimited ? '<span class="planDays"></span>' : '');
-        btn.querySelector('.planName').textContent = plan.name;
-        if(isLimited){
-            const d = btn.querySelector('.planDays');
-            if(d) d.textContent = 'مدت: ' + (plan.days_label || '—');
-        }
-        btn.addEventListener('click', function(){
-            selectedPlan = plan;
-            planSelect.value = plan.value;
-            planSelect.dispatchEvent(new Event('change'));
-            renderPlans();
-            updateContinueState();
-        });
-        planGrid.appendChild(btn);
-    });
-    updateContinueState();
-}
-
-document.querySelectorAll('.catCard').forEach(function(card){
-    card.addEventListener('click', function(){
-        if(card.hidden || card.classList.contains('is-empty')){ return; }
-        selectedCategory = card.getAttribute('data-cat');
-        selectCategory(selectedCategory);
-        selectedPlan = null;
-        planSelect.value = '';
-        planSelect.dispatchEvent(new Event('change'));
-        renderPlans();
-    });
 });
 
-initPlanCategories();
+function renderPlans(){
+    if(planPicker){ planPicker.renderPlans(); }
+}
 
 function showStep(step){
     step1.classList.toggle('is-active', step === 1);
