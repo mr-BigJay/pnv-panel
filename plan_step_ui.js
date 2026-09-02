@@ -44,8 +44,9 @@
         const getCouponState = typeof options.getCouponState === 'function' ? options.getCouponState : function(){ return { applied: false }; };
         const escapeHtml = typeof options.escapeHtml === 'function' ? options.escapeHtml : function(s){ return String(s || ''); };
         const getEmptyCategoryMessage = typeof options.getEmptyCategoryMessage === 'function' ? options.getEmptyCategoryMessage : null;
+        const initialCategory = String(options.initialCategory || '').trim();
 
-        let selectedCategory = '';
+        let selectedCategory = (initialCategory === 'limited' || initialCategory === 'unlimited') ? initialCategory : '';
         let selectedPlan = null;
 
         function getSelectedCategory(){ return selectedCategory; }
@@ -70,6 +71,12 @@
             if(onSelectionChange){
                 onSelectionChange(selectedPlan, selectedCategory);
             }
+        }
+
+        if(selectedCategory){
+            document.querySelectorAll('.catCard').forEach(function(el){
+                el.classList.toggle('is-active', el.getAttribute('data-cat') === selectedCategory);
+            });
         }
 
         function initCategories(){

@@ -16,6 +16,9 @@ require_once __DIR__ . '/instant_pay_lib.php';
 $plans = function_exists('pnvLoadPlans') ? pnvLoadPlans() : [];
 if(!is_array($plans)){ $plans = []; }
 $plansUi = pnvPlansForStepUi($plans);
+$planCatMeta = pnvPlansCategoryMeta($plansUi);
+$planInitialCategory = (string)($planCatMeta['default_category'] ?? '');
+$planInitialList = $planInitialCategory !== '' ? pnvPlansForCategory($plansUi, $planInitialCategory) : [];
 
 $cards = [];
 if(file_exists('db/cards.json')){
@@ -38,7 +41,7 @@ $h = static function($v){
 <title>خرید اشتراک جدید</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=29">
+<link rel="stylesheet" href="plan_step_ui.css?v=30">
 </head>
 <body>
 <div class="box">
@@ -82,22 +85,33 @@ $h = static function($v){
 
 <div class="sectionTitle">نوع پلن را انتخاب کنید</div>
 <div class="catGrid">
-<button type="button" class="catCard" data-cat="unlimited">
+<button type="button" class="catCard<?php echo $planInitialCategory === 'unlimited' ? ' is-active' : ''; ?>" data-cat="unlimited"<?php echo ($planCatMeta['counts']['unlimited'] ?? 0) > 0 ? '' : ' hidden'; ?>>
 <span class="catCheck">✓</span><span class="catIcon">∞</span>
 <span class="catTitle">نامحدود زمانی</span>
 <span class="catDesc">بدون محدودیت در زمان استفاده</span>
 </button>
-<button type="button" class="catCard" data-cat="limited">
+<button type="button" class="catCard<?php echo $planInitialCategory === 'limited' ? ' is-active' : ''; ?>" data-cat="limited"<?php echo ($planCatMeta['counts']['limited'] ?? 0) > 0 ? '' : ' hidden'; ?>>
 <span class="catCheck">✓</span><span class="catIcon">⏱</span>
 <span class="catTitle">محدود زمانی</span>
 <span class="catDesc">مدت مشخص (روز / ماه)</span>
 </button>
 </div>
 
-<div class="planBlock" id="planBlock">
-<div class="sectionTitle" id="planListTitle">حجم را انتخاب کنید</div>
-<div class="planEmpty" id="planEmpty">در این دسته پلنی تعریف نشده است</div>
-<div class="planGrid" id="planGrid"></div>
+<div class="planBlock<?php echo $planInitialCategory !== '' ? ' is-visible' : ''; ?>" id="planBlock">
+<div class="sectionTitle" id="planListTitle"><?php echo $planInitialCategory === 'limited' ? 'حجم و مدت را انتخاب کنید' : 'حجم را انتخاب کنید'; ?></div>
+<div class="planEmpty" id="planEmpty"<?php echo ($planInitialCategory !== '' && empty($planInitialList)) ? ' class="is-visible"' : ''; ?>><?php echo !($planCatMeta['has_plans'] ?? false) ? 'هنوز پلنی در پنل تعریف نشده است.' : 'در این دسته پلنی تعریف نشده است'; ?></div>
+<div class="planGrid" id="planGrid">
+<?php foreach($planInitialList as $planItem){
+    $isLimitedItem = (($planItem['category'] ?? '') === 'limited');
+?>
+<button type="button" class="planChip<?php echo $isLimitedItem ? ' planChip--limited' : ''; ?>" data-plan-value="<?php echo $h($planItem['value'] ?? ''); ?>">
+<span class="planCheck">✓</span>
+<span class="planName"><?php echo $h($planItem['name'] ?? ''); ?></span>
+<span class="planPrice"><?php echo $h($planItem['price_text'] ?? ''); ?></span>
+<?php if($isLimitedItem){ ?><span class="planDays">مدت: <?php echo $h($planItem['days_label'] ?? '—'); ?></span><?php } ?>
+</button>
+<?php } ?>
+</div>
 </div>
 
 <input type="hidden" id="planSelect" value="">
@@ -212,9 +226,13 @@ $h = static function($v){
 </div>
 </div>
 
-<script src="plan_step_ui.js?v=2"></script>
+<script>
+<?php readfile(__DIR__ . '/plan_step_ui.js'); ?>
+</script>
 <script>
 const plansData = <?php echo json_encode($plansUi, JSON_UNESCAPED_UNICODE); ?>;
+const planCategoryMeta = <?php echo json_encode($planCatMeta, JSON_UNESCAPED_UNICODE); ?>;
+const planInitialCategory = <?php echo json_encode($planInitialCategory, JSON_UNESCAPED_UNICODE); ?>;
 const cardsData = <?php echo json_encode($cardsUi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const payWindowSeconds = <?php echo intval($payWindowSeconds); ?>;
 const mode = 'buy';
@@ -315,6 +333,7 @@ function updateContinueState(){
 planPicker = PnvPlanUi.initCategoryPlanPicker({
     mode: 'buy',
     plansData: plansData,
+    initialCategory: planInitialCategory,
     planGrid: planGrid,
     planEmpty: planEmpty,
     planBlockEl: planBlockEl,

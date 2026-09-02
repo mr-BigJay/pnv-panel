@@ -172,6 +172,64 @@ if(!function_exists('pnvFormatPlanPrice')){
         return $out;
     }
 
+    function pnvPlansCategoryMeta($plansUi){
+        $counts = ['unlimited' => 0, 'limited' => 0];
+
+        if(!is_array($plansUi)){
+            return [
+                'counts' => $counts,
+                'default_category' => '',
+                'has_plans' => false,
+            ];
+        }
+
+        foreach($plansUi as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $cat = (($plan['category'] ?? '') === 'limited') ? 'limited' : 'unlimited';
+            $counts[$cat]++;
+        }
+
+        $default = '';
+
+        if($counts['unlimited'] > 0 && $counts['limited'] === 0){
+            $default = 'unlimited';
+        } elseif($counts['limited'] > 0 && $counts['unlimited'] === 0){
+            $default = 'limited';
+        }
+
+        return [
+            'counts' => $counts,
+            'default_category' => $default,
+            'has_plans' => ($counts['unlimited'] + $counts['limited']) > 0,
+        ];
+    }
+
+    function pnvPlansForCategory($plansUi, $category){
+        $category = ($category === 'limited') ? 'limited' : 'unlimited';
+        $out = [];
+
+        if(!is_array($plansUi)){
+            return $out;
+        }
+
+        foreach($plansUi as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $cat = (($plan['category'] ?? '') === 'limited') ? 'limited' : 'unlimited';
+
+            if($cat === $category){
+                $out[] = $plan;
+            }
+        }
+
+        return $out;
+    }
+
     function pnvFindSubLinkFromCsv($username, $subLink){
         $username = trim((string)$username);
         $subLink = trim((string)$subLink);
