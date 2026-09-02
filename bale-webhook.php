@@ -5,9 +5,61 @@
  */
 
 require_once __DIR__ . '/bale_lib.php';
-require_once __DIR__ . '/instant_pay_lib.php';
 
 header('Content-Type: application/json; charset=utf-8');
+
+function baleWebhookEnsureInstantPayLib(){
+    if(function_exists('instantPayHandleDepositText')){
+        return true;
+    }
+
+    $lib = __DIR__ . '/instant_pay_lib.php';
+
+    if(!is_file($lib)){
+        return false;
+    }
+
+    require_once $lib;
+
+    return function_exists('instantPayHandleDepositText');
+}
+
+function baleWebhookJsonError($httpCode, $message, $extra = []){
+    http_response_code($httpCode);
+    echo json_encode(array_merge([
+        'ok' => false,
+        'error' => $message,
+    ], $extra), JSON_UNESCAPED_UNICODE);
+}
+
+register_shutdown_function(static function(){
+    $err = error_get_last();
+
+    if($err === null){
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+
+    if(!in_array($err['type'] ?? 0, $fatalTypes, true)){
+        return;
+    }
+
+    if(!headers_sent()){
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+    }
+
+    if(function_exists('baleWebhookLog')){
+        baleWebhookLog('FATAL ' . ($err['message'] ?? '') . ' @ ' . ($err['file'] ?? '') . ':' . intval($err['line'] ?? 0));
+    }
+
+    echo json_encode([
+        'ok' => false,
+        'error' => 'internal error',
+        'detail' => $err['message'] ?? '',
+    ], JSON_UNESCAPED_UNICODE);
+});
 
 $raw = file_get_contents('php://input');
 $update = json_decode($raw ?: '[]', true);
@@ -35,6 +87,11 @@ if(!is_array($message)){
 
 $chatId = (string)($message['chat']['id'] ?? '');
 $text = baleExtractMessageText($message);
+
+baleLogWebhookEvent('incoming', array_merge(
+    function_exists('baleMessageDebugSummary') ? baleMessageDebugSummary($message) : ['chat_id' => $chatId],
+    ['via_listener' => !empty($_SERVER['HTTP_X_POSTBANK_LISTENER'])]
+));
 
 // bootstrap: اگر ادمین هنوز chat_id ندارد، از اولین پیام ذخیره کن
 $adminIds = baleAdminChatIds($config);
@@ -89,7 +146,39 @@ if($text === ''){
     exit;
 }
 
-$result = instantPayHandleDepositText($text, pnvNowParts());
+baleLogWebhookEvent('deposit_text', [
+    'chat_id' => $chatId,
+    'forward' => baleForwardSourceLabel($message),
+    'preview' => function_exists('mb_substr') ? mb_substr($text, 0, 120) : substr($text, 0, 120),
+]);
+
+try{
+    if(!baleWebhookEnsureInstantPayLib()){
+        throw new RuntimeException('instant_pay_lib در دسترس نیست');
+    }
+
+    $nowMeta = function_exists('pnvNowParts')
+        ? pnvNowParts()
+        : ['date' => date('Y/m/d'), 'time' => date('H:i')];
+
+    $result = instantPayHandleDepositText($text, $nowMeta);
+}
+catch(Throwable $e){
+    baleLogWebhookEvent('handler_exception', [
+        'chat_id' => $chatId,
+        'error' => $e->getMessage(),
+    ]);
+
+    baleSendMessage(
+        $chatId,
+        "⚠️ خطای داخلی هنگام پردازش واریز.\n" . $e->getMessage(),
+        [],
+        $config
+    );
+
+    echo json_encode(['ok' => false, 'error' => 'handler exception']);
+    exit;
+}
 
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];

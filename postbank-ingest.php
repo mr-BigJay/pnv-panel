@@ -7,15 +7,30 @@
  */
 
 require_once __DIR__ . '/bale_lib.php';
-require_once __DIR__ . '/instant_pay_lib.php';
 
 header('Content-Type: application/json; charset=utf-8');
+
+function postbankEnsureInstantPayLib(){
+    if(function_exists('instantPayHandleDepositText')){
+        return true;
+    }
+
+    $lib = __DIR__ . '/instant_pay_lib.php';
+
+    if(!is_file($lib)){
+        return false;
+    }
+
+    require_once $lib;
+
+    return function_exists('instantPayHandleDepositText');
+}
 
 if(($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'){
     echo json_encode([
         'ok' => true,
         'service' => 'postbank-ingest',
-        'parser' => baleParserVersion(),
+        'parser' => function_exists('baleParserVersion') ? baleParserVersion() : 'unknown',
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -61,15 +76,30 @@ if($text === ''){
     exit;
 }
 
+if(!postbankEnsureInstantPayLib()){
+    baleWebhookLog('INGEST_FAIL instant_pay_lib missing source=' . $source);
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'instant pay unavailable'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $preview = function_exists('mb_substr') ? mb_substr($text, 0, 220) : substr($text, 0, 220);
 baleWebhookLog('INGEST source=' . $source . ' text=' . str_replace("\n", ' | ', $preview));
 
 $nowMeta = function_exists('pnvNowParts') ? pnvNowParts() : ['date' => date('Y/m/d'), 'time' => date('H:i')];
 
-$result = instantPayHandleDepositText($text, [
-    'date' => $nowMeta['date'] ?? '',
-    'time' => $nowMeta['time'] ?? '',
-]);
+try{
+    $result = instantPayHandleDepositText($text, [
+        'date' => $nowMeta['date'] ?? '',
+        'time' => $nowMeta['time'] ?? '',
+    ]);
+}
+catch(Throwable $e){
+    baleWebhookLog('INGEST_EXCEPTION ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'handler exception', 'detail' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 $adminIds = baleAdminChatIds($config);
 $notifyChat = $adminIds[0] ?? '';
