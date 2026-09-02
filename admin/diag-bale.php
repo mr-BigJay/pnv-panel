@@ -7,7 +7,6 @@
 header('Content-Type: text/plain; charset=utf-8');
 
 require_once __DIR__ . '/../bale_lib.php';
-require_once __DIR__ . '/../instant_pay_lib.php';
 
 $config = baleLoadConfig();
 $webhookUrl = baleWebhookPublicUrl();

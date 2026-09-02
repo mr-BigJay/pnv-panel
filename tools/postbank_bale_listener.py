@@ -78,12 +78,10 @@ def should_process_message(msg, text):
 def ingest_is_paid(result):
     if not isinstance(result, dict):
         return False
-    if result.get("paid"):
+    if result.get("paid") is True:
         return True
     if result.get("_http") != 200:
         return False
-    if result.get("ok") is True and not result.get("ignored"):
-        return True
     return False
 
 
@@ -299,8 +297,10 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
                     wh.get("ok"),
                     wh.get("error"),
                 )
-                if wh.get("paid") or (wh.get("_http") == 200 and wh.get("ok") is True and not wh.get("ignored")):
+                if wh.get("paid") is True or (wh.get("_http") == 200 and wh.get("ok") is True and wh.get("paid") is True):
                     paid = True
+                elif wh.get("_http") == 500:
+                    LOG.error("Webhook returned HTTP 500 — deploy bale-webhook.php + instant_pay_lib.php")
             except Exception as exc:
                 LOG.exception("Webhook POST failed: %s", exc)
 

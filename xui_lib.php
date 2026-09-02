@@ -1752,6 +1752,75 @@ if(!function_exists('xuiConfigPath')){
         fclose($handle);
     }
 
+    function xuiSyncAutoPayJsonRow($csvIndex, $row, $link){
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') !== 0){
+            return false;
+        }
+
+        $path = __DIR__ . '/db/instant_payments.json';
+
+        if(!is_file($path)){
+            return false;
+        }
+
+        $items = json_decode((string)file_get_contents($path), true);
+
+        if(!is_array($items)){
+            return false;
+        }
+
+        $userKey = strtolower(trim((string)($row[0] ?? '')));
+        $code = preg_replace('/^AUTO-/i', '', $tracking);
+        $code = str_pad((string)intval($code), 4, '0', STR_PAD_LEFT);
+        $trackingNorm = 'AUTO-' . $code;
+        $link = trim((string)$link);
+        $changed = false;
+
+        foreach($items as $i => $item){
+            if(!is_array($item)){
+                continue;
+            }
+
+            $matches = intval($item['csv_index'] ?? -1) === intval($csvIndex);
+
+            if(!$matches && $userKey !== ''){
+                $itemCode = str_pad((string)intval($item['code'] ?? 0), 4, '0', STR_PAD_LEFT);
+                $matches = strtolower(trim((string)($item['user'] ?? ''))) === $userKey
+                    && ('AUTO-' . $itemCode) === $trackingNorm;
+            }
+
+            if(!$matches){
+                continue;
+            }
+
+            if(($item['status'] ?? '') === 'paid'){
+                return true;
+            }
+
+            $items[$i]['status'] = 'paid';
+            $items[$i]['paid_at'] = time();
+            $items[$i]['link'] = $link;
+            $items[$i]['message'] = 'پرداخت تأیید شد';
+            $items[$i]['csv_index'] = intval($csvIndex);
+            $items[$i]['csv_purged'] = false;
+            unset($items[$i]['processing_at']);
+            $changed = true;
+            break;
+        }
+
+        if($changed){
+            file_put_contents(
+                $path,
+                json_encode(array_values($items), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+                LOCK_EX
+            );
+        }
+
+        return $changed;
+    }
+
     function xuiApprovePaymentIndex($index, $typeHint = ''){
         $payments = xuiLoadPayments();
 
@@ -1771,13 +1840,7 @@ if(!function_exists('xuiConfigPath')){
                 'link' => $link
             ];
 
-            if(!function_exists('instantPaySyncJsonAfterCsvApproval') && is_file(__DIR__ . '/instant_pay_lib.php')){
-                require_once __DIR__ . '/instant_pay_lib.php';
-            }
-
-            if(function_exists('instantPaySyncJsonAfterCsvApproval')){
-                instantPaySyncJsonAfterCsvApproval($index, $row, $result);
-            }
+            xuiSyncAutoPayJsonRow($index, $row, $link);
 
             return $result;
         }
@@ -1860,13 +1923,7 @@ if(!function_exists('xuiConfigPath')){
             }
         }
 
-        if(!function_exists('instantPaySyncJsonAfterCsvApproval') && is_file(__DIR__ . '/instant_pay_lib.php')){
-            require_once __DIR__ . '/instant_pay_lib.php';
-        }
-
-        if(function_exists('instantPaySyncJsonAfterCsvApproval')){
-            instantPaySyncJsonAfterCsvApproval($index, $payments[$index], $result);
-        }
+        xuiSyncAutoPayJsonRow($index, $payments[$index], $result['link'] ?? '');
 
         return $result;
     }
