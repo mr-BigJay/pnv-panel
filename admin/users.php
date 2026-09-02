@@ -7,7 +7,7 @@ foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $_
         break;
     }
 }
-.users.php stubs - keep admin_nav as source of truth
+// users.php stubs - keep admin_nav as source of truth
 if(!function_exists('adminPageEnd')){
     function adminPageEnd($options = []){
         if(function_exists('adminBottomNavStyles')){

@@ -1,55 +1,42 @@
 <?php
 
 require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/admin_nav.php';
+foreach([__DIR__ . '/admin_nav.php', dirname(__DIR__) . '/admin/admin_nav.php'] as $__navFile){
+    if(is_file($__navFile)){
+        require_once $__navFile;
+        break;
+    }
+}
+if(!function_exists('adminPageEnd')){
+    function adminPageEnd($options = []){
+        if(function_exists('adminBottomNavStyles')){
+            adminBottomNavStyles();
+        }
+        if(function_exists('adminBottomNav')){
+            adminBottomNav($options);
+        }
+        if(function_exists('adminBottomNavScript')){
+            adminBottomNavScript();
+        }
+    }
+}
+require_once __DIR__ . '/functions.php';
 
 pnvAdminRequireAuth();
 
-$plansFile = "../db/plans.json";
+$plansFile = dirname(__DIR__) . '/db/plans.json';
 
 if(!file_exists($plansFile)){
-file_put_contents($plansFile,"[]");
+    if(!is_dir(dirname($plansFile))){
+        @mkdir(dirname($plansFile), 0755, true);
+    }
+    file_put_contents($plansFile, '[]');
 }
 
-$plans = json_decode(
-file_get_contents($plansFile),
-true
-);
+$plans = json_decode((string)file_get_contents($plansFile), true);
 
 if(!is_array($plans)){
-$plans = [];
-}
-
-function formatPrice($price){
-
-$price = intval($price);
-
-if($price < 1000){
-
-return
-number_format($price)
-.
-" هزار تومان";
-
-}
-
-$million =
-$price / 1000;
-
-$million =
-rtrim(
-rtrim(
-number_format($million,3),
-'0'
-),
-'.'
-);
-
-return
-$million
-.
-" میلیون تومان";
-
+    $plans = [];
 }
 
 if(isset($_POST['add'])){
@@ -438,31 +425,40 @@ name="add">
 
 </tr>
 
-<?php foreach($plans as $i=>$p){ ?>
+<?php foreach($plans as $i => $p){
+    if(!is_array($p)){
+        continue;
+    }
+    $planName = htmlspecialchars((string)($p['name'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $planDays = trim((string)($p['days'] ?? 'نامحدود'));
+    if($planDays === ''){
+        $planDays = 'نامحدود';
+    }
+?>
 
 <tr>
 
 <td>
 
-<?php echo $i+1; ?>
+<?php echo $i + 1; ?>
 
 </td>
 
 <td>
 
-<?php echo htmlspecialchars($p['name']); ?>
+<?php echo $planName; ?>
 
 </td>
 
 <td class="price">
 
-<?php echo formatPrice($p['price']); ?>
+<?php echo formatPrice($p['price'] ?? 0); ?>
 
 </td>
 
 <td>
 
-<?php if($p['days']=='نامحدود'){ ?>
+<?php if($planDays === 'نامحدود'){ ?>
 
 <span class="unlimited">
 
@@ -472,7 +468,7 @@ name="add">
 
 <?php }else{ ?>
 
-<?php echo htmlspecialchars($p['days']); ?>
+<?php echo htmlspecialchars($planDays, ENT_QUOTES, 'UTF-8'); ?>
 
 روز
 
