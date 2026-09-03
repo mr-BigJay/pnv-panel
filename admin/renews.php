@@ -195,6 +195,38 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
+if(isset($payments[$index]) && is_file(__DIR__ . '/../telegram_user_lib.php')){
+require_once __DIR__ . '/../telegram_user_lib.php';
+
+if(function_exists('tgUserNotifyPaymentApproved')){
+tgUserNotifyPaymentApproved(
+trim((string)($payments[$index][0] ?? '')),
+trim((string)($payments[$index][1] ?? '')),
+trim((string)($payments[$index][2] ?? '')),
+true
+);
+}
+}
+
+if(isset($payments[$index]) && is_file(__DIR__ . '/../telegram_lib.php')){
+require_once __DIR__ . '/../telegram_lib.php';
+
+if(function_exists('telegramNotifyPaymentConfirmedRow')){
+telegramNotifyPaymentConfirmedRow($payments[$index], 'تمدید');
+}
+elseif(function_exists('telegramNotifyNewPayment')){
+telegramNotifyNewPayment('تمدید', $payments[$index], ['confirmed' => true]);
+}
+}
+
+if(isset($payments[$index]) && is_file(__DIR__ . '/../bale_lib.php')){
+require_once __DIR__ . '/../bale_lib.php';
+
+if(function_exists('baleNotifyPaymentConfirmedRow')){
+baleNotifyPaymentConfirmedRow($payments[$index], 'تمدید', ['link' => $link]);
+}
+}
+
 $_SESSION['payment_message'] = 'تمدید تایید شد';
 $_SESSION['payment_message_detail'] = $link;
 header('Location: ' . pnvAdminUrl('index.php?page=renews'));

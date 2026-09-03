@@ -201,6 +201,12 @@ if(!empty($result['ok'])){
     }
 
     baleSendMessage($chatId, $msg, [], $config);
+    baleLogWebhookEvent('deposit_paid', [
+        'chat_id' => $chatId,
+        'id' => $paidId,
+        'amount' => $result['matched_amount'] ?? null,
+        'via' => $result['matched_via'] ?? '',
+    ]);
     echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId]);
     exit;
 }

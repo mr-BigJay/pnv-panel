@@ -107,27 +107,6 @@ $notifyChat = $adminIds[0] ?? '';
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];
     $paidId = $item['id'] ?? '';
-    $rawItem = $paidId !== '' ? instantPayGet($paidId) : null;
-    $userLabel = is_array($rawItem) ? ($rawItem['user'] ?? '-') : '-';
-
-    $msg = "✅ پرداخت تأیید شد (اتوماتیک)\n"
-        . 'کاربر: ' . $userLabel . "\n"
-        . 'مبلغ: ' . ($item['amount_text'] ?? '-') . "\n"
-        . 'پلن: ' . ($item['plan'] ?? '-') . "\n"
-        . 'کد: ' . ($item['code'] ?? '-');
-
-    if(!empty($item['link'])){
-        $msg .= "\nلینک:\n" . $item['link'];
-    }
-
-    if($notifyChat !== ''){
-        baleSendMessage($notifyChat, $msg, [], $config);
-    }
-
-    baleNotifyAdminDeposit($config, $text, [
-        'status' => 'paid',
-        'detail' => 'پرداخت تأیید شد | کاربر: ' . $userLabel . ' | مبلغ: ' . ($item['amount_text'] ?? '-'),
-    ]);
 
     baleWebhookLog('INGEST_PAID id=' . $paidId . ' amount=' . ($result['matched_amount'] ?? ''));
 

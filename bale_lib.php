@@ -366,6 +366,258 @@ if(!function_exists('baleConfigPath')){
         return false;
     }
 
+    function baleConfirmNotifyDedupPath(){
+        return __DIR__ . '/db/bale_confirm_dedup.json';
+    }
+
+    function baleConfirmNotifyKey($row){
+        if(function_exists('telegramConfirmNotifyKey')){
+            return telegramConfirmNotifyKey($row);
+        }
+
+        if(!is_array($row)){
+            return '';
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+        $user = strtolower(trim((string)($row[0] ?? '')));
+        $created = intval($row[8] ?? 0);
+
+        if($tracking === '' && $created <= 0){
+            return '';
+        }
+
+        return $user . '|' . $tracking . '|' . $created;
+    }
+
+    function baleConfirmNotifyWasSent($key, $withinSeconds = 300){
+        $key = trim((string)$key);
+
+        if($key === ''){
+            return false;
+        }
+
+        $file = baleConfirmNotifyDedupPath();
+
+        if(!file_exists($file)){
+            return false;
+        }
+
+        $data = json_decode((string)file_get_contents($file), true);
+
+        if(!is_array($data) || !isset($data[$key])){
+            return false;
+        }
+
+        $sentAt = intval($data[$key]['sent_at'] ?? 0);
+
+        return $sentAt > 0 && (time() - $sentAt) <= max(30, intval($withinSeconds));
+    }
+
+    function baleConfirmNotifyMarkSent($key, $kind = ''){
+        $key = trim((string)$key);
+
+        if($key === ''){
+            return;
+        }
+
+        if(!is_dir(__DIR__ . '/db')){
+            @mkdir(__DIR__ . '/db', 0755, true);
+        }
+
+        $file = baleConfirmNotifyDedupPath();
+        $data = [];
+
+        if(file_exists($file)){
+            $decoded = json_decode((string)file_get_contents($file), true);
+            $data = is_array($decoded) ? $decoded : [];
+        }
+
+        $data[$key] = [
+            'sent_at' => time(),
+            'kind' => ($kind === 'تمدید') ? 'تمدید' : 'خرید',
+        ];
+
+        if(count($data) > 500){
+            uasort($data, static function($a, $b){
+                return intval($b['sent_at'] ?? 0) <=> intval($a['sent_at'] ?? 0);
+            });
+            $data = array_slice($data, 0, 400, true);
+        }
+
+        file_put_contents(
+            $file,
+            json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function baleResolvePaymentKind($row, $hint = ''){
+        if(function_exists('telegramResolvePaymentKind')){
+            return telegramResolvePaymentKind($row, $hint);
+        }
+
+        if(!is_array($row)){
+            return 'خرید';
+        }
+
+        $type = trim((string)($row[9] ?? ''));
+        $hint = trim((string)$hint);
+
+        if($type === 'تمدید' || $hint === 'تمدید'){
+            return 'تمدید';
+        }
+
+        return 'خرید';
+    }
+
+    function baleFormatPaymentConfirmed($row, $kind, $link = ''){
+        $kind = baleResolvePaymentKind($row, $kind);
+        $title = ($kind === 'تمدید') ? '✅ تمدید تأیید شد' : '✅ خرید تأیید شد';
+        $label = ($kind === 'تمدید') ? 'لینک اشتراک' : 'نام کانفیگ';
+        $username = trim((string)($row[0] ?? '-'));
+        $target = trim((string)($row[1] ?? '-'));
+        $plan = trim((string)($row[2] ?? '-'));
+        $tracking = trim((string)($row[3] ?? '-'));
+        $date = trim((string)($row[4] ?? ''));
+        $time = trim((string)($row[5] ?? ''));
+        $amount = intval($row[12] ?? 0);
+        $link = trim((string)$link);
+
+        if($link === ''){
+            $link = trim((string)($row[7] ?? ''));
+        }
+
+        $lines = [
+            $title,
+            '',
+            'کاربر: ' . $username,
+            $label . ': ' . $target,
+            'پلن: ' . $plan,
+            'پیگیری: ' . $tracking,
+        ];
+
+        if($date !== '' || $time !== ''){
+            $lines[] = 'تاریخ: ' . trim($date . ' ' . $time);
+        }
+
+        if($amount > 0){
+            $lines[] = 'مبلغ: ' . number_format($amount) . ' ریال';
+        }
+
+        $coupon = trim((string)($row[10] ?? ''));
+
+        if($coupon !== ''){
+            $lines[] = 'کد تخفیف: ' . $coupon;
+        }
+
+        if($link !== ''){
+            $lines[] = 'لینک: ' . $link;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    function baleNotifyPaymentConfirmedRow($row, $kindHint = '', $opts = []){
+        if(!is_array($row)){
+            return [];
+        }
+
+        $config = baleLoadConfig();
+
+        if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
+            return [];
+        }
+
+        $ids = baleAdminChatIds($config);
+
+        if(count($ids) === 0){
+            return [];
+        }
+
+        $forceNotify = !empty($opts['force_notify']);
+        $dedupKey = baleConfirmNotifyKey($row);
+
+        if(!$forceNotify && $dedupKey !== '' && baleConfirmNotifyWasSent($dedupKey)){
+            return [];
+        }
+
+        $link = trim((string)($opts['link'] ?? ($row[7] ?? '')));
+        $kind = baleResolvePaymentKind($row, $kindHint);
+        $text = baleFormatPaymentConfirmed($row, $kind, $link);
+        $results = [];
+
+        foreach($ids as $chatId){
+            $results[] = baleSendMessage($chatId, $text, [], $config);
+        }
+
+        $sent = false;
+
+        foreach($results as $result){
+            if(!empty($result['ok'])){
+                $sent = true;
+                break;
+            }
+        }
+
+        if($sent && $dedupKey !== ''){
+            baleConfirmNotifyMarkSent($dedupKey, $kind);
+        }
+
+        return $results;
+    }
+
+    function baleNotifyAdminDeposit($config, $text, $summary = []){
+        $ids = baleAdminChatIds($config);
+
+        if(count($ids) === 0){
+            return false;
+        }
+
+        $status = (string)($summary['status'] ?? 'info');
+        $detail = trim((string)($summary['detail'] ?? ''));
+        $icon = 'ℹ️';
+
+        if($status === 'paid'){
+            $icon = '✅';
+        }
+        elseif($status === 'no_match'){
+            $icon = '⚠️';
+        }
+        elseif($status === 'error'){
+            $icon = '❌';
+        }
+
+        $msg = $icon . " واریز پست‌بانک (اتوماتیک)\n";
+
+        if($detail !== ''){
+            $msg .= $detail . "\n\n";
+        }
+
+        $preview = $text;
+
+        if(function_exists('mb_substr')){
+            $preview = mb_substr($preview, 0, 900);
+        }
+        else{
+            $preview = substr($preview, 0, 900);
+        }
+
+        $msg .= $preview;
+
+        $sent = false;
+
+        foreach($ids as $chatId){
+            $result = baleSendMessage($chatId, $msg, [], $config);
+
+            if(!empty($result['ok'])){
+                $sent = true;
+            }
+        }
+
+        return $sent;
+    }
+
     function baleWebhookPublicUrl(){
         $host = $_SERVER['HTTP_HOST'] ?? 'panel.ticketin.ir';
         $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')

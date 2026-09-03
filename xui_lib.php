@@ -1821,6 +1821,52 @@ if(!function_exists('xuiConfigPath')){
         return $changed;
     }
 
+    function xuiResolvePaymentType($row, $typeHint = ''){
+        if(function_exists('telegramResolvePaymentKind')){
+            return telegramResolvePaymentKind($row, $typeHint);
+        }
+
+        $type = trim((string)($row[9] ?? $typeHint));
+
+        return ($type === 'تمدید') ? 'تمدید' : 'خرید';
+    }
+
+    function xuiTelegramNotifyApproved($row, $typeHint, $link, $opts = []){
+        $results = [];
+
+        if(!function_exists('telegramNotifyPaymentConfirmedRow') && is_file(__DIR__ . '/telegram_lib.php')){
+            require_once __DIR__ . '/telegram_lib.php';
+        }
+
+        if(function_exists('telegramNotifyPaymentConfirmedRow')){
+            try{
+                $results['telegram'] = telegramNotifyPaymentConfirmedRow($row, $typeHint, array_merge($opts, [
+                    'link' => $link,
+                ]));
+            }
+            catch(Throwable $e){
+                error_log('xui approve telegram admin notify failed: ' . $e->getMessage());
+            }
+        }
+
+        if(!function_exists('baleNotifyPaymentConfirmedRow') && is_file(__DIR__ . '/bale_lib.php')){
+            require_once __DIR__ . '/bale_lib.php';
+        }
+
+        if(function_exists('baleNotifyPaymentConfirmedRow')){
+            try{
+                $results['bale'] = baleNotifyPaymentConfirmedRow($row, $typeHint, array_merge($opts, [
+                    'link' => $link,
+                ]));
+            }
+            catch(Throwable $e){
+                error_log('xui approve bale admin notify failed: ' . $e->getMessage());
+            }
+        }
+
+        return $results;
+    }
+
     function xuiApprovePaymentIndex($index, $typeHint = ''){
         $payments = xuiLoadPayments();
 

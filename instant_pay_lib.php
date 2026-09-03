@@ -306,6 +306,79 @@ if(!function_exists('instantPayPath')){
         return $changed;
     }
 
+    /**
+     * اطلاع تأیید پرداخت به ادمین (تلگرام + بله).
+     */
+    function instantPayNotifyPaymentConfirmed($found, $row = null){
+        if(!is_array($found)){
+            return;
+        }
+
+        if(!is_array($row)){
+            $csvIndex = instantPayResolveCsvIndex($found);
+
+            if($csvIndex < 0 || !function_exists('xuiLoadPayments')){
+                return;
+            }
+
+            $payments = xuiLoadPayments();
+
+            if(!isset($payments[$csvIndex]) || !is_array($payments[$csvIndex])){
+                return;
+            }
+
+            $row = $payments[$csvIndex];
+        }
+
+        if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
+            return;
+        }
+
+        $link = trim((string)($row[7] ?? ($found['link'] ?? '')));
+        $typeHint = trim((string)($found['type'] ?? ''));
+
+        if($typeHint === '' && function_exists('xuiResolvePaymentType')){
+            $typeHint = xuiResolvePaymentType($row, 'خرید');
+        }
+
+        if($typeHint === ''){
+            $typeHint = 'خرید';
+        }
+
+        $opts = ['link' => $link];
+
+        if(function_exists('telegramNotifyPaymentConfirmedRow')){
+            try{
+                telegramNotifyPaymentConfirmedRow($row, $typeHint, $opts);
+            }
+            catch(Throwable $e){
+                error_log('instant pay confirm telegram notify failed: ' . $e->getMessage());
+            }
+        }
+        elseif(function_exists('xuiTelegramNotifyApproved')){
+            try{
+                xuiTelegramNotifyApproved($row, $typeHint, $link);
+            }
+            catch(Throwable $e){
+                error_log('instant pay confirm telegram notify failed: ' . $e->getMessage());
+            }
+        }
+
+        if(function_exists('baleNotifyPaymentConfirmedRow')){
+            try{
+                baleNotifyPaymentConfirmedRow($row, $typeHint, $opts);
+            }
+            catch(Throwable $e){
+                error_log('instant pay confirm bale notify failed: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /** @deprecated use instantPayNotifyPaymentConfirmed */
+    function instantPayTryConfirmTelegramNotify($found, $row = null){
+        instantPayNotifyPaymentConfirmed($found, $row);
+    }
+
     function instantPayItemMatchable($item, $now = null){
         $now = $now ?? time();
         $status = (string)($item['status'] ?? '');
@@ -329,11 +402,96 @@ if(!function_exists('instantPayPath')){
         return false;
     }
 
-    function instantPayResolveCsvIndex($item){
-        $csvIndex = intval($item['csv_index'] ?? -1);
+    function instantPayEnsureCsvRowForItem($item, &$items, $idx){
+        if(!is_array($item)){
+            return -1;
+        }
+
+        $csvIndex = instantPayResolveCsvIndex($item);
 
         if($csvIndex >= 0){
             return $csvIndex;
+        }
+
+        if(!function_exists('xuiLoadPayments') || !function_exists('xuiSavePayments')){
+            return -1;
+        }
+
+        $amount = intval($item['amount'] ?? 0);
+
+        if($amount > 0){
+            $match = instantPayFindCsvMatchByAmount($amount);
+
+            if(is_array($match)){
+                $csvIndex = intval($match['csv_index'] ?? -1);
+
+                if($csvIndex >= 0 && $idx >= 0){
+                    $items[$idx]['csv_index'] = $csvIndex;
+                    $items[$idx]['csv_purged'] = false;
+                    instantPaySave($items);
+                }
+
+                return $csvIndex;
+            }
+        }
+
+        $type = instantPayNormalizeType($item['type'] ?? 'خرید');
+        $target = ($type === 'تمدید') ? trim((string)($item['sub'] ?? '')) : trim((string)($item['subname'] ?? ''));
+        $code = intval($item['code'] ?? 0);
+        $now = intval($item['created_at'] ?? time());
+        $amount = $amount > 0 ? $amount : instantPayNormalizeItemAmountRial($item);
+
+        if($target === '' || $amount <= 0){
+            return -1;
+        }
+
+        $row = [
+            trim((string)($item['user'] ?? '')),
+            $target,
+            trim((string)($item['plan'] ?? '')),
+            instantPayTrackingCode($item),
+            '',
+            '',
+            'درحال بررسی',
+            '',
+            $now,
+            $type,
+            trim((string)($item['coupon_code'] ?? '')) !== '' ? strtoupper(trim((string)($item['coupon_code'] ?? ''))) : '',
+            intval($item['discount_percent'] ?? 0),
+            $amount,
+            $code,
+        ];
+
+        $payments = xuiLoadPayments();
+        $payments[] = $row;
+        $csvIndex = count($payments) - 1;
+        xuiSavePayments($payments);
+
+        if($idx >= 0){
+            $items[$idx]['csv_index'] = $csvIndex;
+            $items[$idx]['csv_purged'] = false;
+            instantPaySave($items);
+        }
+
+        instantPayRebuildCsvIndexes();
+
+        return $csvIndex;
+    }
+
+    function instantPayResolveCsvIndex($item){
+        $csvIndex = intval($item['csv_index'] ?? -1);
+
+        if($csvIndex >= 0 && function_exists('xuiLoadPayments')){
+            $payments = xuiLoadPayments();
+
+            if(isset($payments[$csvIndex]) && is_array($payments[$csvIndex])){
+                $rowTracking = instantPayNormalizeTracking(trim((string)($payments[$csvIndex][3] ?? '')));
+                $itemTracking = instantPayTrackingCode($item);
+
+                if($rowTracking !== '' && $rowTracking === $itemTracking){
+                    return $csvIndex;
+                }
+            }
         }
 
         if(!function_exists('xuiLoadPayments')){
@@ -350,7 +508,7 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if(trim((string)($row[3] ?? '')) !== $tracking){
+            if(instantPayNormalizeTracking(trim((string)($row[3] ?? ''))) !== $tracking){
                 continue;
             }
 
@@ -516,7 +674,7 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            $tracking = trim((string)($row[3] ?? ''));
+            $tracking = instantPayNormalizeTracking(trim((string)($row[3] ?? '')));
 
             if(strpos($tracking, 'AUTO-') !== 0){
                 continue;
@@ -1468,6 +1626,8 @@ if(!function_exists('instantPayPath')){
         }
 
         if(($found['status'] ?? '') === 'paid'){
+            instantPayNotifyPaymentConfirmed($found);
+
             return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
         }
 
@@ -1494,11 +1654,13 @@ if(!function_exists('instantPayPath')){
             $found = $items[$idx];
         }
 
-        $csvIndex = instantPayResolveCsvIndex($found);
+        $csvIndex = instantPayEnsureCsvRowForItem($found, $items, $idx);
 
         if($csvIndex < 0){
             return ['ok' => false, 'error' => 'ایندکس پرداخت نامعتبر است'];
         }
+
+        $found = $items[$idx] ?? $found;
 
         // تاریخ/ساعت را برای لاگ پر می‌کنیم
         $payments = xuiLoadPayments();
@@ -1618,6 +1780,11 @@ if(!function_exists('instantPayPath')){
                 instantPaySyncJsonAfterCsvApproval($csvIndex, $row, ['ok' => true, 'link' => $link]);
 
                 $jsonItem = instantPayFindJsonByTracking($user, $tracking);
+                $notifyFound = is_array($jsonItem) ? $jsonItem : [
+                    'type' => xuiResolvePaymentType($row, 'خرید'),
+                    'link' => $link,
+                ];
+                instantPayNotifyPaymentConfirmed($notifyFound, $row);
                 $publicItem = is_array($jsonItem) && !empty($jsonItem['id'])
                     ? instantPayPublicView($jsonItem)
                     : [
