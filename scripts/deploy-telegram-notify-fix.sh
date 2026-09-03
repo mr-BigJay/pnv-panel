@@ -64,6 +64,7 @@ files=(
     bale_lib.php
     bale-webhook.php
     postbank-ingest.php
+    tools/postbank_bale_listener.py
     admin/renews.php
     admin/payments.php
 )

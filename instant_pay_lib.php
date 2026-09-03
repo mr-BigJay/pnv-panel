@@ -2061,7 +2061,7 @@ if(!function_exists('instantPayPath')){
         $amounts = baleExtractRialAmounts($text);
 
         if(count($amounts) === 0){
-            return ['ok' => false, 'error' => 'مبلغی در پیام پیدا نشد'];
+            return ['ok' => false, 'error' => 'مبلغی در پیام پیدا نشد', 'ignored' => true];
         }
 
         // پیام پست‌بانک: مبالغ ریال‌اند؛ «مانده» را از قبل حذف کرده‌ایم

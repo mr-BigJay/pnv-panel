@@ -221,17 +221,14 @@ $parsed = $result['amounts'] ?? $result['parsed_amounts'] ?? [];
 $parsedText = is_array($parsed) && count($parsed) ? implode('، ', array_map(static function($n){
     return number_format(intval($n)) . ' ریال';
 }, $parsed)) : '—';
-$debug = is_array($result['debug'] ?? null) ? $result['debug'] : [];
-$debugText = '';
 
-if($debug){
-    $debugText = "\n"
-        . 'سفارش waiting: ' . intval($debug['waiting'] ?? 0) . ' | '
-        . 'قابل مچ: ' . intval($debug['matchable'] ?? 0) . ' | '
-        . 'CSV در انتظار: ' . intval($debug['csv_pending'] ?? 0);
-}
+baleLogWebhookEvent('deposit_no_match', [
+    'chat_id' => $chatId,
+    'error' => $err,
+    'amounts' => $parsed,
+]);
 
-// اگر مچ شده ولی صدور اشتراک شکست خورده، واضح بگو (نه «مچ نشد»)
+// فقط خطای واقعی صدور اشتراک (مبلغ مچ شده) — بدون اسپم «مچ نشد»
 if(!empty($result['matched_amount']) && empty($result['ok'])){
     baleSendMessage(
         $chatId,
@@ -239,17 +236,6 @@ if(!empty($result['matched_amount']) && empty($result['ok'])){
         . $err . "\n"
         . 'مبلغ مچ‌شده: ' . number_format(intval($result['matched_amount'])) . " ریال\n"
         . 'مبالغ خوانده‌شده: ' . $parsedText,
-        [],
-        $config
-    );
-}
-else{
-    baleSendMessage(
-        $chatId,
-        "⚠️ پیام دریافت شد ولی سفارش مچ نشد.\n"
-        . $err . "\n"
-        . 'مبالغ خوانده‌شده: ' . $parsedText . $debugText . "\n"
-        . "نکته: کاربر باید دقیقاً همان مبلغ صفحه را کارت‌به‌کارت کند و پیام @postbank_bot را فوروارد کنید.",
         [],
         $config
     );

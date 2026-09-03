@@ -101,9 +101,6 @@ catch(Throwable $e){
     exit;
 }
 
-$adminIds = baleAdminChatIds($config);
-$notifyChat = $adminIds[0] ?? '';
-
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];
     $paidId = $item['id'] ?? '';
@@ -132,54 +129,6 @@ if(!empty($result['ignored'])){
 
 $err = (string)($result['error'] ?? 'no match');
 $parsed = $result['amounts'] ?? ($result['parsed_amounts'] ?? []);
-$parsedText = is_array($parsed) && count($parsed)
-    ? implode('، ', array_map(static function($n){ return number_format(intval($n)) . ' ریال'; }, $parsed))
-    : '—';
-$openOrders = is_array($result['open_orders'] ?? null) ? $result['open_orders'] : [];
-$openLines = '';
-
-if(count($openOrders) > 0){
-    $openLines = "\nسفارش‌های قابل مچ:\n";
-
-    foreach(array_slice($openOrders, 0, 6) as $order){
-        $openLines .= '• ' . ($order['amount_text'] ?? number_format(intval($order['amount'] ?? 0))) . ' ریال'
-            . ' | ' . ($order['user'] ?? '-')
-            . ' | کد ' . ($order['code'] ?? '-')
-            . "\n";
-    }
-}
-
-if($notifyChat !== '' && empty($result['ignored'])){
-    if(!empty($result['matched_amount']) && empty($result['ok'])){
-        baleSendMessage(
-            $notifyChat,
-            "⚠️ واریز دیده شد ولی آماده‌سازی اشتراک ناموفق بود.\n"
-            . $err . "\n"
-            . 'مبلغ مچ‌شده: ' . number_format(intval($result['matched_amount'])) . " ریال\n"
-            . 'مبالغ: ' . $parsedText,
-            [],
-            $config
-        );
-    }
-    else{
-        baleSendMessage(
-            $notifyChat,
-            "⚠️ واریز اتوماتیک خوانده شد ولی مچ نشد.\n"
-            . $err . "\n"
-            . 'مبالغ: ' . $parsedText
-            . $openLines,
-            [],
-            $config
-        );
-    }
-}
-
-baleNotifyAdminDeposit($config, $text, [
-    'status' => empty($result['ignored']) ? 'no_match' : 'info',
-    'detail' => empty($result['ignored'])
-        ? ('مچ نشد: ' . $err . ' | مبالغ: ' . $parsedText)
-        : ((string)($result['error'] ?? 'ignored')),
-]);
 
 baleWebhookLog('INGEST_NO_MATCH err=' . $err . ' amounts=' . json_encode($parsed, JSON_UNESCAPED_UNICODE));
 
@@ -187,7 +136,7 @@ echo json_encode([
     'ok' => false,
     'error' => $err,
     'amounts' => $parsed,
-    'open_orders' => $openOrders,
+    'open_orders' => $result['open_orders'] ?? [],
     'matched_amount' => $result['matched_amount'] ?? null,
     'parser' => baleParserVersion(),
 ], JSON_UNESCAPED_UNICODE);

@@ -41,6 +41,17 @@ DEPOSIT_HINTS = (
 )
 
 
+def has_parseable_amount(text):
+    t = (text or "").strip()
+    if not t:
+        return False
+    if re.search(r"\+\s*\d{1,3}(?:,\d{3})+", t):
+        return True
+    if re.search(r"\d{1,3}(?:,\d{3}){2,}", t):
+        return True
+    return False
+
+
 def looks_like_deposit(text):
     t = (text or "").strip()
     if not t:
@@ -69,9 +80,13 @@ def message_sender_username(msg):
 
 
 def should_process_message(msg, text):
+    if not has_parseable_amount(text):
+        return False
+
     sender = message_sender_username(msg)
     if sender in POSTBANK_USERNAMES:
         return True
+
     return looks_like_deposit(text)
 
 
@@ -287,7 +302,21 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
 
         paid = ingest_is_paid(ingest_result)
 
-        if not paid and webhook_url:
+        if ingest_result.get("ignored"):
+            LOG.info("Ingest ignored: %s", ingest_result.get("error"))
+            return
+
+        ingest_http = ingest_result.get("_http")
+        ingest_handled = ingest_http in (200, 201)
+
+        if paid:
+            return
+
+        if ingest_handled:
+            LOG.info("Ingest handled but unpaid: %s", ingest_result.get("error"))
+            return
+
+        if webhook_url:
             try:
                 wh = await post_bot_webhook(webhook_url, admin_chat_id, text)
                 LOG.info(
@@ -304,7 +333,7 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
             except Exception as exc:
                 LOG.exception("Webhook POST failed: %s", exc)
 
-        if forward_bot_username and not paid:
+        if forward_bot_username and not paid and not ingest_handled:
             try:
                 await deliver_deposit_to_bot(client, bot_cache, msg, text, forward_bot_username)
             except Exception as exc:
