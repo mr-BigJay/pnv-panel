@@ -167,6 +167,41 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 ۴. اگر ۴ رقم آخر مبلغ با سفارش باز یکی باشد، پرداخت خودکار تأیید می‌شود
 </div>
 
+<?php if($listenerEnvExists && $listenerSessionExists){ ?>
+<div class="hint" style="border-color:#854d0e;background:#422006;color:#fde68a">
+Listener باید env کامل داشته باشد. بعد از deploy:<br>
+<code>cat &gt; /var/www/html/db/postbank-listener.env &lt;&lt;'EOF'
+POSTBANK_INGEST_SECRET=<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_ADMIN_CHAT_ID=<?php echo htmlspecialchars((string)($config['admin_chat_ids'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_WEBHOOK_URL=<?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
+
+EOF
+chmod 600 /var/www/html/db/postbank-listener.env
+systemctl restart postbank-listener</code>
+</div>
+<?php } ?>
+
+<?php if(is_array($parsePreview)){ ?>
+<div class="hint">
+<b>نتیجه تست پارس:</b><br>
+مبالغ: <?php echo htmlspecialchars(json_encode($parsePreview['amounts'] ?? [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?><br>
+شبیه واریز: <?php echo !empty($parsePreview['looks_deposit']) ? 'بله' : 'خیر'; ?> |
+پست‌بانک: <?php echo !empty($parsePreview['looks_postbank']) ? 'بله' : 'خیر'; ?><br>
+مچ: <?php echo htmlspecialchars(json_encode($parsePreview['match'] ?? [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>
+</div>
+<?php } ?>
+
+<?php if(count($webhookLogTail) > 0){ ?>
+<label>آخرین رویدادهای Webhook</label>
+<div class="logbox"><?php echo htmlspecialchars(implode("\n", $webhookLogTail), ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } else { ?>
+<div class="hint">لاگ Webhook خالی است. بعد از فوروارد پیام واریز، اینجا رویدادها دیده می‌شوند.</div>
+<?php } ?>
+
 <form method="post">
 <label class="toggle">
 <input type="checkbox" name="enabled" <?php echo !empty($config['enabled']) ? 'checked' : ''; ?>>
@@ -192,7 +227,45 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <input class="ltr" type="number" id="match_grace_seconds" name="match_grace_seconds" min="0" value="<?php echo intval($config['match_grace_seconds'] ?? 0); ?>">
 <div class="hint">۰ = خودکار (حداقل ۳۰ دقیقه یا دوبرابر مهلت پرداخت). اگر کاربر دیر واریز کرد، در این بازه هنوز تأیید خودکار کار می‌کند.</div>
 
-<div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></div>
+<div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code><br><br>
+آدرس Ingest اتوماتیک:<br><code><?php echo htmlspecialchars($ingestUrl, ENT_QUOTES, 'UTF-8'); ?></code><br>
+کلید Ingest (برای Listener):<br><code><?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?></code><br><br>
+وضعیت Listener روی سرور:<br>
+• env: <?php echo $listenerEnvExists ? '✅' : '❌'; ?> db/postbank-listener.env<br>
+• session: <?php echo $listenerSessionExists ? '✅' : '❌'; ?> db/bale_user_session.bale<br><br>
+<b>راه‌اندازی listener (یک‌بار روی سرور):</b><br>
+<code>pip3 install -r tools/requirements-postbank.txt</code><br>
+<code>python3 tools/postbank_bale_listener.py --login --session /var/www/html/db/bale_user_session.bale</code><br>
+<code>cat &gt; db/postbank-listener.env &lt;&lt;'EOF'
+POSTBANK_INGEST_SECRET=<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_ADMIN_CHAT_ID=<?php echo htmlspecialchars(trim(explode(',', (string)($config['admin_chat_ids'] ?? ''))[0]), ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_WEBHOOK_URL=<?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
+
+EOF
+chmod 600 db/postbank-listener.env</code><br>
+<code>cp tools/postbank-listener.service /etc/systemd/system/ &amp;&amp; systemctl daemon-reload &amp;&amp; systemctl enable --now postbank-listener</code><br>
+<code>systemctl status postbank-listener --no-pager</code>
+</div>
+
+<?php
+$liveWebhook = baleGetWebhookInfo($config);
+if(!empty($liveWebhook['ok'])){
+    $info = $liveWebhook['result'] ?? [];
+    $liveUrl = trim((string)($info['url'] ?? ''));
+    $pending = intval($info['pending_update_count'] ?? 0);
+    $lastError = trim((string)($info['last_error_message'] ?? ''));
+?>
+<div class="hint">
+وضعیت Webhook در بله:<br>
+<code><?php echo htmlspecialchars($liveUrl !== '' ? $liveUrl : 'ثبت نشده', ENT_QUOTES, 'UTF-8'); ?></code><br>
+<?php if($pending > 0){ ?>پیام‌های در صف: <?php echo $pending; ?><br><?php } ?>
+<?php if($lastError !== ''){ ?><span style="color:#fecaca">آخرین خطا: <?php echo htmlspecialchars($lastError, ENT_QUOTES, 'UTF-8'); ?></span><?php } ?>
+</div>
+<?php } ?>
 
 <button type="submit" name="save">ذخیره تنظیمات</button>
 <button type="submit" name="fetch_chat" class="test">خواندن شناسه چت از بله</button>
