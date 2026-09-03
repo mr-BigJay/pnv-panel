@@ -35,6 +35,8 @@ $sample1 = "پست بانک\nواريز به کارت: 6156\n+998,190\n1405/05/1
 $sample2 = "پست بانک\nواريز به کارت: 6156\n+3,698,233\n1405/05/9\n20:46\nمانده: 43,110,709 ريال";
 
 assertTrue(baleLooksLikeDeposit($sample1), 'sample1 looks like deposit');
+assertTrue(baleLooksLikePostBankCardDeposit($sample1), 'sample1 card deposit');
+assertTrue(baleLooksLikeDeposit($sample1) === baleLooksLikePostBankCardDeposit($sample1), 'deposit alias matches card deposit');
 assertTrue(!baleLooksLikeDeposit("پست بانک\nموجودی حساب شما"), 'generic postbank without deposit rejected');
 assertTrue(baleLooksLikePostBankNotice($sample1), 'sample1 is postbank notice');
 

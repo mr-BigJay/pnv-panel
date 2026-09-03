@@ -635,11 +635,10 @@ if(!function_exists('baleConfigPath')){
         return array_values(array_unique(array_filter($tomans)));
     }
 
-    function baleLooksLikeDeposit($text){
-        if(function_exists('baleLooksLikePostBankCardDeposit')){
-            return baleLooksLikePostBankCardDeposit($text);
-        }
-
+    /**
+     * فقط اعلان واقعی «واریز به کارت» پست‌بانک — نه هر پیام حاوی «پست بانک».
+     */
+    function baleLooksLikePostBankCardDeposit($text){
         $text = baleNormalizeBankText($text);
 
         if($text === ''){
@@ -665,11 +664,8 @@ if(!function_exists('baleConfigPath')){
         return false;
     }
 
-    /**
-     * فقط اعلان واقعی «واریز به کارت» پست‌بانک — نه هر پیام حاوی «پست بانک».
-     */
-    function baleLooksLikePostBankCardDeposit($text){
-        return baleLooksLikeDeposit($text);
+    function baleLooksLikeDeposit($text){
+        return baleLooksLikePostBankCardDeposit($text);
     }
 
     /**
