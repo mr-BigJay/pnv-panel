@@ -306,6 +306,63 @@ if(!function_exists('instantPayPath')){
         return $changed;
     }
 
+    /**
+     * اگر CSV تأیید شده ولی اطلاع تلگرام قبلاً نرفته (مثلاً واریز تکراری)، دوباره تلاش کن.
+     */
+    function instantPayTryConfirmTelegramNotify($found, $row = null){
+        if(!is_array($found)){
+            return;
+        }
+
+        if(!is_array($row)){
+            $csvIndex = instantPayResolveCsvIndex($found);
+
+            if($csvIndex < 0 || !function_exists('xuiLoadPayments')){
+                return;
+            }
+
+            $payments = xuiLoadPayments();
+
+            if(!isset($payments[$csvIndex]) || !is_array($payments[$csvIndex])){
+                return;
+            }
+
+            $row = $payments[$csvIndex];
+        }
+
+        if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
+            return;
+        }
+
+        $link = trim((string)($row[7] ?? ($found['link'] ?? '')));
+        $typeHint = trim((string)($found['type'] ?? ''));
+
+        if($typeHint === '' && function_exists('xuiResolvePaymentType')){
+            $typeHint = xuiResolvePaymentType($row, 'خرید');
+        }
+
+        if($typeHint === ''){
+            $typeHint = 'خرید';
+        }
+
+        if(function_exists('telegramNotifyPaymentConfirmedRow')){
+            try{
+                telegramNotifyPaymentConfirmedRow($row, $typeHint, ['link' => $link]);
+            }
+            catch(Throwable $e){
+                error_log('instant pay confirm telegram notify failed: ' . $e->getMessage());
+            }
+        }
+        elseif(function_exists('xuiTelegramNotifyApproved')){
+            try{
+                xuiTelegramNotifyApproved($row, $typeHint, $link);
+            }
+            catch(Throwable $e){
+                error_log('instant pay confirm telegram notify failed: ' . $e->getMessage());
+            }
+        }
+    }
+
     function instantPayItemMatchable($item, $now = null){
         $now = $now ?? time();
         $status = (string)($item['status'] ?? '');
@@ -1333,6 +1390,8 @@ if(!function_exists('instantPayPath')){
         }
 
         if(($found['status'] ?? '') === 'paid'){
+            instantPayTryConfirmTelegramNotify($found);
+
             return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
         }
 
@@ -1450,19 +1509,12 @@ if(!function_exists('instantPayPath')){
                 $link = trim((string)($row[7] ?? ''));
                 instantPaySyncJsonAfterCsvApproval($csvIndex, $row, ['ok' => true, 'link' => $link]);
 
-                if(function_exists('telegramNotifyPaymentConfirmedRow')){
-                    try{
-                        telegramNotifyPaymentConfirmedRow($row, xuiResolvePaymentType($row, 'خرید'), ['link' => $link]);
-                    }
-                    catch(Throwable $e){
-                        error_log('instant pay csv-already telegram notify failed: ' . $e->getMessage());
-                    }
-                }
-                elseif(function_exists('xuiTelegramNotifyApproved')){
-                    xuiTelegramNotifyApproved($row, xuiResolvePaymentType($row, 'خرید'), $link);
-                }
-
                 $jsonItem = instantPayFindJsonByTracking($user, $tracking);
+                $notifyFound = is_array($jsonItem) ? $jsonItem : [
+                    'type' => xuiResolvePaymentType($row, 'خرید'),
+                    'link' => $link,
+                ];
+                instantPayTryConfirmTelegramNotify($notifyFound, $row);
                 $publicItem = is_array($jsonItem) && !empty($jsonItem['id'])
                     ? instantPayPublicView($jsonItem)
                     : [
