@@ -719,7 +719,7 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if(trim((string)($row[3] ?? '')) !== $tracking){
+            if(instantPayNormalizeTracking(trim((string)($row[3] ?? ''))) !== instantPayNormalizeTracking($tracking)){
                 continue;
             }
 
@@ -1733,7 +1733,10 @@ if(!function_exists('instantPayPath')){
             $result = instantPayMarkPaid($item['id'], $payload);
             $result['matched_amount'] = $amount;
             $result['matched_via'] = 'json';
-            return $result;
+
+            if(!empty($result['ok']) || !empty($result['already'])){
+                return $result;
+            }
         }
 
         $csvMatch = instantPayFindCsvMatchByAmount($amount);
@@ -1920,6 +1923,8 @@ if(!function_exists('instantPayPath')){
         $rialOnly = function_exists('baleLooksLikePostBankNotice') && baleLooksLikePostBankNotice($text);
         $candidates = instantPayExpandAmountCandidates($amounts, ['rial_only' => $rialOnly]);
 
+        $lastFailure = null;
+
         foreach($candidates as $amount){
             $result = instantPayTryDepositAmount($amount, $text, [
                 'date' => $meta['date'] ?? '',
@@ -1931,7 +1936,20 @@ if(!function_exists('instantPayPath')){
             }
 
             $result['parsed_amounts'] = $amounts;
-            return $result;
+
+            if(!empty($result['ok']) || !empty($result['already'])){
+                return $result;
+            }
+
+            $lastFailure = $result;
+        }
+
+        if(is_array($lastFailure)){
+            if(empty($lastFailure['ignored'])){
+                $lastFailure['ignored'] = false;
+            }
+
+            return $lastFailure;
         }
 
         return [
