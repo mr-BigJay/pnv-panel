@@ -278,6 +278,15 @@ if(isset($_POST['approve_payment'])){
         }
     }
 
+    if(isset($payments[$index]) && is_file(__DIR__ . '/../bale_lib.php')){
+        require_once __DIR__ . '/../bale_lib.php';
+        $notifyKind = trim((string)($payments[$index][9] ?? '')) === 'تمدید' ? 'تمدید' : 'خرید';
+
+        if(function_exists('baleNotifyPaymentConfirmedRow')){
+            baleNotifyPaymentConfirmedRow($payments[$index], $notifyKind, ['link' => $link]);
+        }
+    }
+
     $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
     header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
 

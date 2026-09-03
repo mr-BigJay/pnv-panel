@@ -61,6 +61,11 @@ files=(
     telegram_lib.php
     instant_pay_lib.php
     xui_lib.php
+    bale_lib.php
+    bale-webhook.php
+    postbank-ingest.php
+    admin/renews.php
+    admin/payments.php
 )
 
 for rel in "${files[@]}"; do
