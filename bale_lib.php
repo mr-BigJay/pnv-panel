@@ -789,50 +789,7 @@ if(!function_exists('baleConfigPath')){
     }
 
     function baleFormatPaymentConfirmed($row, $kind, $link = ''){
-        $kind = baleResolvePaymentKind($row, $kind);
-        $title = ($kind === 'تمدید') ? '✅ تمدید تأیید شد' : '✅ خرید تأیید شد';
-        $label = ($kind === 'تمدید') ? 'لینک اشتراک' : 'نام کانفیگ';
-        $username = trim((string)($row[0] ?? '-'));
-        $target = trim((string)($row[1] ?? '-'));
-        $plan = trim((string)($row[2] ?? '-'));
-        $tracking = trim((string)($row[3] ?? '-'));
-        $date = trim((string)($row[4] ?? ''));
-        $time = trim((string)($row[5] ?? ''));
-        $amount = intval($row[12] ?? 0);
-        $link = trim((string)$link);
-
-        if($link === ''){
-            $link = trim((string)($row[7] ?? ''));
-        }
-
-        $lines = [
-            $title,
-            '',
-            'کاربر: ' . $username,
-            $label . ': ' . $target,
-            'پلن: ' . $plan,
-            'پیگیری: ' . $tracking,
-        ];
-
-        if($date !== '' || $time !== ''){
-            $lines[] = 'تاریخ: ' . trim($date . ' ' . $time);
-        }
-
-        if($amount > 0){
-            $lines[] = 'مبلغ: ' . number_format($amount) . ' ریال';
-        }
-
-        $coupon = trim((string)($row[10] ?? ''));
-
-        if($coupon !== ''){
-            $lines[] = 'کد تخفیف: ' . $coupon;
-        }
-
-        if($link !== ''){
-            $lines[] = 'لینک: ' . $link;
-        }
-
-        return implode("\n", $lines);
+        return '✅ واریز تأیید شد';
     }
 
     function baleNotifyPaymentConfirmedRow($row, $kindHint = '', $opts = []){
