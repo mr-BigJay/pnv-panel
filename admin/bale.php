@@ -253,6 +253,8 @@ POSTBANK_ADMIN_CHAT_ID=<?php echo htmlspecialchars((string)($config['admin_chat_
 
 POSTBANK_WEBHOOK_URL=<?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?>
 
+POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
+
 EOF
 chmod 600 /var/www/html/db/postbank-listener.env
 systemctl restart postbank-listener</code>
@@ -321,6 +323,8 @@ POSTBANK_INGEST_SECRET=<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'U
 POSTBANK_ADMIN_CHAT_ID=<?php echo htmlspecialchars(trim(explode(',', (string)($config['admin_chat_ids'] ?? ''))[0]), ENT_QUOTES, 'UTF-8'); ?>
 
 POSTBANK_WEBHOOK_URL=<?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?>
+
+POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
 
 EOF
 chmod 600 db/postbank-listener.env</code><br>

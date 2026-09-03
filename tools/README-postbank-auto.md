@@ -1,8 +1,11 @@
 # پرداخت آنی تمام‌اتوماتیک (بدون فوروارد دستی)
 
 Listener پیام @postbank_bot را می‌خواند و:
-1. `postbank-ingest.php` را صدا می‌زند
-2. اگر تأیید نشد، همان متن را به `bale-webhook.php` می‌فرستد (مثل فوروارد دستی به @Jay24x7Pusbank_bot)
+1. `postbank-ingest.php` را صدا می‌زند (تأیید خودکار)
+2. همان پیام را به @Jay24x7Pusbank_bot **فوروارد** می‌کند (مثل فوروارد دستی)
+3. اگر ingest خطای HTTP داد، `bale-webhook.php` هم امتحان می‌شود
+
+**بدون سفارش باز** → ingest پاسخ `ignored` می‌دهد و فوروارد انجام نمی‌شود (بدون اسپم).
 
 ## env لازم (`db/postbank-listener.env`)
 
@@ -10,6 +13,7 @@ Listener پیام @postbank_bot را می‌خواند و:
 POSTBANK_INGEST_SECRET=...
 POSTBANK_ADMIN_CHAT_ID=196365289
 POSTBANK_WEBHOOK_URL=https://panel.ticketin.ir/bale-webhook.php
+POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
 ```
 
 بعد: `systemctl restart postbank-listener`

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-شنونده خودکار: فقط «واریز به کارت» از @postbank_bot → postbank-ingest.php
+شنونده خودکار: واریز واقعی @postbank_bot
 
-Bot API نمی‌تواند چت @postbank_bot را بخواند. این سرویس با سشن صاحب کارت
-فقط اعلان واقعی واریز (با مبلغ) را به ingest می‌فرستد.
-اگر ingest خطای HTTP داد، همان متن را به webhook پنل می‌فرستد (fallback).
+Bot API نمی‌تواند چت @postbank_bot را بخواند. این سервیس با سشن صاحب کارت:
+  1) postbank-ingest.php را صدا می‌زند (تأیید خودکار)
+  2) همان پیام را به @Jay24x7Pusbank_bot فوروارد می‌کند (مثل فوروارد دستی)
+  3) اگر ingest خطای HTTP داد، webhook پنل هم امتحان می‌شود
 
-بدون سفارش باز → ingest پاسخ ignored می‌دهد و هیچ پیامی به JayPusbankbot نمی‌رود.
+بدون سفارش باز → ingest پاسخ ignored می‌دهد و به JayPusbankbot فوروارد نمی‌شود.
 """
 
 import argparse
@@ -21,6 +22,7 @@ from pathlib import Path
 try:
     import aiohttp
     from aiobale import Client, Dispatcher
+    import aiobale.enums as bale_enums
 except ImportError as exc:
     print("Missing dependency. Run: pip3 install -r tools/requirements-postbank.txt", file=sys.stderr)
     raise SystemExit(1) from exc
@@ -181,6 +183,66 @@ async def post_bot_webhook(webhook_url, admin_chat_id, text):
             return data
 
 
+class BotPeerCache:
+    def __init__(self):
+        self.chat_id = None
+        self.chat_type = None
+
+
+async def resolve_bot_peer(client, cache, bot_username):
+    if cache.chat_id is not None and cache.chat_type is not None:
+        return cache.chat_id, cache.chat_type
+
+    username = (bot_username or "").strip().lstrip("@")
+    if not username:
+        raise ValueError("bot username empty")
+
+    resp = await client.search_username(username)
+    user = getattr(resp, "user", None)
+
+    if user is None:
+        raise ValueError("bot username not found: @" + username)
+
+    chat_id = getattr(user, "id", None) or getattr(user, "user_id", None)
+    if chat_id is None:
+        raise ValueError("bot peer id missing for @" + username)
+
+    cache.chat_id = int(chat_id)
+    cache.chat_type = bale_enums.ChatType.BOT
+    return cache.chat_id, cache.chat_type
+
+
+async def deliver_deposit_to_bot(client, cache, msg, text, bot_username):
+    """فوروارد/ارسال پیام واریز به بازوی JayPusbank (مثل فوروارد دستی)."""
+    if not bot_username:
+        return False
+
+    chat_id, chat_type = await resolve_bot_peer(client, cache, bot_username)
+
+    try:
+        await msg.forward_to(chat_id=chat_id, chat_type=chat_type)
+        LOG.info("Forwarded deposit to @%s", bot_username.lstrip("@"))
+        return True
+    except Exception as exc:
+        LOG.warning("Forward failed (%s), trying send_message", exc)
+
+    send = getattr(client, "send_message", None)
+    if send is None:
+        LOG.error("client.send_message unavailable")
+        return False
+
+    try:
+        try:
+            await send(chat_id=chat_id, text=text, chat_type=chat_type)
+        except TypeError:
+            await send(chat_id, text)
+        LOG.info("Sent deposit text to @%s via send_message", bot_username.lstrip("@"))
+        return True
+    except Exception as exc2:
+        LOG.error("send_message to bot failed: %s", exc2)
+        return False
+
+
 def run_login(session_file):
     session_file.parent.mkdir(parents=True, exist_ok=True)
     dp = Dispatcher()
@@ -189,7 +251,7 @@ def run_login(session_file):
     client.run()
 
 
-def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_chat_id):
+def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_chat_id, forward_bot_username):
     if not session_file.exists() or session_file.stat().st_size < 8:
         LOG.error("Session missing. Run with --login first: %s", session_file)
         raise SystemExit(2)
@@ -201,6 +263,7 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
     dp = Dispatcher()
     client = Client(dp, session_file=str(session_file))
     recent = set()
+    bot_cache = BotPeerCache()
 
     @dp.message()
     async def on_message(msg):
@@ -242,19 +305,13 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
             if ingest_result.get("_http") == 401:
                 LOG.error("Ingest unauthorized — update POSTBANK_INGEST_SECRET in db/postbank-listener.env")
 
-        if ingest_is_paid(ingest_result):
-            LOG.info("Payment confirmed via ingest")
-            return
-
         if ingest_result.get("ignored"):
             LOG.info("Ignored (no open order): %s", ingest_result.get("error"))
             return
 
-        if ingest_http_ok(ingest_result):
-            LOG.info("Ingest handled but unpaid: %s", ingest_result.get("error"))
-            return
+        paid = ingest_is_paid(ingest_result)
 
-        if webhook_url:
+        if not paid and not ingest_http_ok(ingest_result) and webhook_url:
             try:
                 wh = await post_bot_webhook(webhook_url, admin_chat_id, text)
                 LOG.info(
@@ -265,20 +322,32 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
                     wh.get("error"),
                 )
                 if wh.get("paid") is True:
-                    LOG.info("Payment confirmed via webhook fallback")
+                    paid = True
                 elif wh.get("_http") == 500:
                     LOG.error("Webhook returned HTTP 500 — deploy bale-webhook.php + instant_pay_lib.php")
             except Exception as exc:
                 LOG.exception("Webhook fallback failed: %s", exc)
+
+        if forward_bot_username:
+            try:
+                delivered = await deliver_deposit_to_bot(client, bot_cache, msg, text, forward_bot_username)
+                if not delivered:
+                    LOG.warning("Could not deliver deposit to @%s", forward_bot_username.lstrip("@"))
+            except Exception as exc:
+                LOG.error("Deliver to bot via userbot failed: %s", exc)
         else:
-            LOG.warning("Ingest failed and no webhook URL configured for fallback")
+            LOG.warning("POSTBANK_FORWARD_BOT not set — skipping forward to JayPusbankbot")
+
+        if paid:
+            LOG.info("Payment confirmed via ingest/webhook")
 
     LOG.info(
-        "Listening… session=%s ingest=%s webhook=%s admin=%s",
+        "Listening… session=%s ingest=%s webhook=%s admin=%s forward_bot=%s",
         session_file,
         ingest_url,
         webhook_url or "(disabled)",
         admin_chat_id,
+        forward_bot_username or "(disabled)",
     )
     client.run()
 
@@ -296,6 +365,11 @@ def parse_args(argv=None):
     )
     p.add_argument("--admin-chat-id", default=os.environ.get("POSTBANK_ADMIN_CHAT_ID", ""))
     p.add_argument("--ingest-secret", default=os.environ.get("POSTBANK_INGEST_SECRET", ""))
+    p.add_argument(
+        "--forward-bot",
+        default=os.environ.get("POSTBANK_FORWARD_BOT", "Jay24x7Pusbank_bot"),
+        help="Forward real card deposits to this Bale bot (JayPusbankbot)",
+    )
     p.add_argument("--login", action="store_true", help="One-time interactive phone login")
     p.add_argument("--log-level", default="INFO")
     return p.parse_args(argv)
@@ -320,6 +394,7 @@ def main(argv=None):
         raise SystemExit(2)
 
     admin_chat_id = (args.admin_chat_id or load_admin_chat_id()).strip()
+    forward_bot = (args.forward_bot or "").strip()
 
     run_listener(
         session_file,
@@ -327,6 +402,7 @@ def main(argv=None):
         args.ingest_secret,
         (args.webhook_url or "").rstrip("/"),
         admin_chat_id,
+        forward_bot,
     )
 
 
