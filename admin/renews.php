@@ -211,7 +211,10 @@ true
 if(isset($payments[$index]) && is_file(__DIR__ . '/../telegram_lib.php')){
 require_once __DIR__ . '/../telegram_lib.php';
 
-if(function_exists('telegramNotifyNewPayment')){
+if(function_exists('telegramNotifyPaymentConfirmedRow')){
+telegramNotifyPaymentConfirmedRow($payments[$index], 'تمدید');
+}
+elseif(function_exists('telegramNotifyNewPayment')){
 telegramNotifyNewPayment('تمدید', $payments[$index], ['confirmed' => true]);
 }
 }

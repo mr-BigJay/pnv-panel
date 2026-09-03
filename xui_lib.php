@@ -1821,6 +1821,36 @@ if(!function_exists('xuiConfigPath')){
         return $changed;
     }
 
+    function xuiResolvePaymentType($row, $typeHint = ''){
+        if(function_exists('telegramResolvePaymentKind')){
+            return telegramResolvePaymentKind($row, $typeHint);
+        }
+
+        $type = trim((string)($row[9] ?? $typeHint));
+
+        return ($type === 'تمدید') ? 'تمدید' : 'خرید';
+    }
+
+    function xuiTelegramNotifyApproved($row, $typeHint, $link, $opts = []){
+        if(!function_exists('telegramNotifyPaymentConfirmedRow') && is_file(__DIR__ . '/telegram_lib.php')){
+            require_once __DIR__ . '/telegram_lib.php';
+        }
+
+        if(!function_exists('telegramNotifyPaymentConfirmedRow')){
+            return [];
+        }
+
+        try{
+            return telegramNotifyPaymentConfirmedRow($row, $typeHint, array_merge($opts, [
+                'link' => $link,
+            ]));
+        }
+        catch(Throwable $e){
+            error_log('xui approve telegram admin notify failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+
     function xuiApprovePaymentIndex($index, $typeHint = ''){
         $payments = xuiLoadPayments();
 
@@ -1829,7 +1859,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $row = $payments[$index];
-        $type = trim((string)($row[9] ?? $typeHint));
+        $type = xuiResolvePaymentType($row, $typeHint);
         $status = trim((string)($row[6] ?? ''));
 
         if($status === 'تایید شد'){
@@ -1841,6 +1871,7 @@ if(!function_exists('xuiConfigPath')){
             ];
 
             xuiSyncAutoPayJsonRow($index, $row, $link);
+            xuiTelegramNotifyApproved($row, $type, $link);
 
             return $result;
         }
@@ -1893,35 +1924,7 @@ if(!function_exists('xuiConfigPath')){
             tgUserNotifyPaymentApproved($username, $subName, $planText, $type === 'تمدید');
         }
 
-        if(!function_exists('telegramNotifyNewPayment') && is_file(__DIR__ . '/telegram_lib.php')){
-            require_once __DIR__ . '/telegram_lib.php';
-        }
-
-        if(function_exists('telegramNotifyNewPayment')){
-            try{
-                $notifyRow = $payments[$index];
-                $notifyRow[6] = 'تایید شد';
-                $notifyRow[7] = $result['link'] ?? ($notifyRow[7] ?? '');
-
-                if(trim((string)($notifyRow[4] ?? '')) === '' || trim((string)($notifyRow[5] ?? '')) === ''){
-                    if(!function_exists('pnvNowParts') && is_file(__DIR__ . '/pnv_date_bootstrap.php')){
-                        require_once __DIR__ . '/pnv_date_bootstrap.php';
-                    }
-
-                    if(function_exists('pnvNowParts')){
-                        $nowParts = pnvNowParts();
-                        $notifyRow[4] = $notifyRow[4] ?: ($nowParts['date'] ?? '');
-                        $notifyRow[5] = $notifyRow[5] ?: ($nowParts['time'] ?? '');
-                    }
-                }
-
-                $notifyKind = ($type === 'تمدید') ? 'تمدید' : 'خرید';
-                telegramNotifyNewPayment($notifyKind, $notifyRow, ['confirmed' => true]);
-            }
-            catch(Throwable $e){
-                error_log('xui approve telegram admin notify failed: ' . $e->getMessage());
-            }
-        }
+        xuiTelegramNotifyApproved($payments[$index], $type, $result['link'] ?? '');
 
         xuiSyncAutoPayJsonRow($index, $payments[$index], $result['link'] ?? '');
 

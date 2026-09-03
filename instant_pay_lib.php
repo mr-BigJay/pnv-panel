@@ -1450,6 +1450,18 @@ if(!function_exists('instantPayPath')){
                 $link = trim((string)($row[7] ?? ''));
                 instantPaySyncJsonAfterCsvApproval($csvIndex, $row, ['ok' => true, 'link' => $link]);
 
+                if(function_exists('telegramNotifyPaymentConfirmedRow')){
+                    try{
+                        telegramNotifyPaymentConfirmedRow($row, xuiResolvePaymentType($row, 'خرید'), ['link' => $link]);
+                    }
+                    catch(Throwable $e){
+                        error_log('instant pay csv-already telegram notify failed: ' . $e->getMessage());
+                    }
+                }
+                elseif(function_exists('xuiTelegramNotifyApproved')){
+                    xuiTelegramNotifyApproved($row, xuiResolvePaymentType($row, 'خرید'), $link);
+                }
+
                 $jsonItem = instantPayFindJsonByTracking($user, $tracking);
                 $publicItem = is_array($jsonItem) && !empty($jsonItem['id'])
                     ? instantPayPublicView($jsonItem)
@@ -1504,7 +1516,7 @@ if(!function_exists('instantPayPath')){
             xuiSavePayments($payments);
         }
 
-        $result = xuiApprovePaymentIndex($csvIndex, trim((string)($row[9] ?? 'خرید')));
+        $result = xuiApprovePaymentIndex($csvIndex, xuiResolvePaymentType($row, 'خرید'));
 
         if(empty($result['ok'])){
             return $result;

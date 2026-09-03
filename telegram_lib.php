@@ -1328,11 +1328,164 @@ if(!function_exists('telegramConfigPath')){
         return $id;
     }
 
+    function telegramResolvePaymentKind($row, $hint = ''){
+        if(!is_array($row)){
+            return 'خرید';
+        }
+
+        $type = trim((string)($row[9] ?? ''));
+        $hint = trim((string)$hint);
+
+        if($type === 'تمدید' || $hint === 'تمدید'){
+            return 'تمدید';
+        }
+
+        if($type === 'خرید'){
+            return 'خرید';
+        }
+
+        $target = trim((string)($row[1] ?? ''));
+
+        if($target !== '' && (
+            preg_match('#^https?://#i', $target)
+            || stripos($target, 'vip') !== false
+            || stripos($target, '/sub/') !== false
+        )){
+            return 'تمدید';
+        }
+
+        return 'خرید';
+    }
+
+    function telegramConfirmNotifyDedupPath(){
+        return __DIR__ . '/db/telegram_confirm_dedup.json';
+    }
+
+    function telegramConfirmNotifyKey($row){
+        if(!is_array($row)){
+            return '';
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+        $user = strtolower(trim((string)($row[0] ?? '')));
+        $created = intval($row[8] ?? 0);
+
+        if($tracking === '' && $created <= 0){
+            return '';
+        }
+
+        return $user . '|' . $tracking . '|' . $created;
+    }
+
+    function telegramConfirmNotifyWasSent($key, $withinSeconds = 300){
+        $key = trim((string)$key);
+
+        if($key === ''){
+            return false;
+        }
+
+        $file = telegramConfirmNotifyDedupPath();
+
+        if(!file_exists($file)){
+            return false;
+        }
+
+        $data = json_decode((string)file_get_contents($file), true);
+
+        if(!is_array($data) || !isset($data[$key])){
+            return false;
+        }
+
+        $sentAt = intval($data[$key]['sent_at'] ?? 0);
+
+        return $sentAt > 0 && (time() - $sentAt) <= max(30, intval($withinSeconds));
+    }
+
+    function telegramConfirmNotifyMarkSent($key, $kind = ''){
+        $key = trim((string)$key);
+
+        if($key === ''){
+            return;
+        }
+
+        if(!is_dir(__DIR__ . '/db')){
+            @mkdir(__DIR__ . '/db', 0755, true);
+        }
+
+        $file = telegramConfirmNotifyDedupPath();
+        $data = [];
+
+        if(file_exists($file)){
+            $decoded = json_decode((string)file_get_contents($file), true);
+            $data = is_array($decoded) ? $decoded : [];
+        }
+
+        $data[$key] = [
+            'sent_at' => time(),
+            'kind' => ($kind === 'تمدید') ? 'تمدید' : 'خرید',
+        ];
+
+        if(count($data) > 500){
+            uasort($data, static function($a, $b){
+                return intval($b['sent_at'] ?? 0) <=> intval($a['sent_at'] ?? 0);
+            });
+            $data = array_slice($data, 0, 400, true);
+        }
+
+        file_put_contents(
+            $file,
+            json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function telegramNotifyPaymentConfirmedRow($row, $kindHint = '', $opts = []){
+        if(!is_array($row)){
+            return [];
+        }
+
+        $link = trim((string)($opts['link'] ?? ($row[7] ?? '')));
+        $notifyRow = $row;
+        $notifyRow[6] = 'تایید شد';
+
+        if($link !== ''){
+            $notifyRow[7] = $link;
+        }
+
+        if(trim((string)($notifyRow[4] ?? '')) === '' || trim((string)($notifyRow[5] ?? '')) === ''){
+            if(!function_exists('pnvNowParts') && is_file(__DIR__ . '/pnv_date_bootstrap.php')){
+                require_once __DIR__ . '/pnv_date_bootstrap.php';
+            }
+
+            if(function_exists('pnvNowParts')){
+                $nowParts = pnvNowParts();
+                $notifyRow[4] = $notifyRow[4] ?: ($nowParts['date'] ?? '');
+                $notifyRow[5] = $notifyRow[5] ?: ($nowParts['time'] ?? '');
+            }
+        }
+
+        $kind = telegramResolvePaymentKind($notifyRow, $kindHint);
+
+        return telegramNotifyNewPayment($kind, $notifyRow, array_merge($opts, [
+            'confirmed' => true,
+        ]));
+    }
+
     function telegramNotifyNewPayment($kind, $row, $opts = []){
         $confirmed = !empty($opts['confirmed']);
+        $forceNotify = !empty($opts['force_notify']);
         $username = trim((string)($row[0] ?? ''));
         $created = intval($row[8] ?? time());
-        $kind = ($kind === 'تمدید') ? 'تمدید' : 'خرید';
+        $kind = telegramResolvePaymentKind($row, $kind);
+
+        if($confirmed && !$forceNotify){
+            $dedupKey = telegramConfirmNotifyKey($row);
+
+            if($dedupKey !== '' && telegramConfirmNotifyWasSent($dedupKey)){
+                return [];
+            }
+        }
+
         $item = [
             'username' => $username,
             'mobile' => telegramGetUserMobile($username),
@@ -1353,6 +1506,22 @@ if(!function_exists('telegramConfigPath')){
 
         $text = telegramFormatPaymentDetail($item, $kind, false, true);
         $results = telegramSendToAdmins($text);
+
+        if($confirmed){
+            $dedupKey = telegramConfirmNotifyKey($row);
+            $sent = false;
+
+            foreach((array)$results as $result){
+                if(!empty($result['ok'])){
+                    $sent = true;
+                    break;
+                }
+            }
+
+            if($sent && $dedupKey !== ''){
+                telegramConfirmNotifyMarkSent($dedupKey, $kind);
+            }
+        }
 
         if($kind === 'خرید' || $kind === 'تمدید'){
             telegramReminderResetKind($kind);
