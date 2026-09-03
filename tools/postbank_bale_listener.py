@@ -2,11 +2,11 @@
 """
 شنونده خودکار: فقط «واریز به کارت» از @postbank_bot → postbank-ingest.php
 
-Bot API نمی‌تواند چت @postbank_bot را بخواند. این سервیس با سشن صاحب کارت
+Bot API نمی‌تواند چت @postbank_bot را بخواند. این سرویس با سشن صاحب کارت
 فقط اعلان واقعی واریز (با مبلغ) را به ingest می‌فرستد.
-اگر مچ شد، پنل تأیید می‌کند و JayPusbankbot پیام «واریز تأیید شد» می‌دهد.
+اگر ingest خطای HTTP داد، همان متن را به webhook پنل می‌فرستد (fallback).
 
-بدون سفارش باز یا بدون واریز واقعی → هیچ پیامی به JayPusbankbot نمی‌رود.
+بدون سفارش باز → ingest پاسخ ignored می‌دهد و هیچ پیامی به JayPusbankbot نمی‌رود.
 """
 
 import argparse
@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 try:
@@ -86,6 +87,13 @@ def ingest_is_paid(result):
     return result.get("paid") is True
 
 
+def ingest_http_ok(result):
+    if not isinstance(result, dict):
+        return False
+    http = result.get("_http")
+    return http in (200, 201)
+
+
 def load_admin_chat_id():
     env = os.environ.get("POSTBANK_ADMIN_CHAT_ID", "").strip()
     if env:
@@ -128,6 +136,51 @@ async def post_ingest(url, secret, text, source="aiobale-userbot"):
             return data
 
 
+async def post_bot_webhook(webhook_url, admin_chat_id, text):
+    """Fallback: همان کاری که فوروارد دستی به @Jay24x7Pusbank_bot می‌کند."""
+    admin_chat_id = str(admin_chat_id or "").strip()
+    if not admin_chat_id or not webhook_url:
+        return {"ok": False, "error": "webhook or admin chat missing"}
+
+    now = int(time.time())
+    update = {
+        "update_id": now,
+        "message": {
+            "message_id": now,
+            "date": now,
+            "chat": {"id": int(admin_chat_id), "type": "private"},
+            "from": {"id": int(admin_chat_id), "is_bot": False},
+            "forward_from_chat": {
+                "id": 0,
+                "type": "private",
+                "username": "postbank_bot",
+                "title": "postbank_bot",
+            },
+            "forward_date": now,
+            "text": text,
+        },
+    }
+
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Postbank-Listener": "1",
+    }
+    timeout = aiohttp.ClientTimeout(total=45)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(
+            webhook_url,
+            headers=headers,
+            data=json.dumps(update, ensure_ascii=False).encode("utf-8"),
+        ) as resp:
+            body = await resp.text()
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                data = {"ok": False, "error": "bad json from webhook", "raw": body[:300]}
+            data["_http"] = resp.status
+            return data
+
+
 def run_login(session_file):
     session_file.parent.mkdir(parents=True, exist_ok=True)
     dp = Dispatcher()
@@ -136,9 +189,13 @@ def run_login(session_file):
     client.run()
 
 
-def run_listener(session_file, ingest_url, ingest_secret):
+def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_chat_id):
     if not session_file.exists() or session_file.stat().st_size < 8:
         LOG.error("Session missing. Run with --login first: %s", session_file)
+        raise SystemExit(2)
+
+    if not admin_chat_id:
+        LOG.error("POSTBANK_ADMIN_CHAT_ID missing (set env or db/bale.json admin_chat_ids)")
         raise SystemExit(2)
 
     dp = Dispatcher()
@@ -167,31 +224,62 @@ def run_listener(session_file, ingest_url, ingest_secret):
         sender = message_sender_username(msg)
         LOG.info("Card deposit from @%s preview=%s", sender or "?", key[:120])
 
+        ingest_result = {}
         try:
             ingest_result = await post_ingest(ingest_url, ingest_secret, text)
         except Exception as exc:
             LOG.exception("Ingest failed: %s", exc)
-            return
 
-        LOG.info(
-            "Ingest http=%s paid=%s ignored=%s err=%s",
-            ingest_result.get("_http"),
-            ingest_result.get("paid"),
-            ingest_result.get("ignored"),
-            ingest_result.get("error"),
-        )
+        if isinstance(ingest_result, dict):
+            LOG.info(
+                "Ingest http=%s paid=%s ignored=%s err=%s",
+                ingest_result.get("_http"),
+                ingest_result.get("paid"),
+                ingest_result.get("ignored"),
+                ingest_result.get("error"),
+            )
 
-        if ingest_result.get("_http") == 401:
-            LOG.error("Ingest unauthorized — update POSTBANK_INGEST_SECRET in db/postbank-listener.env")
+            if ingest_result.get("_http") == 401:
+                LOG.error("Ingest unauthorized — update POSTBANK_INGEST_SECRET in db/postbank-listener.env")
 
         if ingest_is_paid(ingest_result):
             LOG.info("Payment confirmed via ingest")
-        elif ingest_result.get("ignored"):
-            LOG.info("Ignored (not a actionable deposit): %s", ingest_result.get("error"))
-        else:
-            LOG.info("No match (silent): %s", ingest_result.get("error"))
+            return
 
-    LOG.info("Listening… session=%s ingest=%s", session_file, ingest_url)
+        if ingest_result.get("ignored"):
+            LOG.info("Ignored (no open order): %s", ingest_result.get("error"))
+            return
+
+        if ingest_http_ok(ingest_result):
+            LOG.info("Ingest handled but unpaid: %s", ingest_result.get("error"))
+            return
+
+        if webhook_url:
+            try:
+                wh = await post_bot_webhook(webhook_url, admin_chat_id, text)
+                LOG.info(
+                    "Webhook fallback http=%s paid=%s ok=%s err=%s",
+                    wh.get("_http"),
+                    wh.get("paid"),
+                    wh.get("ok"),
+                    wh.get("error"),
+                )
+                if wh.get("paid") is True:
+                    LOG.info("Payment confirmed via webhook fallback")
+                elif wh.get("_http") == 500:
+                    LOG.error("Webhook returned HTTP 500 — deploy bale-webhook.php + instant_pay_lib.php")
+            except Exception as exc:
+                LOG.exception("Webhook fallback failed: %s", exc)
+        else:
+            LOG.warning("Ingest failed and no webhook URL configured for fallback")
+
+    LOG.info(
+        "Listening… session=%s ingest=%s webhook=%s admin=%s",
+        session_file,
+        ingest_url,
+        webhook_url or "(disabled)",
+        admin_chat_id,
+    )
     client.run()
 
 
@@ -202,6 +290,11 @@ def parse_args(argv=None):
         "--ingest-url",
         default=os.environ.get("POSTBANK_INGEST_URL", "https://panel.ticketin.ir/postbank-ingest.php"),
     )
+    p.add_argument(
+        "--webhook-url",
+        default=os.environ.get("POSTBANK_WEBHOOK_URL", "https://panel.ticketin.ir/bale-webhook.php"),
+    )
+    p.add_argument("--admin-chat-id", default=os.environ.get("POSTBANK_ADMIN_CHAT_ID", ""))
     p.add_argument("--ingest-secret", default=os.environ.get("POSTBANK_INGEST_SECRET", ""))
     p.add_argument("--login", action="store_true", help="One-time interactive phone login")
     p.add_argument("--log-level", default="INFO")
@@ -226,10 +319,14 @@ def main(argv=None):
         print("ERROR: --ingest-secret or POSTBANK_INGEST_SECRET required", file=sys.stderr)
         raise SystemExit(2)
 
+    admin_chat_id = (args.admin_chat_id or load_admin_chat_id()).strip()
+
     run_listener(
         session_file,
         args.ingest_url.rstrip("/"),
         args.ingest_secret,
+        (args.webhook_url or "").rstrip("/"),
+        admin_chat_id,
     )
 
 
