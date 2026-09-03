@@ -2085,6 +2085,7 @@ if(!function_exists('instantPayPath')){
         return [
             'ok' => false,
             'error' => instantPayDepositNoMatchError($amounts, $candidates),
+            'ignored' => true,
             'amounts' => $amounts,
             'candidates' => $candidates,
             'debug' => instantPayMatchDebugSnapshot($amounts),

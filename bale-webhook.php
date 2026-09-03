@@ -212,6 +212,13 @@ if(!empty($result['ok'])){
 }
 
 if(!empty($result['ignored'])){
+    baleLogWebhookEvent('ignored_deposit', [
+        'chat_id' => $chatId,
+        'forward' => baleForwardSourceLabel($message),
+        'error' => $result['error'] ?? '',
+        'via_listener' => !empty($_SERVER['HTTP_X_POSTBANK_LISTENER']),
+    ]);
+
     echo json_encode(['ok' => true, 'ignored' => true]);
     exit;
 }

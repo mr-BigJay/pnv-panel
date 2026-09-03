@@ -65,6 +65,7 @@ files=(
     bale-webhook.php
     postbank-ingest.php
     tools/postbank_bale_listener.py
+    tools/postbank-listener.service
     admin/renews.php
     admin/payments.php
 )
@@ -94,6 +95,20 @@ else
     say "  !! سرویس ${SERVICE_NAME} نصب نیست."
     say "  برای نصب polling:"
     say "  bash <(curl -Ls ${BASE}/scripts/setup-telegram-bot.sh)"
+fi
+
+say ""
+say ">> PostBank listener"
+
+if systemctl list-unit-files postbank-listener.service --no-legend 2>/dev/null | grep -q postbank-listener.service; then
+    cp -f "${ROOT}/tools/postbank-listener.service" /etc/systemd/system/postbank-listener.service 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl restart postbank-listener
+    say "  restarted postbank-listener"
+elif pgrep -f postbank_bale_listener.py >/dev/null 2>&1; then
+    pkill -f postbank_bale_listener.py || true
+    sleep 1
+    say "  !! postbank-listener systemd unit missing; restart listener manually"
 fi
 
 say ""
