@@ -14,7 +14,7 @@ Environment=POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
 Environment=POSTBANK_BALE_CONFIG=/var/www/html/db/bale.json
 # POSTBANK_ADMIN_CHAT_ID and POSTBANK_INGEST_SECRET in env file:
 EnvironmentFile=-/var/www/html/db/postbank-listener.env
-ExecStart=/usr/bin/python3 /var/www/html/tools/postbank_bale_listener.py --forward-bot Jay24x7Pusbank_bot
+ExecStart=/usr/bin/python3 /var/www/html/tools/postbank_bale_listener.py
 Restart=always
 RestartSec=5
 

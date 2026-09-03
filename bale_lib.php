@@ -636,26 +636,40 @@ if(!function_exists('baleConfigPath')){
     }
 
     function baleLooksLikeDeposit($text){
+        if(function_exists('baleLooksLikePostBankCardDeposit')){
+            return baleLooksLikePostBankCardDeposit($text);
+        }
+
         $text = baleNormalizeBankText($text);
 
         if($text === ''){
             return false;
         }
 
-        $needles = ['واریز', 'واریزی', 'بستانکار', 'deposit', 'مبلغ', 'حساب شما', 'پست بانک', 'پست‌بانک'];
-
-        foreach($needles as $n){
-            if(baleContains($text, $n)){
-                return true;
-            }
+        if(!preg_match('/\+\s*\d{1,3}(?:,\d{3})+/u', $text) && count(baleExtractRialAmounts($text)) === 0){
+            return false;
         }
 
-        // فرمت +مبلغ
-        if(preg_match('/\+\s*\d{1,3}(?:,\d{3})+/u', $text)){
+        if(baleContains($text, 'واریز به کارت') || baleContains($text, 'واريز به كارت')){
             return true;
         }
 
-        return count(baleExtractRialAmounts($text)) > 0;
+        if(preg_match('/\+\s*\d{1,3}(?:,\d{3})+/u', $text) && (
+            baleContains($text, 'مانده')
+            || baleContains($text, 'واریز')
+            || baleContains($text, 'بستانکار')
+        )){
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * فقط اعلان واقعی «واریز به کارت» پست‌بانک — نه هر پیام حاوی «پست بانک».
+     */
+    function baleLooksLikePostBankCardDeposit($text){
+        return baleLooksLikeDeposit($text);
     }
 
     /**

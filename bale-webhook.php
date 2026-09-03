@@ -228,25 +228,12 @@ if(!empty($result['ok'])){
 }
 
 if(!empty($result['ignored'])){
-    $forwardLabel = baleForwardSourceLabel($message);
-    $isPostBank = function_exists('baleLooksLikePostBankForward') && baleLooksLikePostBankForward($message);
-
-    if($isPostBank || $forwardLabel !== ''){
-        baleSendMessage(
-            $chatId,
-            "ℹ️ پیام فوروارد دریافت شد ولی شبیه واریز تشخیص داده نشد.\n"
-            . ($forwardLabel !== '' ? "منبع: {$forwardLabel}\n" : '')
-            . "لطفاً پیام @postbank_bot را با «فوروارد» (نه کپی) بفرستید.\n"
-            . "اگر متن دیده نمی‌شود، متن پیام را کپی و به‌صورت پیام عادی ارسال کنید.",
-            [],
-            $config
-        );
-        baleLogWebhookEvent('ignored_not_deposit', [
-            'chat_id' => $chatId,
-            'forward' => $forwardLabel,
-            'preview' => function_exists('mb_substr') ? mb_substr($text, 0, 120) : substr($text, 0, 120),
-        ]);
-    }
+    baleLogWebhookEvent('ignored_deposit', [
+        'chat_id' => $chatId,
+        'forward' => baleForwardSourceLabel($message),
+        'error' => $result['error'] ?? '',
+        'via_listener' => !empty($_SERVER['HTTP_X_POSTBANK_LISTENER']),
+    ]);
 
     echo json_encode(['ok' => true, 'ignored' => true]);
     exit;
