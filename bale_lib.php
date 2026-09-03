@@ -789,7 +789,31 @@ if(!function_exists('baleConfigPath')){
     }
 
     function baleFormatPaymentConfirmed($row, $kind, $link = ''){
-        return '✅ واریز تأیید شد';
+        $kind = baleResolvePaymentKind($row, $kind);
+        $kindLabel = ($kind === 'تمدید') ? 'تمدید' : 'خرید';
+        $username = trim((string)($row[0] ?? '-'));
+        $plan = trim((string)($row[2] ?? '-'));
+        $tracking = trim((string)($row[3] ?? ''));
+        $amount = intval($row[12] ?? 0);
+
+        $lines = [
+            '✅ واریز تأیید شد',
+            $kindLabel . ' | ' . $username,
+        ];
+
+        if($plan !== ''){
+            $lines[] = 'پلن: ' . $plan;
+        }
+
+        if($amount > 0){
+            $lines[] = 'مبلغ: ' . number_format($amount) . ' ریال';
+        }
+
+        if($tracking !== ''){
+            $lines[] = 'پیگیری: ' . $tracking;
+        }
+
+        return implode("\n", $lines);
     }
 
     function baleNotifyPaymentConfirmedRow($row, $kindHint = '', $opts = []){
