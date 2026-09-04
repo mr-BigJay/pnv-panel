@@ -13,9 +13,11 @@ files=(
   "support_lib.php"
   "admin/support-api.php"
   "admin/support-v2.php"
+  "admin/support-v2-diag.php"
   "admin/index.php"
   "assets/support/admin/support-admin.js"
   "assets/support/admin/support-admin.css"
+  "bigjay_controller/support-v2-diag.php"
 )
 
 for rel in "${files[@]}"; do
@@ -26,9 +28,33 @@ for rel in "${files[@]}"; do
 done
 
 echo ""
+echo "=== Verify ==="
+
+php -l "${ROOT}/support_lib.php"
+php -l "${ROOT}/admin/support-api.php"
+
+if grep -q 'function supportTicketsListForApi' "${ROOT}/support_lib.php"; then
+  echo "  OK supportTicketsListForApi in support_lib.php"
+else
+  echo "  FAIL supportTicketsListForApi missing!"
+  exit 1
+fi
+
+if [[ ! -s "${ROOT}/assets/support/admin/support-admin.js" ]]; then
+  echo "  FAIL support-admin.js is empty!"
+  exit 1
+fi
+
+echo ""
+echo "=== Ping API (no login) ==="
+curl -fsSL "https://panel.ticketin.ir/bigjay_controller/support-api.php?action=ping" || \
+curl -fsSL "${ROOT%/html}/html/bigjay_controller/support-api.php?action=ping" 2>/dev/null || \
+echo "  (open manually: /bigjay_controller/support-api.php?action=ping)"
+
+echo ""
+echo ""
 echo "Done. Hard-refresh:"
 echo "  /bigjay_controller/?page=support-v2"
 echo ""
-echo "Optional API check (while logged in as admin in browser, copy Cookie header):"
-echo "  curl -sS -b 'PHPSESSID=...' '${ROOT%/}/../..'  # use panel URL instead"
-echo "  curl -sS -b \"\$COOKIE\" 'https://panel.ticketin.ir/bigjay_controller/support-api.php?action=tickets'"
+echo "If still broken, open while logged in:"
+echo "  /bigjay_controller/support-v2-diag.php"
