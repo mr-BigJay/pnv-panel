@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, forwardRef, useImperativeHandle, useRef } from 'react';
+import { ChangeEvent, FormEvent, KeyboardEvent, forwardRef, useImperativeHandle, useRef } from 'react';
 import { FaPaperclip } from 'react-icons/fa';
 import { FaMicrophone } from 'react-icons/fa6';
 import { IoSend } from 'react-icons/io5';
@@ -21,8 +21,12 @@ interface MessageComposerProps {
   onClearEdit: () => void;
   onSendText: (text: string) => Promise<void>;
   onSendVoice: (blob: Blob) => Promise<void>;
+  onSendImage: (file: File, caption?: string) => Promise<void>;
   showVoice?: boolean;
+  showAttach?: boolean;
 }
+
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
 
 export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposerProps>(
   function MessageComposer(
@@ -36,13 +40,17 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
       onClearEdit,
       onSendText,
       onSendVoice,
+      onSendImage,
       showVoice = true,
+      showAttach = true,
     },
     ref,
   ) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const { recording, seconds, start, stop, cancel } = useVoiceRecorder();
     const hasText = draft.trim().length > 0;
+    const isEditing = Boolean(editTarget);
 
     useImperativeHandle(ref, () => ({
       focus: () => textareaRef.current?.focus(),
@@ -86,6 +94,25 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
       }
     }
 
+    async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || sending || isEditing) return;
+
+      const okType =
+        /^image\/(jpeg|jpg|png|webp)$/i.test(file.type) ||
+        /\.(jpe?g|png|webp)$/i.test(file.name);
+      if (!okType) {
+        alert('فقط JPG، PNG یا WebP مجاز است');
+        return;
+      }
+
+      const caption = draft.trim();
+      if (caption) onDraftChange('');
+      growTextarea(textareaRef.current);
+      await onSendImage(file, caption);
+    }
+
     return (
       <div className="tg-composer-wrap shrink-0 border-t border-[#0e1621] bg-[#17212b]">
         {replyTarget ? (
@@ -124,9 +151,26 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
             </div>
           ) : (
             <div className="tg-composer-row">
-              <button type="button" className="tg-composer-icon" title="پیوست (به‌زودی)">
-                <FaPaperclip className="h-5 w-5" />
-              </button>
+              {showAttach && !isEditing ? (
+                <>
+                  <button
+                    type="button"
+                    className="tg-composer-icon"
+                    title="پیوست تصویر"
+                    disabled={sending}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <FaPaperclip className="h-5 w-5" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={IMAGE_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => void handleFileChange(e)}
+                  />
+                </>
+              ) : null}
 
               <textarea
                 ref={textareaRef}
@@ -140,7 +184,16 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
                 onInput={(e) => growTextarea(e.currentTarget)}
               />
 
-              {!hasText && showVoice ? (
+              {hasText ? (
+                <button
+                  type="submit"
+                  disabled={sending}
+                  className="tg-composer-action tg-btn-send"
+                  title="ارسال"
+                >
+                  <IoSend className="h-5 w-5" />
+                </button>
+              ) : showVoice ? (
                 <button
                   type="button"
                   disabled={sending}
@@ -151,15 +204,6 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
                   <FaMicrophone className="h-5 w-5" />
                 </button>
               ) : null}
-
-              <button
-                type="submit"
-                disabled={sending || !hasText}
-                className={`tg-composer-action tg-composer-send ${hasText ? 'tg-btn-send' : 'tg-composer-send-idle'}`}
-                title="ارسال"
-              >
-                <IoSend className="h-5 w-5" />
-              </button>
             </div>
           )}
         </form>

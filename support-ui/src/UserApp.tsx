@@ -136,6 +136,33 @@ export function UserApp() {
     }
   }
 
+  async function handleSendVoice(blob: Blob) {
+    setSending(true);
+    setChatError('');
+    try {
+      const res = await api.sendVoice(blob, csrf);
+      if (res.message) mergeMessage(res.message);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : 'ارسال ویس ناموفق');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleSendImage(file: File, caption = '') {
+    setSending(true);
+    setChatError('');
+    try {
+      const res = await api.sendImage(file, csrf, caption, replyTarget?.id ?? '');
+      if (res.message) mergeMessage(res.message);
+      setReplyTarget(null);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : 'ارسال تصویر ناموفق');
+    } finally {
+      setSending(false);
+    }
+  }
+
   const handleMenuOpen = useCallback((state: MessageContextMenuState) => {
     setMenuState(state);
   }, []);
@@ -277,7 +304,7 @@ export function UserApp() {
         composerRef={composerRef}
         viewerRole="user"
         showSubscriptions={false}
-        showVoice={false}
+        showVoice={true}
         onDraftChange={setDraft}
         onClearReply={() => setReplyTarget(null)}
         onClearEdit={() => {
@@ -287,7 +314,8 @@ export function UserApp() {
         onBack={handleBack}
         onOpenSubscriptions={() => {}}
         onSendText={handleSendText}
-        onSendVoice={async () => {}}
+        onSendVoice={handleSendVoice}
+        onSendImage={handleSendImage}
         onMenuOpen={handleMenuOpen}
         onMenuClose={handleMenuClose}
         onMenuAction={handleMenuAction}

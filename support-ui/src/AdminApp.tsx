@@ -214,6 +214,24 @@ export function AdminApp() {
     }
   }
 
+  async function handleSendImage(file: File, caption = '') {
+    if (!activeUser) return;
+    setSending(true);
+    setChatError('');
+    try {
+      const res = await api.sendImage(activeUser, file, csrf, caption, replyTarget?.id ?? '');
+      if (res.message) {
+        mergeMessage(res.message);
+      }
+      setReplyTarget(null);
+      await loadTickets();
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : 'ارسال تصویر ناموفق');
+    } finally {
+      setSending(false);
+    }
+  }
+
   const handleMenuOpen = useCallback((state: MessageContextMenuState) => {
     setMenuState(state);
   }, []);
@@ -380,6 +398,7 @@ export function AdminApp() {
           onOpenSubscriptions={() => setShowSubscriptions(true)}
           onSendText={handleSendText}
           onSendVoice={handleSendVoice}
+          onSendImage={handleSendImage}
           onMenuOpen={handleMenuOpen}
           onMenuClose={handleMenuClose}
           onMenuAction={handleMenuAction}

@@ -147,6 +147,28 @@ export function createAdminSupportApi(config: SupportConfig) {
       });
       return parseJson(res);
     },
+
+    async sendImage(
+      user: string,
+      file: File,
+      csrf: string,
+      message = '',
+      replyTo = '',
+    ): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
+      const fd = new FormData();
+      fd.append('action', 'send_image');
+      fd.append('user', user);
+      fd.append('csrf', csrf);
+      if (message) fd.append('message', message);
+      if (replyTo) fd.append('reply_to', replyTo);
+      fd.append('image', file, file.name || 'image.jpg');
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: fd,
+      });
+      return parseJson(res);
+    },
   };
 }
 
@@ -221,6 +243,43 @@ function createUserSupportApi(config: SupportConfig) {
           delete_id: messageId,
           csrf,
         }),
+      });
+      return parseJson(res);
+    },
+
+    async sendVoice(
+      blob: Blob,
+      csrf: string,
+    ): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
+      const ext = blob.type.includes('ogg') ? 'ogg' : 'webm';
+      const fd = new FormData();
+      fd.append('action', 'send_voice');
+      fd.append('csrf', csrf);
+      fd.append('voice', blob, `voice.${ext}`);
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: fd,
+      });
+      return parseJson(res);
+    },
+
+    async sendImage(
+      file: File,
+      csrf: string,
+      message = '',
+      replyTo = '',
+    ): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
+      const fd = new FormData();
+      fd.append('action', 'send_image');
+      fd.append('csrf', csrf);
+      if (message) fd.append('message', message);
+      if (replyTo) fd.append('reply_to', replyTo);
+      fd.append('image', file, file.name || 'image.jpg');
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: fd,
       });
       return parseJson(res);
     },

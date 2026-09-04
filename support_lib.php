@@ -1649,12 +1649,21 @@ if(!function_exists('supportLoad')){
                     '/uploads/support'
                 );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
+                $voiceUpload = supportHandleVoiceUpload(
+                    $_FILES['voice'] ?? [],
+                    __DIR__ . '/uploads/support',
+                    '/uploads/support'
+                );
+                $audio = !empty($voiceUpload['ok']) ? ($voiceUpload['path'] ?? '') : '';
 
-                if($image === '' && !empty($upload['error'])){
+                if($image === '' && !empty($upload['error']) && !empty($_FILES['image']['name'] ?? '')){
                     $error = $upload['error'];
                 }
-                elseif($text === '' && $image === ''){
-                    $error = 'متن یا تصویر وارد کنید';
+                elseif($audio === '' && !empty($voiceUpload['error']) && !empty($_FILES['voice']['name'] ?? '')){
+                    $error = $voiceUpload['error'];
+                }
+                elseif($text === '' && $image === '' && $audio === ''){
+                    $error = 'متن، تصویر یا ویس وارد کنید';
                 }
                 else{
                     $meta = supportMessageMeta();
@@ -1665,6 +1674,7 @@ if(!function_exists('supportLoad')){
                         'sender' => 'user',
                         'text' => $text,
                         'image' => $image,
+                        'audio' => $audio,
                         'date' => $meta['date'],
                         'time' => $meta['time'],
                         'timestamp' => $meta['timestamp'],
@@ -1904,6 +1914,14 @@ if(!function_exists('supportUserHasUnread')){
             $_POST['reply'] = '1';
             $_POST['support_ajax'] = '1';
         }
+        elseif($action === 'send_image'){
+            $_POST['message'] = trim((string)($_POST['message'] ?? $input['message'] ?? ''));
+            $_POST['user'] = $_POST['user'] ?? $input['user'] ?? '';
+            $_POST['csrf'] = $_POST['csrf'] ?? $input['csrf'] ?? '';
+            $_POST['reply_to'] = $_POST['reply_to'] ?? $input['reply_to'] ?? '';
+            $_POST['reply'] = '1';
+            $_POST['support_ajax'] = '1';
+        }
         elseif($action === 'edit'){
             $_POST['edit_id'] = $input['edit_id'] ?? $input['id'] ?? '';
             $_POST['edit_text'] = $input['edit_text'] ?? $input['text'] ?? '';
@@ -2013,6 +2031,19 @@ if(!function_exists('supportUserHasUnread')){
             $_POST['edit_id'] = $input['edit_id'] ?? $input['id'] ?? '';
             $_POST['edit_text'] = $input['edit_text'] ?? $input['text'] ?? '';
             $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'send_image'){
+            $_POST['send'] = '1';
+            $_POST['message'] = trim((string)($_POST['message'] ?? $input['message'] ?? ''));
+            $_POST['csrf'] = $_POST['csrf'] ?? $input['csrf'] ?? '';
+            $_POST['reply_to'] = $_POST['reply_to'] ?? $input['reply_to'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'send_voice'){
+            $_POST['send'] = '1';
+            $_POST['message'] = '';
+            $_POST['csrf'] = $_POST['csrf'] ?? $input['csrf'] ?? '';
             $_POST['support_ajax'] = '1';
         }
         elseif($action === 'delete'){

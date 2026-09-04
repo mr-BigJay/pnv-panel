@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BsCheck, BsCheckAll } from 'react-icons/bs';
 import { FiCheck } from 'react-icons/fi';
 import { IoArrowBack } from 'react-icons/io5';
@@ -13,6 +13,7 @@ import {
   type MessageMenuAction,
 } from './MessageContextMenu';
 import { MessageComposer, type MessageComposerHandle } from './MessageComposer';
+import { ImageLightbox } from './ImageLightbox';
 import { PinnedMessagesBar } from './PinnedMessagesBar';
 
 interface ChatPanelProps {
@@ -40,6 +41,7 @@ interface ChatPanelProps {
   onOpenSubscriptions: () => void;
   onSendText: (text: string) => Promise<void>;
   onSendVoice: (blob: Blob) => Promise<void>;
+  onSendImage: (file: File, caption?: string) => Promise<void>;
   onMenuOpen: (state: MessageContextMenuState) => void;
   onMenuClose: () => void;
   onMenuAction: (action: MessageMenuAction, message: SupportMessage) => void;
@@ -124,6 +126,7 @@ export function ChatPanel({
   onOpenSubscriptions,
   onSendText,
   onSendVoice,
+  onSendImage,
   onMenuOpen,
   onMenuClose,
   onMenuAction,
@@ -137,6 +140,7 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const grouped = useMemo(() => messages, [messages]);
 
   const { getBubbleHandlers } = useMessageMenuOpener(onMenuOpen);
@@ -317,12 +321,13 @@ export function ChatPanel({
                       </div>
                     ) : null}
                     {msg.image ? (
-                      <a
-                        href={msg.image}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="tg-msg-image-link block overflow-hidden rounded-[10px]"
-                        onClick={(e) => e.stopPropagation()}
+                      <button
+                        type="button"
+                        className="tg-msg-image-link block overflow-hidden rounded-[10px] border-0 bg-transparent p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxSrc(msg.image);
+                        }}
                       >
                         <img
                           src={msg.image}
@@ -330,7 +335,7 @@ export function ChatPanel({
                           loading="lazy"
                           className="tg-msg-image block max-h-[360px] w-full max-w-[280px] object-contain"
                         />
-                      </a>
+                      </button>
                     ) : null}
                     {msg.audio ? (
                       <audio
@@ -391,9 +396,12 @@ export function ChatPanel({
           onClearEdit={onClearEdit}
           onSendText={onSendText}
           onSendVoice={onSendVoice}
+          onSendImage={onSendImage}
           showVoice={showVoice}
         />
       ) : null}
+
+      {lightboxSrc ? <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} /> : null}
 
       {menuState ? (
         <MessageContextMenu
