@@ -99,12 +99,18 @@ fi
 
 say ""
 say ">> PostBank listener"
+say "  برای نصب/رفع وابستگی Python (venv):"
+say "  bash <(curl -Ls ${BASE}/scripts/setup-postbank-listener.sh)"
 
 if systemctl list-unit-files postbank-listener.service --no-legend 2>/dev/null | grep -q postbank-listener.service; then
-    cp -f "${ROOT}/tools/postbank-listener.service" /etc/systemd/system/postbank-listener.service 2>/dev/null || true
-    systemctl daemon-reload 2>/dev/null || true
-    systemctl restart postbank-listener
-    say "  restarted postbank-listener"
+    if [[ -x "${ROOT}/tools/postbank-venv/bin/python" ]]; then
+        cp -f "${ROOT}/tools/postbank-listener.service" /etc/systemd/system/postbank-listener.service 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl restart postbank-listener
+        say "  restarted postbank-listener"
+    else
+        say "  !! venv نیست — setup-postbank-listener.sh را اجرا کنید"
+    fi
 elif pgrep -f postbank_bale_listener.py >/dev/null 2>&1; then
     pkill -f postbank_bale_listener.py || true
     sleep 1

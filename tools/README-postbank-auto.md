@@ -19,30 +19,29 @@ POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
 بعد: `systemctl restart postbank-listener`
 
 ## راه‌اندازی (یک‌بار)
-روی سرور:
+روی سرور — **یک خط** (venv + systemd + deploy):
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/telegram-user-bot-058b/scripts/setup-postbank-listener.sh)
+```
+
+یا دستی:
 
 ```bash
 cd /var/www/html
-curl -fsSL "https://raw.githubusercontent.com/mr-BigJay/pnv-panel/HEAD/postbank-ingest.php" -o postbank-ingest.php
-# + به‌روز کردن bale_lib.php / admin/bale.php / tools/*
+apt install -y python3 python3-venv python3-pip
+python3 -m venv tools/postbank-venv
+tools/postbank-venv/bin/pip install -r tools/requirements-postbank.txt
+cp tools/postbank-listener.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now postbank-listener
+```
 
-pip3 install -r tools/requirements-postbank.txt
-
-# لاگین تعاملی با همان شماره‌ای که اعلان پست‌بانک را می‌گیرد
-python3 tools/postbank_bale_listener.py --login \
-  --session /var/www/html/db/bale_user_session.bale
-
-# secret را از صفحه ادمین → بله کپی کن
-cat >/var/www/html/db/postbank-listener.env <<EOF
-POSTBANK_INGEST_SECRET=PASTE_SECRET_HERE
-EOF
-chmod 600 /var/www/html/db/postbank-listener.env
-chown www-data:www-data /var/www/html/db/bale_user_session.bale /var/www/html/db/postbank-listener.env
-
-cp tools/postbank-listener.service /etc/systemd/system/postbank-listener.service
-systemctl daemon-reload
-systemctl enable --now postbank-listener
-systemctl status postbank-listener --no-pager
+## login بله (تعاملی — یک‌بار)
+```bash
+cd /var/www/html
+sudo -u www-data tools/postbank-venv/bin/python tools/postbank_bale_listener.py \
+  --login --session /var/www/html/db/bale_user_session.bale
+systemctl restart postbank-listener
 ```
 
 ## تست

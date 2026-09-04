@@ -233,9 +233,9 @@ systemctl restart postbank-listener</code>
 وضعیت Listener روی سرور:<br>
 • env: <?php echo $listenerEnvExists ? '✅' : '❌'; ?> db/postbank-listener.env<br>
 • session: <?php echo $listenerSessionExists ? '✅' : '❌'; ?> db/bale_user_session.bale<br><br>
-<b>راه‌اندازی listener (یک‌بار روی سرور):</b><br>
-<code>pip3 install -r tools/requirements-postbank.txt</code><br>
-<code>python3 tools/postbank_bale_listener.py --login --session /var/www/html/db/bale_user_session.bale</code><br>
+<b>راه‌اندازی listener (یک‌بار روی سرور — root):</b><br>
+<code>bash &lt;(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/telegram-user-bot-058b/scripts/setup-postbank-listener.sh)</code><br>
+سپس env را پر کنید:<br>
 <code>cat &gt; db/postbank-listener.env &lt;&lt;'EOF'
 POSTBANK_INGEST_SECRET=<?php echo htmlspecialchars($ingestSecret, ENT_QUOTES, 'UTF-8'); ?>
 
@@ -246,8 +246,10 @@ POSTBANK_WEBHOOK_URL=<?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8
 POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
 
 EOF
-chmod 600 db/postbank-listener.env</code><br>
-<code>cp tools/postbank-listener.service /etc/systemd/system/ &amp;&amp; systemctl daemon-reload &amp;&amp; systemctl enable --now postbank-listener</code><br>
+chmod 600 db/postbank-listener.env
+systemctl restart postbank-listener</code><br>
+login تعاملی (اگر session ندارید):<br>
+<code>cd /var/www/html &amp;&amp; sudo -u www-data tools/postbank-venv/bin/python tools/postbank_bale_listener.py --login --session db/bale_user_session.bale</code><br>
 <code>systemctl status postbank-listener --no-pager</code>
 </div>
 

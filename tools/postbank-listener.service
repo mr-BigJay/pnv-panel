@@ -2,6 +2,8 @@
 Description=PostBank Bale auto-ingest listener for pnv-panel
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -12,11 +14,11 @@ Environment=POSTBANK_INGEST_URL=https://panel.ticketin.ir/postbank-ingest.php
 Environment=POSTBANK_WEBHOOK_URL=https://panel.ticketin.ir/bale-webhook.php
 Environment=POSTBANK_FORWARD_BOT=Jay24x7Pusbank_bot
 Environment=POSTBANK_BALE_CONFIG=/var/www/html/db/bale.json
-# POSTBANK_ADMIN_CHAT_ID and POSTBANK_INGEST_SECRET in env file:
 EnvironmentFile=-/var/www/html/db/postbank-listener.env
-ExecStart=/usr/bin/python3 /var/www/html/tools/postbank_bale_listener.py
-Restart=always
-RestartSec=5
+# venv را setup-postbank-listener.sh می‌سازد:
+ExecStart=/var/www/html/tools/postbank-venv/bin/python /var/www/html/tools/postbank_bale_listener.py
+Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
