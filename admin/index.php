@@ -968,7 +968,7 @@ box-sizing:border-box;
 
 </head>
 
-<body class="<?php echo $page === 'support' ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
+<body class="<?php echo in_array($page, ['support', 'support-v2'], true) ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
 
 <button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
 <div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
@@ -998,6 +998,19 @@ id="adminSupportMenu">
 <?php } ?>
 
 پیام‌های کاربران
+
+</a>
+
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=support-v2'), ENT_QUOTES, 'UTF-8'); ?>"
+class="supportMenu">
+
+<?php if($hasUnreadSupport){ ?>
+
+<span class="notifDot"></span>
+
+<?php } ?>
+
+پشتیبانی v2 (React)
 
 </a>
 
@@ -1093,7 +1106,7 @@ class="red">
 
 </div>
 
-<div class="content <?php echo $page=='support' ? 'content-support' : ''; ?>">
+<div class="content <?php echo in_array($page, ['support', 'support-v2'], true) ? 'content-support' : ''; ?>">
 
 <?php if($page=='dashboard'){ ?>
 
@@ -1106,6 +1119,15 @@ class="red">
 <?php
 $supportEmbedded = true;
 pnvAdminInclude('support.php');
+?>
+
+<?php } ?>
+
+<?php if($page=='support-v2'){ ?>
+
+<?php
+$supportEmbedded = true;
+pnvAdminInclude('support-v2.php');
 ?>
 
 <?php } ?>
@@ -1267,8 +1289,8 @@ name="uploadcsv">
 
 <?php
 $adminBottomActive = 'dashboard';
-if(in_array($page, ['support', 'renews', 'payments'], true)){
-    $adminBottomActive = $page;
+if(in_array($page, ['support', 'support-v2', 'renews', 'payments'], true)){
+    $adminBottomActive = $page === 'support-v2' ? 'support' : $page;
 }
 adminPageEnd([
     'active' => $adminBottomActive,

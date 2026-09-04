@@ -1586,4 +1586,176 @@ if(!function_exists('supportUserHasUnread')){
 
         return false;
     }
+
+    function supportTicketForApi($ticket){
+
+        $user = supportNormalizeUsername($ticket['user'] ?? '');
+        $lastTs = supportTicketLastTimestamp($ticket);
+        $profile = supportGetUserProfileSummary($user);
+
+        return [
+            'user' => $user,
+            'initial' => supportUserInitial($user),
+            'preview' => supportTicketPreview($ticket),
+            'relative_time' => supportRelativeTime($lastTs),
+            'timestamp' => $lastTs,
+            'unread' => supportAdminUnreadCount($ticket),
+            'status' => $ticket['status'] ?? '',
+            'mobile' => $profile['mobile'] ?? '-',
+            'ticket_id' => $ticket['id'] ?? '',
+        ];
+
+    }
+
+    function supportTicketsListForApi($data){
+
+        $sorted = supportSortTickets($data);
+        $tickets = [];
+
+        foreach($sorted as $ticket){
+            $tickets[] = supportTicketForApi($ticket);
+        }
+
+        return [
+            'tickets' => $tickets,
+            'has_unread' => supportAdminHasUnread($sorted),
+            'unread_count' => supportAdminUnreadTotal($sorted),
+        ];
+
+    }
+
+    function supportAdminApiBootstrap($embedded = false){
+
+        return [
+            'csrf' => supportCsrfToken(),
+            'embedded' => (bool)$embedded,
+            'poll_interval_ms' => 3000,
+        ];
+
+    }
+
+    function supportAdminApiMessages($file, $user, $since = 0, $syncAll = false){
+
+        $data = supportLoad($file);
+        $user = supportResolveTicketUsername($data, $user);
+        $messages = [];
+        $status = '';
+        $sync = [];
+        $unreadUsers = [];
+
+        foreach($data as $ticket){
+
+            if(supportTicketHasUnreadForAdmin($ticket)){
+                $unreadUsers[] = $ticket['user'] ?? '';
+            }
+
+            if($user === '' || !supportUsernamesMatch($ticket['user'] ?? '', $user)){
+                continue;
+            }
+
+            $status = $ticket['status'] ?? '';
+
+            if(empty($ticket['messages'])){
+                continue;
+            }
+
+            foreach($ticket['messages'] as $msg){
+
+                $timestamp = intval($msg['timestamp'] ?? 0);
+
+                if($syncAll){
+                    $sync[] = supportMessageForApi($msg, ['isAdmin' => true]);
+                }
+
+                if($since > 0 && $timestamp <= $since){
+                    continue;
+                }
+
+                $messages[] = supportMessageForApi($msg, ['isAdmin' => true]);
+
+            }
+
+        }
+
+        if($user !== ''){
+            $data = supportLoad($file);
+
+            if(supportMarkSeenByAdmin($data, $user)){
+                supportSave($file, $data);
+            }
+
+        }
+
+        $payload = [
+            'user' => $user,
+            'messages' => $messages,
+            'status' => $status,
+            'unreadUsers' => $unreadUsers,
+            'has_unread' => count($unreadUsers) > 0,
+            'unread_count' => supportAdminUnreadTotal($data),
+        ];
+
+        if($syncAll){
+            $payload['sync'] = $sync;
+        }
+
+        return $payload;
+
+    }
+
+    function supportAdminApiParseInput(){
+
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+
+        if(stripos($contentType, 'application/json') !== false){
+            $raw = file_get_contents('php://input');
+            $json = json_decode($raw, true);
+
+            return is_array($json) ? $json : [];
+        }
+
+        return $_POST;
+
+    }
+
+    function supportAdminApiHandlePost($file, $embedded = false){
+
+        $input = supportAdminApiParseInput();
+        $action = trim((string)($input['action'] ?? ''));
+
+        if($action === 'send' || ($action === '' && isset($input['message'], $input['user']))){
+            $_POST['message'] = $input['message'] ?? '';
+            $_POST['user'] = $input['user'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['reply_to'] = $input['reply_to'] ?? '';
+            $_POST['reply'] = '1';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'edit'){
+            $_POST['edit_id'] = $input['edit_id'] ?? $input['id'] ?? '';
+            $_POST['edit_text'] = $input['edit_text'] ?? $input['text'] ?? '';
+            $_POST['user'] = $input['user'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'delete'){
+            $_POST['delete_message'] = '1';
+            $_POST['delete_id'] = $input['delete_id'] ?? $input['id'] ?? '';
+            $_POST['user'] = $input['user'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        else{
+            supportAjaxRespond(['ok' => false, 'error' => 'action نامعتبر است'], 400);
+        }
+
+        $result = supportProcessAdminActions($file, $embedded);
+
+        if(!empty($result['error'])){
+            supportAjaxRespond(['ok' => false, 'error' => $result['error']], 400);
+        }
+
+        supportAjaxRespond(['ok' => false, 'error' => 'درخواست پردازش نشد'], 400);
+
+    }
 }

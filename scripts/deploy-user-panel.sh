@@ -61,10 +61,23 @@ files=(
   "admin/dashboard.php"
   "admin/backup.php"
   "admin/support.php"
+  "admin/support-v2.php"
   "admin/support-api.php"
   "admin/support-users-api.php"
   "admin/user-profile.php"
 )
+
+support_assets=(
+  "assets/support/admin/support-admin.js"
+  "assets/support/admin/support-admin.css"
+)
+
+for rel in "${support_assets[@]}"; do
+  dest="${ROOT}/${rel}"
+  mkdir -p "$(dirname "$dest")"
+  curl -fsSL "${BASE}/${rel}" -o "${dest}"
+  echo "  OK ${rel}"
+done
 
 for rel in "${files[@]}"; do
   dest="${ROOT}/${rel}"
@@ -110,6 +123,7 @@ echo "Done. Test:"
 echo "  /dashboard.php"
 echo "  /support.php"
 echo "  /bigjay_controller/?page=support"
+echo "  /bigjay_controller/?page=support-v2"
 echo "  /bale-webhook.php"
 echo "  /bigjay_controller/bale.php"
 echo "Hard-refresh (Ctrl+Shift+R)."
