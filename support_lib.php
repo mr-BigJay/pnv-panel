@@ -429,6 +429,27 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportTicketListTime($timestamp){
+
+        $timestamp = intval($timestamp);
+
+        if($timestamp <= 0){
+            return '';
+        }
+
+        supportEnsureTehranTimezone();
+
+        $formatted = supportFormatFromTimestamp($timestamp);
+        $today = pnvFormatJalaliDate(time(), '/');
+
+        if(($formatted['date'] ?? '') === $today){
+            return $formatted['time'];
+        }
+
+        return $formatted['date'];
+
+    }
+
     function supportRelativeTime($timestamp){
 
         $timestamp = intval($timestamp);
@@ -1742,6 +1763,7 @@ if(!function_exists('supportUserHasUnread')){
             'initial' => supportUserInitial($user),
             'preview' => supportTicketPreview($ticket),
             'relative_time' => supportRelativeTime($lastTs),
+            'list_time' => supportTicketListTime($lastTs),
             'timestamp' => $lastTs,
             'unread' => supportAdminUnreadCount($ticket),
             'status' => $ticket['status'] ?? '',

@@ -12,6 +12,7 @@ export interface Ticket {
   initial: string;
   preview: string;
   relative_time: string;
+  list_time?: string;
   timestamp: number;
   unread: number;
   status: string;

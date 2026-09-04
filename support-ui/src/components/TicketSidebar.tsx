@@ -45,7 +45,9 @@ export function TicketSidebar({
     >
       <header className="shrink-0 border-b border-[#0e1621] px-3 py-3">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-[15px] font-semibold text-white">پیام‌های کاربران</h2>
+          <h2 className="support-chat-item-name text-[15px] font-medium leading-snug text-white">
+            پیام‌های کاربران
+          </h2>
           <button
             type="button"
             onClick={onRefresh}

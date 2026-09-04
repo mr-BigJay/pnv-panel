@@ -975,9 +975,18 @@ max-width:40px !important;
 height:40px !important;
 }
 
-#support-v2-root .support-chat-title{
+#support-v2-root .support-chat-title,
+#support-v2-root .support-chat-item-name{
 font-weight:500 !important;
 -webkit-font-smoothing:antialiased;
+-moz-osx-font-smoothing:grayscale;
+text-shadow:none !important;
+filter:none !important;
+}
+
+#support-v2-root .support-chat-item-time{
+font-variant-numeric:tabular-nums;
+text-shadow:none !important;
 }
 
 input,

@@ -113,6 +113,32 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.support-chat-item {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-shadow: none;
+}
+
+.support-chat-item-name,
+.support-chat-item-time {
+  text-shadow: none;
+  filter: none;
+}
+
+.support-chat-item-name {
+  font-weight: 500;
+}
+
+.support-chat-item-time {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.support-chat-item mark {
+  text-shadow: none;
+  filter: none;
+}
+
 .tg-composer-row {
   width: 100%;
 }
