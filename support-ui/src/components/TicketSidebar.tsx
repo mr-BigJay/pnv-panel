@@ -1,4 +1,7 @@
+import { useMemo, useState } from 'react';
 import type { Ticket } from '../types';
+import { ChatItem } from './ChatItem';
+import { SearchInput } from './SearchInput';
 
 interface TicketSidebarProps {
   tickets: Ticket[];
@@ -7,6 +10,15 @@ interface TicketSidebarProps {
   error: string;
   onSelect: (user: string) => void;
   onRefresh: () => void;
+  mobileVisible: boolean;
+}
+
+function filterTickets(tickets: Ticket[], query: string): Ticket[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return tickets;
+  return tickets.filter(
+    (t) => t.user.toLowerCase().includes(q) || t.preview.toLowerCase().includes(q),
+  );
 }
 
 export function TicketSidebar({
@@ -16,82 +28,54 @@ export function TicketSidebar({
   error,
   onSelect,
   onRefresh,
+  mobileVisible,
 }: TicketSidebarProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const filtered = useMemo(() => filterTickets(tickets, searchQuery), [tickets, searchQuery]);
+
   return (
-    <aside className="flex h-full w-full max-w-[360px] shrink-0 flex-col border-l border-tg-border bg-tg-sidebar md:w-[360px]">
-      <header className="flex items-center justify-between border-b border-tg-border px-4 py-3">
-        <h2 className="text-base font-semibold">پیام‌های کاربران</h2>
+    <aside
+      className={`flex h-full w-full shrink-0 flex-col border-l border-[#2d2d2d] bg-[#1a1a1a] md:w-96 ${
+        mobileVisible ? 'flex' : 'hidden md:flex'
+      }`}
+    >
+      <header className="flex items-center gap-2 border-b border-[#2d2d2d] p-3">
         <button
           type="button"
           onClick={onRefresh}
-          className="rounded-lg px-2 py-1 text-sm text-tg-accent hover:bg-tg-hover"
-          aria-label="بروزرسانی لیست"
+          className="rounded-full p-2 text-gray-400 transition hover:bg-[#151515] hover:text-white"
+          title="بروزرسانی"
         >
           ↻
         </button>
+        <SearchInput onSearch={setSearchQuery} placeholder="جستجو در چت‌ها..." />
       </header>
 
-      <div className="border-b border-tg-border px-3 py-2">
-        <input
-          type="search"
-          placeholder="جستجو..."
-          className="w-full rounded-lg border border-tg-border bg-tg-panel px-3 py-2 text-sm outline-none focus:border-tg-accent"
-          disabled
-        />
-      </div>
+      {error ? <div className="px-4 py-3 text-sm text-red-400">{error}</div> : null}
 
-      {error ? (
-        <div className="px-4 py-3 text-sm text-red-400">{error}</div>
-      ) : null}
-
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto tg-scroll">
         {loading && tickets.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-tg-muted">در حال بارگذاری...</div>
-        ) : null}
-
-        {!loading && tickets.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-tg-muted">
-            هنوز پیامی نیست
+          <div className="flex h-40 items-center justify-center text-sm text-gray-500">
+            در حال بارگذاری...
           </div>
         ) : null}
 
-        {tickets.map((ticket) => {
-          const active = ticket.user === activeUser;
-          return (
-            <button
-              key={ticket.user}
-              type="button"
-              onClick={() => onSelect(ticket.user)}
-              className={`flex w-full items-start gap-3 border-b border-tg-border/50 px-4 py-3 text-right transition hover:bg-tg-hover ${
-                active ? 'bg-tg-hover' : ''
-              }`}
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-tg-bubbleOwn text-lg font-semibold">
-                {ticket.initial}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium">{ticket.user}</span>
-                  <span className="shrink-0 text-xs text-tg-muted">{ticket.relative_time}</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <span
-                    className={`truncate text-sm ${
-                      ticket.unread > 0 ? 'font-semibold text-white' : 'text-tg-muted'
-                    }`}
-                  >
-                    {ticket.preview}
-                  </span>
-                  {ticket.unread > 0 ? (
-                    <span className="shrink-0 rounded-full bg-tg-accent px-2 py-0.5 text-xs font-bold text-tg-bg">
-                      {ticket.unread > 9 ? '9+' : ticket.unread}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </button>
-          );
-        })}
+        {!loading && filtered.length === 0 ? (
+          <div className="flex h-64 flex-col items-center justify-center px-6 text-center text-gray-500">
+            <div className="mb-3 text-4xl">{searchQuery ? '🔍' : '📭'}</div>
+            <p className="font-medium">{searchQuery ? 'چتی پیدا نشد' : 'هنوز پیامی نیست'}</p>
+          </div>
+        ) : null}
+
+        {filtered.map((ticket) => (
+          <ChatItem
+            key={ticket.user}
+            ticket={ticket}
+            active={ticket.user === activeUser}
+            searchQuery={searchQuery}
+            onClick={() => onSelect(ticket.user)}
+          />
+        ))}
       </div>
     </aside>
   );

@@ -11,6 +11,7 @@ export function AdminApp() {
   const [csrf, setCsrf] = useState(config.csrf);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeUser, setActiveUser] = useState(config.initialUser);
+  const [activeMobile, setActiveMobile] = useState('-');
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [status, setStatus] = useState('');
   const [ticketsLoading, setTicketsLoading] = useState(true);
@@ -18,9 +19,20 @@ export function AdminApp() {
   const [sending, setSending] = useState(false);
   const [sidebarError, setSidebarError] = useState('');
   const [chatError, setChatError] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
 
   const sinceRef = useRef(0);
   const pollMs = config.pollIntervalMs;
+
+  const showSidebar = isMobile ? !activeUser : true;
+  const showChat = isMobile ? !!activeUser : true;
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const loadTickets = useCallback(async () => {
     setSidebarError('');
@@ -53,6 +65,9 @@ export function AdminApp() {
       try {
         const data = await api.messages(user, sinceRef.current, false);
         setStatus(data.status);
+        const ticket = tickets.find((t) => t.user === user);
+        if (ticket?.mobile) setActiveMobile(ticket.mobile);
+
         if (data.messages.length > 0) {
           setMessages((prev) => {
             const merged = initial ? [] : [...prev];
@@ -74,7 +89,7 @@ export function AdminApp() {
         if (initial) setMessagesLoading(false);
       }
     },
-    [api],
+    [api, tickets],
   );
 
   useEffect(() => {
@@ -106,6 +121,11 @@ export function AdminApp() {
     return () => window.clearInterval(timer);
   }, [activeUser, loadMessages, loadTickets, pollMs]);
 
+  useEffect(() => {
+    const ticket = tickets.find((t) => t.user === activeUser);
+    if (ticket?.mobile) setActiveMobile(ticket.mobile);
+  }, [tickets, activeUser]);
+
   async function handleSend(text: string) {
     if (!activeUser) return;
     setSending(true);
@@ -131,9 +151,10 @@ export function AdminApp() {
 
   return (
     <div
-      className={`support-v2-shell flex h-full overflow-hidden rounded-xl border border-tg-border bg-tg-bg ${
+      className={`support-v2-shell flex h-full overflow-hidden bg-[#202021] text-white ${
         config.embedded ? 'support-v2-embedded' : ''
       }`}
+      dir="rtl"
     >
       <TicketSidebar
         tickets={tickets}
@@ -142,16 +163,22 @@ export function AdminApp() {
         error={sidebarError}
         onSelect={setActiveUser}
         onRefresh={loadTickets}
+        mobileVisible={showSidebar}
       />
-      <ChatPanel
-        user={activeUser}
-        messages={messages}
-        status={status}
-        loading={messagesLoading}
-        sending={sending}
-        error={chatError}
-        onSend={handleSend}
-      />
+      {showChat ? (
+        <ChatPanel
+          user={activeUser}
+          mobile={activeMobile}
+          messages={messages}
+          status={status}
+          loading={messagesLoading}
+          sending={sending}
+          error={chatError}
+          mobileVisible={!showChat}
+          onBack={() => setActiveUser('')}
+          onSend={handleSend}
+        />
+      ) : null}
     </div>
   );
 }
