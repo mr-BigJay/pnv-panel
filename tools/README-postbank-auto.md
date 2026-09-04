@@ -31,7 +31,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/tel
 cd /var/www/html
 apt install -y python3 python3-venv python3-pip
 python3 -m venv tools/postbank-venv
-tools/postbank-venv/bin/pip install -r tools/requirements-postbank.txt
+tools/postbank-venv/bin/pip install aiobale-py aiohttp colorama
 cp tools/postbank-listener.service /etc/systemd/system/
 systemctl daemon-reload && systemctl enable --now postbank-listener
 ```

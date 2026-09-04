@@ -90,28 +90,48 @@ install_os_packages(){
         python3-venv \
         python3-pip \
         curl \
-        ca-certificates
+        ca-certificates \
+        git
+}
+
+install_python_deps(){
+    local req="${ROOT}/tools/requirements-postbank.txt"
+    local pip_bin="${VENV_DIR}/bin/pip"
+
+    [[ -f "$req" ]] || die "فایل نیست: ${req}"
+
+    say ">> نصب وابستگی‌ها از ${req}..."
+    if "$pip_bin" install -r "$req"; then
+        return 0
+    fi
+
+    say "!! pip install -r failed — fallback: aiobale-py + aiohttp"
+    "$pip_bin" install 'aiobale-py>=0.3.0' 'aiohttp>=3.9.0' 'colorama>=0.4.6' || {
+        say "!! PyPI fallback failed — trying GitHub Enalite/aiobale..."
+        "$pip_bin" install 'aiohttp>=3.9.0' 'colorama>=0.4.6'
+        "$pip_bin" install 'git+https://github.com/Enalite/aiobale.git'
+    }
 }
 
 create_venv(){
     VENV_DIR="${ROOT}/tools/postbank-venv"
     PYTHON_BIN="${VENV_DIR}/bin/python"
-    local req="${ROOT}/tools/requirements-postbank.txt"
-
-    [[ -f "$req" ]] || die "فایل نیست: ${req}"
 
     say ">> ساخت venv در ${VENV_DIR}..."
     rm -rf "$VENV_DIR"
     python3 -m venv "$VENV_DIR"
     "${VENV_DIR}/bin/pip" install --upgrade pip wheel
-    "${VENV_DIR}/bin/pip" install -r "$req"
+    install_python_deps
 
     say ">> تست import..."
     "$PYTHON_BIN" - <<'PY'
 import aiobale
 import aiohttp
-print("OK aiobale", getattr(aiobale, "__version__", "?"))
+from aiobale import Client, Dispatcher
+import aiobale.enums as enums
+print("OK aiobale-py import")
 print("OK aiohttp", aiohttp.__version__)
+print("OK ChatType.BOT", enums.ChatType.BOT)
 PY
 }
 
