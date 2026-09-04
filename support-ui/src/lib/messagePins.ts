@@ -39,3 +39,16 @@ export function togglePin(scope: string, messageId: string): boolean {
   savePinnedIds(scope, ids);
   return true;
 }
+
+export function unpinMessage(scope: string, messageId: string): void {
+  const ids = loadPinnedIds(scope).filter((id) => id !== messageId);
+  savePinnedIds(scope, ids);
+}
+
+export function pinPreview(msg: { text?: string; image?: string; audio?: string }): string {
+  const text = msg.text?.trim();
+  if (text) return text.length > 120 ? `${text.slice(0, 120)}…` : text;
+  if (msg.image) return '🖼 تصویر';
+  if (msg.audio) return '🎤 پیام صوتی';
+  return 'پیام';
+}

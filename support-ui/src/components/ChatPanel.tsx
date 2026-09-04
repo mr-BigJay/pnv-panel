@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { BsCheck, BsCheckAll } from 'react-icons/bs';
+import { FiCheck } from 'react-icons/fi';
 import { IoArrowBack } from 'react-icons/io5';
 import { useMessageMenuOpener } from '../hooks/useMessageMenuOpener';
 import { isPinned } from '../lib/messagePins';
@@ -12,6 +13,7 @@ import {
   type MessageMenuAction,
 } from './MessageContextMenu';
 import { MessageComposer, type MessageComposerHandle } from './MessageComposer';
+import { PinnedMessagesBar } from './PinnedMessagesBar';
 
 interface ChatPanelProps {
   user: string;
@@ -44,6 +46,7 @@ interface ChatPanelProps {
   onToggleSelect: (id: string) => void;
   onExitSelect: () => void;
   onCopySelected: () => void;
+  onUnpin: (id: string) => void;
 }
 
 function messageStatus(msg: SupportMessage) {
@@ -124,16 +127,22 @@ export function ChatPanel({
   onToggleSelect,
   onExitSelect,
   onCopySelected,
+  onUnpin,
 }: ChatPanelProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const grouped = useMemo(() => messages, [messages]);
-  void pinTick;
 
   const { getBubbleHandlers } = useMessageMenuOpener(onMenuOpen);
 
+  const scrollToMessage = useCallback((id: string) => {
+    messageRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
   useEffect(() => {
+    if (selectMode) return;
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, user]);
+  }, [messages, user, selectMode]);
 
   if (!user) {
     return (
@@ -157,39 +166,74 @@ export function ChatPanel({
       } ${selectMode ? 'is-select-mode' : ''}`}
     >
       <header className="flex h-[56px] shrink-0 items-center justify-between gap-2 border-b border-[#0e1621] bg-[#17212b] px-2 md:px-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onBack}
-            className="shrink-0 rounded-full p-2 text-[#6ab2f2] hover:bg-[#242f3d] md:hidden"
-            aria-label="بازگشت"
-          >
-            <IoArrowBack className="h-5 w-5" />
-          </button>
-          <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ${getAvatarColor(
-              user,
-            )}`}
-          >
-            {getInitials(user)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="support-chat-title truncate text-[16px] font-medium leading-snug text-white">
-              {user}
-            </h1>
-            <p className="fa-num truncate text-[12px] leading-normal text-[#8b9cb3]">
-              {mobile && mobile !== '-' ? toPersianDigits(mobile) : status || 'پشتیبانی'}
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onOpenSubscriptions}
-          className="shrink-0 rounded-lg bg-[#242f3d] px-3 py-2 text-[12px] font-medium text-[#6ab2f2] hover:bg-[#2b5278] hover:text-white"
-        >
-          اشتراک‌ها
-        </button>
+        {selectMode ? (
+          <>
+            <button
+              type="button"
+              onClick={onExitSelect}
+              className="shrink-0 rounded-lg px-3 py-2 text-[13px] text-[#6ab2f2] hover:bg-[#242f3d]"
+            >
+              انصراف
+            </button>
+            <span className="fa-num flex-1 truncate text-center text-[15px] font-medium text-white">
+              {toPersianDigits(selectedIds.size)} انتخاب
+            </span>
+            <button
+              type="button"
+              onClick={onCopySelected}
+              disabled={selectedIds.size === 0}
+              className="shrink-0 rounded-lg bg-[#242f3d] px-3 py-2 text-[13px] text-[#6ab2f2] hover:bg-[#2b5278] hover:text-white disabled:opacity-40"
+            >
+              کپی
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <button
+                type="button"
+                onClick={onBack}
+                className="shrink-0 rounded-full p-2 text-[#6ab2f2] hover:bg-[#242f3d] md:hidden"
+                aria-label="بازگشت"
+              >
+                <IoArrowBack className="h-5 w-5" />
+              </button>
+              <div
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ${getAvatarColor(
+                  user,
+                )}`}
+              >
+                {getInitials(user)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h1 className="support-chat-title truncate text-[16px] font-medium leading-snug text-white">
+                  {user}
+                </h1>
+                <p className="fa-num truncate text-[12px] leading-normal text-[#8b9cb3]">
+                  {mobile && mobile !== '-' ? toPersianDigits(mobile) : status || 'پشتیبانی'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenSubscriptions}
+              className="shrink-0 rounded-lg bg-[#242f3d] px-3 py-2 text-[12px] font-medium text-[#6ab2f2] hover:bg-[#2b5278] hover:text-white"
+            >
+              اشتراک‌ها
+            </button>
+          </>
+        )}
       </header>
+
+      {!selectMode ? (
+        <PinnedMessagesBar
+          scope={pinScope}
+          messages={messages}
+          pinTick={pinTick}
+          onScrollTo={scrollToMessage}
+          onUnpin={onUnpin}
+        />
+      ) : null}
 
       <div className="tg-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-4 tg-scroll">
         {loading && messages.length === 0 ? (
@@ -205,6 +249,7 @@ export function ChatPanel({
             const separator = dayLabel(msg, grouped[index - 1]);
             const pos = clusterPos(grouped, index);
             const pinned = isPinned(pinScope, msg.id);
+            const isSelected = selectedIds.has(msg.id);
             const bubbleHandlers = selectMode
               ? {
                   onClick: (e: React.MouseEvent<HTMLElement>) => {
@@ -215,7 +260,13 @@ export function ChatPanel({
               : getBubbleHandlers(msg, pinned);
 
             return (
-              <div key={msg.id}>
+              <div
+                key={msg.id}
+                ref={(el) => {
+                  if (el) messageRefs.current.set(msg.id, el);
+                  else messageRefs.current.delete(msg.id);
+                }}
+              >
                 {separator ? (
                   <div className="my-3 flex justify-center">
                     <span className="fa-num rounded-full bg-[#182533] px-3 py-1 text-[11px] text-[#8b9cb3]">
@@ -223,16 +274,32 @@ export function ChatPanel({
                     </span>
                   </div>
                 ) : null}
-                <div className={`flex ${msg.is_own ? 'justify-start' : 'justify-end'}`}>
+                <div
+                  className={`msg-row flex w-full items-center gap-2.5 ${
+                    msg.is_own ? 'justify-start' : 'justify-end'
+                  }`}
+                >
+                  {selectMode && !msg.is_own ? (
+                    <button
+                      type="button"
+                      className={`msg-select-check shrink-0 ${isSelected ? 'is-checked' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSelect(msg.id);
+                      }}
+                      aria-label={isSelected ? 'لغو انتخاب' : 'انتخاب پیام'}
+                    >
+                      {isSelected ? <FiCheck className="h-4 w-4" /> : null}
+                    </button>
+                  ) : null}
                   <div
                     {...bubbleHandlers}
-                    className={`msg-bubble max-w-[min(82%,24rem)] cursor-pointer ${msg.image && !msg.text && !msg.audio ? 'p-1' : 'px-3 py-2'} ${clusterRadius(msg.is_own, pos)} ${
+                    className={`msg-bubble max-w-[min(82%,24rem)] ${selectMode ? '' : 'cursor-pointer'} ${
+                      msg.image && !msg.text && !msg.audio ? 'p-1' : 'px-3 py-2'
+                    } ${clusterRadius(msg.is_own, pos)} ${
                       msg.is_own ? 'tg-bubble-admin' : 'tg-bubble-user'
-                    } ${pinned ? 'is-pinned' : ''} ${selectMode ? 'is-selectable' : ''} ${
-                      selectedIds.has(msg.id) ? 'is-selected' : ''
-                    }`}
+                    } ${pinned ? 'is-pinned' : ''} ${isSelected ? 'is-selected' : ''}`}
                   >
-                    {pinned ? <span className="msg-pin-badge" aria-hidden="true">📌</span> : null}
                     {msg.reply_to?.text ? (
                       <div className="msg-quote">
                         <strong>{msg.reply_to.sender === 'admin' ? 'پشتیبانی' : 'کاربر'}</strong>
@@ -265,7 +332,9 @@ export function ChatPanel({
                       />
                     ) : null}
                     {msg.text ? (
-                      <div className={`whitespace-pre-wrap break-words text-[14px] leading-relaxed ${msg.image ? 'mt-2' : ''}`}>
+                      <div
+                        className={`whitespace-pre-wrap break-words text-[14px] leading-relaxed ${msg.image ? 'mt-2' : ''}`}
+                      >
                         {msg.text}
                       </div>
                     ) : null}
@@ -279,6 +348,19 @@ export function ChatPanel({
                       {messageStatus(msg)}
                     </div>
                   </div>
+                  {selectMode && msg.is_own ? (
+                    <button
+                      type="button"
+                      className={`msg-select-check shrink-0 ${isSelected ? 'is-checked' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSelect(msg.id);
+                      }}
+                      aria-label={isSelected ? 'لغو انتخاب' : 'انتخاب پیام'}
+                    >
+                      {isSelected ? <FiCheck className="h-4 w-4" /> : null}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -287,32 +369,20 @@ export function ChatPanel({
         <div ref={endRef} />
       </div>
 
-      {selectMode ? (
-        <div className="support-select-bar">
-          <span className="fa-num support-select-count">{toPersianDigits(selectedIds.size)} انتخاب</span>
-          <div className="support-select-actions">
-            <button type="button" className="support-select-btn" onClick={onCopySelected}>
-              کپی
-            </button>
-            <button type="button" className="support-select-btn ghost" onClick={onExitSelect}>
-              انصراف
-            </button>
-          </div>
-        </div>
+      {!selectMode ? (
+        <MessageComposer
+          ref={composerRef}
+          draft={draft}
+          sending={sending}
+          replyTarget={replyTarget}
+          editTarget={editTarget}
+          onDraftChange={onDraftChange}
+          onClearReply={onClearReply}
+          onClearEdit={onClearEdit}
+          onSendText={onSendText}
+          onSendVoice={onSendVoice}
+        />
       ) : null}
-
-      <MessageComposer
-        ref={composerRef}
-        draft={draft}
-        sending={sending}
-        replyTarget={replyTarget}
-        editTarget={editTarget}
-        onDraftChange={onDraftChange}
-        onClearReply={onClearReply}
-        onClearEdit={onClearEdit}
-        onSendText={onSendText}
-        onSendVoice={onSendVoice}
-      />
 
       {menuState ? (
         <MessageContextMenu

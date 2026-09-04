@@ -5,7 +5,7 @@ import { TicketSidebar } from './components/TicketSidebar';
 import { UserSubscriptionsModal } from './components/UserSubscriptionsModal';
 import type { MessageContextMenuState, MessageMenuAction } from './components/MessageContextMenu';
 import { usePinnedRefresh } from './hooks/useMessageMenuOpener';
-import { togglePin } from './lib/messagePins';
+import { togglePin, unpinMessage } from './lib/messagePins';
 import type { MessageComposerHandle } from './components/MessageComposer';
 import { getSupportConfig, type ReplyTarget, type SupportMessage, type Ticket } from './types';
 
@@ -250,6 +250,14 @@ export function AdminApp() {
       .catch(() => alert('کپی ناموفق بود'));
   }, [messages, selectedIds, handleExitSelect]);
 
+  const handleUnpin = useCallback(
+    (messageId: string) => {
+      unpinMessage(pinScope, messageId);
+      bumpPins();
+    },
+    [pinScope, bumpPins],
+  );
+
   const handleMenuAction = useCallback(
     async (action: MessageMenuAction, message: SupportMessage) => {
       setMenuState(null);
@@ -378,6 +386,7 @@ export function AdminApp() {
           onToggleSelect={handleToggleSelect}
           onExitSelect={handleExitSelect}
           onCopySelected={handleCopySelected}
+          onUnpin={handleUnpin}
         />
       ) : null}
       {showSubscriptions && activeUser ? (

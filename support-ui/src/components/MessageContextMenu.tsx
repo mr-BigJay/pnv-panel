@@ -63,35 +63,35 @@ export function MessageContextMenu({ state, onAction, onClose }: MessageContextM
   const items: MenuItem[] = [
     {
       key: 'reply' as const,
-      label: 'Reply',
+      label: 'پاسخ',
       icon: <FiCornerUpLeft className="h-[18px] w-[18px]" />,
       hidden: message.is_own,
     },
     {
       key: 'edit' as const,
-      label: 'Edit',
+      label: 'ویرایش',
       icon: <FiEdit2 className="h-[18px] w-[18px]" />,
     },
     {
       key: 'pin' as const,
-      label: pinned ? 'Unpin' : 'Pin',
+      label: pinned ? 'برداشتن سنجاق' : 'سنجاق',
       icon: <FiMapPin className="h-[18px] w-[18px]" />,
     },
     {
       key: 'copy' as const,
-      label: 'Copy Text',
+      label: 'کپی متن',
       icon: <FiCopy className="h-[18px] w-[18px]" />,
       hidden: !hasText,
     },
     {
       key: 'delete' as const,
-      label: 'Delete',
+      label: 'حذف',
       icon: <FiTrash2 className="h-[18px] w-[18px]" />,
       danger: true,
     },
     {
       key: 'select' as const,
-      label: 'Select',
+      label: 'انتخاب',
       icon: <FiCheckCircle className="h-[18px] w-[18px]" />,
     },
   ].filter((item) => !item.hidden);
@@ -118,6 +118,7 @@ export function MessageContextMenu({ state, onAction, onClose }: MessageContextM
         ref={menuRef}
         className="support-context-menu"
         role="menu"
+        dir="rtl"
         onClick={(e) => e.stopPropagation()}
       >
         {items.map((item) => (
