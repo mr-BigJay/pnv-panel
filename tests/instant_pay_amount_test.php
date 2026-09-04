@@ -97,6 +97,23 @@ $oldExpired = $expiredItem;
 $oldExpired['expires_at'] = $now - instantPayMatchGraceSeconds() - 60;
 assertTrue(!instantPayItemMatchable($oldExpired, $now), 'expired order outside grace is not matchable');
 
+$cancelledFresh = [
+    'id' => 'test-cancelled',
+    'status' => 'cancelled',
+    'amount' => 1498650,
+    'currency' => 'rial',
+    'code' => 8650,
+    'expires_at' => $now + 600,
+    'cancelled_at' => $now - 60,
+    'csv_index' => -1,
+    'csv_purged' => true,
+    'user' => 'demo',
+];
+assertTrue(instantPayItemMatchable($cancelledFresh, $now), 'cancelled order within cancel grace is matchable');
+$oldCancelled = $cancelledFresh;
+$oldCancelled['cancelled_at'] = $now - instantPayCancelGraceSeconds() - 60;
+assertTrue(!instantPayItemMatchable($oldCancelled, $now), 'cancelled order outside cancel grace is not matchable');
+
 // CSV fallback matcher
 $csvRow = array_fill(0, 14, '');
 $csvRow[0] = 'demo';
