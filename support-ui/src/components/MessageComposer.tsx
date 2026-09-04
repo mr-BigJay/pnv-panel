@@ -1,10 +1,11 @@
-import { ChangeEvent, FormEvent, KeyboardEvent, forwardRef, useImperativeHandle, useRef } from 'react';
+import { ChangeEvent, FormEvent, KeyboardEvent, forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { FaPaperclip } from 'react-icons/fa';
 import { FaMicrophone } from 'react-icons/fa6';
 import { IoSend } from 'react-icons/io5';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { toPersianDigits } from '../lib/persianDigits';
 import { ComposerChip } from './ComposerChip';
+import { ImageAttachSheet } from './ImageAttachSheet';
 import type { ReplyTarget } from '../types';
 
 export interface MessageComposerHandle {
@@ -48,6 +49,7 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
   ) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [attachFile, setAttachFile] = useState<File | null>(null);
     const { recording, seconds, start, stop, cancel } = useVoiceRecorder();
     const hasText = draft.trim().length > 0;
     const isEditing = Boolean(editTarget);
@@ -94,7 +96,7 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
       }
     }
 
-    async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
       const file = e.target.files?.[0];
       e.target.value = '';
       if (!file || sending || isEditing) return;
@@ -107,14 +109,27 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
         return;
       }
 
-      const caption = draft.trim();
-      if (caption) onDraftChange('');
+      setAttachFile(file);
+    }
+
+    async function handleAttachSend(file: File, caption: string) {
+      if (caption && caption === draft.trim()) onDraftChange('');
       growTextarea(textareaRef.current);
       await onSendImage(file, caption);
+      setAttachFile(null);
     }
 
     return (
       <div className="tg-composer-wrap shrink-0 border-t border-[#0e1621] bg-[#17212b]">
+        {attachFile ? (
+          <ImageAttachSheet
+            file={attachFile}
+            initialCaption={draft.trim()}
+            sending={sending}
+            onCancel={() => setAttachFile(null)}
+            onSend={handleAttachSend}
+          />
+        ) : null}
         {replyTarget ? (
           <ComposerChip
             title="در پاسخ به"
@@ -126,6 +141,7 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
           <ComposerChip title="ویرایش پیام" preview={editTarget.text || 'پیام'} onClear={onClearEdit} />
         ) : null}
 
+        {!attachFile ? (
         <form onSubmit={submit} className="tg-composer-bar px-2 py-2.5 md:px-3">
           {recording ? (
             <div className="flex w-full items-center gap-3 rounded-full bg-[#242f3d] px-4 py-3">
@@ -207,6 +223,7 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
             </div>
           )}
         </form>
+        ) : null}
       </div>
     );
   },

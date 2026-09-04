@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createSupportApi, type UserSupportApi } from './api/client';
-import { ChatPanel } from './components/ChatPanel';
+import { ChatPanel, type ChatPanelHandle } from './components/ChatPanel';
 import type { MessageContextMenuState, MessageMenuAction } from './components/MessageContextMenu';
 import { usePinnedRefresh } from './hooks/useMessageMenuOpener';
 import { togglePin, unpinMessage } from './lib/messagePins';
@@ -26,6 +26,7 @@ export function UserApp() {
 
   const sinceRef = useRef(0);
   const composerRef = useRef<MessageComposerHandle | null>(null);
+  const chatPanelRef = useRef<ChatPanelHandle | null>(null);
   const pollMs = config.pollIntervalMs;
   const pinScope = config.pinScope || 'user';
   const { pinTick, bumpPins } = usePinnedRefresh(pinScope);
@@ -95,20 +96,28 @@ export function UserApp() {
     return () => window.clearInterval(timer);
   }, [loadMessages, pollMs]);
 
-  const mergeMessage = useCallback((message: SupportMessage) => {
-    setMessages((prev) => {
-      const idx = prev.findIndex((m) => m.id === message.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = message;
-        return next;
-      }
-      return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
-    });
-    if (message.timestamp > sinceRef.current) {
-      sinceRef.current = message.timestamp;
-    }
+  const scrollChatToEnd = useCallback(() => {
+    chatPanelRef.current?.scrollToEnd();
   }, []);
+
+  const mergeMessage = useCallback(
+    (message: SupportMessage) => {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === message.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = message;
+          return next;
+        }
+        return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
+      });
+      if (message.timestamp > sinceRef.current) {
+        sinceRef.current = message.timestamp;
+      }
+      scrollChatToEnd();
+    },
+    [scrollChatToEnd],
+  );
 
   async function handleSendText(text: string) {
     const trimmed = text.trim();
@@ -285,6 +294,7 @@ export function UserApp() {
   return (
     <div className="support-v2-shell flex h-full overflow-hidden bg-[#0e1621] text-[#e4ecf4]" dir="rtl">
       <ChatPanel
+        ref={chatPanelRef}
         user={chatTitle}
         mobile={chatSubtitle}
         messages={messages}

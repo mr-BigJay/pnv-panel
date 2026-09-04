@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createAdminSupportApi } from './api/client';
-import { ChatPanel } from './components/ChatPanel';
+import { ChatPanel, type ChatPanelHandle } from './components/ChatPanel';
 import { TicketSidebar } from './components/TicketSidebar';
 import { UserSubscriptionsModal } from './components/UserSubscriptionsModal';
 import type { MessageContextMenuState, MessageMenuAction } from './components/MessageContextMenu';
@@ -35,6 +35,7 @@ export function AdminApp() {
 
   const sinceRef = useRef(0);
   const composerRef = useRef<MessageComposerHandle | null>(null);
+  const chatPanelRef = useRef<ChatPanelHandle | null>(null);
   const pollMs = config.pollIntervalMs;
   const pinScope = activeUser || 'default';
   const { pinTick, bumpPins } = usePinnedRefresh(pinScope);
@@ -150,20 +151,28 @@ export function AdminApp() {
     if (ticket?.mobile) setActiveMobile(ticket.mobile);
   }, [tickets, activeUser]);
 
-  const mergeMessage = useCallback((message: SupportMessage) => {
-    setMessages((prev) => {
-      const idx = prev.findIndex((m) => m.id === message.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = message;
-        return next;
-      }
-      return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
-    });
-    if (message.timestamp > sinceRef.current) {
-      sinceRef.current = message.timestamp;
-    }
+  const scrollChatToEnd = useCallback(() => {
+    chatPanelRef.current?.scrollToEnd();
   }, []);
+
+  const mergeMessage = useCallback(
+    (message: SupportMessage) => {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === message.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = message;
+          return next;
+        }
+        return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
+      });
+      if (message.timestamp > sinceRef.current) {
+        sinceRef.current = message.timestamp;
+      }
+      scrollChatToEnd();
+    },
+    [scrollChatToEnd],
+  );
 
   async function handleSendText(text: string) {
     if (!activeUser) return;
@@ -371,6 +380,7 @@ export function AdminApp() {
       />
       {showChat ? (
         <ChatPanel
+          ref={chatPanelRef}
           user={activeUser}
           mobile={activeMobile}
           messages={messages}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { BsCheck, BsCheckAll } from 'react-icons/bs';
 import { FiCheck } from 'react-icons/fi';
 import { IoArrowBack } from 'react-icons/io5';
@@ -54,6 +54,10 @@ interface ChatPanelProps {
   showVoice?: boolean;
 }
 
+export interface ChatPanelHandle {
+  scrollToEnd: () => void;
+}
+
 function messageStatus(msg: SupportMessage) {
   if (!msg.is_own) return null;
   if (msg.seen_by_user) {
@@ -101,7 +105,8 @@ function clusterPos(messages: SupportMessage[], index: number): 'single' | 'top'
   return 'single';
 }
 
-export function ChatPanel({
+export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel(
+  {
   user,
   mobile,
   messages,
@@ -137,7 +142,10 @@ export function ChatPanel({
   viewerRole = 'admin',
   showSubscriptions = true,
   showVoice = true,
-}: ChatPanelProps) {
+},
+  ref,
+) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -145,14 +153,38 @@ export function ChatPanel({
 
   const { getBubbleHandlers } = useMessageMenuOpener(onMenuOpen);
 
+  const scrollToEnd = useCallback(() => {
+    const scroll = () => {
+      const el = scrollRef.current;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+      } else {
+        endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      }
+    };
+    requestAnimationFrame(() => {
+      scroll();
+      requestAnimationFrame(scroll);
+    });
+    window.setTimeout(scroll, 120);
+    window.setTimeout(scroll, 350);
+  }, []);
+
+  useImperativeHandle(ref, () => ({ scrollToEnd }), [scrollToEnd]);
+
   const scrollToMessage = useCallback((id: string) => {
     messageRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
   useEffect(() => {
     if (selectMode) return;
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, user, selectMode]);
+    scrollToEnd();
+  }, [messages, user, selectMode, scrollToEnd]);
+
+  useEffect(() => {
+    if (selectMode || sending) return;
+    scrollToEnd();
+  }, [sending, selectMode, scrollToEnd]);
 
   if (!user) {
     return (
@@ -249,7 +281,10 @@ export function ChatPanel({
         />
       ) : null}
 
-      <div className="tg-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-4 tg-scroll">
+      <div
+        ref={scrollRef}
+        className="tg-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-4 tg-scroll"
+      >
         {loading && messages.length === 0 ? (
           <div className="py-8 text-center text-sm text-[#6d8399]">در حال بارگذاری پیام‌ها...</div>
         ) : null}
@@ -414,4 +449,4 @@ export function ChatPanel({
       ) : null}
     </section>
   );
-}
+});
