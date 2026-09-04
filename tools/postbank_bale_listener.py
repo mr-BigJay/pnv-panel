@@ -31,7 +31,7 @@ except ImportError as exc:
         + "  bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/telegram-user-bot-058b/scripts/setup-postbank-listener.sh)\n"
         + "Or manually:\n"
         + "  cd /var/www/html && python3 -m venv tools/postbank-venv\n"
-        + "  tools/postbank-venv/bin/pip install -r tools/requirements-postbank.txt",
+        + "  tools/postbank-venv/bin/pip install aiobale-py aiohttp colorama",
         file=sys.stderr,
     )
     raise SystemExit(1) from exc

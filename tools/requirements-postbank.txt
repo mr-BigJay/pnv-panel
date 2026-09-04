@@ -1,3 +1,5 @@
-aiobale>=0.1.5
+# PyPI package name is aiobale-py (import: from aiobale import Client)
+# Do NOT use bare "aiobale" — that name is a placeholder package (0.0.1 only).
+aiobale-py>=0.3.0
 aiohttp>=3.9.0
 colorama>=0.4.6
