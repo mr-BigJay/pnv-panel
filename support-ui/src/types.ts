@@ -30,10 +30,16 @@ export interface SupportMessage {
   time: string;
   timestamp: number;
   edited: boolean;
-  reply_to: Record<string, unknown> | null;
+  reply_to: { id?: string; sender?: string; text?: string } | null;
   seen_by_admin: boolean;
   seen_by_user: boolean;
   is_own: boolean;
+}
+
+export interface ReplyTarget {
+  id: string;
+  text: string;
+  sender: string;
 }
 
 export interface TicketsResponse {

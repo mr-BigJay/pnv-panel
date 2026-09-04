@@ -15,6 +15,7 @@ files=(
   "admin/support-v2.php"
   "admin/support-v2-diag.php"
   "admin/index.php"
+  "admin/user-profile.php"
   "assets/support/admin/support-admin.js"
   "assets/support/admin/support-admin.css"
   "bigjay_controller/support-v2-diag.php"

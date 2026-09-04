@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { BsCheck, BsCheckAll } from 'react-icons/bs';
 import { IoArrowBack } from 'react-icons/io5';
-import type { SupportMessage } from '../types';
+import { useMessageMenuOpener } from '../hooks/useMessageMenuOpener';
+import { isPinned } from '../lib/messagePins';
+import type { ReplyTarget, SupportMessage } from '../types';
 import { getAvatarColor, getInitials } from '../lib/avatarUtils';
 import { formatPersianDate, formatPersianTime, toPersianDigits } from '../lib/persianDigits';
-import { MessageComposer } from './MessageComposer';
+import {
+  MessageContextMenu,
+  type MessageContextMenuState,
+  type MessageMenuAction,
+} from './MessageContextMenu';
+import { MessageComposer, type MessageComposerHandle } from './MessageComposer';
 
 interface ChatPanelProps {
   user: string;
@@ -16,11 +23,27 @@ interface ChatPanelProps {
   error: string;
   draft: string;
   mobileVisible: boolean;
+  pinScope: string;
+  pinTick: number;
+  replyTarget: ReplyTarget | null;
+  editTarget: ReplyTarget | null;
+  menuState: MessageContextMenuState | null;
+  selectMode: boolean;
+  selectedIds: Set<string>;
+  composerRef: React.RefObject<MessageComposerHandle | null>;
   onDraftChange: (value: string) => void;
+  onClearReply: () => void;
+  onClearEdit: () => void;
   onBack: () => void;
   onOpenSubscriptions: () => void;
   onSendText: (text: string) => Promise<void>;
   onSendVoice: (blob: Blob) => Promise<void>;
+  onMenuOpen: (state: MessageContextMenuState) => void;
+  onMenuClose: () => void;
+  onMenuAction: (action: MessageMenuAction, message: SupportMessage) => void;
+  onToggleSelect: (id: string) => void;
+  onExitSelect: () => void;
+  onCopySelected: () => void;
 }
 
 function messageStatus(msg: SupportMessage) {
@@ -80,14 +103,33 @@ export function ChatPanel({
   error,
   draft,
   mobileVisible,
+  pinScope,
+  pinTick,
+  replyTarget,
+  editTarget,
+  menuState,
+  selectMode,
+  selectedIds,
+  composerRef,
   onDraftChange,
+  onClearReply,
+  onClearEdit,
   onBack,
   onOpenSubscriptions,
   onSendText,
   onSendVoice,
+  onMenuOpen,
+  onMenuClose,
+  onMenuAction,
+  onToggleSelect,
+  onExitSelect,
+  onCopySelected,
 }: ChatPanelProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const grouped = useMemo(() => messages, [messages]);
+  void pinTick;
+
+  const { getBubbleHandlers } = useMessageMenuOpener(onMenuOpen);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -112,7 +154,7 @@ export function ChatPanel({
     <section
       className={`flex min-w-0 flex-1 flex-col bg-[#0e1621] text-[#e4ecf4] ${
         mobileVisible ? 'hidden md:flex' : 'flex'
-      }`}
+      } ${selectMode ? 'is-select-mode' : ''}`}
     >
       <header className="flex h-[56px] shrink-0 items-center justify-between gap-2 border-b border-[#0e1621] bg-[#17212b] px-2 md:px-3">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -162,6 +204,16 @@ export function ChatPanel({
           {grouped.map((msg, index) => {
             const separator = dayLabel(msg, grouped[index - 1]);
             const pos = clusterPos(grouped, index);
+            const pinned = isPinned(pinScope, msg.id);
+            const bubbleHandlers = selectMode
+              ? {
+                  onClick: (e: React.MouseEvent<HTMLElement>) => {
+                    e.preventDefault();
+                    onToggleSelect(msg.id);
+                  },
+                }
+              : getBubbleHandlers(msg, pinned);
+
             return (
               <div key={msg.id}>
                 {separator ? (
@@ -173,16 +225,27 @@ export function ChatPanel({
                 ) : null}
                 <div className={`flex ${msg.is_own ? 'justify-start' : 'justify-end'}`}>
                   <div
-                    className={`max-w-[min(82%,24rem)] ${msg.image && !msg.text && !msg.audio ? 'p-1' : 'px-3 py-2'} ${clusterRadius(msg.is_own, pos)} ${
+                    {...bubbleHandlers}
+                    className={`msg-bubble max-w-[min(82%,24rem)] cursor-pointer ${msg.image && !msg.text && !msg.audio ? 'p-1' : 'px-3 py-2'} ${clusterRadius(msg.is_own, pos)} ${
                       msg.is_own ? 'tg-bubble-admin' : 'tg-bubble-user'
+                    } ${pinned ? 'is-pinned' : ''} ${selectMode ? 'is-selectable' : ''} ${
+                      selectedIds.has(msg.id) ? 'is-selected' : ''
                     }`}
                   >
+                    {pinned ? <span className="msg-pin-badge" aria-hidden="true">📌</span> : null}
+                    {msg.reply_to?.text ? (
+                      <div className="msg-quote">
+                        <strong>{msg.reply_to.sender === 'admin' ? 'پشتیبانی' : 'کاربر'}</strong>
+                        <span>{msg.reply_to.text}</span>
+                      </div>
+                    ) : null}
                     {msg.image ? (
                       <a
                         href={msg.image}
                         target="_blank"
                         rel="noreferrer"
                         className="tg-msg-image-link block overflow-hidden rounded-[10px]"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <img
                           src={msg.image}
@@ -193,7 +256,13 @@ export function ChatPanel({
                       </a>
                     ) : null}
                     {msg.audio ? (
-                      <audio controls preload="metadata" src={msg.audio} className="mb-2 w-full min-w-[200px]" />
+                      <audio
+                        controls
+                        preload="metadata"
+                        src={msg.audio}
+                        className="mb-2 w-full min-w-[200px]"
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     ) : null}
                     {msg.text ? (
                       <div className={`whitespace-pre-wrap break-words text-[14px] leading-relaxed ${msg.image ? 'mt-2' : ''}`}>
@@ -218,13 +287,40 @@ export function ChatPanel({
         <div ref={endRef} />
       </div>
 
+      {selectMode ? (
+        <div className="support-select-bar">
+          <span className="fa-num support-select-count">{toPersianDigits(selectedIds.size)} انتخاب</span>
+          <div className="support-select-actions">
+            <button type="button" className="support-select-btn" onClick={onCopySelected}>
+              کپی
+            </button>
+            <button type="button" className="support-select-btn ghost" onClick={onExitSelect}>
+              انصراف
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <MessageComposer
+        ref={composerRef}
         draft={draft}
         sending={sending}
+        replyTarget={replyTarget}
+        editTarget={editTarget}
         onDraftChange={onDraftChange}
+        onClearReply={onClearReply}
+        onClearEdit={onClearEdit}
         onSendText={onSendText}
         onSendVoice={onSendVoice}
       />
+
+      {menuState ? (
+        <MessageContextMenu
+          state={menuState}
+          onClose={onMenuClose}
+          onAction={(action) => onMenuAction(action, menuState.message)}
+        />
+      ) : null}
     </section>
   );
 }

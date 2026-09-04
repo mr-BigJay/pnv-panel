@@ -76,12 +76,57 @@ export function createSupportApi(config: SupportConfig) {
       return parseJson(res);
     },
 
-    async send(user: string, message: string, csrf: string): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
+    async send(
+      user: string,
+      message: string,
+      csrf: string,
+      replyTo = '',
+    ): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
       const res = await fetch(base, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', user, message, csrf }),
+        body: JSON.stringify({ action: 'send', user, message, csrf, reply_to: replyTo }),
+      });
+      return parseJson(res);
+    },
+
+    async edit(
+      user: string,
+      editId: string,
+      text: string,
+      csrf: string,
+    ): Promise<{ ok: boolean; message?: SupportMessage; edited?: boolean; error?: string }> {
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'edit',
+          user,
+          edit_id: editId,
+          edit_text: text,
+          csrf,
+        }),
+      });
+      return parseJson(res);
+    },
+
+    async deleteMessage(
+      user: string,
+      messageId: string,
+      csrf: string,
+    ): Promise<{ ok: boolean; deleted?: boolean; message_id?: string; error?: string }> {
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          user,
+          delete_id: messageId,
+          csrf,
+        }),
       });
       return parseJson(res);
     },

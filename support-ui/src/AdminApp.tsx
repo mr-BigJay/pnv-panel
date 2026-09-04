@@ -3,7 +3,11 @@ import { createSupportApi } from './api/client';
 import { ChatPanel } from './components/ChatPanel';
 import { TicketSidebar } from './components/TicketSidebar';
 import { UserSubscriptionsModal } from './components/UserSubscriptionsModal';
-import { getSupportConfig, type SupportMessage, type Ticket } from './types';
+import type { MessageContextMenuState, MessageMenuAction } from './components/MessageContextMenu';
+import { usePinnedRefresh } from './hooks/useMessageMenuOpener';
+import { togglePin } from './lib/messagePins';
+import type { MessageComposerHandle } from './components/MessageComposer';
+import { getSupportConfig, type ReplyTarget, type SupportMessage, type Ticket } from './types';
 
 export function AdminApp() {
   const config = useMemo(() => getSupportConfig(), []);
@@ -23,9 +27,17 @@ export function AdminApp() {
   const [draft, setDraft] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [showSubscriptions, setShowSubscriptions] = useState(false);
+  const [menuState, setMenuState] = useState<MessageContextMenuState | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const [editTarget, setEditTarget] = useState<ReplyTarget | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const sinceRef = useRef(0);
+  const composerRef = useRef<MessageComposerHandle | null>(null);
   const pollMs = config.pollIntervalMs;
+  const pinScope = activeUser || 'default';
+  const { pinTick, bumpPins } = usePinnedRefresh(pinScope);
 
   const showSidebar = isMobile ? !activeUser : true;
   const showChat = isMobile ? !!activeUser : true;
@@ -36,6 +48,15 @@ export function AdminApp() {
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+
+  useEffect(() => {
+    setReplyTarget(null);
+    setEditTarget(null);
+    setDraft('');
+    setMenuState(null);
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, [activeUser]);
 
   const loadTickets = useCallback(async () => {
     setSidebarError('');
@@ -129,20 +150,44 @@ export function AdminApp() {
     if (ticket?.mobile) setActiveMobile(ticket.mobile);
   }, [tickets, activeUser]);
 
-  async function handleSend(text: string) {
+  const mergeMessage = useCallback((message: SupportMessage) => {
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === message.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = message;
+        return next;
+      }
+      return [...prev, message].sort((a, b) => a.timestamp - b.timestamp);
+    });
+    if (message.timestamp > sinceRef.current) {
+      sinceRef.current = message.timestamp;
+    }
+  }, []);
+
+  async function handleSendText(text: string) {
     if (!activeUser) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
     setSending(true);
     setChatError('');
+
     try {
-      const res = await api.send(activeUser, text, csrf);
-      if (res.message) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === res.message!.id)) return prev;
-          return [...prev, res.message!].sort((a, b) => a.timestamp - b.timestamp);
-        });
-        if (res.message.timestamp > sinceRef.current) {
-          sinceRef.current = res.message.timestamp;
+      if (editTarget) {
+        const res = await api.edit(activeUser, editTarget.id, trimmed, csrf);
+        if (res.message) {
+          mergeMessage(res.message);
         }
+        setEditTarget(null);
+        setDraft('');
+      } else {
+        const res = await api.send(activeUser, trimmed, csrf, replyTarget?.id ?? '');
+        if (res.message) {
+          mergeMessage(res.message);
+        }
+        setReplyTarget(null);
+        setDraft('');
       }
       await loadTickets();
     } catch (err) {
@@ -159,13 +204,7 @@ export function AdminApp() {
     try {
       const res = await api.sendVoice(activeUser, blob, csrf);
       if (res.message) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === res.message!.id)) return prev;
-          return [...prev, res.message!].sort((a, b) => a.timestamp - b.timestamp);
-        });
-        if (res.message.timestamp > sinceRef.current) {
-          sinceRef.current = res.message.timestamp;
-        }
+        mergeMessage(res.message);
       }
       await loadTickets();
     } catch (err) {
@@ -174,6 +213,119 @@ export function AdminApp() {
       setSending(false);
     }
   }
+
+  const handleMenuOpen = useCallback((state: MessageContextMenuState) => {
+    setMenuState(state);
+  }, []);
+
+  const handleMenuClose = useCallback(() => {
+    setMenuState(null);
+  }, []);
+
+  const handleExitSelect = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleCopySelected = useCallback(() => {
+    const texts = messages
+      .filter((m) => selectedIds.has(m.id) && m.text?.trim())
+      .map((m) => m.text.trim());
+    if (!texts.length) {
+      alert('پیامی انتخاب نشده');
+      return;
+    }
+    navigator.clipboard
+      .writeText(texts.join('\n'))
+      .then(() => handleExitSelect())
+      .catch(() => alert('کپی ناموفق بود'));
+  }, [messages, selectedIds, handleExitSelect]);
+
+  const handleMenuAction = useCallback(
+    async (action: MessageMenuAction, message: SupportMessage) => {
+      setMenuState(null);
+
+      if (action === 'reply') {
+        setEditTarget(null);
+        setReplyTarget({
+          id: message.id,
+          text: message.text || 'پیام',
+          sender: message.sender,
+        });
+        window.setTimeout(() => composerRef.current?.focus(), 0);
+        return;
+      }
+
+      if (action === 'edit') {
+        setReplyTarget(null);
+        setEditTarget({
+          id: message.id,
+          text: message.text || 'پیام',
+          sender: message.sender,
+        });
+        setDraft(message.text || '');
+        window.setTimeout(() => composerRef.current?.focus(), 0);
+        return;
+      }
+
+      if (action === 'pin') {
+        togglePin(pinScope, message.id);
+        bumpPins();
+        return;
+      }
+
+      if (action === 'copy') {
+        const copyText = message.text?.trim() || '';
+        if (!copyText) return;
+        try {
+          await navigator.clipboard.writeText(copyText);
+          try {
+            navigator.vibrate?.(8);
+          } catch {
+            /* ignore */
+          }
+        } catch {
+          alert('کپی ناموفق بود');
+        }
+        return;
+      }
+
+      if (action === 'select') {
+        setSelectMode(true);
+        setSelectedIds(new Set([message.id]));
+        return;
+      }
+
+      if (action === 'delete') {
+        if (!window.confirm('پیام حذف شود؟')) return;
+        setSending(true);
+        setChatError('');
+        try {
+          const res = await api.deleteMessage(activeUser, message.id, csrf);
+          if (!res.ok) {
+            alert(res.error || 'حذف ناموفق بود');
+            return;
+          }
+          setMessages((prev) => prev.filter((m) => m.id !== message.id));
+          await loadTickets();
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'خطا در حذف پیام');
+        } finally {
+          setSending(false);
+        }
+      }
+    },
+    [activeUser, api, bumpPins, csrf, loadTickets, pinScope],
+  );
 
   return (
     <div
@@ -202,16 +354,30 @@ export function AdminApp() {
           error={chatError}
           draft={draft}
           mobileVisible={!showChat}
+          pinScope={pinScope}
+          pinTick={pinTick}
+          replyTarget={replyTarget}
+          editTarget={editTarget}
+          menuState={menuState}
+          selectMode={selectMode}
+          selectedIds={selectedIds}
+          composerRef={composerRef}
           onDraftChange={setDraft}
+          onClearReply={() => setReplyTarget(null)}
+          onClearEdit={() => {
+            setEditTarget(null);
+            setDraft('');
+          }}
           onBack={() => setActiveUser('')}
           onOpenSubscriptions={() => setShowSubscriptions(true)}
-          onSendText={async (text) => {
-            const trimmed = text.trim();
-            if (!trimmed) return;
-            setDraft('');
-            await handleSend(trimmed);
-          }}
+          onSendText={handleSendText}
           onSendVoice={handleSendVoice}
+          onMenuOpen={handleMenuOpen}
+          onMenuClose={handleMenuClose}
+          onMenuAction={handleMenuAction}
+          onToggleSelect={handleToggleSelect}
+          onExitSelect={handleExitSelect}
+          onCopySelected={handleCopySelected}
         />
       ) : null}
       {showSubscriptions && activeUser ? (
