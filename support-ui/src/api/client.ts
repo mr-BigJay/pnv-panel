@@ -85,6 +85,21 @@ export function createSupportApi(config: SupportConfig) {
       });
       return parseJson(res);
     },
+
+    async sendVoice(user: string, blob: Blob, csrf: string): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
+      const ext = blob.type.includes('ogg') ? 'ogg' : 'webm';
+      const fd = new FormData();
+      fd.append('action', 'send_voice');
+      fd.append('user', user);
+      fd.append('csrf', csrf);
+      fd.append('voice', blob, `voice.${ext}`);
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: fd,
+      });
+      return parseJson(res);
+    },
   };
 }
 

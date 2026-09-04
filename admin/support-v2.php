@@ -64,6 +64,9 @@ if(!$supportEmbedded){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>پیام‌های کاربران (v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
 <?php if($cssFile !== ''){ ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
@@ -73,6 +76,9 @@ if(!$supportEmbedded){
 <?php if($cssFile !== ''){ ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
 <?php } ?>
 
 <div id="support-v2-root" style="height:<?php echo htmlspecialchars($rootHeight, ENT_QUOTES, 'UTF-8'); ?>;"></div>

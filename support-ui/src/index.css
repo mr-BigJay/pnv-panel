@@ -10,9 +10,14 @@ body,
 }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, 'Vazirmatn', sans-serif;
+  font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
   background: #202021;
   color: #fff;
+}
+
+.fa-num {
+  font-family: 'Vazirmatn', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 
 .support-v2-shell {

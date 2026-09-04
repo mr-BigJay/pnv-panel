@@ -23,6 +23,7 @@ export interface SupportMessage {
   sender: string;
   text: string;
   image: string;
+  audio?: string;
   date: string;
   time: string;
   timestamp: number;

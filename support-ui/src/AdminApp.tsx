@@ -19,6 +19,7 @@ export function AdminApp() {
   const [sending, setSending] = useState(false);
   const [sidebarError, setSidebarError] = useState('');
   const [chatError, setChatError] = useState('');
+  const [draft, setDraft] = useState('');
   const [isMobile, setIsMobile] = useState(false);
 
   const sinceRef = useRef(0);
@@ -149,6 +150,29 @@ export function AdminApp() {
     }
   }
 
+  async function handleSendVoice(blob: Blob) {
+    if (!activeUser) return;
+    setSending(true);
+    setChatError('');
+    try {
+      const res = await api.sendVoice(activeUser, blob, csrf);
+      if (res.message) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === res.message!.id)) return prev;
+          return [...prev, res.message!].sort((a, b) => a.timestamp - b.timestamp);
+        });
+        if (res.message.timestamp > sinceRef.current) {
+          sinceRef.current = res.message.timestamp;
+        }
+      }
+      await loadTickets();
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : 'ارسال ویس ناموفق');
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div
       className={`support-v2-shell flex h-full overflow-hidden bg-[#202021] text-white ${
@@ -174,9 +198,17 @@ export function AdminApp() {
           loading={messagesLoading}
           sending={sending}
           error={chatError}
+          draft={draft}
           mobileVisible={!showChat}
+          onDraftChange={setDraft}
           onBack={() => setActiveUser('')}
-          onSend={handleSend}
+          onSendText={async () => {
+            const text = draft.trim();
+            if (!text) return;
+            setDraft('');
+            await handleSend(text);
+          }}
+          onSendVoice={handleSendVoice}
         />
       ) : null}
     </div>

@@ -353,11 +353,18 @@ if(!function_exists('supportLoad')){
             $image = '/' . ltrim($image, '/');
         }
 
+        $audio = $message['audio'] ?? '';
+
+        if($audio !== ''){
+            $audio = '/' . ltrim($audio, '/');
+        }
+
         return [
             'id' => $message['id'] ?? '',
             'sender' => $message['sender'] ?? '',
             'text' => $message['text'] ?? '',
             'image' => $image,
+            'audio' => $audio,
             'date' => $display['date'],
             'time' => $display['time'],
             'timestamp' => intval($message['timestamp'] ?? 0),
@@ -392,6 +399,10 @@ if(!function_exists('supportLoad')){
 
         if($text === '' && !empty($last['image'])){
             return '📷 تصویر';
+        }
+
+        if($text === '' && !empty($last['audio'])){
+            return '🎤 پیام صوتی';
         }
 
         if($text === ''){
@@ -709,6 +720,102 @@ if(!function_exists('supportLoad')){
 
         if(!move_uploaded_file($tmp, $savePath)){
             return ['ok' => false, 'path' => '', 'error' => 'ذخیره تصویر روی سرور ناموفق بود'];
+        }
+
+        return [
+            'ok' => true,
+            'path' => rtrim($urlPrefix, '/') . '/' . $filename,
+            'error' => ''
+        ];
+
+    }
+
+    function supportHandleVoiceUpload($fileInput, $uploadDir, $urlPrefix){
+
+        if(!is_array($fileInput) || !isset($fileInput['error'])){
+            return ['ok' => false, 'path' => '', 'error' => ''];
+        }
+
+        if(intval($fileInput['error']) === UPLOAD_ERR_NO_FILE || intval($fileInput['size'] ?? 0) <= 0){
+            return ['ok' => false, 'path' => '', 'error' => ''];
+        }
+
+        if(intval($fileInput['error']) !== UPLOAD_ERR_OK){
+            return ['ok' => false, 'path' => '', 'error' => 'آپلود ویس ناموفق بود (خطای سرور)'];
+        }
+
+        $maxBytes = 10 * 1024 * 1024;
+        $phpMax = supportParseIniBytes(ini_get('upload_max_filesize'));
+
+        if($phpMax > 0 && $phpMax < $maxBytes){
+            $maxBytes = $phpMax;
+        }
+
+        if(intval($fileInput['size']) > $maxBytes){
+            return ['ok' => false, 'path' => '', 'error' => 'حجم ویس نباید بیشتر از ' . round($maxBytes / 1024 / 1024, 1) . 'MB باشد'];
+        }
+
+        $ext = strtolower(pathinfo((string)($fileInput['name'] ?? ''), PATHINFO_EXTENSION));
+        $allowedExt = ['webm', 'ogg', 'mp3', 'm4a', 'wav', 'mp4'];
+        $allowedMime = [
+            'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp3', 'audio/mp4',
+            'audio/x-m4a', 'audio/wav', 'audio/x-wav', 'video/webm'
+        ];
+
+        $tmp = (string)($fileInput['tmp_name'] ?? '');
+        $finfo = ($tmp !== '' && function_exists('finfo_open')) ? finfo_open(FILEINFO_MIME_TYPE) : false;
+        $mime = ($finfo && $tmp !== '') ? (string)finfo_file($finfo, $tmp) : (string)($fileInput['type'] ?? '');
+
+        if($finfo){
+            finfo_close($finfo);
+        }
+
+        $mimeOk = false;
+
+        foreach($allowedMime as $allowed){
+            if($mime === $allowed || strpos($mime, rtrim($allowed, '*')) === 0){
+                $mimeOk = true;
+                break;
+            }
+        }
+
+        if(!$mimeOk && !in_array($ext, $allowedExt, true)){
+            return ['ok' => false, 'path' => '', 'error' => 'فرمت ویس پشتیبانی نمی‌شود'];
+        }
+
+        if(!in_array($ext, $allowedExt, true)){
+            if(strpos($mime, 'ogg') !== false){
+                $ext = 'ogg';
+            }
+            elseif(strpos($mime, 'mpeg') !== false || strpos($mime, 'mp3') !== false){
+                $ext = 'mp3';
+            }
+            elseif(strpos($mime, 'wav') !== false){
+                $ext = 'wav';
+            }
+            else{
+                $ext = 'webm';
+            }
+        }
+
+        if(!is_dir($uploadDir)){
+            if(!@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)){
+                return ['ok' => false, 'path' => '', 'error' => 'پوشه آپلود قابل ایجاد نیست'];
+            }
+        }
+
+        if(!is_writable($uploadDir)){
+            @chmod($uploadDir, 0755);
+            if(!is_writable($uploadDir)){
+                return ['ok' => false, 'path' => '', 'error' => 'پوشه آپلود قابل نوشتن نیست'];
+            }
+        }
+
+        $filename = 'voice_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+        $savePath = rtrim($uploadDir, '/') . '/' . $filename;
+
+        if(!move_uploaded_file($tmp, $savePath)){
+            return ['ok' => false, 'path' => '', 'error' => 'ذخیره ویس روی سرور ناموفق بود'];
         }
 
         return [
@@ -1301,12 +1408,21 @@ if(!function_exists('supportLoad')){
                     '/uploads/support'
                 );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
+                $voiceUpload = supportHandleVoiceUpload(
+                    $_FILES['voice'] ?? [],
+                    dirname($file) . '/../uploads/support',
+                    '/uploads/support'
+                );
+                $audio = !empty($voiceUpload['ok']) ? ($voiceUpload['path'] ?? '') : '';
 
                 if($image === '' && !empty($upload['error'])){
                     $error = $upload['error'];
                 }
-                elseif($text === '' && $image === ''){
-                    $error = 'متن یا تصویر وارد کنید';
+                elseif($audio === '' && !empty($voiceUpload['error'])){
+                    $error = $voiceUpload['error'];
+                }
+                elseif($text === '' && $image === '' && $audio === ''){
+                    $error = 'متن، تصویر یا ویس وارد کنید';
                 }
                 else{
                     $ticketIndex = supportEnsureTicket($data, $user);
@@ -1325,6 +1441,7 @@ if(!function_exists('supportLoad')){
                             'sender' => 'admin',
                             'text' => $text,
                             'image' => $image,
+                            'audio' => $audio,
                             'date' => $meta['date'],
                             'time' => $meta['time'],
                             'timestamp' => $meta['timestamp'],
@@ -1346,7 +1463,8 @@ if(!function_exists('supportLoad')){
                         }
 
                         if(function_exists('tgUserNotifySupportReply')){
-                            tgUserNotifySupportReply($user, $text);
+                            $notifyText = $text !== '' ? $text : ($audio !== '' ? '🎤 پیام صوتی' : 'پیام جدید');
+                            tgUserNotifySupportReply($user, $notifyText);
                         }
 
                         if(supportIsAjaxRequest()){
@@ -1754,6 +1872,13 @@ if(!function_exists('supportUserHasUnread')){
             $_POST['user'] = $input['user'] ?? '';
             $_POST['csrf'] = $input['csrf'] ?? '';
             $_POST['reply_to'] = $input['reply_to'] ?? '';
+            $_POST['reply'] = '1';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'send_voice'){
+            $_POST['message'] = trim((string)($input['message'] ?? $_POST['message'] ?? ''));
+            $_POST['user'] = $input['user'] ?? $_POST['user'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? $_POST['csrf'] ?? '';
             $_POST['reply'] = '1';
             $_POST['support_ajax'] = '1';
         }

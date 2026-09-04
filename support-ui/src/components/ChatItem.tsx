@@ -1,5 +1,6 @@
 import type { Ticket } from '../types';
 import { getAvatarColor, getInitials } from '../lib/avatarUtils';
+import { toPersianDigits } from '../lib/persianDigits';
 
 interface ChatItemProps {
   ticket: Ticket;
@@ -45,7 +46,9 @@ export function ChatItem({ ticket, active, searchQuery, onClick }: ChatItemProps
           <h3 className="truncate font-medium text-white">
             {searchQuery ? highlightText(ticket.user, searchQuery) : ticket.user}
           </h3>
-          <span className="mr-auto shrink-0 text-xs text-gray-500">{ticket.relative_time}</span>
+          <span className="fa-num mr-auto shrink-0 text-xs text-gray-500">
+            {toPersianDigits(ticket.relative_time)}
+          </span>
         </div>
         <div className="mt-0.5 flex items-center gap-2">
           <p
