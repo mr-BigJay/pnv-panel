@@ -953,6 +953,33 @@ max-width:none !important;
 margin:0 !important;
 }
 
+#support-v2-root .tg-composer-input{
+flex:1 1 0 !important;
+min-width:0 !important;
+width:auto !important;
+min-height:48px !important;
+}
+
+#support-v2-root .tg-composer-action,
+#support-v2-root .tg-composer-send{
+width:44px !important;
+min-width:44px !important;
+max-width:44px !important;
+height:44px !important;
+}
+
+#support-v2-root .tg-composer-icon{
+width:40px !important;
+min-width:40px !important;
+max-width:40px !important;
+height:40px !important;
+}
+
+#support-v2-root .support-chat-title{
+font-weight:500 !important;
+-webkit-font-smoothing:antialiased;
+}
+
 input,
 select,
 button{

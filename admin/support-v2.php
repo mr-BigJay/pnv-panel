@@ -36,18 +36,22 @@ $initialUser = supportNormalizeUsername($_GET['user'] ?? '');
 
 if(function_exists('pnvAdminUrl')){
     $apiUrl = pnvAdminUrl('support-api.php');
+    $profileApiUrl = pnvAdminUrl('user-profile.php');
 }
 elseif(defined('PNV_ADMIN_BASE')){
     $apiUrl = rtrim(PNV_ADMIN_BASE, '/') . '/support-api.php';
+    $profileApiUrl = rtrim(PNV_ADMIN_BASE, '/') . '/user-profile.php';
 }
 else{
     $apiUrl = '/bigjay_controller/support-api.php';
+    $profileApiUrl = '/bigjay_controller/user-profile.php';
 }
 
 $assetBase = '/assets/support/admin/';
 
 $config = [
     'apiUrl' => $apiUrl,
+    'profileApiUrl' => $profileApiUrl,
     'csrf' => supportCsrfToken(),
     'embedded' => (bool)$supportEmbedded,
     'initialUser' => $initialUser,

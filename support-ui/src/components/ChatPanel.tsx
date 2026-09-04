@@ -18,7 +18,8 @@ interface ChatPanelProps {
   mobileVisible: boolean;
   onDraftChange: (value: string) => void;
   onBack: () => void;
-  onSendText: () => Promise<void>;
+  onOpenSubscriptions: () => void;
+  onSendText: (text: string) => Promise<void>;
   onSendVoice: (blob: Blob) => Promise<void>;
 }
 
@@ -81,6 +82,7 @@ export function ChatPanel({
   mobileVisible,
   onDraftChange,
   onBack,
+  onOpenSubscriptions,
   onSendText,
   onSendVoice,
 }: ChatPanelProps) {
@@ -112,12 +114,12 @@ export function ChatPanel({
         mobileVisible ? 'hidden md:flex' : 'flex'
       }`}
     >
-      <header className="flex h-[54px] shrink-0 items-center justify-between border-b border-[#0e1621] bg-[#17212b] px-2 md:px-3">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <header className="flex h-[56px] shrink-0 items-center justify-between gap-2 border-b border-[#0e1621] bg-[#17212b] px-2 md:px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <button
             type="button"
             onClick={onBack}
-            className="rounded-full p-2 text-[#6ab2f2] hover:bg-[#242f3d] md:hidden"
+            className="shrink-0 rounded-full p-2 text-[#6ab2f2] hover:bg-[#242f3d] md:hidden"
             aria-label="بازگشت"
           >
             <IoArrowBack className="h-5 w-5" />
@@ -129,16 +131,19 @@ export function ChatPanel({
           >
             {getInitials(user)}
           </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-[15px] font-semibold text-white">{user}</h1>
-            <p className="fa-num truncate text-[11px] text-[#6d8399]">
+          <div className="min-w-0 flex-1">
+            <h1 className="support-chat-title truncate text-[16px] font-medium leading-snug text-white">
+              {user}
+            </h1>
+            <p className="fa-num truncate text-[12px] leading-normal text-[#8b9cb3]">
               {mobile && mobile !== '-' ? toPersianDigits(mobile) : status || 'پشتیبانی'}
             </p>
           </div>
         </div>
         <button
           type="button"
-          className="rounded-lg px-3 py-1.5 text-[11px] text-[#6ab2f2] hover:bg-[#242f3d]"
+          onClick={onOpenSubscriptions}
+          className="shrink-0 rounded-lg bg-[#242f3d] px-3 py-2 text-[12px] font-medium text-[#6ab2f2] hover:bg-[#2b5278] hover:text-white"
         >
           اشتراک‌ها
         </button>
@@ -168,16 +173,22 @@ export function ChatPanel({
                 ) : null}
                 <div className={`flex ${msg.is_own ? 'justify-start' : 'justify-end'}`}>
                   <div
-                    className={`max-w-[min(78%,20rem)] px-3 py-2 ${clusterRadius(msg.is_own, pos)} ${
+                    className={`max-w-[min(82%,24rem)] ${msg.image && !msg.text && !msg.audio ? 'p-1' : 'px-3 py-2'} ${clusterRadius(msg.is_own, pos)} ${
                       msg.is_own ? 'tg-bubble-admin' : 'tg-bubble-user'
                     }`}
                   >
                     {msg.image ? (
-                      <a href={msg.image} target="_blank" rel="noreferrer">
+                      <a
+                        href={msg.image}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="tg-msg-image-link block overflow-hidden rounded-[10px]"
+                      >
                         <img
                           src={msg.image}
                           alt=""
-                          className="mb-2 max-h-56 rounded-lg object-cover"
+                          loading="lazy"
+                          className="tg-msg-image block max-h-[360px] w-full max-w-[280px] object-contain"
                         />
                       </a>
                     ) : null}
@@ -185,7 +196,9 @@ export function ChatPanel({
                       <audio controls preload="metadata" src={msg.audio} className="mb-2 w-full min-w-[200px]" />
                     ) : null}
                     {msg.text ? (
-                      <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">{msg.text}</div>
+                      <div className={`whitespace-pre-wrap break-words text-[14px] leading-relaxed ${msg.image ? 'mt-2' : ''}`}>
+                        {msg.text}
+                      </div>
                     ) : null}
                     <div
                       className={`fa-num mt-1 flex items-center justify-end gap-1 text-[10px] ${

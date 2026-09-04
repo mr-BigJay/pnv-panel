@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createSupportApi } from './api/client';
 import { ChatPanel } from './components/ChatPanel';
 import { TicketSidebar } from './components/TicketSidebar';
+import { UserSubscriptionsModal } from './components/UserSubscriptionsModal';
 import { getSupportConfig, type SupportMessage, type Ticket } from './types';
 
 export function AdminApp() {
@@ -21,6 +22,7 @@ export function AdminApp() {
   const [chatError, setChatError] = useState('');
   const [draft, setDraft] = useState('');
   const [isMobile, setIsMobile] = useState(false);
+  const [showSubscriptions, setShowSubscriptions] = useState(false);
 
   const sinceRef = useRef(0);
   const pollMs = config.pollIntervalMs;
@@ -202,13 +204,21 @@ export function AdminApp() {
           mobileVisible={!showChat}
           onDraftChange={setDraft}
           onBack={() => setActiveUser('')}
-          onSendText={async () => {
-            const text = draft.trim();
-            if (!text) return;
+          onOpenSubscriptions={() => setShowSubscriptions(true)}
+          onSendText={async (text) => {
+            const trimmed = text.trim();
+            if (!trimmed) return;
             setDraft('');
-            await handleSend(text);
+            await handleSend(trimmed);
           }}
           onSendVoice={handleSendVoice}
+        />
+      ) : null}
+      {showSubscriptions && activeUser ? (
+        <UserSubscriptionsModal
+          user={activeUser}
+          profileApiUrl={config.profileApiUrl}
+          onClose={() => setShowSubscriptions(false)}
         />
       ) : null}
     </div>

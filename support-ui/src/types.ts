@@ -1,5 +1,6 @@
 export interface SupportConfig {
   apiUrl: string;
+  profileApiUrl: string;
   csrf: string;
   embedded: boolean;
   initialUser: string;
@@ -64,8 +65,13 @@ declare global {
 
 export function getSupportConfig(): SupportConfig {
   const cfg = window.SUPPORT_CONFIG ?? {};
+  const apiUrl = cfg.apiUrl ?? 'support-api.php';
+  const profileApiUrl =
+    cfg.profileApiUrl ??
+    apiUrl.replace(/support-api\.php$/i, 'user-profile.php');
   return {
-    apiUrl: cfg.apiUrl ?? 'support-api.php',
+    apiUrl,
+    profileApiUrl,
     csrf: cfg.csrf ?? '',
     embedded: Boolean(cfg.embedded),
     initialUser: cfg.initialUser ?? '',

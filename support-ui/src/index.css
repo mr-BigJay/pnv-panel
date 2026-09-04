@@ -106,3 +106,209 @@ body {
 .tg-btn-send:hover {
   background: #3d6fa8;
 }
+
+.support-chat-title {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.tg-composer-row {
+  width: 100%;
+}
+
+.tg-composer-input {
+  min-height: 48px;
+  max-height: 140px;
+}
+
+.tg-composer-action {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.tg-composer-icon {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+}
+
+.tg-msg-image-link {
+  line-height: 0;
+}
+
+.tg-msg-image {
+  background: #0a1018;
+}
+
+/* مودال اشتراک‌ها */
+.profile-host {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: block;
+}
+
+.profile-host-loading,
+.profile-host-error {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  background: #1e293b;
+  color: #fff;
+  padding: 16px 20px;
+  border-radius: 12px;
+}
+
+.profile-host .profileOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.profile-host .profileModal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 32px);
+  max-width: 640px;
+  max-height: 86vh;
+  overflow-y: auto;
+  background: #1e293b;
+  border-radius: 18px;
+  padding: 20px;
+  color: white;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+  border: 1px solid #1e2d3d;
+  cursor: default;
+}
+
+.profile-host .profileHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.profile-host .profileCloseBtn {
+  background: #475569;
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.profile-host .profileInfo {
+  background: #0f172a;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 16px;
+  line-height: 30px;
+  font-size: 14px;
+}
+
+.profile-host .subsTitle {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.profile-host .subCard {
+  background: #0f172a;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.profile-host .subTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.profile-host .subPlan {
+  font-weight: bold;
+}
+
+.profile-host .subStatus {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.profile-host .subMeta {
+  font-size: 13px;
+  line-height: 24px;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+
+.profile-host .subLink {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.profile-host .subLink input {
+  flex: 1;
+  min-width: 140px;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: #1e293b;
+  color: #fff;
+  font-size: 12px;
+}
+
+.profile-host .subLink button {
+  border: none;
+  border-radius: 10px;
+  background: #22c55e;
+  color: #fff;
+  padding: 10px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.profile-host .subLink .subClearBtn {
+  background: #dc2626;
+}
+
+.profile-host .emptySubs {
+  text-align: center;
+  color: #94a3b8;
+  padding: 24px;
+}
+
+.profile-host .subStatusApproved {
+  background: #14532d;
+  color: #86efac;
+}
+
+.profile-host .subStatusRejected {
+  background: #450a0a;
+  color: #fca5a5;
+}
+
+.profile-host .subStatusPending {
+  background: #422006;
+  color: #fcd34d;
+}
+
