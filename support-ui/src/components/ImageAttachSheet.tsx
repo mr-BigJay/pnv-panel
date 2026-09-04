@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { IoSend } from 'react-icons/io5';
+import { IoArrowBack, IoSend } from 'react-icons/io5';
+import { MdCrop } from 'react-icons/md';
+import { ImageCropModal } from './ImageCropModal';
 
 interface ImageAttachSheetProps {
   file: File;
   initialCaption: string;
   sending: boolean;
   onCancel: () => void;
-  onRecrop: () => void;
   onSend: (file: File, caption: string) => Promise<void>;
 }
 
@@ -16,50 +17,78 @@ export function ImageAttachSheet({
   initialCaption,
   sending,
   onCancel,
-  onRecrop,
   onSend,
 }: ImageAttachSheetProps) {
+  const [pendingFile, setPendingFile] = useState(file);
   const [caption, setCaption] = useState(initialCaption);
-  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
+  const [showCrop, setShowCrop] = useState(false);
+  const previewUrl = useMemo(() => URL.createObjectURL(pendingFile), [pendingFile]);
 
   useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
 
   return createPortal(
-    <div className="support-attach-overlay" role="dialog" aria-modal="true" aria-label="ارسال تصویر">
-      <div className="support-attach-sheet">
-        <div className="support-attach-header">
-          <button type="button" className="support-attach-cancel" onClick={onCancel} disabled={sending}>
-            انصراف
-          </button>
-          <span className="support-attach-title">ارسال تصویر</span>
-          <button type="button" className="support-attach-crop" onClick={onRecrop} disabled={sending}>
-            برش
-          </button>
+    <>
+      <div className="support-media-overlay" role="dialog" aria-modal="true" aria-label="ارسال تصویر">
+        <div className="support-media-preview">
+          <img src={previewUrl} alt="" className="support-media-preview-img" />
         </div>
-        <div className="support-attach-preview">
-          <img src={previewUrl} alt="" className="support-attach-preview-img" />
-        </div>
-        <div className="support-attach-caption-row">
+
+        <div className="support-media-caption-wrap">
           <textarea
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             placeholder="کپشن (اختیاری)..."
-            rows={2}
+            rows={1}
             disabled={sending}
-            className="support-attach-caption fa-num"
+            className="support-media-caption fa-num"
           />
+        </div>
+
+        <div className="support-media-toolbar">
           <button
             type="button"
-            className="tg-composer-action tg-btn-send support-attach-send"
+            className="support-media-tool-btn"
+            onClick={onCancel}
             disabled={sending}
-            onClick={() => void onSend(file, caption.trim())}
+            aria-label="برگشت"
+            title="برگشت"
+          >
+            <IoArrowBack className="h-6 w-6" />
+          </button>
+          <button
+            type="button"
+            className="support-media-tool-btn"
+            onClick={() => setShowCrop(true)}
+            disabled={sending}
+            aria-label="برش"
+            title="برش"
+          >
+            <MdCrop className="h-7 w-7" />
+          </button>
+          <button
+            type="button"
+            className="support-media-tool-btn support-media-tool-send"
+            disabled={sending}
+            onClick={() => void onSend(pendingFile, caption.trim())}
+            aria-label="ارسال"
             title="ارسال"
           >
-            <IoSend className="h-5 w-5" />
+            <IoSend className="h-6 w-6" />
           </button>
         </div>
       </div>
-    </div>,
+
+      {showCrop ? (
+        <ImageCropModal
+          file={pendingFile}
+          onCancel={() => setShowCrop(false)}
+          onConfirm={(cropped) => {
+            setPendingFile(cropped);
+            setShowCrop(false);
+          }}
+        />
+      ) : null}
+    </>,
     document.body,
   );
 }
