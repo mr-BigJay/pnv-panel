@@ -283,29 +283,7 @@ if(!function_exists('adminPageEnd')){
 
 $supportActionResult = null;
 
-if($page === 'support' && file_exists(__DIR__ . '/../support_lib.php')){
-
-require_once __DIR__ . '/../support_lib.php';
-
-if($_SERVER['REQUEST_METHOD'] === 'POST'){
-
-$supportActionResult =
-supportProcessAdminActions(
-$pnvRootDir . '/db/support.json',
-true
-);
-
-if($supportActionResult['redirect']){
-
-header('Location: ' . $supportActionResult['redirect']);
-
-exit;
-
-}
-
-}
-
-}
+// Support v2 uses JSON API — legacy v1 form POST removed
 
 // تأیید/رد/حذف لیست خرید و تمدید — قبل از خروجی HTML (وگرنه redirect خراب می‌شود)
 if(
@@ -1065,19 +1043,6 @@ id="adminSupportMenu">
 
 </a>
 
-<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=support-v2'), ENT_QUOTES, 'UTF-8'); ?>"
-class="supportMenu">
-
-<?php if($hasUnreadSupport){ ?>
-
-<span class="notifDot"></span>
-
-<?php } ?>
-
-پشتیبانی v2 (React)
-
-</a>
-
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('users.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 لیست کاربران
@@ -1178,16 +1143,7 @@ class="red">
 
 <?php } ?>
 
-<?php if($page=='support'){ ?>
-
-<?php
-$supportEmbedded = true;
-pnvAdminInclude('support.php');
-?>
-
-<?php } ?>
-
-<?php if($page=='support-v2'){ ?>
+<?php if($page=='support' || $page=='support-v2'){ ?>
 
 <?php
 $supportEmbedded = true;

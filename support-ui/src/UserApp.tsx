@@ -1,32 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createAdminSupportApi } from './api/client';
+import { createSupportApi, type UserSupportApi } from './api/client';
 import { ChatPanel } from './components/ChatPanel';
-import { TicketSidebar } from './components/TicketSidebar';
-import { UserSubscriptionsModal } from './components/UserSubscriptionsModal';
 import type { MessageContextMenuState, MessageMenuAction } from './components/MessageContextMenu';
 import { usePinnedRefresh } from './hooks/useMessageMenuOpener';
 import { togglePin, unpinMessage } from './lib/messagePins';
 import type { MessageComposerHandle } from './components/MessageComposer';
-import { getSupportConfig, type ReplyTarget, type SupportMessage, type Ticket } from './types';
+import { getSupportConfig, type ReplyTarget, type SupportMessage } from './types';
 
-export function AdminApp() {
+export function UserApp() {
   const config = useMemo(() => getSupportConfig(), []);
-  const api = useMemo(() => createAdminSupportApi(config), [config]);
+  const api = useMemo(() => createSupportApi(config) as UserSupportApi, [config]);
 
   const [csrf, setCsrf] = useState(config.csrf);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [activeUser, setActiveUser] = useState(config.initialUser);
-  const [activeMobile, setActiveMobile] = useState('-');
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [status, setStatus] = useState('');
-  const [ticketsLoading, setTicketsLoading] = useState(true);
-  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [sidebarError, setSidebarError] = useState('');
   const [chatError, setChatError] = useState('');
   const [draft, setDraft] = useState('');
-  const [isMobile, setIsMobile] = useState(false);
-  const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [menuState, setMenuState] = useState<MessageContextMenuState | null>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [editTarget, setEditTarget] = useState<ReplyTarget | null>(null);
@@ -36,50 +27,29 @@ export function AdminApp() {
   const sinceRef = useRef(0);
   const composerRef = useRef<MessageComposerHandle | null>(null);
   const pollMs = config.pollIntervalMs;
-  const pinScope = activeUser || 'default';
+  const pinScope = config.pinScope || 'user';
   const { pinTick, bumpPins } = usePinnedRefresh(pinScope);
 
-  const showSidebar = isMobile ? !activeUser : true;
-  const showChat = isMobile ? !!activeUser : true;
+  const chatTitle = config.displayTitle || 'پشتیبانی';
+  const chatSubtitle = config.displaySubtitle || status || 'پشتیبانی';
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
-  useEffect(() => {
-    setReplyTarget(null);
-    setEditTarget(null);
-    setDraft('');
-    setMenuState(null);
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  }, [activeUser]);
-
-  const loadTickets = useCallback(async () => {
-    setSidebarError('');
-    setTicketsLoading(true);
-    try {
-      const data = await api.tickets();
-      setTickets(data.tickets);
-    } catch (err) {
-      setSidebarError(err instanceof Error ? err.message : 'خطا در بارگذاری لیست');
-    } finally {
-      setTicketsLoading(false);
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const boot = await api.bootstrap();
+        if (!cancelled) setCsrf(boot.csrf);
+      } catch {
+        /* keep config csrf */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [api]);
 
   const loadMessages = useCallback(
-    async (user: string, initial = false) => {
-      if (!user) {
-        setMessages([]);
-        setStatus('');
-        sinceRef.current = 0;
-        return;
-      }
-
+    async (initial = false) => {
       setChatError('');
       if (initial) {
         setMessagesLoading(true);
@@ -87,10 +57,8 @@ export function AdminApp() {
       }
 
       try {
-        const data = await api.messages(user, sinceRef.current, false);
+        const data = await api.messages(sinceRef.current, false);
         setStatus(data.status);
-        const ticket = tickets.find((t) => t.user === user);
-        if (ticket?.mobile) setActiveMobile(ticket.mobile);
 
         if (data.messages.length > 0) {
           setMessages((prev) => {
@@ -113,42 +81,19 @@ export function AdminApp() {
         if (initial) setMessagesLoading(false);
       }
     },
-    [api, tickets],
+    [api],
   );
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const boot = await api.bootstrap();
-        if (!cancelled) setCsrf(boot.csrf);
-      } catch {
-        /* keep config csrf */
-      }
-      if (!cancelled) await loadTickets();
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [api, loadTickets]);
+    loadMessages(true);
+  }, [loadMessages]);
 
   useEffect(() => {
-    loadMessages(activeUser, true);
-  }, [activeUser, loadMessages]);
-
-  useEffect(() => {
-    if (!activeUser) return undefined;
     const timer = window.setInterval(() => {
-      loadMessages(activeUser, false);
-      loadTickets();
+      loadMessages(false);
     }, pollMs);
     return () => window.clearInterval(timer);
-  }, [activeUser, loadMessages, loadTickets, pollMs]);
-
-  useEffect(() => {
-    const ticket = tickets.find((t) => t.user === activeUser);
-    if (ticket?.mobile) setActiveMobile(ticket.mobile);
-  }, [tickets, activeUser]);
+  }, [loadMessages, pollMs]);
 
   const mergeMessage = useCallback((message: SupportMessage) => {
     setMessages((prev) => {
@@ -166,7 +111,6 @@ export function AdminApp() {
   }, []);
 
   async function handleSendText(text: string) {
-    if (!activeUser) return;
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -175,40 +119,18 @@ export function AdminApp() {
 
     try {
       if (editTarget) {
-        const res = await api.edit(activeUser, editTarget.id, trimmed, csrf);
-        if (res.message) {
-          mergeMessage(res.message);
-        }
+        const res = await api.edit(editTarget.id, trimmed, csrf);
+        if (res.message) mergeMessage(res.message);
         setEditTarget(null);
         setDraft('');
       } else {
-        const res = await api.send(activeUser, trimmed, csrf, replyTarget?.id ?? '');
-        if (res.message) {
-          mergeMessage(res.message);
-        }
+        const res = await api.send(trimmed, csrf, replyTarget?.id ?? '');
+        if (res.message) mergeMessage(res.message);
         setReplyTarget(null);
         setDraft('');
       }
-      await loadTickets();
     } catch (err) {
       setChatError(err instanceof Error ? err.message : 'ارسال ناموفق');
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function handleSendVoice(blob: Blob) {
-    if (!activeUser) return;
-    setSending(true);
-    setChatError('');
-    try {
-      const res = await api.sendVoice(activeUser, blob, csrf);
-      if (res.message) {
-        mergeMessage(res.message);
-      }
-      await loadTickets();
-    } catch (err) {
-      setChatError(err instanceof Error ? err.message : 'ارسال ویس ناموفق');
     } finally {
       setSending(false);
     }
@@ -296,11 +218,6 @@ export function AdminApp() {
         if (!copyText) return;
         try {
           await navigator.clipboard.writeText(copyText);
-          try {
-            navigator.vibrate?.(8);
-          } catch {
-            /* ignore */
-          }
         } catch {
           alert('کپی ناموفق بود');
         }
@@ -318,13 +235,12 @@ export function AdminApp() {
         setSending(true);
         setChatError('');
         try {
-          const res = await api.deleteMessage(activeUser, message.id, csrf);
+          const res = await api.deleteMessage(message.id, csrf);
           if (!res.ok) {
             alert(res.error || 'حذف ناموفق بود');
             return;
           }
           setMessages((prev) => prev.filter((m) => m.id !== message.id));
-          await loadTickets();
         } catch (err) {
           alert(err instanceof Error ? err.message : 'خطا در حذف پیام');
         } finally {
@@ -332,70 +248,54 @@ export function AdminApp() {
         }
       }
     },
-    [activeUser, api, bumpPins, csrf, loadTickets, pinScope],
+    [api, bumpPins, csrf, pinScope],
   );
 
+  function handleBack() {
+    window.location.href = config.backUrl || 'dashboard.php';
+  }
+
   return (
-    <div
-      className={`support-v2-shell flex h-full overflow-hidden bg-[#0e1621] text-[#e4ecf4] ${
-        config.embedded ? 'support-v2-embedded' : ''
-      }`}
-      dir="rtl"
-    >
-      <TicketSidebar
-        tickets={tickets}
-        activeUser={activeUser}
-        loading={ticketsLoading}
-        error={sidebarError}
-        onSelect={setActiveUser}
-        onRefresh={loadTickets}
-        mobileVisible={showSidebar}
+    <div className="support-v2-shell flex h-full overflow-hidden bg-[#0e1621] text-[#e4ecf4]" dir="rtl">
+      <ChatPanel
+        user={chatTitle}
+        mobile={chatSubtitle}
+        messages={messages}
+        status={status}
+        loading={messagesLoading}
+        sending={sending}
+        error={chatError}
+        draft={draft}
+        mobileVisible={false}
+        pinScope={pinScope}
+        pinTick={pinTick}
+        replyTarget={replyTarget}
+        editTarget={editTarget}
+        menuState={menuState}
+        selectMode={selectMode}
+        selectedIds={selectedIds}
+        composerRef={composerRef}
+        viewerRole="user"
+        showSubscriptions={false}
+        showVoice={false}
+        onDraftChange={setDraft}
+        onClearReply={() => setReplyTarget(null)}
+        onClearEdit={() => {
+          setEditTarget(null);
+          setDraft('');
+        }}
+        onBack={handleBack}
+        onOpenSubscriptions={() => {}}
+        onSendText={handleSendText}
+        onSendVoice={async () => {}}
+        onMenuOpen={handleMenuOpen}
+        onMenuClose={handleMenuClose}
+        onMenuAction={handleMenuAction}
+        onToggleSelect={handleToggleSelect}
+        onExitSelect={handleExitSelect}
+        onCopySelected={handleCopySelected}
+        onUnpin={handleUnpin}
       />
-      {showChat ? (
-        <ChatPanel
-          user={activeUser}
-          mobile={activeMobile}
-          messages={messages}
-          status={status}
-          loading={messagesLoading}
-          sending={sending}
-          error={chatError}
-          draft={draft}
-          mobileVisible={!showChat}
-          pinScope={pinScope}
-          pinTick={pinTick}
-          replyTarget={replyTarget}
-          editTarget={editTarget}
-          menuState={menuState}
-          selectMode={selectMode}
-          selectedIds={selectedIds}
-          composerRef={composerRef}
-          onDraftChange={setDraft}
-          onClearReply={() => setReplyTarget(null)}
-          onClearEdit={() => {
-            setEditTarget(null);
-            setDraft('');
-          }}
-          onBack={() => setActiveUser('')}
-          onOpenSubscriptions={() => setShowSubscriptions(true)}
-          onSendText={handleSendText}
-          onSendVoice={handleSendVoice}
-          onMenuOpen={handleMenuOpen}
-          onMenuClose={handleMenuClose}
-          onMenuAction={handleMenuAction}
-          onToggleSelect={handleToggleSelect}
-          onExitSelect={handleExitSelect}
-          onCopySelected={handleCopySelected}
-          onUnpin={handleUnpin}
-        />
-      ) : null}
-      {showSubscriptions && activeUser ? (
-        <UserSubscriptionsModal
-          user={activeUser}
-          profileApiUrl={config.profileApiUrl}
-          onClose={() => setShowSubscriptions(false)}
-        />
-      ) : null}
     </div>
   );
 }

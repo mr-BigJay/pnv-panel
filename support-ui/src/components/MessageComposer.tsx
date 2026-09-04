@@ -21,6 +21,7 @@ interface MessageComposerProps {
   onClearEdit: () => void;
   onSendText: (text: string) => Promise<void>;
   onSendVoice: (blob: Blob) => Promise<void>;
+  showVoice?: boolean;
 }
 
 export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposerProps>(
@@ -35,6 +36,7 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
       onClearEdit,
       onSendText,
       onSendVoice,
+      showVoice = true,
     },
     ref,
   ) {
@@ -138,7 +140,7 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
                 onInput={(e) => growTextarea(e.currentTarget)}
               />
 
-              {!hasText ? (
+              {!hasText && showVoice ? (
                 <button
                   type="button"
                   disabled={sending}

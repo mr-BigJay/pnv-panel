@@ -7,7 +7,7 @@ import {
   FiMapPin,
   FiTrash2,
 } from 'react-icons/fi';
-import type { SupportMessage } from '../types';
+import type { SupportMessage, SupportRole } from '../types';
 
 export type MessageMenuAction =
   | 'reply'
@@ -27,6 +27,33 @@ interface MessageContextMenuProps {
   state: MessageContextMenuState;
   onAction: (action: MessageMenuAction) => void;
   onClose: () => void;
+  viewerRole?: SupportRole;
+}
+
+function messagePermissions(message: SupportMessage, viewerRole: SupportRole) {
+  const age = Math.max(0, Math.floor(Date.now() / 1000) - (message.timestamp || 0));
+
+  if (viewerRole === 'admin') {
+    return {
+      canReply: !message.is_own,
+      canEdit: true,
+      canDelete: true,
+    };
+  }
+
+  if (message.is_own) {
+    return {
+      canReply: false,
+      canEdit: age <= 900,
+      canDelete: age <= 300,
+    };
+  }
+
+  return {
+    canReply: true,
+    canEdit: false,
+    canDelete: false,
+  };
 }
 
 interface MenuItem {
@@ -55,22 +82,29 @@ function positionMenu(menu: HTMLElement, anchorRect: DOMRect) {
   return { top, left };
 }
 
-export function MessageContextMenu({ state, onAction, onClose }: MessageContextMenuProps) {
+export function MessageContextMenu({
+  state,
+  onAction,
+  onClose,
+  viewerRole = 'admin',
+}: MessageContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const { message, anchorRect, pinned } = state;
   const hasText = Boolean(message.text?.trim());
+  const perms = messagePermissions(message, viewerRole);
 
   const items: MenuItem[] = [
     {
       key: 'reply' as const,
       label: 'پاسخ',
       icon: <FiCornerUpLeft className="h-[18px] w-[18px]" />,
-      hidden: message.is_own,
+      hidden: !perms.canReply,
     },
     {
       key: 'edit' as const,
       label: 'ویرایش',
       icon: <FiEdit2 className="h-[18px] w-[18px]" />,
+      hidden: !perms.canEdit,
     },
     {
       key: 'pin' as const,
@@ -88,6 +122,7 @@ export function MessageContextMenu({ state, onAction, onClose }: MessageContextM
       label: 'حذف',
       icon: <FiTrash2 className="h-[18px] w-[18px]" />,
       danger: true,
+      hidden: !perms.canDelete,
     },
     {
       key: 'select' as const,

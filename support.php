@@ -9,148 +9,65 @@ if(!isset($_SESSION['user'])){
 
 require_once __DIR__ . '/support_lib.php';
 
-$user = $_SESSION['user'];
-$file = __DIR__ . '/db/support.json';
-$csrfField = supportCsrfField();
-$actionResult = supportProcessUserActions($file, $user);
-$supportError = $actionResult['error'] ?? '';
-$data = $actionResult['data'];
-$messages = [];
-$editId = $_GET['edit'] ?? '';
+$assetDir = __DIR__ . '/assets/support/admin';
+$jsFile = 'support-admin.js';
+$cssFile = '';
 
-foreach($data as $ticket){
-
-    if(supportUsernamesMatch($ticket['user'] ?? '', $user)){
-
-        if(isset($ticket['messages'])){
-            $messages = $ticket['messages'];
-        }
-
+if(is_dir($assetDir)){
+    foreach(glob($assetDir . '/support-admin*.css') ?: [] as $cssPath){
+        $cssFile = basename($cssPath);
         break;
-
     }
-
 }
+
+$assetBase = '/assets/support/admin/';
+
+$config = [
+    'apiUrl' => 'support-api.php',
+    'csrf' => supportCsrfToken(),
+    'embedded' => false,
+    'role' => 'user',
+    'initialUser' => 'support',
+    'displayTitle' => 'پشتیبانی',
+    'displaySubtitle' => 'معمولاً در کمتر از ۱ ساعت پاسخ می‌دهیم',
+    'backUrl' => 'dashboard.php',
+    'pinScope' => 'user',
+    'pollIntervalMs' => 5000,
+];
 
 ?>
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
-<link rel="stylesheet" href="support_ui.css?v=45">
-<link rel="stylesheet" href="fonts.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
+<?php if($cssFile !== ''){ ?>
+<link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>">
+<?php } ?>
 <style>
 html,body{margin:0;padding:0;background:#0e1621;color:#e4ecf4;height:100%;overflow:hidden;}
+#support-v2-root{height:100%;}
 </style>
 </head>
 <body>
 
-<div class="msgApp msgApp--user">
+<div id="support-v2-root"></div>
 
-<header class="msgHeader msgHeader--user">
-<a href="dashboard.php" class="msgBackLink" title="بازگشت">← بازگشت</a>
-<div class="msgAvatar msgAvatar--support">پ</div>
-<div class="msgHeaderInfo">
-<h1>پشتیبانی</h1>
-<p>معمولاً در کمتر از ۱ ساعت پاسخ می‌دهیم</p>
-</div>
-</header>
-
-<?php if($supportError){ ?>
-<div class="msgFlash"><?php echo htmlspecialchars($supportError, ENT_QUOTES, 'UTF-8'); ?></div>
-<?php } ?>
-
-<div class="msgBody" id="userChat">
-
-<?php if(count($messages) === 0){ ?>
-<div class="msgEmpty">
-<div class="msgEmptyIcon">💬</div>
-هنوز پیامی نفرستاده‌اید<br>
-اولین پیام را پایین بنویسید
-</div>
-<?php } ?>
-
-<?php if(count($messages) > 0){
-    echo supportRenderMessagesList($messages, [
-        'ownUsername' => $user,
-        'csrfField' => $csrfField,
-        'editId' => $editId,
-        'baseUrl' => 'support.php'
-    ]);
-} ?>
-
-</div>
-
-<footer class="msgComposer">
-<form method="POST" enctype="multipart/form-data" id="userSupportForm" class="msgComposerInner" action="support.php">
-
-<?php echo $csrfField; ?>
-<input type="hidden" name="send" value="1">
-
-<div class="msgComposerRow">
-<button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtn" title="پیوست تصویر" aria-label="پیوست تصویر">📎</button>
-<input type="file" name="image" id="userImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
-
-<textarea
-    name="message"
-    id="message"
-    placeholder="پیام به پشتیبانی..."
-    rows="1"></textarea>
-
-<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
-</div>
-
-</form>
-</footer>
-
-</div>
-
-<script src="support_ui.js?v=45"></script>
 <script>
-(function(){
-    const userChat = document.getElementById('userChat');
-    const messageInput = document.getElementById('message');
-    const userSupportForm = document.getElementById('userSupportForm');
-    const pinScope = 'user';
-
-    SupportUI.bindTextareaGrow(messageInput);
-    SupportUI.bindEnterToSend(messageInput, userSupportForm, true);
-    SupportUI.bindFormGuard(userSupportForm, messageInput, 'userImage');
-    SupportUI.bindImageAttach(userSupportForm, 'userImage', 'attachBtn');
-    SupportUI.bindAjaxSend({
-        form: userSupportForm,
-        chatEl: userChat,
-        classMap: {admin:'admin', user:'usermsg'},
-        actionMeta: {isAdmin: false, ownSender: 'user', pinScope: pinScope}
-    });
-    SupportUI.bindMessageActions({
-        chatEl: userChat,
-        form: userSupportForm,
-        role: 'user',
-        pinScope: pinScope
-    });
-
-    SupportUI.initPolling({
-        chatEl: userChat,
-        pollUrl: 'support-api.php',
-        pinScope: pinScope,
-        getParams: function(since){
-            return '?since=' + (since || 0);
-        },
-        classMap: {admin:'admin', user:'usermsg'},
-        actionMeta: {isAdmin: false, ownSender: 'user', pinScope: pinScope},
-        interval: 5000
-    });
-
-    if(userChat){
-        SupportUI.scrollToBottomOnOpen(userChat);
-    }
-})();
+window.SUPPORT_CONFIG = <?php echo json_encode($config, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 
-<?php require_once __DIR__ . '/form_validation_fa.php'; pnvFormValidationFaScript(); ?>
+<?php if(!is_file($assetDir . '/' . $jsFile)){ ?>
+<div style="padding:24px;color:#fecaca;font-family:sans-serif;text-align:center;">
+    فایل‌های UI ساخته نشده‌اند. در پوشه <code>support-ui</code> دستور <code>npm run build</code> را اجرا کنید.
+</div>
+<?php } else { ?>
+<script type="module" src="<?php echo htmlspecialchars($assetBase . $jsFile, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php } ?>
 
 </body>
 </html>

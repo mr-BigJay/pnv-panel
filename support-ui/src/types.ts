@@ -1,10 +1,17 @@
+export type SupportRole = 'admin' | 'user';
+
 export interface SupportConfig {
   apiUrl: string;
   profileApiUrl: string;
   csrf: string;
   embedded: boolean;
+  role: SupportRole;
   initialUser: string;
   pollIntervalMs: number;
+  displayTitle?: string;
+  displaySubtitle?: string;
+  backUrl?: string;
+  pinScope?: string;
 }
 
 export interface Ticket {
@@ -49,18 +56,18 @@ export interface TicketsResponse {
 }
 
 export interface MessagesResponse {
-  user: string;
+  user?: string;
   messages: SupportMessage[];
   status: string;
-  unreadUsers: string[];
-  has_unread: boolean;
-  unread_count: number;
+  unreadUsers?: string[];
+  has_unread?: boolean;
+  unread_count?: number;
   sync?: SupportMessage[];
 }
 
 export interface BootstrapResponse {
   csrf: string;
-  embedded: boolean;
+  embedded?: boolean;
   poll_interval_ms: number;
 }
 
@@ -81,7 +88,12 @@ export function getSupportConfig(): SupportConfig {
     profileApiUrl,
     csrf: cfg.csrf ?? '',
     embedded: Boolean(cfg.embedded),
+    role: cfg.role ?? 'admin',
     initialUser: cfg.initialUser ?? '',
-    pollIntervalMs: cfg.pollIntervalMs ?? 3000,
+    pollIntervalMs: cfg.pollIntervalMs ?? (cfg.role === 'user' ? 5000 : 3000),
+    displayTitle: cfg.displayTitle,
+    displaySubtitle: cfg.displaySubtitle,
+    backUrl: cfg.backUrl,
+    pinScope: cfg.pinScope,
   };
 }

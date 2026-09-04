@@ -4,7 +4,7 @@ import { FiCheck } from 'react-icons/fi';
 import { IoArrowBack } from 'react-icons/io5';
 import { useMessageMenuOpener } from '../hooks/useMessageMenuOpener';
 import { isPinned } from '../lib/messagePins';
-import type { ReplyTarget, SupportMessage } from '../types';
+import type { ReplyTarget, SupportMessage, SupportRole } from '../types';
 import { getAvatarColor, getInitials } from '../lib/avatarUtils';
 import { formatPersianDate, formatPersianTime, toPersianDigits } from '../lib/persianDigits';
 import {
@@ -47,6 +47,9 @@ interface ChatPanelProps {
   onExitSelect: () => void;
   onCopySelected: () => void;
   onUnpin: (id: string) => void;
+  viewerRole?: SupportRole;
+  showSubscriptions?: boolean;
+  showVoice?: boolean;
 }
 
 function messageStatus(msg: SupportMessage) {
@@ -128,6 +131,9 @@ export function ChatPanel({
   onExitSelect,
   onCopySelected,
   onUnpin,
+  viewerRole = 'admin',
+  showSubscriptions = true,
+  showVoice = true,
 }: ChatPanelProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -193,7 +199,9 @@ export function ChatPanel({
               <button
                 type="button"
                 onClick={onBack}
-                className="shrink-0 rounded-full p-2 text-[#6ab2f2] hover:bg-[#242f3d] md:hidden"
+                className={`shrink-0 rounded-full p-2 text-[#6ab2f2] hover:bg-[#242f3d] ${
+                  viewerRole === 'user' ? '' : 'md:hidden'
+                }`}
                 aria-label="بازگشت"
               >
                 <IoArrowBack className="h-5 w-5" />
@@ -203,24 +211,26 @@ export function ChatPanel({
                   user,
                 )}`}
               >
-                {getInitials(user)}
+                {viewerRole === 'user' ? 'پ' : getInitials(user)}
               </div>
               <div className="min-w-0 flex-1">
                 <h1 className="support-chat-title truncate text-[16px] font-medium leading-snug text-white">
                   {user}
                 </h1>
                 <p className="fa-num truncate text-[12px] leading-normal text-[#8b9cb3]">
-                  {mobile && mobile !== '-' ? toPersianDigits(mobile) : status || 'پشتیبانی'}
+                  {mobile && mobile !== '-' ? mobile : status || 'پشتیبانی'}
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onOpenSubscriptions}
-              className="shrink-0 rounded-lg bg-[#242f3d] px-3 py-2 text-[12px] font-medium text-[#6ab2f2] hover:bg-[#2b5278] hover:text-white"
-            >
-              اشتراک‌ها
-            </button>
+            {showSubscriptions ? (
+              <button
+                type="button"
+                onClick={onOpenSubscriptions}
+                className="shrink-0 rounded-lg bg-[#242f3d] px-3 py-2 text-[12px] font-medium text-[#6ab2f2] hover:bg-[#2b5278] hover:text-white"
+              >
+                اشتراک‌ها
+              </button>
+            ) : null}
           </>
         )}
       </header>
@@ -381,6 +391,7 @@ export function ChatPanel({
           onClearEdit={onClearEdit}
           onSendText={onSendText}
           onSendVoice={onSendVoice}
+          showVoice={showVoice}
         />
       ) : null}
 
@@ -389,6 +400,7 @@ export function ChatPanel({
           state={menuState}
           onClose={onMenuClose}
           onAction={(action) => onMenuAction(action, menuState.message)}
+          viewerRole={viewerRole}
         />
       ) : null}
     </section>

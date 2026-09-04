@@ -6,7 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 if(!isset($_SESSION['user'])){
     http_response_code(403);
-    echo json_encode(['error' => 'forbidden']);
+    echo json_encode(['error' => 'forbidden'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -14,55 +14,61 @@ require_once __DIR__ . '/support_lib.php';
 
 $file = __DIR__ . '/db/support.json';
 $user = $_SESSION['user'];
-$since = intval($_GET['since'] ?? 0);
+$method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+$action = trim((string)($_GET['action'] ?? ''));
 
-$data = supportLoad($file);
-$messages = [];
-$status = '';
-$sync = [];
+try{
 
-foreach($data as $ticket){
+    if($method === 'POST'){
+        if(!function_exists('supportUserApiHandlePost')){
+            http_response_code(500);
+            echo json_encode([
+                'error' => 'support_lib.php روی سرور قدیمی است — deploy را دوباره اجرا کنید',
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
 
-    if(!supportUsernamesMatch($ticket['user'] ?? '', $user)){
-        continue;
+        supportUserApiHandlePost($file, $user);
     }
 
-    $status = $ticket['status'] ?? '';
+    if($action === 'bootstrap'){
+        if(!function_exists('supportUserApiBootstrap')){
+            http_response_code(500);
+            echo json_encode(['error' => 'support_lib.php قدیمی است'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
 
-    if(empty($ticket['messages'])){
-        break;
+        echo json_encode(supportUserApiBootstrap(), JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
+    $since = intval($_GET['since'] ?? 0);
     $syncAll = !empty($_GET['sync']);
-    $sync = [];
 
-    foreach($ticket['messages'] as $msg){
-
-        $timestamp = intval($msg['timestamp'] ?? 0);
-
-        if($syncAll){
-            $sync[] = supportMessageForApi($msg, ['isAdmin' => false]);
+    if($action === 'messages' || $action === ''){
+        if(!function_exists('supportUserApiMessages')){
+            http_response_code(500);
+            echo json_encode(['error' => 'support_lib.php قدیمی است'], JSON_UNESCAPED_UNICODE);
+            exit;
         }
 
-        if($since > 0 && $timestamp <= $since){
-            continue;
-        }
-
-        $messages[] = supportMessageForApi($msg, ['isAdmin' => false]);
-
+        echo json_encode(
+            supportUserApiMessages($file, $user, $since, $syncAll),
+            JSON_UNESCAPED_UNICODE
+        );
+        exit;
     }
 
-    break;
+    http_response_code(400);
+    echo json_encode(['error' => 'action نامعتبر است'], JSON_UNESCAPED_UNICODE);
 
 }
+catch(Throwable $e){
 
-$payload = [
-    'messages' => $messages,
-    'status' => $status
-];
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'server error',
+        'detail' => $e->getMessage(),
+    ], JSON_UNESCAPED_UNICODE);
 
-if(!empty($_GET['sync'])){
-    $payload['sync'] = $sync ?? [];
 }
-
-echo json_encode($payload, JSON_UNESCAPED_UNICODE);

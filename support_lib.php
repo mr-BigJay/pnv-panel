@@ -1931,4 +1931,107 @@ if(!function_exists('supportUserHasUnread')){
         supportAjaxRespond(['ok' => false, 'error' => 'درخواست پردازش نشد'], 400);
 
     }
+
+    function supportUserApiBootstrap(){
+
+        return [
+            'csrf' => supportCsrfToken(),
+            'poll_interval_ms' => 5000,
+        ];
+
+    }
+
+    function supportUserApiMessages($file, $username, $since = 0, $syncAll = false){
+
+        $data = supportLoad($file);
+        $messages = [];
+        $status = '';
+        $sync = [];
+
+        foreach($data as $ticket){
+
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
+                continue;
+            }
+
+            $status = $ticket['status'] ?? '';
+
+            if(empty($ticket['messages'])){
+                break;
+            }
+
+            foreach($ticket['messages'] as $msg){
+
+                $timestamp = intval($msg['timestamp'] ?? 0);
+
+                if($syncAll){
+                    $sync[] = supportMessageForApi($msg, ['isAdmin' => false]);
+                }
+
+                if($since > 0 && $timestamp <= $since){
+                    continue;
+                }
+
+                $messages[] = supportMessageForApi($msg, ['isAdmin' => false]);
+
+            }
+
+            break;
+
+        }
+
+        if(supportMarkSeenByUser($data, $username)){
+            supportSave($file, $data);
+        }
+
+        $payload = [
+            'messages' => $messages,
+            'status' => $status,
+        ];
+
+        if($syncAll){
+            $payload['sync'] = $sync;
+        }
+
+        return $payload;
+
+    }
+
+    function supportUserApiHandlePost($file, $username){
+
+        $input = supportAdminApiParseInput();
+        $action = trim((string)($input['action'] ?? ''));
+
+        if($action === 'send' || ($action === '' && isset($input['message']))){
+            $_POST['send'] = '1';
+            $_POST['message'] = $input['message'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['reply_to'] = $input['reply_to'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'edit'){
+            $_POST['edit_id'] = $input['edit_id'] ?? $input['id'] ?? '';
+            $_POST['edit_text'] = $input['edit_text'] ?? $input['text'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'delete'){
+            $_POST['delete_message'] = '1';
+            $_POST['delete_id'] = $input['delete_id'] ?? $input['id'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        else{
+            supportAjaxRespond(['ok' => false, 'error' => 'action نامعتبر است'], 400);
+        }
+
+        $result = supportProcessUserActions($file, $username);
+
+        if(!empty($result['error'])){
+            supportAjaxRespond(['ok' => false, 'error' => $result['error']], 400);
+        }
+
+        supportAjaxRespond(['ok' => false, 'error' => 'درخواست پردازش نشد'], 400);
+
+    }
 }

@@ -41,10 +41,12 @@ function apiUrl(base: string, params: Record<string, string | number | boolean |
   return url.pathname + url.search;
 }
 
-export function createSupportApi(config: SupportConfig) {
+export function createAdminSupportApi(config: SupportConfig) {
   const base = config.apiUrl;
 
   return {
+    role: 'admin' as const,
+
     async bootstrap(): Promise<BootstrapResponse> {
       const res = await fetch(apiUrl(base, { action: 'bootstrap' }), {
         credentials: 'same-origin',
@@ -59,11 +61,7 @@ export function createSupportApi(config: SupportConfig) {
       return parseJson(res);
     },
 
-    async messages(
-      user: string,
-      since = 0,
-      sync = false,
-    ): Promise<MessagesResponse> {
+    async messages(user: string, since = 0, sync = false): Promise<MessagesResponse> {
       const res = await fetch(
         apiUrl(base, {
           action: 'messages',
@@ -131,7 +129,11 @@ export function createSupportApi(config: SupportConfig) {
       return parseJson(res);
     },
 
-    async sendVoice(user: string, blob: Blob, csrf: string): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
+    async sendVoice(
+      user: string,
+      blob: Blob,
+      csrf: string,
+    ): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
       const ext = blob.type.includes('ogg') ? 'ogg' : 'webm';
       const fd = new FormData();
       fd.append('action', 'send_voice');
@@ -148,4 +150,90 @@ export function createSupportApi(config: SupportConfig) {
   };
 }
 
+function createUserSupportApi(config: SupportConfig) {
+  const base = config.apiUrl;
+
+  return {
+    role: 'user' as const,
+
+    async bootstrap(): Promise<BootstrapResponse> {
+      const res = await fetch(apiUrl(base, { action: 'bootstrap' }), {
+        credentials: 'same-origin',
+      });
+      return parseJson(res);
+    },
+
+    async messages(since = 0, sync = false): Promise<MessagesResponse> {
+      const res = await fetch(
+        apiUrl(base, {
+          action: 'messages',
+          since,
+          sync: sync ? 1 : undefined,
+        }),
+        { credentials: 'same-origin' },
+      );
+      return parseJson(res);
+    },
+
+    async send(
+      message: string,
+      csrf: string,
+      replyTo = '',
+    ): Promise<{ ok: boolean; message?: SupportMessage; error?: string }> {
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', message, csrf, reply_to: replyTo }),
+      });
+      return parseJson(res);
+    },
+
+    async edit(
+      editId: string,
+      text: string,
+      csrf: string,
+    ): Promise<{ ok: boolean; message?: SupportMessage; edited?: boolean; error?: string }> {
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'edit',
+          edit_id: editId,
+          edit_text: text,
+          csrf,
+        }),
+      });
+      return parseJson(res);
+    },
+
+    async deleteMessage(
+      messageId: string,
+      csrf: string,
+    ): Promise<{ ok: boolean; deleted?: boolean; message_id?: string; error?: string }> {
+      const res = await fetch(base, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          delete_id: messageId,
+          csrf,
+        }),
+      });
+      return parseJson(res);
+    },
+  };
+}
+
+export function createSupportApi(config: SupportConfig) {
+  if (config.role === 'user') {
+    return createUserSupportApi(config);
+  }
+  return createAdminSupportApi(config);
+}
+
 export type SupportApi = ReturnType<typeof createSupportApi>;
+export type AdminSupportApi = ReturnType<typeof createAdminSupportApi>;
+export type UserSupportApi = ReturnType<typeof createUserSupportApi>;
