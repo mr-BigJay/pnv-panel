@@ -24,7 +24,16 @@ try:
     from aiobale import Client, Dispatcher
     import aiobale.enums as bale_enums
 except ImportError as exc:
-    print("Missing dependency. Run: pip3 install -r tools/requirements-postbank.txt", file=sys.stderr)
+    print(
+        "Missing Python dependency: "
+        + str(exc)
+        + "\nFix on server (as root):\n"
+        + "  bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/telegram-user-bot-058b/scripts/setup-postbank-listener.sh)\n"
+        + "Or manually:\n"
+        + "  cd /var/www/html && python3 -m venv tools/postbank-venv\n"
+        + "  tools/postbank-venv/bin/pip install -r tools/requirements-postbank.txt",
+        file=sys.stderr,
+    )
     raise SystemExit(1) from exc
 
 
