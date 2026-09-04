@@ -7,6 +7,7 @@
 header('Content-Type: text/plain; charset=utf-8');
 
 require_once __DIR__ . '/../bale_lib.php';
+require_once __DIR__ . '/../instant_pay_lib.php';
 
 $config = baleLoadConfig();
 $webhookUrl = baleWebhookPublicUrl();
@@ -39,6 +40,19 @@ else{
 $sample = "پست بانک\nواريز به کارت: 6156\n+998,190\n1405/05/10\n9:47\nمانده: 44,108,899 ريال";
 $amounts = baleExtractRialAmounts($sample);
 echo 'parse_sample: ' . json_encode($amounts, JSON_UNESCAPED_UNICODE) . "\n";
+echo 'deposit_detect: ' . (baleLooksLikeDeposit($sample) ? 'yes' : 'no') . "\n";
+
+if(function_exists('instantPayHandleDepositText')){
+    $dry = instantPayHandleDepositText($sample, ['date' => date('Y/m/d'), 'time' => date('H:i')]);
+    echo 'instant_pay_dry: ' . json_encode([
+        'ok' => !empty($dry['ok']),
+        'ignored' => !empty($dry['ignored']),
+        'error' => $dry['error'] ?? '',
+        'open_orders' => count($dry['open_orders'] ?? []),
+    ], JSON_UNESCAPED_UNICODE) . "\n";
+}
+
+echo 'parser_version: ' . (function_exists('baleParserVersion') ? baleParserVersion() : '?') . "\n";
 echo 'ingest_file: ' . __DIR__ . '/../postbank-ingest.php exists=' . (is_file(__DIR__ . '/../postbank-ingest.php') ? 'yes' : 'no') . "\n";
 echo 'ingest_secret: ' . (trim((string)($config['ingest_secret'] ?? '')) !== '' ? 'yes' : 'no') . "\n";
 echo 'listener_env: ' . (is_file(__DIR__ . '/../db/postbank-listener.env') ? 'yes' : 'no') . "\n";

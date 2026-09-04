@@ -1717,37 +1717,9 @@ if(!function_exists('instantPayPath')){
             checkoutMarkDiscountPaid($found);
         }
 
-        // اطلاع‌رسانی تلگرام فقط بعد از تأیید نهایی
-        if(function_exists('telegramNotifyNewPayment')){
-            try{
-                $payments = xuiLoadPayments();
-                $notifyRow = $payments[$csvIndex] ?? null;
-
-                if(!is_array($notifyRow)){
-                    $nowParts = pnvNowParts();
-                    $notifyRow = [
-                        $found['user'] ?? '',
-                        ($found['type'] ?? '') === 'تمدید' ? ($found['sub'] ?? '') : ($found['subname'] ?? ''),
-                        $found['plan'] ?? '',
-                        'AUTO-' . ($found['code'] ?? ''),
-                        $meta['date'] ?? $nowParts['date'],
-                        $meta['time'] ?? $nowParts['time'],
-                        'تایید شد',
-                        $items[$idx]['link'] ?? '',
-                        intval($found['created_at'] ?? time()),
-                        $found['type'] ?? 'خرید',
-                        $found['coupon_code'] ?? '',
-                        intval($found['discount_percent'] ?? 0),
-                        intval($found['amount'] ?? 0),
-                        $found['code'] ?? ''
-                    ];
-                }
-
-                telegramNotifyNewPayment($found['type'] ?? 'خرید', $notifyRow, ['confirmed' => true]);
-            }catch(Throwable $e){
-                error_log('instant pay telegram confirm notify failed: ' . $e->getMessage());
-            }
-        }
+        $payments = xuiLoadPayments();
+        $paidRow = isset($payments[$csvIndex]) && is_array($payments[$csvIndex]) ? $payments[$csvIndex] : null;
+        instantPayNotifyPaymentConfirmed($items[$idx], $paidRow);
 
         return [
             'ok' => true,
