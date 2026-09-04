@@ -21,6 +21,7 @@ $user = supportResolveTicketUsername($data, $user);
 $messages = [];
 $status = '';
 $unreadUsers = [];
+$sync = [];
 
 foreach($data as $ticket){
 
@@ -38,24 +39,37 @@ foreach($data as $ticket){
         continue;
     }
 
+    $syncAll = !empty($_GET['sync']);
+    $sync = [];
+
     foreach($ticket['messages'] as $msg){
 
         $timestamp = intval($msg['timestamp'] ?? 0);
+
+        if($syncAll){
+            $sync[] = supportMessageForApi($msg, ['isAdmin' => true]);
+        }
 
         if($since > 0 && $timestamp <= $since){
             continue;
         }
 
-        $messages[] = supportMessageForApi($msg);
+        $messages[] = supportMessageForApi($msg, ['isAdmin' => true]);
 
     }
 
 }
 
-echo json_encode([
+$payload = [
     'messages' => $messages,
     'status' => $status,
     'unreadUsers' => $unreadUsers,
     'has_unread' => count($unreadUsers) > 0,
     'unread_count' => supportAdminUnreadTotal($data)
-], JSON_UNESCAPED_UNICODE);
+];
+
+if(!empty($_GET['sync'])){
+    $payload['sync'] = $sync ?? [];
+}
+
+echo json_encode($payload, JSON_UNESCAPED_UNICODE);

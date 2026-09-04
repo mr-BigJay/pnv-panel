@@ -19,6 +19,7 @@ $since = intval($_GET['since'] ?? 0);
 $data = supportLoad($file);
 $messages = [];
 $status = '';
+$sync = [];
 
 foreach($data as $ticket){
 
@@ -32,15 +33,22 @@ foreach($data as $ticket){
         break;
     }
 
+    $syncAll = !empty($_GET['sync']);
+    $sync = [];
+
     foreach($ticket['messages'] as $msg){
 
         $timestamp = intval($msg['timestamp'] ?? 0);
+
+        if($syncAll){
+            $sync[] = supportMessageForApi($msg, ['isAdmin' => false]);
+        }
 
         if($since > 0 && $timestamp <= $since){
             continue;
         }
 
-        $messages[] = supportMessageForApi($msg);
+        $messages[] = supportMessageForApi($msg, ['isAdmin' => false]);
 
     }
 
@@ -48,7 +56,13 @@ foreach($data as $ticket){
 
 }
 
-echo json_encode([
+$payload = [
     'messages' => $messages,
     'status' => $status
-], JSON_UNESCAPED_UNICODE);
+];
+
+if(!empty($_GET['sync'])){
+    $payload['sync'] = $sync ?? [];
+}
+
+echo json_encode($payload, JSON_UNESCAPED_UNICODE);

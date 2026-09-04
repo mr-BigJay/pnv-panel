@@ -57,6 +57,120 @@
             .replace(/'/g, '&#039;');
     }
 
+    function dayKeyFromTimestamp(ts){
+        const d = new Date((ts || 0) * 1000);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+
+    function daySeparatorLabel(ts){
+        if(!ts){ return '—'; }
+        const key = dayKeyFromTimestamp(ts);
+        const now = new Date();
+        const today = dayKeyFromTimestamp(Math.floor(now.getTime() / 1000));
+        const yesterdayDate = new Date(now);
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterday = dayKeyFromTimestamp(Math.floor(yesterdayDate.getTime() / 1000));
+        if(key === today){ return 'امروز'; }
+        if(key === yesterday){ return 'دیروز'; }
+        const d = new Date(ts * 1000);
+        return d.toLocaleDateString('fa-IR');
+    }
+
+    function clusterPosForList(list, index){
+        const cur = list[index];
+        if(!cur){ return 'single'; }
+        const curSender = cur.sender || '';
+        const curTs = cur.timestamp || 0;
+        const curDay = dayKeyFromTimestamp(curTs);
+        const prev = index > 0 ? list[index - 1] : null;
+        const next = index + 1 < list.length ? list[index + 1] : null;
+
+        const samePrev = prev
+            && prev.sender === curSender
+            && dayKeyFromTimestamp(prev.timestamp || 0) === curDay
+            && (curTs - (prev.timestamp || 0)) <= 600;
+
+        const sameNext = next
+            && next.sender === curSender
+            && dayKeyFromTimestamp(next.timestamp || 0) === curDay
+            && ((next.timestamp || 0) - curTs) <= 600;
+
+        if(samePrev && sameNext){ return 'mid'; }
+        if(samePrev){ return 'bot'; }
+        if(sameNext){ return 'top'; }
+        return 'single';
+    }
+
+    function pinStorageKey(scope){
+        return 'support_pins_' + (scope || 'default');
+    }
+
+    function loadPinnedIds(scope){
+        try{
+            const raw = localStorage.getItem(pinStorageKey(scope));
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        }catch(err){
+            return [];
+        }
+    }
+
+    function savePinnedIds(scope, ids){
+        try{
+            localStorage.setItem(pinStorageKey(scope), JSON.stringify(ids || []));
+        }catch(err){}
+    }
+
+    function isPinned(scope, msgId){
+        return loadPinnedIds(scope).indexOf(msgId) >= 0;
+    }
+
+    function togglePin(scope, msgId){
+        const ids = loadPinnedIds(scope);
+        const idx = ids.indexOf(msgId);
+        if(idx >= 0){
+            ids.splice(idx, 1);
+        }else{
+            ids.push(msgId);
+        }
+        savePinnedIds(scope, ids);
+        return ids.indexOf(msgId) >= 0;
+    }
+
+    function renderReadTicks(msg, actionMeta){
+        const meta = actionMeta || {};
+        const isAdmin = !!meta.isAdmin;
+        const isOwn = typeof msg.is_own === 'boolean'
+            ? msg.is_own
+            : (msg.sender === (meta.ownSender || 'user'));
+        if(!isOwn){ return ''; }
+        const seen = isAdmin ? !!msg.seen_by_user : !!msg.seen_by_admin;
+        const cls = seen ? 'msgTicks msgTicks--read' : 'msgTicks';
+        return '<span class="' + cls + '" aria-hidden="true">' + (seen ? '✓✓' : '✓') + '</span>';
+    }
+
+    function bubbleClassForMessage(msg, classMap){
+        const sender = msg.sender || 'user';
+        const roleCls = classMap[sender] || classMap.user || 'user';
+        const typeCls = (sender === 'admin') ? 'is-admin admin' : 'is-user usermsg';
+        return 'msgBubble msg ' + typeCls + ' ' + roleCls;
+    }
+
+    function applyClusterClass(bubble, cluster){
+        bubble.classList.remove('cluster-top', 'cluster-mid', 'cluster-bot');
+        if(cluster && cluster !== 'single'){
+            bubble.classList.add('cluster-' + cluster);
+        }
+    }
+
+    function applyPinState(bubble, scope){
+        const msgId = bubble.dataset.msgId || '';
+        bubble.classList.toggle('is-pinned', isPinned(scope, msgId));
+    }
+
     function isMobileComposer(){
         const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
         const narrowScreen = window.matchMedia('(max-width: 768px)').matches;
@@ -364,19 +478,37 @@
             const fd = new FormData(form);
             fd.set('image', file, pendingName);
             fd.set('message', caption);
+            fd.set('support_ajax', '1');
 
             const action = form.getAttribute('action') || window.location.href;
             fetch(action, {
                 method: 'POST',
                 body: fd,
                 credentials: 'same-origin',
-                redirect: 'follow'
+                headers: {'X-Support-AJAX': '1'}
             }).then(function(res){
-                if(res.redirected && res.url){
-                    window.location.href = res.url;
-                    return;
-                }
-                window.location.reload();
+                return res.json().catch(function(){
+                    return null;
+                }).then(function(payload){
+                    if(payload && payload.ok && payload.message){
+                        const chatEl = form.closest('.msgApp, .supportPage, .supportChatbox')
+                            ? document.querySelector('.msgBody, .supportMessages')
+                            : null;
+                        if(chatEl && typeof appendMessageToChat === 'function'){
+                            appendMessageToChat(chatEl, payload.message, form._supportUiOpts || {});
+                            if(mainTextarea){ mainTextarea.value = ''; }
+                            closeMediaComposer();
+                            submitting = false;
+                            mediaSend.disabled = false;
+                            return;
+                        }
+                    }
+                    if(res.redirected && res.url){
+                        window.location.href = res.url;
+                        return;
+                    }
+                    window.location.reload();
+                });
             }).catch(function(){
                 submitting = false;
                 mediaSend.disabled = false;
@@ -444,6 +576,428 @@
         return el ? el.value : '';
     }
 
+    function buildBubbleNode(msg, classMap, actionMeta, cluster){
+        const sender = msg.sender || 'user';
+        const typeCls = (sender === 'admin') ? 'is-admin admin' : 'is-user usermsg';
+        const wrap = document.createElement('div');
+        wrap.className = bubbleClassForMessage(msg, classMap);
+        wrap.dataset.msgId = msg.id || '';
+        wrap.dataset.timestamp = msg.timestamp || 0;
+        wrap.dataset.sender = sender;
+        wrap.dataset.text = msg.text || '';
+
+        const meta = actionMeta || {};
+        const isAdminView = !!meta.isAdmin;
+        const ownSender = meta.ownSender || 'user';
+        const isOwn = typeof msg.is_own === 'boolean' ? msg.is_own : (sender === ownSender);
+        let canEdit = false, canDelete = false, canReply = false;
+        const age = Math.max(0, Math.floor(Date.now()/1000) - (msg.timestamp || 0));
+
+        if(isAdminView){
+            canEdit = true;
+            canDelete = true;
+            canReply = !isOwn;
+        }else if(isOwn){
+            canEdit = age <= 900;
+            canDelete = age <= 300;
+        }else{
+            canReply = true;
+        }
+
+        wrap.dataset.own = isOwn ? '1' : '0';
+        wrap.dataset.canEdit = canEdit ? '1' : '0';
+        wrap.dataset.canDelete = canDelete ? '1' : '0';
+        wrap.dataset.canReply = canReply ? '1' : '0';
+
+        applyClusterClass(wrap, cluster || 'single');
+        applyPinState(wrap, meta.pinScope);
+
+        let html = '';
+        if(isPinned(meta.pinScope, msg.id)){
+            html += '<span class="msgPinBadge" aria-hidden="true">📌</span>';
+        }
+        if(msg.reply_to && msg.reply_to.text){
+            html += '<div class="msgQuote"><strong>'+
+                (msg.reply_to.sender === 'admin' ? 'پشتیبانی' : 'کاربر')+
+                '</strong><span>'+escapeHtml(msg.reply_to.text)+'</span></div>';
+        }
+        if(msg.text){
+            html += '<div class="msgText">'+escapeHtml(msg.text).replace(/\n/g, '<br>')+'</div>';
+        }
+        if(msg.edited){
+            html += '<span class="msgEditedInline">ویرایش‌شده</span>';
+        }
+        if(msg.image){
+            html += '<a class="msgImageLink" href="'+escapeHtml(msg.image)+'" target="_blank" rel="noopener"><img src="'+escapeHtml(msg.image)+'" alt=""></a>';
+        }
+        html += '<div class="msgMeta"><span class="msgTime">'+escapeHtml(msg.time || '')+'</span>'+
+            renderReadTicks(msg, meta) +
+            '</div>';
+        wrap.innerHTML = html;
+        return wrap;
+    }
+
+    function buildRowNode(msg, classMap, actionMeta, cluster){
+        const meta = actionMeta || {};
+        const isOwn = typeof msg.is_own === 'boolean'
+            ? msg.is_own
+            : (msg.sender === (meta.ownSender || 'user'));
+        const row = document.createElement('div');
+        row.className = isOwn ? 'msgRow msgRow--own' : 'msgRow msgRow--other';
+        row.dataset.msgRowId = msg.id || '';
+        row.appendChild(buildBubbleNode(msg, classMap, actionMeta, cluster));
+        return row;
+    }
+
+    function ensureDaySeparator(chatEl, msg){
+        const ts = msg.timestamp || 0;
+        const dayKey = dayKeyFromTimestamp(ts);
+        const seps = chatEl.querySelectorAll('.msgDaySep[data-day-key]');
+        for(let i = 0; i < seps.length; i++){
+            if(seps[i].dataset.dayKey === dayKey){
+                return;
+            }
+        }
+        const sep = document.createElement('div');
+        sep.className = 'msgDaySep';
+        sep.dataset.dayKey = dayKey;
+        sep.innerHTML = '<span>' + escapeHtml(daySeparatorLabel(ts)) + '</span>';
+        chatEl.appendChild(sep);
+    }
+
+    function applyMessageLayout(chatEl){
+        if(!chatEl){ return; }
+        const rows = Array.from(chatEl.querySelectorAll('.msgRow'));
+        const list = rows.map(function(row){
+            const bubble = row.querySelector('.msgBubble');
+            return {
+                sender: bubble ? (bubble.dataset.sender || '') : '',
+                timestamp: bubble ? parseInt(bubble.dataset.timestamp || '0', 10) : 0
+            };
+        });
+        rows.forEach(function(row, index){
+            const bubble = row.querySelector('.msgBubble');
+            if(!bubble){ return; }
+            applyClusterClass(bubble, clusterPosForList(list, index));
+        });
+    }
+
+    function updateBubbleContent(bubble, msg, actionMeta){
+        bubble.dataset.text = msg.text || '';
+        bubble.dataset.timestamp = msg.timestamp || 0;
+
+        let editedEl = bubble.querySelector('.msgEditedInline');
+        if(msg.edited){
+            if(!editedEl){
+                editedEl = document.createElement('span');
+                editedEl.className = 'msgEditedInline';
+                const metaEl = bubble.querySelector('.msgMeta');
+                if(metaEl){
+                    bubble.insertBefore(editedEl, metaEl);
+                }else{
+                    bubble.appendChild(editedEl);
+                }
+            }
+            editedEl.textContent = 'ویرایش‌شده';
+        }else if(editedEl){
+            editedEl.remove();
+        }
+
+        const textEl = bubble.querySelector('.msgText');
+        if(msg.text){
+            const html = escapeHtml(msg.text).replace(/\n/g, '<br>');
+            if(textEl){
+                textEl.innerHTML = html;
+            }else{
+                const node = document.createElement('div');
+                node.className = 'msgText';
+                node.innerHTML = html;
+                const metaEl = bubble.querySelector('.msgMeta');
+                if(metaEl){
+                    bubble.insertBefore(node, metaEl);
+                }else{
+                    bubble.appendChild(node);
+                }
+            }
+        }else if(textEl){
+            textEl.remove();
+        }
+
+        const metaEl = bubble.querySelector('.msgMeta');
+        if(metaEl){
+            const timeEl = metaEl.querySelector('.msgTime');
+            if(timeEl){
+                timeEl.textContent = msg.time || '';
+            }
+            const oldTicks = metaEl.querySelector('.msgTicks');
+            if(oldTicks){ oldTicks.remove(); }
+            metaEl.insertAdjacentHTML('beforeend', renderReadTicks(msg, actionMeta));
+        }
+
+        applyPinState(bubble, (actionMeta || {}).pinScope);
+        let pinBadge = bubble.querySelector('.msgPinBadge');
+        const pinned = isPinned((actionMeta || {}).pinScope, msg.id);
+        if(pinned && !pinBadge){
+            pinBadge = document.createElement('span');
+            pinBadge.className = 'msgPinBadge';
+            pinBadge.setAttribute('aria-hidden', 'true');
+            pinBadge.textContent = '📌';
+            bubble.insertBefore(pinBadge, bubble.firstChild);
+        }else if(!pinned && pinBadge){
+            pinBadge.remove();
+        }
+    }
+
+    function appendMessageToChat(chatEl, msg, options){
+        if(!chatEl || !msg || !msg.id){ return null; }
+        if(chatEl.querySelector('[data-msg-id="' + msg.id + '"]')){ return null; }
+
+        const empty = chatEl.querySelector('.msgEmpty');
+        if(empty){ empty.remove(); }
+
+        ensureDaySeparator(chatEl, msg);
+
+        const rows = chatEl.querySelectorAll('.msgRow');
+        const list = Array.from(rows).map(function(row){
+            const b = row.querySelector('.msgBubble');
+            return {
+                sender: b ? b.dataset.sender : '',
+                timestamp: b ? parseInt(b.dataset.timestamp || '0', 10) : 0
+            };
+        });
+        list.push({sender: msg.sender || '', timestamp: msg.timestamp || 0});
+        const cluster = clusterPosForList(list, list.length - 1);
+
+        const row = buildRowNode(
+            msg,
+            options.classMap || {admin:'admin', user:'usermsg'},
+            options.actionMeta || {},
+            cluster
+        );
+        chatEl.appendChild(row);
+        applyMessageLayout(chatEl);
+        scrollToBottom(chatEl, false);
+        return row;
+    }
+
+    function syncChatFromPayload(chatEl, payload, options){
+        if(!chatEl || !payload){ return false; }
+        let changed = false;
+        const actionMeta = options.actionMeta || {};
+        const syncList = payload.sync || payload.all || [];
+
+        if(Array.isArray(syncList) && syncList.length){
+            const alive = {};
+            syncList.forEach(function(msg){
+                if(msg && msg.id){ alive[msg.id] = true; }
+            });
+
+            chatEl.querySelectorAll('.msgRow').forEach(function(row){
+                const bubble = row.querySelector('.msgBubble');
+                const id = bubble ? bubble.dataset.msgId : '';
+                if(id && !alive[id]){
+                    row.remove();
+                    changed = true;
+                }
+            });
+
+            syncList.forEach(function(msg){
+                if(!msg || !msg.id){ return; }
+                const bubble = chatEl.querySelector('[data-msg-id="' + msg.id + '"]');
+                if(bubble){
+                    updateBubbleContent(bubble, msg, actionMeta);
+                }
+            });
+            applyMessageLayout(chatEl);
+        }
+
+        (payload.messages || []).forEach(function(msg){
+            if(appendMessageToChat(chatEl, msg, options)){
+                changed = true;
+            }
+        });
+
+        return changed;
+    }
+
+    function postSupportAction(form, fields, actionUrl){
+        const fd = new FormData();
+        const csrf = getCsrf(form);
+        fd.set('csrf', csrf);
+        fd.set('support_ajax', '1');
+        Object.keys(fields || {}).forEach(function(key){
+            fd.set(key, fields[key]);
+        });
+        const userInput = form.querySelector('input[name="user"]');
+        if(userInput && userInput.value && !fd.has('user')){
+            fd.set('user', userInput.value);
+        }
+        return fetch(actionUrl || form.getAttribute('action') || window.location.href, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: {'X-Support-AJAX': '1'}
+        }).then(function(res){
+            return res.json().catch(function(){
+                return {ok: false, error: 'پاسخ نامعتبر'};
+            });
+        });
+    }
+
+    function bindAjaxSend(options){
+        const form = options.form;
+        const chatEl = options.chatEl;
+        if(!form || !chatEl){ return; }
+
+        form._supportUiOpts = {
+            classMap: options.classMap || {admin:'admin', user:'usermsg'},
+            actionMeta: options.actionMeta || {}
+        };
+
+        let sending = false;
+        let editInput = form.querySelector('input[name="edit_id"]');
+        if(!editInput){
+            editInput = document.createElement('input');
+            editInput.type = 'hidden';
+            editInput.name = 'edit_id';
+            editInput.value = '';
+            form.appendChild(editInput);
+        }
+
+        let editChip = form.querySelector('.supportEditChip');
+        if(!editChip){
+            editChip = document.createElement('div');
+            editChip.className = 'supportEditChip supportReplyChip';
+            editChip.hidden = true;
+            form.insertBefore(editChip, form.firstChild);
+        }
+
+        function clearEditMode(){
+            editInput.value = '';
+            editChip.hidden = true;
+            editChip.innerHTML = '';
+        }
+
+        function setEditMode(msgId, preview){
+            editInput.value = msgId || '';
+            if(!msgId){
+                clearEditMode();
+                return;
+            }
+            editChip.hidden = false;
+            editChip.innerHTML =
+                '<div><small>ویرایش پیام</small><div>' + escapeHtml(preview || '') + '</div></div>' +
+                '<button type="button" class="supportReplyClear">×</button>';
+            editChip.querySelector('.supportReplyClear').onclick = function(){
+                clearEditMode();
+            };
+        }
+
+        form._supportClearEdit = clearEditMode;
+        form._supportSetEdit = setEditMode;
+
+        form.addEventListener('submit', function(e){
+            const mediaComposer = document.getElementById('supportMediaComposer');
+            const cropModal = document.getElementById('supportCropModal');
+            if(
+                (mediaComposer && !mediaComposer.hidden)
+                || (cropModal && !cropModal.hidden)
+            ){
+                return;
+            }
+
+            e.preventDefault();
+            if(sending){ return; }
+
+            const textarea = form.querySelector('textarea');
+            const text = (textarea?.value || '').trim();
+            const imageInput = form.querySelector('input[type="file"]');
+            const hasFile = imageInput && imageInput.files && imageInput.files.length > 0;
+            const hasPreview = !!form.querySelector('.supportAttachPreview:not([hidden])');
+            const editId = (editInput.value || '').trim();
+
+            if(!editId && text === '' && !hasFile && !hasPreview){
+                alert('متن یا تصویر وارد کنید');
+                return;
+            }
+
+            sending = true;
+            const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+            if(submitBtn){ submitBtn.disabled = true; }
+
+            const fd = new FormData(form);
+            fd.set('support_ajax', '1');
+
+            if(editId){
+                fd.delete('send');
+                fd.delete('reply');
+                fd.set('edit_id', editId);
+                fd.set('edit_text', text);
+                fd.delete('message');
+            }
+
+            fetch(form.getAttribute('action') || window.location.href, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: {'X-Support-AJAX': '1'}
+            }).then(function(res){
+                return res.json().catch(function(){
+                    return null;
+                });
+            }).then(function(payload){
+                sending = false;
+                if(submitBtn){ submitBtn.disabled = false; }
+
+                if(!payload || !payload.ok){
+                    alert((payload && payload.error) ? payload.error : 'ارسال ناموفق بود');
+                    return;
+                }
+
+                if(payload.deleted && payload.message_id){
+                    const bubble = chatEl.querySelector('[data-msg-id="' + payload.message_id + '"]');
+                    const row = bubble ? bubble.closest('.msgRow') : null;
+                    if(row){ row.remove(); }
+                    applyMessageLayout(chatEl);
+                    clearEditMode();
+                    if(textarea){ textarea.value = ''; }
+                    return;
+                }
+
+                if(payload.edited && payload.message){
+                    const bubble = chatEl.querySelector('[data-msg-id="' + payload.message.id + '"]');
+                    if(bubble){
+                        updateBubbleContent(bubble, payload.message, form._supportUiOpts.actionMeta);
+                    }
+                    clearEditMode();
+                    if(textarea){ textarea.value = ''; }
+                    return;
+                }
+
+                if(payload.message){
+                    appendMessageToChat(chatEl, payload.message, form._supportUiOpts);
+                }
+
+                if(textarea){ textarea.value = ''; textarea.style.height = '44px'; }
+                const replyInput = form.querySelector('input[name="reply_to"]');
+                if(replyInput){ replyInput.value = ''; }
+                const replyChip = form.querySelector('.supportReplyChip:not(.supportEditChip)');
+                if(replyChip){
+                    replyChip.hidden = true;
+                    replyChip.innerHTML = '';
+                }
+                clearEditMode();
+                if(imageInput){
+                    try{ imageInput.value = ''; }catch(err){}
+                }
+            }).catch(function(){
+                sending = false;
+                if(submitBtn){ submitBtn.disabled = false; }
+                alert('خطا در ارتباط با سرور');
+            });
+        });
+    }
+
     function bindMessageActions(options){
         const chatEl = options.chatEl;
         const form = options.form;
@@ -496,9 +1050,14 @@
             const isOwn = bubble.dataset.own === '1';
             const msgId = bubble.dataset.msgId || '';
             const text = bubble.dataset.text || '';
+            const pinScope = options.pinScope || 'default';
+            const pinned = isPinned(pinScope, msgId);
             const actions = [];
 
             if(canReply){ actions.push({key:'reply', label:'پاسخ'}); }
+            if(text){ actions.push({key:'copy', label:'کپی متن'}); }
+            actions.push({key:'pin', label: pinned ? 'برداشتن سنجاق' : 'سنجاق'});
+            actions.push({key:'select', label:'انتخاب'});
             if(canEdit){ actions.push({key:'edit', label:'ویرایش'}); }
             if(canDelete){ actions.push({key:'delete', label:'حذف', danger:true}); }
 
@@ -540,36 +1099,144 @@
                         if(ta){ ta.focus(); }
                         return;
                     }
+                    if(act === 'copy'){
+                        const copyText = text || '';
+                        if(copyText && navigator.clipboard){
+                            navigator.clipboard.writeText(copyText).then(function(){
+                                try{ if(navigator.vibrate){ navigator.vibrate(8); } }catch(err){}
+                            }).catch(function(){
+                                alert('کپی ناموفق بود');
+                            });
+                        }
+                        return;
+                    }
+                    if(act === 'pin'){
+                        togglePin(pinScope, msgId);
+                        applyPinState(bubble, pinScope);
+                        let pinBadge = bubble.querySelector('.msgPinBadge');
+                        const nowPinned = isPinned(pinScope, msgId);
+                        if(nowPinned && !pinBadge){
+                            pinBadge = document.createElement('span');
+                            pinBadge.className = 'msgPinBadge';
+                            pinBadge.setAttribute('aria-hidden', 'true');
+                            pinBadge.textContent = '📌';
+                            bubble.insertBefore(pinBadge, bubble.firstChild);
+                        }else if(!nowPinned && pinBadge){
+                            pinBadge.remove();
+                        }
+                        return;
+                    }
+                    if(act === 'select'){
+                        enterSelectMode(msgId);
+                        return;
+                    }
                     if(act === 'delete'){
                         if(!confirm('پیام حذف شود؟')){ return; }
-                        const f = document.createElement('form');
-                        f.method = 'POST';
-                        f.innerHTML =
-                            '<input type="hidden" name="csrf" value="'+escapeHtml(getCsrf(form))+'">' +
-                            '<input type="hidden" name="delete_message" value="1">' +
-                            '<input type="hidden" name="delete_id" value="'+escapeHtml(msgId)+'">' +
-                            '<input type="hidden" name="user" value="'+escapeHtml((form.querySelector('input[name="user"]')||{}).value || '')+'">';
-                        document.body.appendChild(f);
-                        f.submit();
+                        postSupportAction(form, {
+                            delete_message: '1',
+                            delete_id: msgId
+                        }).then(function(payload){
+                            if(!payload || !payload.ok){
+                                alert((payload && payload.error) ? payload.error : 'حذف ناموفق بود');
+                                return;
+                            }
+                            const row = bubble.closest('.msgRow') || bubble;
+                            if(row.parentNode){
+                                row.remove();
+                                applyMessageLayout(chatEl);
+                            }
+                        }).catch(function(){
+                            alert('خطا در حذف پیام');
+                        });
                         return;
                     }
                     if(act === 'edit'){
-                        const next = window.prompt('متن جدید پیام:', text);
-                        if(next === null){ return; }
-                        const f = document.createElement('form');
-                        f.method = 'POST';
-                        f.innerHTML =
-                            '<input type="hidden" name="csrf" value="'+escapeHtml(getCsrf(form))+'">' +
-                            '<input type="hidden" name="edit_id" value="'+escapeHtml(msgId)+'">' +
-                            '<input type="hidden" name="user" value="'+escapeHtml((form.querySelector('input[name="user"]')||{}).value || '')+'">' +
-                            '<input type="hidden" name="edit_text" value="">';
-                        f.querySelector('input[name="edit_text"]').value = next;
-                        document.body.appendChild(f);
-                        f.submit();
+                        const ta = form.querySelector('textarea');
+                        if(form._supportSetEdit){
+                            form._supportSetEdit(msgId, text);
+                        }
+                        if(ta){
+                            ta.value = text;
+                            ta.focus();
+                        }
                     }
                 };
             });
         }
+
+        let selectMode = false;
+        let selectBar = document.getElementById('supportSelectBar');
+        if(!selectBar){
+            selectBar = document.createElement('div');
+            selectBar.id = 'supportSelectBar';
+            selectBar.hidden = true;
+            selectBar.className = 'supportSelectBar';
+            selectBar.innerHTML =
+                '<span class="supportSelectCount">۰ انتخاب</span>' +
+                '<div class="supportSelectActions">' +
+                '<button type="button" data-act="copy" class="supportSelectBtn">کپی</button>' +
+                '<button type="button" data-act="cancel" class="supportSelectBtn ghost">انصراف</button>' +
+                '</div>';
+            const composer = form.closest('.msgComposer, .supportSendbox, footer');
+            if(composer){
+                composer.parentNode.insertBefore(selectBar, composer);
+            }else{
+                form.parentNode.insertBefore(selectBar, form);
+            }
+        }
+
+        function updateSelectBar(){
+            const selected = chatEl.querySelectorAll('.msgBubble.is-selected');
+            const countEl = selectBar.querySelector('.supportSelectCount');
+            if(countEl){
+                countEl.textContent = selected.length + ' انتخاب';
+            }
+        }
+
+        function exitSelectMode(){
+            selectMode = false;
+            selectBar.hidden = true;
+            chatEl.classList.remove('is-select-mode');
+            chatEl.querySelectorAll('.msgBubble.is-selectable, .msgBubble.is-selected').forEach(function(node){
+                node.classList.remove('is-selectable', 'is-selected');
+            });
+        }
+
+        function enterSelectMode(msgId){
+            selectMode = true;
+            selectBar.hidden = false;
+            chatEl.classList.add('is-select-mode');
+            chatEl.querySelectorAll('.msgBubble').forEach(function(b){
+                b.classList.add('is-selectable');
+                b.classList.toggle('is-selected', b.dataset.msgId === msgId);
+            });
+            updateSelectBar();
+        }
+
+        selectBar.querySelector('[data-act="cancel"]').addEventListener('click', exitSelectMode);
+        selectBar.querySelector('[data-act="copy"]').addEventListener('click', function(){
+            const texts = Array.from(chatEl.querySelectorAll('.msgBubble.is-selected'))
+                .map(function(b){ return b.dataset.text || ''; })
+                .filter(Boolean);
+            if(!texts.length){
+                alert('پیامی انتخاب نشده');
+                return;
+            }
+            navigator.clipboard.writeText(texts.join('\n')).then(function(){
+                exitSelectMode();
+            }).catch(function(){
+                alert('کپی ناموفق بود');
+            });
+        });
+
+        chatEl.addEventListener('click', function(e){
+            if(!selectMode){ return; }
+            const bubble = e.target.closest('.msgBubble');
+            if(!bubble || !chatEl.contains(bubble)){ return; }
+            e.preventDefault();
+            bubble.classList.toggle('is-selected');
+            updateSelectBar();
+        });
 
         let holdTimer = null;
         let holdStart = null;
@@ -583,6 +1250,7 @@
         }
 
         chatEl.addEventListener('contextmenu', function(e){
+            if(selectMode){ return; }
             const bubble = e.target.closest('.msgBubble');
             if(!bubble || !chatEl.contains(bubble)){ return; }
             if(e.target.closest('button,textarea,input')){ return; }
@@ -620,62 +1288,6 @@
         sheet.addEventListener('click', function(e){
             if(e.target === sheet){ closeSheet(); }
         });
-    }
-
-    function buildBubbleNode(msg, classMap, actionMeta){
-        const sender = msg.sender || 'user';
-        const roleCls = classMap[sender] || classMap.user || 'user';
-        const typeCls = (sender === 'admin') ? 'is-admin admin' : 'is-user usermsg';
-        const wrap = document.createElement('div');
-        wrap.className = 'msgBubble msg ' + typeCls;
-        wrap.dataset.msgId = msg.id || '';
-        wrap.dataset.timestamp = msg.timestamp || 0;
-        wrap.dataset.sender = sender;
-        wrap.dataset.text = msg.text || '';
-
-        const meta = actionMeta || {};
-        const isAdminView = !!meta.isAdmin;
-        const ownSender = meta.ownSender || 'user';
-        const isOwn = sender === ownSender;
-        let canEdit = false, canDelete = false, canReply = false;
-        const age = Math.max(0, Math.floor(Date.now()/1000) - (msg.timestamp || 0));
-
-        if(isAdminView){
-            canEdit = true;
-            canDelete = true;
-            canReply = !isOwn;
-        }else if(isOwn){
-            canEdit = age <= 900;
-            canDelete = age <= 300;
-        }else{
-            canReply = true;
-        }
-
-        wrap.dataset.own = isOwn ? '1' : '0';
-        wrap.dataset.canEdit = canEdit ? '1' : '0';
-        wrap.dataset.canDelete = canDelete ? '1' : '0';
-        wrap.dataset.canReply = canReply ? '1' : '0';
-
-        let html = '';
-        if(msg.reply_to && msg.reply_to.text){
-            html += '<div class="msgQuote"><strong>'+
-                (msg.reply_to.sender === 'admin' ? 'پشتیبانی' : 'کاربر')+
-                '</strong><span>'+escapeHtml(msg.reply_to.text)+'</span></div>';
-        }
-        if(msg.text){
-            html += '<div class="msgText">'+escapeHtml(msg.text).replace(/\n/g, '<br>')+'</div>';
-        }
-        if(msg.edited){
-            html += '<small class="msgEdited">(ویرایش شد)</small>';
-        }
-        if(msg.image){
-            html += '<a class="msgImageLink" href="'+escapeHtml(msg.image)+'" target="_blank" rel="noopener"><img src="'+escapeHtml(msg.image)+'" alt=""></a>';
-        }
-        html += '<div class="msgMeta">'+
-            escapeHtml(msg.time || '') + ' - ' + escapeHtml(msg.date || '') +
-            '</div>';
-        wrap.innerHTML = html;
-        return wrap;
     }
 
     function bindMobileChatLayout(options){
@@ -849,33 +1461,41 @@
         const getParams = options.getParams || function(){ return ''; };
         const classMap = options.classMap || {admin:'admin',user:'user'};
         const interval = options.interval || 5000;
-        const actionMeta = options.actionMeta || {};
+        const actionMeta = Object.assign({pinScope: options.pinScope || 'default'}, options.actionMeta || {});
         let lastPollTimestamp = options.since || 0;
 
         if(chatEl){
-            chatEl.querySelectorAll('[data-timestamp]').forEach(function(node){
+            chatEl.querySelectorAll('.msgBubble[data-timestamp]').forEach(function(node){
                 const ts = parseInt(node.dataset.timestamp || '0', 10);
                 if(ts > lastPollTimestamp){ lastPollTimestamp = ts; }
             });
+            applyMessageLayout(chatEl);
+            chatEl.querySelectorAll('.msgBubble').forEach(function(b){
+                applyPinState(b, actionMeta.pinScope);
+            });
         }
+
+        const pollOpts = {
+            classMap: classMap,
+            actionMeta: actionMeta
+        };
 
         async function poll(){
             if(!chatEl || !pollUrl){ return; }
-            const url = pollUrl + getParams(lastPollTimestamp);
+            let url = pollUrl + getParams(lastPollTimestamp);
+            url += (url.indexOf('?') >= 0 ? '&' : '?') + 'sync=1';
             try{
                 const response = await fetch(url, {credentials: 'same-origin'});
                 if(!response.ok){ return; }
                 const payload = await response.json();
-                let added = false;
+                const changed = syncChatFromPayload(chatEl, payload, pollOpts);
                 (payload.messages || []).forEach(function(msg){
-                    if(chatEl.querySelector('[data-msg-id="' + msg.id + '"]')){ return; }
-                    const empty = chatEl.querySelector('.msgEmpty');
-                    if(empty){ empty.remove(); }
-                    chatEl.appendChild(buildBubbleNode(msg, classMap, actionMeta));
                     lastPollTimestamp = Math.max(lastPollTimestamp, msg.timestamp || 0);
-                    added = true;
                 });
-                if(added){ scrollToBottom(chatEl, false); }
+                (payload.sync || []).forEach(function(msg){
+                    lastPollTimestamp = Math.max(lastPollTimestamp, msg.timestamp || 0);
+                });
+                if(changed){ scrollToBottom(chatEl, false); }
             }catch(e){}
         }
 
@@ -893,7 +1513,10 @@
         bindImageAttach: bindImageAttach,
         bindMessageActions: bindMessageActions,
         bindMobileChatLayout: bindMobileChatLayout,
+        bindAjaxSend: bindAjaxSend,
         initPolling: initPolling,
+        appendMessageToChat: appendMessageToChat,
+        applyMessageLayout: applyMessageLayout,
         submitComposerForm: submitComposerForm
     };
 

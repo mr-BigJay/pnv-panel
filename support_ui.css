@@ -1,19 +1,20 @@
 /* مسنجر داخلی پنل — استایل مشترک کاربر و ادمین */
 
 :root{
---msg-bg:#0b1220;
---msg-panel:#111827;
---msg-card:#1a2332;
---msg-border:#243044;
---msg-user:#3b82f6;
---msg-user-hover:#2563eb;
---msg-admin:#22c55e;
---msg-admin-hover:#16a34a;
---msg-in:#1e293b;
---msg-text:#f1f5f9;
---msg-muted:#94a3b8;
---msg-radius:18px;
---msg-bubble:16px;
+--msg-bg:#0e1621;
+--msg-panel:#17212b;
+--msg-card:#242f3d;
+--msg-border:#1e2d3d;
+--msg-user:#2b5278;
+--msg-user-hover:#3d6fa8;
+--msg-admin:#182533;
+--msg-admin-hover:#202b36;
+--msg-in:#182533;
+--msg-text:#e4ecf4;
+--msg-muted:#6d8399;
+--msg-accent:#6ab2f2;
+--msg-radius:12px;
+--msg-bubble:12px;
 }
 
 html,body{
@@ -1712,4 +1713,252 @@ overflow:hidden;
 font-family:"Lalezar", Tahoma, sans-serif;
 font-weight:400;
 letter-spacing:.2px;
+}
+
+/* ——— Telegram theme v43 ——— */
+.msgBody,
+.supportMessages{
+gap:2px;
+background:var(--msg-bg);
+padding:10px 12px 16px;
+}
+
+.msgRow{
+display:flex;
+width:100%;
+margin:0;
+clear:both;
+}
+
+.msgRow--own{
+justify-content:flex-end;
+}
+
+.msgRow--other{
+justify-content:flex-start;
+}
+
+.msgRow .msgBubble,
+.msgRow .msg{
+margin:0;
+max-width:min(76%, 480px);
+}
+
+.msgBubble.cluster-top{
+border-bottom-right-radius:4px;
+}
+
+.msgRow--own .msgBubble.cluster-top,
+.msgApp--user .msgRow--own .msgBubble.cluster-top{
+border-bottom-left-radius:4px;
+border-bottom-right-radius:12px;
+}
+
+.msgBubble.cluster-mid{
+border-radius:4px 12px 12px 4px;
+}
+
+.msgRow--own .msgBubble.cluster-mid,
+.msgApp--user .msgRow--own .msgBubble.cluster-mid{
+border-radius:12px 4px 4px 12px;
+}
+
+.msgBubble.cluster-bot{
+border-top-right-radius:4px;
+}
+
+.msgRow--own .msgBubble.cluster-bot,
+.msgApp--user .msgRow--own .msgBubble.cluster-bot{
+border-top-left-radius:4px;
+border-top-right-radius:12px;
+}
+
+.msgApp--user .msg.usermsg,
+.msgApp--user .msgBubble.is-user,
+.msgRow--own .msgBubble.is-user,
+.msgRow--own .msg.usermsg{
+background:var(--msg-user);
+color:#fff;
+margin:0;
+}
+
+.msgBubble.is-admin,
+.msg.admin,
+.msgRow--own .msgBubble.is-admin,
+.msgRow--own .msg.admin{
+background:var(--msg-user);
+color:#fff;
+margin:0;
+}
+
+.msgBubble.is-user,
+.msg.usermsg,
+.msgRow--other .msgBubble.is-user,
+.msgRow--other .msg.usermsg{
+background:var(--msg-in);
+margin:0;
+}
+
+.msgRow--other .msgBubble.is-admin,
+.msgRow--other .msg.admin{
+background:var(--msg-in);
+margin:0;
+}
+
+.msgMeta{
+display:flex;
+align-items:center;
+justify-content:flex-end;
+gap:4px;
+margin-top:4px;
+font-size:10px;
+color:var(--msg-muted);
+float:none;
+}
+
+.msgRow--own .msgMeta,
+.msgApp--user .msgRow--own .msgMeta{
+color:rgba(255,255,255,.55);
+}
+
+.msgTicks{
+font-size:11px;
+line-height:1;
+letter-spacing:-1px;
+}
+
+.msgTicks--read{
+color:var(--msg-accent);
+}
+
+.msgEditedInline{
+font-size:10px;
+opacity:.75;
+margin-left:4px;
+}
+
+.msgDaySep span{
+background:#182533;
+border:0;
+color:var(--msg-muted);
+}
+
+.msgConv.active{
+background:#2b5278;
+}
+
+.msgConv:hover:not(.active){
+background:#202b36;
+}
+
+.msgBadge{
+background:var(--msg-accent);
+}
+
+.msgIconBtn--send{
+background:var(--msg-accent);
+color:#fff;
+}
+
+.msgComposerInner textarea,
+.msgComposer textarea{
+background:var(--msg-card);
+border:0;
+border-radius:20px;
+}
+
+.msgQuote{
+border-right-color:var(--msg-accent);
+color:var(--msg-accent);
+}
+
+.supportSheetCard{
+background:var(--msg-panel);
+border:1px solid var(--msg-border);
+border-radius:14px 14px 0 0;
+padding:8px 0 10px;
+}
+
+.supportSheetCard button{
+background:transparent;
+border:0;
+color:var(--msg-text);
+text-align:right;
+padding:12px 20px;
+font-size:14px;
+width:100%;
+}
+
+.supportSheetCard button:hover{
+background:var(--msg-card);
+}
+
+.supportSheetCard button.danger{
+color:#e85c5c;
+}
+
+.supportSheetCard button.ghost{
+color:var(--msg-muted);
+}
+
+.supportSheetCard button.is-disabled{
+opacity:.55;
+}
+
+.msgBubble.is-selectable{
+outline:2px solid var(--msg-accent);
+outline-offset:2px;
+}
+
+.msgBubble.is-selected{
+background:rgba(106,178,242,.22) !important;
+}
+
+.supportSelectBar{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+padding:8px 12px;
+background:var(--msg-panel);
+border-top:1px solid var(--msg-border);
+font-size:13px;
+}
+
+.supportSelectBar[hidden]{
+display:none !important;
+}
+
+.msgPinBadge{
+position:absolute;
+top:4px;
+left:6px;
+font-size:11px;
+opacity:.85;
+}
+
+.msgBubble.is-pinned{
+position:relative;
+}
+
+.is-select-mode .msgBubble.is-selectable{
+cursor:pointer;
+}
+
+.supportSelectBtn{
+background:var(--msg-card);
+border:0;
+border-radius:8px;
+color:var(--msg-text);
+padding:6px 12px;
+font-size:13px;
+cursor:pointer;
+}
+
+.supportSelectBtn.ghost{
+color:var(--msg-muted);
+}
+
+.supportEditChip small{
+color:var(--msg-accent);
 }

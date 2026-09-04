@@ -151,7 +151,174 @@ if(!function_exists('supportLoad')){
 
     }
 
-    function supportMessageForApi($message){
+    function supportIsAjaxRequest(){
+
+        if(!empty($_POST['support_ajax']) || !empty($_GET['support_ajax'])){
+            return true;
+        }
+
+        $hdr = $_SERVER['HTTP_X_SUPPORT_AJAX'] ?? '';
+
+        return $hdr === '1' || strtolower($hdr) === 'true';
+    }
+
+    function supportAjaxRespond($payload, $httpCode = 200){
+
+        http_response_code($httpCode);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    function supportMessageDayKey($message){
+
+        $timestamp = intval($message['timestamp'] ?? 0);
+
+        if($timestamp <= 0){
+            return 'unknown';
+        }
+
+        supportEnsureTehranTimezone();
+
+        return date('Y-m-d', $timestamp);
+    }
+
+    function supportDaySeparatorLabel($message){
+
+        $timestamp = intval($message['timestamp'] ?? 0);
+
+        if($timestamp <= 0){
+            return '—';
+        }
+
+        supportEnsureTehranTimezone();
+        $key = date('Y-m-d', $timestamp);
+        $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+
+        if($key === $today){
+            return 'امروز';
+        }
+
+        if($key === $yesterday){
+            return 'دیروز';
+        }
+
+        return supportFormatFromTimestamp($timestamp)['date'];
+    }
+
+    function supportRenderDaySeparator($message){
+
+        $label = supportDaySeparatorLabel($message);
+
+        return '<div class="msgDaySep" data-day-key="' . htmlspecialchars(supportMessageDayKey($message), ENT_QUOTES, 'UTF-8') . '"><span>'
+            . htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+            . '</span></div>';
+    }
+
+    function supportMessageClusterPos($messages, $index){
+
+        if(!isset($messages[$index]) || !is_array($messages[$index])){
+            return 'single';
+        }
+
+        $cur = $messages[$index];
+        $curSender = (string)($cur['sender'] ?? '');
+        $curTs = intval($cur['timestamp'] ?? 0);
+        $curDay = supportMessageDayKey($cur);
+        $prev = $index > 0 ? $messages[$index - 1] : null;
+        $next = ($index + 1) < count($messages) ? $messages[$index + 1] : null;
+
+        $samePrev = is_array($prev)
+            && (string)($prev['sender'] ?? '') === $curSender
+            && supportMessageDayKey($prev) === $curDay
+            && ($curTs - intval($prev['timestamp'] ?? 0)) <= 600;
+
+        $sameNext = is_array($next)
+            && (string)($next['sender'] ?? '') === $curSender
+            && supportMessageDayKey($next) === $curDay
+            && (intval($next['timestamp'] ?? 0) - $curTs) <= 600;
+
+        if($samePrev && $sameNext){
+            return 'mid';
+        }
+
+        if($samePrev){
+            return 'bot';
+        }
+
+        if($sameNext){
+            return 'top';
+        }
+
+        return 'single';
+    }
+
+    function supportMessageIsOwn($message, $options){
+
+        $sender = (string)($message['sender'] ?? '');
+        $isAdmin = !empty($options['isAdmin']);
+
+        if($isAdmin){
+            return $sender === 'admin';
+        }
+
+        return $sender === 'user';
+    }
+
+    function supportRenderReadTicks($message, $options){
+
+        if(!supportMessageIsOwn($message, $options)){
+            return '';
+        }
+
+        $isAdmin = !empty($options['isAdmin']);
+        $seen = $isAdmin
+            ? !empty($message['seen_by_user'])
+            : !empty($message['seen_by_admin']);
+
+        $class = $seen ? 'msgTicks msgTicks--read' : 'msgTicks';
+
+        return '<span class="' . $class . '" aria-hidden="true">'
+            . ($seen ? '✓✓' : '✓')
+            . '</span>';
+    }
+
+    function supportRenderMessagesList($messages, $options){
+
+        if(!is_array($messages) || count($messages) === 0){
+            return '';
+        }
+
+        $html = '';
+        $lastDay = '';
+
+        foreach($messages as $i => $m){
+
+            if(!is_array($m)){
+                continue;
+            }
+
+            $dayKey = supportMessageDayKey($m);
+
+            if($dayKey !== $lastDay){
+                $html .= supportRenderDaySeparator($m);
+                $lastDay = $dayKey;
+            }
+
+            $msgOptions = $options;
+            $msgOptions['cluster'] = supportMessageClusterPos($messages, $i);
+            $rowClass = supportMessageIsOwn($m, $options) ? 'msgRow msgRow--own' : 'msgRow msgRow--other';
+
+            $html .= '<div class="' . $rowClass . '">';
+            $html .= supportRenderMessageHtml($m, $msgOptions);
+            $html .= '</div>';
+        }
+
+        return $html;
+    }
+
+    function supportMessageForApi($message, $options = []){
 
         $display = supportMessageDisplayTime($message);
         $image = $message['image'] ?? '';
@@ -169,7 +336,10 @@ if(!function_exists('supportLoad')){
             'time' => $display['time'],
             'timestamp' => intval($message['timestamp'] ?? 0),
             'edited' => !empty($message['edited']),
-            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null
+            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null,
+            'seen_by_admin' => !empty($message['seen_by_admin']),
+            'seen_by_user' => !empty($message['seen_by_user']),
+            'is_own' => supportMessageIsOwn($message, $options),
         ];
 
     }
@@ -848,6 +1018,11 @@ if(!function_exists('supportLoad')){
 
         $sender = $m['sender'] ?? 'user';
         $class = ($sender === 'admin') ? 'is-admin admin' : 'is-user usermsg';
+        $cluster = trim((string)($options['cluster'] ?? 'single'));
+
+        if($cluster !== '' && $cluster !== 'single'){
+            $class .= ' cluster-' . $cluster;
+        }
         $currentUser = $options['currentUser'] ?? '';
         $embedded = !empty($options['embedded']);
         $csrfField = $options['csrfField'] ?? '';
@@ -916,7 +1091,7 @@ if(!function_exists('supportLoad')){
             <?php } ?>
 
             <?php if(!empty($m['edited'])){ ?>
-            <small class="msgEdited">(ویرایش شد)</small>
+            <span class="msgEditedInline">ویرایش‌شده</span>
             <?php } ?>
 
             <?php if($image !== ''){ ?>
@@ -926,9 +1101,8 @@ if(!function_exists('supportLoad')){
             <?php } ?>
 
             <div class="msgMeta">
-                <?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?>
-                -
-                <?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
+                <span class="msgTime"><?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?></span>
+                <?php echo supportRenderReadTicks($m, $options); ?>
             </div>
 
             <?php if(
@@ -1020,6 +1194,14 @@ if(!function_exists('supportLoad')){
                     supportSave($file, $data);
                 }
 
+                if(supportIsAjaxRequest()){
+                    supportAjaxRespond([
+                        'ok' => true,
+                        'deleted' => true,
+                        'message_id' => $msgId,
+                    ]);
+                }
+
                 $redirect = supportAdminUrl($user, $embedded);
             }
 
@@ -1046,6 +1228,17 @@ if(!function_exists('supportLoad')){
                         if(($msg['id'] ?? '') === $id){
                             $data[$i]['messages'][$j]['text'] = $text;
                             $data[$i]['messages'][$j]['edited'] = true;
+
+                            if(supportIsAjaxRequest()){
+                                supportAjaxRespond([
+                                    'ok' => true,
+                                    'edited' => true,
+                                    'message' => supportMessageForApi(
+                                        $data[$i]['messages'][$j],
+                                        ['isAdmin' => true]
+                                    ),
+                                ]);
+                            }
                         }
 
                     }
@@ -1130,6 +1323,13 @@ if(!function_exists('supportLoad')){
                             tgUserNotifySupportReply($user, $text);
                         }
 
+                        if(supportIsAjaxRequest()){
+                            supportAjaxRespond([
+                                'ok' => true,
+                                'message' => supportMessageForApi($row, ['isAdmin' => true]),
+                            ]);
+                        }
+
                     }
                     $redirect = supportAdminUrl($user, $embedded);
                 }
@@ -1194,6 +1394,14 @@ if(!function_exists('supportLoad')){
                             unset($data[$i]['messages'][$j]);
                             $data[$i]['messages'] = array_values($data[$i]['messages']);
                             supportSave($file, $data);
+
+                            if(supportIsAjaxRequest()){
+                                supportAjaxRespond([
+                                    'ok' => true,
+                                    'deleted' => true,
+                                    'message_id' => $msgId,
+                                ]);
+                            }
                         }
 
                     }
@@ -1232,6 +1440,17 @@ if(!function_exists('supportLoad')){
                             $data[$i]['messages'][$j]['text'] = $newText;
                             $data[$i]['messages'][$j]['edited'] = true;
                             supportSave($file, $data);
+
+                            if(supportIsAjaxRequest()){
+                                supportAjaxRespond([
+                                    'ok' => true,
+                                    'edited' => true,
+                                    'message' => supportMessageForApi(
+                                        $data[$i]['messages'][$j],
+                                        ['isAdmin' => false]
+                                    ),
+                                ]);
+                            }
                         }
 
                     }
@@ -1308,6 +1527,14 @@ if(!function_exists('supportLoad')){
 
                     supportSave($file, $data);
                     supportNotifyTelegramAdmins($username, $newmsg);
+
+                    if(supportIsAjaxRequest()){
+                        supportAjaxRespond([
+                            'ok' => true,
+                            'message' => supportMessageForApi($newmsg, ['isAdmin' => false]),
+                        ]);
+                    }
+
                     header('Location: support.php');
                     exit;
                 }

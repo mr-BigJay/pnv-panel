@@ -40,7 +40,7 @@ foreach($data as $ticket){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="support_ui.css?v=42">
+<link rel="stylesheet" href="support_ui.css?v=44">
 <link rel="stylesheet" href="fonts.css">
 <style>
 html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overflow:hidden;}
@@ -72,8 +72,8 @@ html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overfl
 </div>
 <?php } ?>
 
-<?php foreach($messages as $m){
-    echo supportRenderMessageHtml($m, [
+<?php if(count($messages) > 0){
+    echo supportRenderMessagesList($messages, [
         'ownUsername' => $user,
         'csrfField' => $csrfField,
         'editId' => $editId,
@@ -107,31 +107,40 @@ html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overfl
 
 </div>
 
-<script src="support_ui.js?v=41"></script>
+<script src="support_ui.js?v=44"></script>
 <script>
 (function(){
     const userChat = document.getElementById('userChat');
     const messageInput = document.getElementById('message');
     const userSupportForm = document.getElementById('userSupportForm');
+    const pinScope = 'user';
 
     SupportUI.bindTextareaGrow(messageInput);
     SupportUI.bindEnterToSend(messageInput, userSupportForm, true);
     SupportUI.bindFormGuard(userSupportForm, messageInput, 'userImage');
     SupportUI.bindImageAttach(userSupportForm, 'userImage', 'attachBtn');
+    SupportUI.bindAjaxSend({
+        form: userSupportForm,
+        chatEl: userChat,
+        classMap: {admin:'admin', user:'usermsg'},
+        actionMeta: {isAdmin: false, ownSender: 'user', pinScope: pinScope}
+    });
     SupportUI.bindMessageActions({
         chatEl: userChat,
         form: userSupportForm,
-        role: 'user'
+        role: 'user',
+        pinScope: pinScope
     });
 
     SupportUI.initPolling({
         chatEl: userChat,
         pollUrl: 'support-api.php',
+        pinScope: pinScope,
         getParams: function(since){
             return '?since=' + (since || 0);
         },
         classMap: {admin:'admin', user:'usermsg'},
-        actionMeta: {isAdmin: false, ownSender: 'user'},
+        actionMeta: {isAdmin: false, ownSender: 'user', pinScope: pinScope},
         interval: 5000
     });
 

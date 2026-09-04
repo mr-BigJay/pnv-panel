@@ -44,10 +44,10 @@ $currentUser = supportResolveTicketUsername($data, $_GET['user'] ?? '');
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=42';
+$cssHref = '../support_ui.css?v=44';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=42';
+$jsHref = '../support_ui.js?v=44';
 
 if(!$supportEmbedded){
 ?>
@@ -181,18 +181,14 @@ foreach($data as $ticket){
 
     $hasMessages = true;
 
-    foreach($ticket['messages'] as $m){
-
-        echo supportRenderMessageHtml($m, [
-            'currentUser' => $currentUser,
-            'embedded' => $supportEmbedded,
-            'csrfField' => $csrfField,
-            'editId' => $editId,
-            'isAdmin' => true,
-            'baseUrl' => $baseUrl
-        ]);
-
-    }
+    echo supportRenderMessagesList($ticket['messages'], [
+        'currentUser' => $currentUser,
+        'embedded' => $supportEmbedded,
+        'csrfField' => $csrfField,
+        'editId' => $editId,
+        'isAdmin' => true,
+        'baseUrl' => $baseUrl
+    ]);
 
     break;
 
@@ -352,11 +348,19 @@ if(!$hasMessages){
     SupportUI.bindEnterToSend(supportMessage, supportReplyForm, true);
     SupportUI.bindFormGuard(supportReplyForm, supportMessage, 'supportImage');
     if(supportReplyForm){
+        const pinScope = currentUser || 'admin';
         SupportUI.bindImageAttach(supportReplyForm, 'supportImage', 'attachBtnAdmin');
+        SupportUI.bindAjaxSend({
+            form: supportReplyForm,
+            chatEl: supportMessages,
+            classMap: {admin:'admin', user:'usermsg'},
+            actionMeta: {isAdmin: true, ownSender: 'admin', pinScope: pinScope}
+        });
         SupportUI.bindMessageActions({
             chatEl: supportMessages,
             form: supportReplyForm,
-            role: 'admin'
+            role: 'admin',
+            pinScope: pinScope
         });
     }
 
@@ -500,11 +504,12 @@ if(!$hasMessages){
         SupportUI.initPolling({
             chatEl: supportMessages,
             pollUrl: pollUrl,
+            pinScope: currentUser || 'admin',
             getParams: function(since){
                 return '?user=' + encodeURIComponent(currentUser) + '&since=' + (since || 0);
             },
             classMap: {admin:'admin', user:'usermsg'},
-            actionMeta: {isAdmin: true, ownSender: 'admin'},
+            actionMeta: {isAdmin: true, ownSender: 'admin', pinScope: currentUser || 'admin'},
             interval: 5000
         });
 
