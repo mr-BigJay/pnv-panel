@@ -177,6 +177,19 @@ body {
   color: #fff;
 }
 
+.msg-bubble {
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+}
+
+.msg-bubble * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .tg-btn-send {
   background: var(--tg-send);
 }

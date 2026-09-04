@@ -9,6 +9,7 @@ export function useMessageMenuOpener(onOpen: (state: MessageContextMenuState) =>
   const holdStart = useRef<{ x: number; y: number } | null>(null);
   const holdMessage = useRef<SupportMessage | null>(null);
   const holdBubble = useRef<HTMLElement | null>(null);
+  const menuOpenedFromHold = useRef(false);
 
   const clearHold = useCallback(() => {
     if (holdTimer.current !== null) {
@@ -26,6 +27,11 @@ export function useMessageMenuOpener(onOpen: (state: MessageContextMenuState) =>
   const openForBubble = useCallback(
     (message: SupportMessage, bubble: HTMLElement, pinned: boolean) => {
       try {
+        window.getSelection()?.removeAllRanges();
+      } catch {
+        /* ignore */
+      }
+      try {
         navigator.vibrate?.(18);
       } catch {
         /* ignore */
@@ -38,6 +44,10 @@ export function useMessageMenuOpener(onOpen: (state: MessageContextMenuState) =>
     },
     [onOpen],
   );
+
+  const blockNativeSelect = useCallback((e: React.SyntheticEvent) => {
+    e.preventDefault();
+  }, []);
 
   const getBubbleHandlers = useCallback(
     (message: SupportMessage, pinned: boolean) => ({
@@ -57,6 +67,7 @@ export function useMessageMenuOpener(onOpen: (state: MessageContextMenuState) =>
         holdTimer.current = window.setTimeout(() => {
           const target = holdBubble.current;
           const msg = holdMessage.current;
+          menuOpenedFromHold.current = true;
           clearHold();
           if (target && msg) openForBubble(msg, target, pinned);
         }, HOLD_MS);
@@ -67,10 +78,26 @@ export function useMessageMenuOpener(onOpen: (state: MessageContextMenuState) =>
         const dy = e.touches[0].clientY - holdStart.current.y;
         if (dx * dx + dy * dy > 100) clearHold();
       },
-      onTouchEnd: clearHold,
-      onTouchCancel: clearHold,
+      onTouchEnd: (e: React.TouchEvent<HTMLElement>) => {
+        if (menuOpenedFromHold.current) {
+          e.preventDefault();
+          menuOpenedFromHold.current = false;
+          try {
+            window.getSelection()?.removeAllRanges();
+          } catch {
+            /* ignore */
+          }
+        }
+        clearHold();
+      },
+      onTouchCancel: () => {
+        menuOpenedFromHold.current = false;
+        clearHold();
+      },
+      onSelectStart: blockNativeSelect,
+      onDragStart: blockNativeSelect,
     }),
-    [clearHold, openForBubble],
+    [blockNativeSelect, clearHold, openForBubble],
   );
 
   useEffect(() => () => clearHold(), [clearHold]);

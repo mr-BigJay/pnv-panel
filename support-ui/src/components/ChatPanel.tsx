@@ -333,6 +333,7 @@ export function ChatPanel({
                           src={msg.image}
                           alt=""
                           loading="lazy"
+                          draggable={false}
                           className="tg-msg-image block max-h-[360px] w-full max-w-[280px] object-contain"
                         />
                       </button>
