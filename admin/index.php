@@ -959,20 +959,33 @@ width:100% !important;
 box-sizing:border-box;
 }
 
-#support-v2-root .tg-composer-field{
-flex:1 1 0% !important;
-min-width:0 !important;
-width:auto !important;
+#support-v2-root .tg-composer-row{
+display:flex !important;
+flex-direction:row !important;
+align-items:flex-end !important;
+gap:8px !important;
 }
 
-#support-v2-root .tg-composer-input{
-display:block !important;
-width:100% !important;
-max-width:none !important;
-flex:none !important;
+#support-v2-root .tg-composer-row > .tg-composer-input{
+flex:1 1 0 !important;
 min-width:0 !important;
+width:auto !important;
+max-width:none !important;
 min-height:48px !important;
-box-sizing:border-box !important;
+overflow-y:hidden !important;
+scrollbar-width:none !important;
+}
+
+#support-v2-root .tg-composer-row > .tg-composer-input::-webkit-scrollbar{
+display:none !important;
+width:0 !important;
+height:0 !important;
+}
+
+#support-v2-root .tg-composer-row > .tg-composer-action,
+#support-v2-root .tg-composer-row > .tg-composer-icon,
+#support-v2-root .tg-composer-row > .tg-composer-send{
+flex:0 0 auto !important;
 }
 
 #support-v2-root .tg-composer-action,
