@@ -6,8 +6,10 @@ if(!function_exists('supportLoad')){
 
     function supportIsEmbeddedRequest(){
 
+        $page = (string)($_GET['page'] ?? '');
+
         return basename($_SERVER['SCRIPT_NAME'] ?? '') === 'index.php'
-            && (($_GET['page'] ?? '') === 'support');
+            && in_array($page, ['support', 'support-v2'], true);
 
     }
 

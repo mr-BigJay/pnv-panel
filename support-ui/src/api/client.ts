@@ -7,11 +7,27 @@ import type {
 } from '../types';
 
 async function parseJson<T>(res: Response): Promise<T> {
-  const data = await res.json();
+  const raw = await res.text();
+
+  if (!raw.trim()) {
+    throw new Error(
+      `پاسخ API خالی است (HTTP ${res.status}) — احتمالاً support_lib.php روی سرور deploy نشده`,
+    );
+  }
+
+  let data: unknown;
+
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(`پاسخ API نامعتبر است (HTTP ${res.status})`);
+  }
+
   if (!res.ok) {
     const err = (data as { error?: string }).error ?? `HTTP ${res.status}`;
     throw new Error(err);
   }
+
   return data as T;
 }
 

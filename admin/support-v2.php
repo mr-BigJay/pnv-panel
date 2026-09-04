@@ -33,8 +33,18 @@ if(is_dir($assetDir)){
 }
 
 $initialUser = supportNormalizeUsername($_GET['user'] ?? '');
-$apiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-api.php') : 'support-api.php';
-$assetBase = '../assets/support/admin/';
+
+if(function_exists('pnvAdminUrl')){
+    $apiUrl = pnvAdminUrl('support-api.php');
+}
+elseif(defined('PNV_ADMIN_BASE')){
+    $apiUrl = rtrim(PNV_ADMIN_BASE, '/') . '/support-api.php';
+}
+else{
+    $apiUrl = '/bigjay_controller/support-api.php';
+}
+
+$assetBase = '/assets/support/admin/';
 
 $config = [
     'apiUrl' => $apiUrl,
