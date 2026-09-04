@@ -23,7 +23,7 @@ files=(
 for rel in "${files[@]}"; do
   dest="${ROOT}/${rel}"
   mkdir -p "$(dirname "$dest")"
-  curl -fsSL "${BASE}/${rel}" -o "${dest}"
+  curl -fsSL "${BASE}/${rel}?v=$(date +%s)" -o "${dest}"
   echo "  OK ${rel}"
 done
 

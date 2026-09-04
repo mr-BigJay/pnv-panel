@@ -54,7 +54,7 @@ $config = [
     'pollIntervalMs' => 3000,
 ];
 
-$rootHeight = $supportEmbedded ? 'calc(100vh - 100px)' : '100vh';
+$rootHeight = $supportEmbedded ? '100%' : '100vh';
 
 if(!$supportEmbedded){
 ?>

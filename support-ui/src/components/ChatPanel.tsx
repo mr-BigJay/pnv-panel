@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { BsCheck, BsCheckAll } from 'react-icons/bs';
-import { HiDotsVertical } from 'react-icons/hi';
 import { IoArrowBack } from 'react-icons/io5';
 import type { SupportMessage } from '../types';
 import { getAvatarColor, getInitials } from '../lib/avatarUtils';
@@ -26,9 +25,9 @@ interface ChatPanelProps {
 function messageStatus(msg: SupportMessage) {
   if (!msg.is_own) return null;
   if (msg.seen_by_user) {
-    return <BsCheckAll className="h-4 w-4 text-blue-400" />;
+    return <BsCheckAll className="h-3.5 w-3.5 text-[#6ab2f2]" />;
   }
-  return <BsCheck className="h-4 w-4 text-gray-300" />;
+  return <BsCheck className="h-3.5 w-3.5 text-white/50" />;
 }
 
 function dayLabel(msg: SupportMessage, prev?: SupportMessage): string | null {
@@ -39,16 +38,16 @@ function dayLabel(msg: SupportMessage, prev?: SupportMessage): string | null {
 
 function clusterRadius(isOwn: boolean, pos: 'single' | 'top' | 'mid' | 'bot') {
   const own = {
-    single: 'rounded-2xl rounded-br-md',
-    top: 'rounded-2xl rounded-br-sm',
-    mid: 'rounded-xl rounded-r-sm',
-    bot: 'rounded-2xl rounded-tr-md',
+    single: 'rounded-xl rounded-br-[4px]',
+    top: 'rounded-xl rounded-br-[4px] rounded-tr-xl',
+    mid: 'rounded-xl rounded-r-[4px]',
+    bot: 'rounded-xl rounded-tr-[4px] rounded-br-xl',
   };
   const other = {
-    single: 'rounded-2xl rounded-bl-md',
-    top: 'rounded-2xl rounded-bl-sm',
-    mid: 'rounded-xl rounded-l-sm',
-    bot: 'rounded-2xl rounded-tl-md',
+    single: 'rounded-xl rounded-bl-[4px]',
+    top: 'rounded-xl rounded-bl-[4px] rounded-tl-xl',
+    mid: 'rounded-xl rounded-l-[4px]',
+    bot: 'rounded-xl rounded-tl-[4px] rounded-bl-xl',
   };
   return (isOwn ? own : other)[pos];
 }
@@ -95,13 +94,13 @@ export function ChatPanel({
   if (!user) {
     return (
       <section
-        className={`flex flex-1 items-center justify-center bg-[#101010] text-gray-500 ${
+        className={`flex min-w-0 flex-1 flex-col items-center justify-center bg-[#0e1621] text-[#6d8399] ${
           mobileVisible ? 'hidden md:flex' : 'flex'
         }`}
       >
         <div className="text-center">
-          <div className="mb-2 text-5xl">💬</div>
-          <p className="text-lg">یک گفتگو را انتخاب کنید</p>
+          <div className="mb-3 text-5xl opacity-80">💬</div>
+          <p className="text-base">یک گفتگو را از لیست انتخاب کنید</p>
         </div>
       </section>
     );
@@ -109,16 +108,17 @@ export function ChatPanel({
 
   return (
     <section
-      className={`flex min-w-0 flex-1 flex-col bg-[#101010] text-white ${
+      className={`flex min-w-0 flex-1 flex-col bg-[#0e1621] text-[#e4ecf4] ${
         mobileVisible ? 'hidden md:flex' : 'flex'
       }`}
     >
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#212121] bg-[#212121] px-2 md:px-4">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="flex h-[54px] shrink-0 items-center justify-between border-b border-[#0e1621] bg-[#17212b] px-2 md:px-3">
+        <div className="flex min-w-0 items-center gap-2.5">
           <button
             type="button"
             onClick={onBack}
-            className="rounded-full p-2 text-gray-400 hover:bg-gray-700 md:hidden"
+            className="rounded-full p-2 text-[#6ab2f2] hover:bg-[#242f3d] md:hidden"
+            aria-label="بازگشت"
           >
             <IoArrowBack className="h-5 w-5" />
           </button>
@@ -130,55 +130,70 @@ export function ChatPanel({
             {getInitials(user)}
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-base font-medium">{user}</h1>
-            <p className="fa-num truncate text-xs text-gray-400">
+            <h1 className="truncate text-[15px] font-semibold text-white">{user}</h1>
+            <p className="fa-num truncate text-[11px] text-[#6d8399]">
               {mobile && mobile !== '-' ? toPersianDigits(mobile) : status || 'پشتیبانی'}
             </p>
           </div>
         </div>
-        <button type="button" className="rounded-full p-2 text-gray-400 hover:bg-gray-700">
-          <HiDotsVertical className="h-5 w-5" />
+        <button
+          type="button"
+          className="rounded-lg px-3 py-1.5 text-[11px] text-[#6ab2f2] hover:bg-[#242f3d]"
+        >
+          اشتراک‌ها
         </button>
       </header>
 
-      <div className="tg-chat-bg min-h-0 flex-1 overflow-y-auto p-4 tg-scroll">
+      <div className="tg-chat-bg min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-4 tg-scroll">
         {loading && messages.length === 0 ? (
-          <div className="py-8 text-center text-sm text-gray-500">در حال بارگذاری پیام‌ها...</div>
+          <div className="py-8 text-center text-sm text-[#6d8399]">در حال بارگذاری پیام‌ها...</div>
         ) : null}
 
         {error ? (
           <div className="mb-3 rounded-xl bg-red-900/40 px-3 py-2 text-sm text-red-200">{error}</div>
         ) : null}
 
-        <div className="flex flex-col space-y-1">
+        <div className="flex flex-col gap-0.5">
           {grouped.map((msg, index) => {
             const separator = dayLabel(msg, grouped[index - 1]);
             const pos = clusterPos(grouped, index);
             return (
-              <div key={msg.id} className="space-y-1">
+              <div key={msg.id}>
                 {separator ? (
-                  <div className="my-4 flex justify-center">
-                    <span className="fa-num rounded-full bg-gray-800 px-3 py-1 text-sm text-gray-400">
+                  <div className="my-3 flex justify-center">
+                    <span className="fa-num rounded-full bg-[#182533] px-3 py-1 text-[11px] text-[#8b9cb3]">
                       {separator}
                     </span>
                   </div>
                 ) : null}
                 <div className={`flex ${msg.is_own ? 'justify-start' : 'justify-end'}`}>
                   <div
-                    className={`max-w-[min(85%,22rem)] px-3 py-2 ${clusterRadius(msg.is_own, pos)} ${
-                      msg.is_own ? 'bg-purple-500 text-white' : 'bg-gray-700 text-white'
+                    className={`max-w-[min(78%,20rem)] px-3 py-2 ${clusterRadius(msg.is_own, pos)} ${
+                      msg.is_own ? 'tg-bubble-admin' : 'tg-bubble-user'
                     }`}
                   >
                     {msg.image ? (
-                      <img src={msg.image} alt="" className="mb-2 max-h-56 rounded-lg object-cover" />
+                      <a href={msg.image} target="_blank" rel="noreferrer">
+                        <img
+                          src={msg.image}
+                          alt=""
+                          className="mb-2 max-h-56 rounded-lg object-cover"
+                        />
+                      </a>
                     ) : null}
                     {msg.audio ? (
                       <audio controls preload="metadata" src={msg.audio} className="mb-2 w-full min-w-[200px]" />
                     ) : null}
-                    {msg.text ? <div className="whitespace-pre-wrap break-words text-sm">{msg.text}</div> : null}
-                    <div className="fa-num mt-1 flex items-center justify-end gap-1 text-[11px] opacity-70">
+                    {msg.text ? (
+                      <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">{msg.text}</div>
+                    ) : null}
+                    <div
+                      className={`fa-num mt-1 flex items-center justify-end gap-1 text-[10px] ${
+                        msg.is_own ? 'text-white/55' : 'text-[#6d8399]'
+                      }`}
+                    >
                       <span>{formatPersianTime(msg.time)}</span>
-                      {msg.edited ? <span>· ویرایش</span> : null}
+                      {msg.edited ? <span>· ویرایش‌شده</span> : null}
                       {messageStatus(msg)}
                     </div>
                   </div>

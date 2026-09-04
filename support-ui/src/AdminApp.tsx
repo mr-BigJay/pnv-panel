@@ -175,7 +175,7 @@ export function AdminApp() {
 
   return (
     <div
-      className={`support-v2-shell flex h-full overflow-hidden bg-[#202021] text-white ${
+      className={`support-v2-shell flex h-full overflow-hidden bg-[#0e1621] text-[#e4ecf4] ${
         config.embedded ? 'support-v2-embedded' : ''
       }`}
       dir="rtl"

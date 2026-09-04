@@ -29,7 +29,7 @@ export function MessageComposer({
     if (recording) return;
     if (!hasText || sending) return;
     onDraftChange('');
-    if (textareaRef.current) textareaRef.current.style.height = '44px';
+    if (textareaRef.current) textareaRef.current.style.height = '40px';
     await onSendText();
   }
 
@@ -56,37 +56,40 @@ export function MessageComposer({
   }
 
   return (
-    <form onSubmit={submit} className="border-t border-[#212121]/50 bg-[#101010]/95 p-3 backdrop-blur-sm md:p-4">
+    <form
+      onSubmit={submit}
+      className="tg-composer-bar shrink-0 border-t px-2 py-2 md:px-3 md:py-2.5"
+    >
       {recording ? (
-        <div className="flex items-center gap-3 rounded-2xl bg-[#212121] px-4 py-3">
-          <span className="inline-flex h-3 w-3 animate-pulse rounded-full bg-red-500" />
+        <div className="flex items-center gap-3 rounded-full bg-[#242f3d] px-4 py-2.5">
+          <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
           <span className="fa-num flex-1 text-sm text-red-300">
             در حال ضبط… {toPersianDigits(seconds)} ثانیه
           </span>
           <button
             type="button"
             onClick={cancel}
-            className="rounded-lg px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+            className="rounded-lg px-3 py-1 text-sm text-[#8b9cb3] hover:bg-[#3d4f63]"
           >
             لغو
           </button>
           <button
             type="button"
             onClick={() => void handleMicClick()}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white hover:bg-blue-600"
+            className="tg-btn-send flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
             title="ارسال ویس"
           >
-            <IoSend className="h-5 w-5" />
+            <IoSend className="h-[18px] w-[18px]" />
           </button>
         </div>
       ) : (
         <div className="flex items-end gap-2">
           <button
             type="button"
-            className="mb-0.5 shrink-0 rounded-lg p-2.5 text-gray-400 hover:bg-gray-800"
-            title="پیوست"
+            className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#6d8399] hover:bg-[#242f3d] hover:text-[#6ab2f2]"
+            title="پیوست (به‌زودی)"
           >
-            <FaPaperclip className="h-5 w-5" />
+            <FaPaperclip className="h-[18px] w-[18px]" />
           </button>
 
           <div className="relative min-w-0 flex-1">
@@ -98,7 +101,7 @@ export function MessageComposer({
               rows={1}
               placeholder="پیام..."
               disabled={sending}
-              className="fa-num max-h-[120px] min-h-[44px] w-full resize-none rounded-2xl border-0 bg-[#212121] py-3 pl-12 pr-12 text-white outline-none placeholder:text-[#a2acb4] disabled:opacity-60"
+              className="tg-input-field fa-num max-h-[120px] min-h-[40px] w-full resize-none rounded-[20px] border-0 py-2.5 pl-4 pr-[72px] text-[13px] outline-none disabled:opacity-60"
               onInput={(e) => {
                 const el = e.currentTarget;
                 el.style.height = 'auto';
@@ -107,10 +110,10 @@ export function MessageComposer({
             />
             <button
               type="button"
-              className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 hover:text-gray-200"
-              title="ایموجی"
+              className="absolute right-10 top-1/2 -translate-y-1/2 rounded-full p-1 text-[#6d8399] hover:text-[#6ab2f2]"
+              title="ایموجی (به‌زودی)"
             >
-              <FaRegSmile className="h-5 w-5" />
+              <FaRegSmile className="h-[18px] w-[18px]" />
             </button>
           </div>
 
@@ -118,20 +121,20 @@ export function MessageComposer({
             <button
               type="submit"
               disabled={sending}
-              className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
+              className="tg-btn-send mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
               title="ارسال"
             >
-              <IoSend className="h-5 w-5" />
+              <IoSend className="h-[18px] w-[18px]" />
             </button>
           ) : (
             <button
               type="button"
               disabled={sending}
               onClick={() => void handleMicClick()}
-              className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
+              className="tg-btn-send mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
               title="ضبط ویس"
             >
-              <FaMicrophone className="h-5 w-5" />
+              <FaMicrophone className="h-[18px] w-[18px]" />
             </button>
           )}
         </div>

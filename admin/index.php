@@ -900,7 +900,7 @@ margin-right:280px;
 padding:0;
 height:100vh;
 overflow:hidden;
-background:#0b1220;
+background:#0e1621;
 display:flex;
 flex-direction:column;
 min-height:0;

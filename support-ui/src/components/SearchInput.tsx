@@ -30,21 +30,21 @@ export function SearchInput({ onSearch, placeholder = 'جستجو...' }: SearchI
         }}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
-        className={`w-full rounded-3xl border border-[#2d2d2d] bg-[#2d2d2d] py-2 pl-10 pr-10 text-sm text-white outline-none transition-all duration-200 placeholder:text-gray-500 ${
-          isFocused ? 'ring-2 ring-blue-500/50' : ''
+        className={`tg-input-field w-full rounded-full border-0 py-2.5 pl-10 pr-10 text-[13px] outline-none transition-all duration-200 ${
+          isFocused ? 'ring-2 ring-[#6ab2f2]/40' : ''
         }`}
       />
       <FiSearch
-        size={18}
+        size={16}
         className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${
-          isFocused || searchQuery ? 'text-blue-400' : 'text-gray-500'
+          isFocused || searchQuery ? 'text-[#6ab2f2]' : 'text-[#6d8399]'
         }`}
       />
       {searchQuery ? (
         <button
           type="button"
           onClick={clearSearch}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-gray-400 hover:bg-gray-600 hover:text-white"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[#6d8399] hover:bg-[#3d4f63] hover:text-white"
         >
           <FiX size={16} />
         </button>
