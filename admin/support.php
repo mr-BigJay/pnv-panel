@@ -44,10 +44,10 @@ $currentUser = supportResolveTicketUsername($data, $_GET['user'] ?? '');
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=44';
+$cssHref = '../support_ui.css?v=45';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=44';
+$jsHref = '../support_ui.js?v=45';
 
 if(!$supportEmbedded){
 ?>
@@ -72,7 +72,7 @@ if(!$supportEmbedded){
 <h2>پیام‌های کاربران</h2>
 </div>
 <div class="msgSearchWrap">
-<input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
+<input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو نام کاربری یا موبایل..." autocomplete="off">
 <div class="msgUserSearchResults" id="supportUserResults"></div>
 </div>
 </div>
@@ -151,10 +151,10 @@ $profileSummary = supportGetUserProfileSummary($currentUser);
 <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($currentUser), ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="msgHeaderInfo">
 <h2><?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?></h2>
-<p><?php echo htmlspecialchars($profileSummary['mobile'] !== '-' ? $profileSummary['mobile'] : '—', ENT_QUOTES, 'UTF-8'); ?></p>
+<p>آخرین بازدید: اخیراً</p>
 </div>
 <div class="supportChatHeaderActions">
-<button type="button" class="viewSubsBtn" onclick="openUserSubscriptions()">اشتراک‌ها</button>
+<button type="button" class="msgHeaderBtn" onclick="openUserSubscriptions()">اشتراک‌ها</button>
 </div>
 </header>
 </div>
@@ -213,7 +213,7 @@ if(!$hasMessages){
 <button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtnAdmin" title="تصویر" aria-label="پیوست تصویر">📎</button>
 <input type="file" name="image" id="supportImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
 
-<textarea name="message" id="supportMessage" placeholder="ارسال پیام . . . ." rows="1"></textarea>
+<textarea name="message" id="supportMessage" placeholder="پیام..." rows="1"></textarea>
 
 <button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
 </div>

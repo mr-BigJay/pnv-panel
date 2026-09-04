@@ -1027,6 +1027,33 @@
             sheet.innerHTML = '';
         }
 
+        function positionContextMenu(menu, bubble){
+            const rect = bubble.getBoundingClientRect();
+            const menuRect = menu.getBoundingClientRect();
+            let top = rect.top + (rect.height / 2) - (menuRect.height / 2);
+            let left = rect.left - menuRect.width - 12;
+            if(left < 8){
+                left = rect.right + 12;
+            }
+            if(left + menuRect.width > window.innerWidth - 8){
+                left = Math.max(8, (window.innerWidth - menuRect.width) / 2);
+            }
+            top = Math.max(8, Math.min(top, window.innerHeight - menuRect.height - 8));
+            menu.style.top = top + 'px';
+            menu.style.left = left + 'px';
+        }
+
+        const actionLabels = {
+            reply: '↩ پاسخ',
+            edit: '✎ ویرایش',
+            pin: '📌 سنجاق',
+            unpin: '📌 برداشتن سنجاق',
+            copy: '📋 کپی متن',
+            delete: '🗑 حذف',
+            select: '☑ انتخاب',
+            info: 'امکان حذف و ویرایش پیام‌های قدیمی وجود ندارد'
+        };
+
         function setReply(msgId, preview){
             replyInput.value = msgId || '';
             if(!msgId){
@@ -1054,18 +1081,18 @@
             const pinned = isPinned(pinScope, msgId);
             const actions = [];
 
-            if(canReply){ actions.push({key:'reply', label:'پاسخ'}); }
-            if(text){ actions.push({key:'copy', label:'کپی متن'}); }
-            actions.push({key:'pin', label: pinned ? 'برداشتن سنجاق' : 'سنجاق'});
-            actions.push({key:'select', label:'انتخاب'});
-            if(canEdit){ actions.push({key:'edit', label:'ویرایش'}); }
-            if(canDelete){ actions.push({key:'delete', label:'حذف', danger:true}); }
+            if(canReply){ actions.push({key:'reply', label: actionLabels.reply}); }
+            if(text){ actions.push({key:'copy', label: actionLabels.copy}); }
+            actions.push({key:'pin', label: pinned ? actionLabels.unpin : actionLabels.pin});
+            actions.push({key:'select', label: actionLabels.select});
+            if(canEdit){ actions.push({key:'edit', label: actionLabels.edit}); }
+            if(canDelete){ actions.push({key:'delete', label: actionLabels.delete, danger:true}); }
 
             if(!actions.length){
                 if(isOwn && role !== 'admin'){
                     actions.push({
                         key:'info',
-                        label:'امکان حذف و ویرایش پیام های قدیمی وجود ندارد',
+                        label: actionLabels.info,
                         disabled:true
                     });
                 }else{
@@ -1075,20 +1102,23 @@
 
             try{ if(navigator.vibrate){ navigator.vibrate(18); } }catch(err){}
 
-            sheet.innerHTML =
-                '<div class="supportSheetCard">' +
-                actions.map(function(a){
-                    const cls = [
-                        a.danger ? 'danger' : '',
-                        a.disabled ? 'is-disabled' : ''
-                    ].filter(Boolean).join(' ');
-                    return '<button type="button" data-act="'+a.key+'" class="'+cls+'"'+(a.disabled?' disabled':'')+'>'+a.label+'</button>';
-                }).join('') +
-                '<button type="button" data-act="cancel" class="ghost">انصراف</button>' +
-                '</div>';
+            sheet.innerHTML = '<div class="supportContextMenu" id="supportContextMenu"></div>';
+            const menu = sheet.querySelector('#supportContextMenu');
+            actions.forEach(function(a){
+                const cls = [
+                    a.danger ? 'danger' : '',
+                    a.disabled ? 'is-disabled' : ''
+                ].filter(Boolean).join(' ');
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.dataset.act = a.key;
+                if(cls){ btn.className = cls; }
+                btn.textContent = a.label;
+                menu.appendChild(btn);
+            });
             sheet.hidden = false;
-
-            sheet.querySelectorAll('button[data-act]').forEach(function(btn){
+            positionContextMenu(menu, bubble);
+            menu.querySelectorAll('button[data-act]').forEach(function(btn){
                 btn.onclick = function(){
                     const act = btn.getAttribute('data-act');
                     closeSheet();
@@ -1286,7 +1316,7 @@
         chatEl.addEventListener('touchend', clearHold);
         chatEl.addEventListener('touchcancel', clearHold);
         sheet.addEventListener('click', function(e){
-            if(e.target === sheet){ closeSheet(); }
+            if(!e.target.closest('.supportContextMenu')){ closeSheet(); }
         });
     }
 

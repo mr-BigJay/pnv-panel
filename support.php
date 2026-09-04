@@ -39,22 +39,22 @@ foreach($data as $ticket){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
-<link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="support_ui.css?v=44">
+<link rel="stylesheet" href="support_ui.css?v=45">
 <link rel="stylesheet" href="fonts.css">
 <style>
-html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overflow:hidden;}
+html,body{margin:0;padding:0;background:#0e1621;color:#e4ecf4;height:100%;overflow:hidden;}
 </style>
 </head>
 <body>
 
 <div class="msgApp msgApp--user">
 
-<header class="msgHeader">
-<a href="dashboard.php" class="userBack" title="بازگشت">بازگشت</a>
-<div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($user), ENT_QUOTES, 'UTF-8'); ?></div>
+<header class="msgHeader msgHeader--user">
+<a href="dashboard.php" class="msgBackLink" title="بازگشت">← بازگشت</a>
+<div class="msgAvatar msgAvatar--support">پ</div>
 <div class="msgHeaderInfo">
 <h1>پشتیبانی</h1>
+<p>معمولاً در کمتر از ۱ ساعت پاسخ می‌دهیم</p>
 </div>
 </header>
 
@@ -96,7 +96,7 @@ html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overfl
 <textarea
     name="message"
     id="message"
-    placeholder="ارسال پیام . . . ."
+    placeholder="پیام به پشتیبانی..."
     rows="1"></textarea>
 
 <button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
@@ -107,7 +107,7 @@ html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overfl
 
 </div>
 
-<script src="support_ui.js?v=44"></script>
+<script src="support_ui.js?v=45"></script>
 <script>
 (function(){
     const userChat = document.getElementById('userChat');
