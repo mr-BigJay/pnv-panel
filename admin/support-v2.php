@@ -48,6 +48,10 @@ else{
 }
 
 $assetBase = '/assets/support/admin/';
+$jsPath = $assetDir . '/' . $jsFile;
+$cssPath = $cssFile !== '' ? $assetDir . '/' . $cssFile : '';
+$jsVer = is_file($jsPath) ? filemtime($jsPath) : time();
+$cssVer = ($cssPath !== '' && is_file($cssPath)) ? filemtime($cssPath) : time();
 
 $config = [
     'apiUrl' => $apiUrl,
@@ -73,13 +77,13 @@ if(!$supportEmbedded){
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
 <?php if($cssFile !== ''){ ?>
-<link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$cssVer; ?>">
 <?php } ?>
 </head>
 <body style="margin:0;background:#0e1621;min-height:100vh;">
 <?php } else { ?>
 <?php if($cssFile !== ''){ ?>
-<link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$cssVer; ?>">
 <?php } ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -97,7 +101,7 @@ window.SUPPORT_CONFIG = <?php echo json_encode($config, JSON_UNESCAPED_UNICODE |
     فایل‌های UI ساخته نشده‌اند. در پوشه <code>support-ui</code> دستور <code>npm run build</code> را اجرا کنید.
 </div>
 <?php } else { ?>
-<script type="module" src="<?php echo htmlspecialchars($assetBase . $jsFile, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script type="module" src="<?php echo htmlspecialchars($assetBase . $jsFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$jsVer; ?>"></script>
 <?php } ?>
 
 <?php if(!$supportEmbedded){ ?>

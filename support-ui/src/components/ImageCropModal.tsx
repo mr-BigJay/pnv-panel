@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface CropRect {
   x: number;
@@ -19,7 +20,7 @@ function pointerPos(canvas: HTMLCanvasElement, e: React.TouchEvent | React.Mouse
   return { x: pt.clientX - rect.left, y: pt.clientY - rect.top };
 }
 
-export function ImageCropModal({ file, onConfirm, onCancel }: ImageCropModalProps) {
+function CropDialog({ file, onConfirm, onCancel }: ImageCropModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sourceRef = useRef<HTMLImageElement | null>(null);
   const scaleRef = useRef(1);
@@ -123,8 +124,7 @@ export function ImageCropModal({ file, onConfirm, onCancel }: ImageCropModalProp
 
   function handleConfirm() {
     const img = sourceRef.current;
-    const canvas = canvasRef.current;
-    if (!img || !canvas) return;
+    if (!img) return;
     const scale = scaleRef.current;
     const size = Math.max(32, Math.round(crop.w / scale));
     const out = document.createElement('canvas');
@@ -183,4 +183,8 @@ export function ImageCropModal({ file, onConfirm, onCancel }: ImageCropModalProp
       </div>
     </div>
   );
+}
+
+export function ImageCropModal(props: ImageCropModalProps) {
+  return createPortal(<CropDialog {...props} />, document.body);
 }

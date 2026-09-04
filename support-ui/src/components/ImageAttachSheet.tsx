@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IoSend } from 'react-icons/io5';
-import { ImageCropModal } from './ImageCropModal';
 
 interface ImageAttachSheetProps {
   file: File;
   initialCaption: string;
   sending: boolean;
   onCancel: () => void;
+  onRecrop: () => void;
   onSend: (file: File, caption: string) => Promise<void>;
 }
 
@@ -15,30 +16,23 @@ export function ImageAttachSheet({
   initialCaption,
   sending,
   onCancel,
+  onRecrop,
   onSend,
 }: ImageAttachSheetProps) {
-  const [pendingFile, setPendingFile] = useState(file);
   const [caption, setCaption] = useState(initialCaption);
-  const [showCrop, setShowCrop] = useState(false);
-
-  const previewUrl = useMemo(() => URL.createObjectURL(pendingFile), [pendingFile]);
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
 
   useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
 
-  return (
-    <>
+  return createPortal(
+    <div className="support-attach-overlay" role="dialog" aria-modal="true" aria-label="ارسال تصویر">
       <div className="support-attach-sheet">
         <div className="support-attach-header">
           <button type="button" className="support-attach-cancel" onClick={onCancel} disabled={sending}>
             انصراف
           </button>
           <span className="support-attach-title">ارسال تصویر</span>
-          <button
-            type="button"
-            className="support-attach-crop"
-            onClick={() => setShowCrop(true)}
-            disabled={sending}
-          >
+          <button type="button" className="support-attach-crop" onClick={onRecrop} disabled={sending}>
             برش
           </button>
         </div>
@@ -58,24 +52,14 @@ export function ImageAttachSheet({
             type="button"
             className="tg-composer-action tg-btn-send support-attach-send"
             disabled={sending}
-            onClick={() => void onSend(pendingFile, caption.trim())}
+            onClick={() => void onSend(file, caption.trim())}
             title="ارسال"
           >
             <IoSend className="h-5 w-5" />
           </button>
         </div>
       </div>
-
-      {showCrop ? (
-        <ImageCropModal
-          file={pendingFile}
-          onCancel={() => setShowCrop(false)}
-          onConfirm={(cropped) => {
-            setPendingFile(cropped);
-            setShowCrop(false);
-          }}
-        />
-      ) : null}
-    </>
+    </div>,
+    document.body,
   );
 }

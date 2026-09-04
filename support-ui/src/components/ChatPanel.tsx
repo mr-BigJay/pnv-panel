@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BsCheck, BsCheckAll } from 'react-icons/bs';
 import { FiCheck } from 'react-icons/fi';
 import { IoArrowBack } from 'react-icons/io5';
@@ -158,16 +158,13 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
       const el = scrollRef.current;
       if (el) {
         el.scrollTop = el.scrollHeight;
-      } else {
-        endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
       }
+      endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
     };
-    requestAnimationFrame(() => {
-      scroll();
-      requestAnimationFrame(scroll);
-    });
-    window.setTimeout(scroll, 120);
-    window.setTimeout(scroll, 350);
+    scroll();
+    requestAnimationFrame(scroll);
+    requestAnimationFrame(() => requestAnimationFrame(scroll));
+    [100, 300, 600, 1200, 2500].forEach((ms) => window.setTimeout(scroll, ms));
   }, []);
 
   useImperativeHandle(ref, () => ({ scrollToEnd }), [scrollToEnd]);
@@ -176,10 +173,17 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
     messageRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  useEffect(() => {
-    if (selectMode) return;
-    scrollToEnd();
-  }, [messages, user, selectMode, scrollToEnd]);
+  const lastMessageIdRef = useRef('');
+
+  useLayoutEffect(() => {
+    if (selectMode || messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    if (!last) return;
+    if (last.id !== lastMessageIdRef.current) {
+      lastMessageIdRef.current = last.id;
+      scrollToEnd();
+    }
+  }, [messages, selectMode, scrollToEnd]);
 
   useEffect(() => {
     if (selectMode || sending) return;
@@ -369,6 +373,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
                           alt=""
                           loading="lazy"
                           draggable={false}
+                          onLoad={scrollToEnd}
                           className="tg-msg-image block max-h-[360px] w-full max-w-[280px] object-contain"
                         />
                       </button>

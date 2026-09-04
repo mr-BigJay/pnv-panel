@@ -6,6 +6,7 @@ import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { toPersianDigits } from '../lib/persianDigits';
 import { ComposerChip } from './ComposerChip';
 import { ImageAttachSheet } from './ImageAttachSheet';
+import { ImageCropModal } from './ImageCropModal';
 import type { ReplyTarget } from '../types';
 
 export interface MessageComposerHandle {
@@ -49,10 +50,12 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
   ) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [cropFile, setCropFile] = useState<File | null>(null);
     const [attachFile, setAttachFile] = useState<File | null>(null);
     const { recording, seconds, start, stop, cancel } = useVoiceRecorder();
     const hasText = draft.trim().length > 0;
     const isEditing = Boolean(editTarget);
+    const attachOpen = Boolean(cropFile || attachFile);
 
     useImperativeHandle(ref, () => ({
       focus: () => textareaRef.current?.focus(),
@@ -109,7 +112,8 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
         return;
       }
 
-      setAttachFile(file);
+      setAttachFile(null);
+      setCropFile(file);
     }
 
     async function handleAttachSend(file: File, caption: string) {
@@ -119,17 +123,37 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
       setAttachFile(null);
     }
 
+    function handleRecrop() {
+      if (!attachFile) return;
+      const current = attachFile;
+      setAttachFile(null);
+      setCropFile(current);
+    }
+
     return (
       <div className="tg-composer-wrap shrink-0 border-t border-[#0e1621] bg-[#17212b]">
+        {cropFile ? (
+          <ImageCropModal
+            file={cropFile}
+            onCancel={() => setCropFile(null)}
+            onConfirm={(cropped) => {
+              setCropFile(null);
+              setAttachFile(cropped);
+            }}
+          />
+        ) : null}
+
         {attachFile ? (
           <ImageAttachSheet
             file={attachFile}
             initialCaption={draft.trim()}
             sending={sending}
             onCancel={() => setAttachFile(null)}
+            onRecrop={handleRecrop}
             onSend={handleAttachSend}
           />
         ) : null}
+
         {replyTarget ? (
           <ComposerChip
             title="در پاسخ به"
@@ -141,88 +165,88 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
           <ComposerChip title="ویرایش پیام" preview={editTarget.text || 'پیام'} onClear={onClearEdit} />
         ) : null}
 
-        {!attachFile ? (
-        <form onSubmit={submit} className="tg-composer-bar px-2 py-2.5 md:px-3">
-          {recording ? (
-            <div className="flex w-full items-center gap-3 rounded-full bg-[#242f3d] px-4 py-3">
-              <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
-              <span className="fa-num flex-1 text-sm text-red-300">
-                در حال ضبط… {toPersianDigits(seconds)} ثانیه
-              </span>
-              <button
-                type="button"
-                onClick={cancel}
-                className="rounded-lg px-3 py-1 text-sm text-[#8b9cb3] hover:bg-[#3d4f63]"
-              >
-                لغو
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleMicClick()}
-                className="tg-composer-action tg-btn-send flex items-center justify-center rounded-full text-white"
-                title="ارسال ویس"
-              >
-                <IoSend className="h-5 w-5" />
-              </button>
-            </div>
-          ) : (
-            <div className="tg-composer-row">
-              {showAttach && !isEditing ? (
-                <>
-                  <button
-                    type="button"
-                    className="tg-composer-icon"
-                    title="پیوست تصویر"
-                    disabled={sending}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <FaPaperclip className="h-5 w-5" />
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={IMAGE_ACCEPT}
-                    className="hidden"
-                    onChange={(e) => void handleFileChange(e)}
-                  />
-                </>
-              ) : null}
-
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={(e) => onDraftChange(e.target.value)}
-                onKeyDown={onKeyDown}
-                rows={1}
-                placeholder="پیام..."
-                disabled={sending}
-                className="tg-composer-input tg-input-field fa-num"
-                onInput={(e) => growTextarea(e.currentTarget)}
-              />
-
-              {hasText ? (
+        {!attachOpen ? (
+          <form onSubmit={submit} className="tg-composer-bar px-2 py-2.5 md:px-3">
+            {recording ? (
+              <div className="flex w-full items-center gap-3 rounded-full bg-[#242f3d] px-4 py-3">
+                <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+                <span className="fa-num flex-1 text-sm text-red-300">
+                  در حال ضبط… {toPersianDigits(seconds)} ثانیه
+                </span>
                 <button
-                  type="submit"
-                  disabled={sending}
-                  className="tg-composer-action tg-btn-send"
-                  title="ارسال"
+                  type="button"
+                  onClick={cancel}
+                  className="rounded-lg px-3 py-1 text-sm text-[#8b9cb3] hover:bg-[#3d4f63]"
+                >
+                  لغو
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleMicClick()}
+                  className="tg-composer-action tg-btn-send flex items-center justify-center rounded-full text-white"
+                  title="ارسال ویس"
                 >
                   <IoSend className="h-5 w-5" />
                 </button>
-              ) : showVoice ? (
-                <button
-                  type="button"
+              </div>
+            ) : (
+              <div className="tg-composer-row">
+                {showAttach && !isEditing ? (
+                  <>
+                    <button
+                      type="button"
+                      className="tg-composer-icon"
+                      title="پیوست تصویر"
+                      disabled={sending}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <FaPaperclip className="h-5 w-5" />
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept={IMAGE_ACCEPT}
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                  </>
+                ) : null}
+
+                <textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={(e) => onDraftChange(e.target.value)}
+                  onKeyDown={onKeyDown}
+                  rows={1}
+                  placeholder="پیام..."
                   disabled={sending}
-                  onClick={() => void handleMicClick()}
-                  className="tg-composer-action tg-btn-send"
-                  title="ضبط ویس"
-                >
-                  <FaMicrophone className="h-5 w-5" />
-                </button>
-              ) : null}
-            </div>
-          )}
-        </form>
+                  className="tg-composer-input tg-input-field fa-num"
+                  onInput={(e) => growTextarea(e.currentTarget)}
+                />
+
+                {hasText ? (
+                  <button
+                    type="submit"
+                    disabled={sending}
+                    className="tg-composer-action tg-btn-send"
+                    title="ارسال"
+                  >
+                    <IoSend className="h-5 w-5" />
+                  </button>
+                ) : showVoice ? (
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void handleMicClick()}
+                    className="tg-composer-action tg-btn-send"
+                    title="ضبط ویس"
+                  >
+                    <FaMicrophone className="h-5 w-5" />
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </form>
         ) : null}
       </div>
     );

@@ -293,10 +293,24 @@ body {
   cursor: zoom-in;
 }
 
+.support-attach-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 13500;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
 .support-attach-sheet {
+  width: 100%;
+  max-width: 640px;
   border-top: 1px solid #0e1621;
+  border-radius: 16px 16px 0 0;
   background: #17212b;
-  padding: 10px 12px 12px;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
 }
 
 .support-attach-header {

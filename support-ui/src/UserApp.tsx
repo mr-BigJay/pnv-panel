@@ -97,7 +97,12 @@ export function UserApp() {
   }, [loadMessages, pollMs]);
 
   const scrollChatToEnd = useCallback(() => {
-    chatPanelRef.current?.scrollToEnd();
+    requestAnimationFrame(() => {
+      chatPanelRef.current?.scrollToEnd();
+    });
+    [150, 500, 1200, 2500].forEach((ms) => {
+      window.setTimeout(() => chatPanelRef.current?.scrollToEnd(), ms);
+    });
   }, []);
 
   const mergeMessage = useCallback(
@@ -169,6 +174,7 @@ export function UserApp() {
       setChatError(err instanceof Error ? err.message : 'ارسال تصویر ناموفق');
     } finally {
       setSending(false);
+      scrollChatToEnd();
     }
   }
 
