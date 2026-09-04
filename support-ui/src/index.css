@@ -78,6 +78,26 @@ body {
 .tg-composer-bar {
   background: var(--tg-panel);
   border-color: var(--tg-border);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tg-composer-row {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tg-composer-field {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.tg-composer-input {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  max-height: 140px;
+  box-sizing: border-box;
 }
 
 .tg-input-field {
@@ -137,15 +157,6 @@ body {
 .support-chat-item mark {
   text-shadow: none;
   filter: none;
-}
-
-.tg-composer-row {
-  width: 100%;
-}
-
-.tg-composer-input {
-  min-height: 48px;
-  max-height: 140px;
 }
 
 .tg-composer-action {

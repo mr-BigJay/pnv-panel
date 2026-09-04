@@ -84,7 +84,7 @@ export function MessageComposer({
           </button>
         </div>
       ) : (
-        <div className="tg-composer-row flex items-end gap-2">
+        <div className="tg-composer-row flex w-full items-end gap-2">
           <button
             type="button"
             className="tg-composer-icon mb-1 flex shrink-0 items-center justify-center rounded-full text-[#6d8399] hover:bg-[#242f3d] hover:text-[#6ab2f2]"
@@ -93,7 +93,7 @@ export function MessageComposer({
             <FaPaperclip className="h-5 w-5" />
           </button>
 
-          <div className="relative min-w-0 flex-1">
+          <div className="tg-composer-field relative min-w-0 flex-1">
             <textarea
               ref={textareaRef}
               value={draft}
@@ -102,7 +102,7 @@ export function MessageComposer({
               rows={1}
               placeholder="پیام..."
               disabled={sending}
-              className="tg-composer-input tg-input-field fa-num w-full resize-none rounded-[22px] border-0 py-3 pl-4 pr-12 text-[15px] leading-normal outline-none disabled:opacity-60"
+              className="tg-composer-input tg-input-field fa-num box-border w-full resize-none rounded-[22px] border-0 py-3 pl-4 pr-12 text-[15px] leading-normal outline-none disabled:opacity-60"
               onInput={(e) => {
                 const el = e.currentTarget;
                 el.style.height = 'auto';
@@ -119,28 +119,30 @@ export function MessageComposer({
             </button>
           </div>
 
-          {!hasText ? (
-            <button
-              type="button"
-              disabled={sending}
-              onClick={() => void handleMicClick()}
-              className="tg-composer-action tg-btn-send mb-1 flex shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
-              title="ضبط ویس"
-            >
-              <FaMicrophone className="h-5 w-5" />
-            </button>
-          ) : null}
+          <div className="mb-1 flex shrink-0 items-end gap-1">
+            {!hasText ? (
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => void handleMicClick()}
+                className="tg-composer-action tg-btn-send flex items-center justify-center rounded-full text-white disabled:opacity-50"
+                title="ضبط ویس"
+              >
+                <FaMicrophone className="h-5 w-5" />
+              </button>
+            ) : null}
 
-          <button
-            type="submit"
-            disabled={sending || !hasText}
-            className={`tg-composer-action tg-composer-send mb-1 flex shrink-0 items-center justify-center rounded-full text-white disabled:cursor-not-allowed ${
-              hasText ? 'tg-btn-send' : 'bg-[#3d4f63] opacity-70'
-            }`}
-            title="ارسال"
-          >
-            <IoSend className="h-5 w-5" />
-          </button>
+            <button
+              type="submit"
+              disabled={sending || !hasText}
+              className={`tg-composer-action tg-composer-send flex items-center justify-center rounded-full text-white disabled:cursor-not-allowed ${
+                hasText ? 'tg-btn-send' : 'bg-[#3d4f63] opacity-70'
+              }`}
+              title="ارسال"
+            >
+              <IoSend className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       )}
     </form>
