@@ -36,6 +36,7 @@ files=(
   "plan_coupon_ui.js"
   "instant_pay_lib.php"
   "instant-pay-api.php"
+  "postbank-ingest.php"
   "bale_lib.php"
   "bale-webhook.php"
   "coupon_lib.php"

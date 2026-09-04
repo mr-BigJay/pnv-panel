@@ -1582,6 +1582,10 @@ if(!function_exists('instantPayPath')){
             checkoutMarkDiscountPaid($found);
         }
 
+        $payments = xuiLoadPayments();
+        $paidRow = isset($payments[$csvIndex]) && is_array($payments[$csvIndex]) ? $payments[$csvIndex] : null;
+        instantPayNotifyPaymentConfirmed($items[$idx], $paidRow);
+
         return [
             'ok' => true,
             'item' => instantPayPublicView($items[$idx]),
