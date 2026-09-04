@@ -23,6 +23,11 @@ if [[ ! -f "$LISTENER" ]]; then
     exit 1
 fi
 
+"$VENV_PY" -m py_compile "$LISTENER" || {
+    echo "listener syntax error — re-run fix-auto-payment.sh or curl fresh postbank_bale_listener.py" >&2
+    exit 1
+}
+
 "$VENV_PY" -c "from aiobale import Client; import aiohttp" || {
     echo "venv missing deps — run setup-postbank-listener.sh" >&2
     exit 1

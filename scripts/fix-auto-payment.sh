@@ -28,9 +28,17 @@ files=(
 for rel in "${files[@]}"; do
   dest="${ROOT}/${rel}"
   mkdir -p "$(dirname "$dest")"
-  curl -fsSL "${BASE}/${rel}" -o "${dest}"
+  curl -fsSL "${BASE}/${rel}?v=$(date +%s)" -o "${dest}"
   say "OK ${rel}"
 done
+
+say "=== Python listener syntax ==="
+if [[ -x "${ROOT}/tools/postbank-venv/bin/python" ]]; then
+  "${ROOT}/tools/postbank-venv/bin/python" -m py_compile "${ROOT}/tools/postbank_bale_listener.py"
+else
+  python3 -m py_compile "${ROOT}/tools/postbank_bale_listener.py"
+fi
+say "OK listener syntax"
 
 say "=== PHP syntax ==="
 php -l "${ROOT}/bale_lib.php" >/dev/null
