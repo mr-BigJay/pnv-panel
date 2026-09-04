@@ -314,7 +314,7 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
             if ingest_result.get("_http") == 401:
                 LOG.error("Ingest unauthorized — update POSTBANK_INGEST_SECRET in db/postbank-listener.env")
 
-        if(ingest_result.get("ignored"):
+        if ingest_result.get("ignored"):
             LOG.info("Ignored (no open order): %s", ingest_result.get("error"))
             return
 
