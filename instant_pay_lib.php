@@ -197,6 +197,27 @@ if(!function_exists('instantPayPath')){
         return ($now - $expires) <= instantPayMatchGraceSeconds();
     }
 
+    /** پس از لغو (مثلاً مبلغ جدید)، چند ثانیه هنوز واریز همان مبلغ را بپذیر. */
+    function instantPayCancelGraceSeconds($config = null){
+        return instantPayMatchGraceSeconds($config);
+    }
+
+    function instantPayWithinCancelGrace($item, $now = null){
+        if(($item['status'] ?? '') !== 'cancelled'){
+            return false;
+        }
+
+        $now = $now ?? time();
+        $cancelledAt = intval($item['cancelled_at'] ?? 0);
+
+        if($cancelledAt > 0){
+            return ($now - $cancelledAt) <= instantPayCancelGraceSeconds();
+        }
+
+        // سفارش‌های قدیمی بدون cancelled_at
+        return instantPayWithinMatchGrace($item, $now);
+    }
+
     function instantPayProcessingTimeoutSeconds(){
         return 180;
     }
@@ -399,7 +420,26 @@ if(!function_exists('instantPayPath')){
             return instantPayWithinMatchGrace($item, $now);
         }
 
+        if($status === 'cancelled'){
+            return instantPayWithinCancelGrace($item, $now);
+        }
+
         return false;
+    }
+
+    function instantPayRecoverCancelledForPayment(&$items, $idx){
+        if($idx < 0 || !isset($items[$idx]) || !is_array($items[$idx])){
+            return null;
+        }
+
+        $now = time();
+        $expires = intval($items[$idx]['expires_at'] ?? 0);
+        $items[$idx]['status'] = ($expires > $now) ? 'waiting' : 'expired';
+        $items[$idx]['message'] = 'بازیابی برای تأیید واریز';
+        $items[$idx]['csv_purged'] = false;
+        instantPaySave($items);
+
+        return $items[$idx];
     }
 
     function instantPayEnsureCsvRowForItem($item, &$items, $idx){
@@ -1504,19 +1544,16 @@ if(!function_exists('instantPayPath')){
             return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . ($found['status'] ?? '') . ')'];
         }
 
-        if($force && ($found['status'] ?? '') === 'cancelled'){
-            $csvIndexCheck = instantPayResolveCsvIndex($found);
-
-            if($csvIndexCheck < 0){
+        if(($found['status'] ?? '') === 'cancelled'){
+            if(!instantPayWithinCancelGrace($found)){
                 return ['ok' => false, 'error' => 'سفارش لغو شده است'];
             }
 
-            $items[$idx]['status'] = 'expired';
-            $items[$idx]['message'] = 'بازیابی برای تأیید واریز';
-            $items[$idx]['csv_index'] = $csvIndexCheck;
-            $items[$idx]['csv_purged'] = false;
-            instantPaySave($items);
-            $found = $items[$idx];
+            $found = instantPayRecoverCancelledForPayment($items, $idx);
+
+            if(!is_array($found)){
+                return ['ok' => false, 'error' => 'بازیابی سفارش لغوشده ناموفق بود'];
+            }
         }
 
         $csvIndex = instantPayEnsureCsvRowForItem($found, $items, $idx);
@@ -1772,7 +1809,7 @@ if(!function_exists('instantPayPath')){
                 $waiting++;
             }
 
-            if(in_array($st, ['waiting', 'expired', 'failed'], true) && instantPayItemMatchable($item, $now)){
+            if(instantPayItemMatchable($item, $now)){
                 $grace++;
             }
         }
@@ -1994,6 +2031,10 @@ if(!function_exists('instantPayPath')){
                 $status = (string)($item['status'] ?? '');
 
                 if($status === 'cancelled'){
+                    if(instantPayWithinCancelGrace($item, $now)){
+                        return 'سفارش لغو شده ولی هنوز در بازه بازیابی است؛ دوباره فوروارد کنید.';
+                    }
+
                     if(is_array(instantPayFindCsvMatchByAmount($amount))){
                         return 'سفارش در سیستم لغو شده ولی ردیف پرداخت هنوز فعال است؛ دوباره فوروارد کنید.';
                     }
