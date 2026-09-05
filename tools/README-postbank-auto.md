@@ -1,9 +1,11 @@
 # پرداخت آنی تمام‌اتوماتیک (بدون فوروارد دستی)
 
-Listener پیام @postbank_bot را می‌خواند و:
+Listener پیام @postbank_bot را می‌خواند (push + **poll هر ۲۰ ثانیه**) و:
 1. **اول** همان پیام را به @Jay24x7Pusbank_bot فوروارد می‌کند (مثل فوروارد دستی)
 2. `postbank-ingest.php` را صدا می‌زند (تأیید خودکار)
 3. اگر ingest مچ نکرد، webhook پنل هم امتحان می‌شود
+
+`POSTBANK_POLL_SEC=20` در env (اختیاری)
 3. اگر ingest خطای HTTP داد، `bale-webhook.php` هم امتحان می‌شود
 
 **بدون سفارش باز** → ingest پاسخ `ignored` می‌دهد و فوروارد انجام نمی‌شود (بدون اسپم).

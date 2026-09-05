@@ -5,19 +5,24 @@
 Bot API نمی‌تواند چت @postbank_bot را بخواند. این سервیس با سشن صاحب کارت:
   1) postbank-ingest.php را صدا می‌زند (تأیید خودکار)
   2) همان پیام را به @Jay24x7Pusbank_bot فوروارد می‌کند (مثل فوروارد دستی)
-  3) اگر ingest خطای HTTP داد، webhook پنل هم امتحان می‌شود
+  3) هر ~۲۰ ثانیه چت @postbank_bot را poll می‌کند (push گاهی نمی‌رسد)
+  4) اگر ingest خطای HTTP داد، webhook پنل هم امتحان می‌شود
 
-بدون سفارش باز → ingest پاسخ ignored می‌دهد و به JayPusbankbot فوروارد نمی‌شود.
+بدون سفارش باز → ingest پاسخ ignored می‌دهد؛ فوروارد برای دیدن در بازو انجام می‌شود.
 """
 
 import argparse
+import asyncio
 import json
 import logging
 import os
 import re
 import sys
 import time
+from contextlib import asynccontextmanager, suppress
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Optional
 
 try:
     import aiohttp
@@ -40,6 +45,18 @@ except ImportError as exc:
 LOG = logging.getLogger("postbank-listener")
 
 POSTBANK_USERNAMES = {"postbank_bot", "postbank"}
+DEFAULT_POLL_SEC = 20
+
+
+@dataclass
+class ListenerState:
+    postbank_bot_id: Optional[int] = None
+    postbank_chat_id: Optional[int] = None
+    postbank_chat_type: Any = None
+    my_user_id: Optional[int] = None
+    seen_message_ids: set = field(default_factory=set)
+    poll_initialized: bool = False
+    recent_text_keys: set = field(default_factory=set)
 
 
 def has_parseable_amount(text):
@@ -68,6 +85,23 @@ def is_postbank_card_deposit(text):
         return True
 
     return False
+
+
+def extract_message_text(msg):
+    text = getattr(msg, "text", None)
+    if text:
+        return str(text).strip()
+    caption = getattr(msg, "caption", None)
+    if caption:
+        return str(caption).strip()
+    content = getattr(msg, "content", None)
+    if content is not None:
+        nested = getattr(content, "text", None)
+        if nested is not None:
+            value = getattr(nested, "value", None)
+            if value:
+                return str(value).strip()
+    return ""
 
 
 def message_peer_username(msg):
@@ -102,7 +136,10 @@ def message_sender_username(msg):
     return ""
 
 
-def is_outgoing_message(msg):
+def is_outgoing_message(msg, my_user_id=None):
+    sender_id = getattr(msg, "sender_id", None)
+    if my_user_id is not None and sender_id is not None and int(sender_id) == int(my_user_id):
+        return True
     for attr in ("out", "is_outgoing", "outgoing"):
         val = getattr(msg, attr, None)
         if val is True:
@@ -121,29 +158,35 @@ def looks_like_postbank_notice(text):
     return False
 
 
-def is_postbank_source(msg):
+def is_postbank_source(msg, postbank_bot_id=None):
     sender = message_sender_username(msg)
     if sender in POSTBANK_USERNAMES:
         return True
     chat = message_peer_username(msg)
     if chat in POSTBANK_USERNAMES:
         return True
+    sender_id = getattr(msg, "sender_id", None)
+    if postbank_bot_id is not None and sender_id is not None and int(sender_id) == int(postbank_bot_id):
+        return True
+    chat_id = getattr(getattr(msg, "chat", None), "id", None)
+    if postbank_bot_id is not None and chat_id is not None and int(chat_id) == int(postbank_bot_id):
+        return True
     return False
 
 
-def should_process_message(msg, text):
-    if is_outgoing_message(msg):
+def should_process_message(msg, text, postbank_bot_id=None, my_user_id=None):
+    if is_outgoing_message(msg, my_user_id):
         return False
     if not is_postbank_card_deposit(text):
         return False
-    if is_postbank_source(msg):
+    if is_postbank_source(msg, postbank_bot_id):
         return True
-    # بعضی نسخه‌های API بله username نمی‌فرستند — متن واقعی واریز کافی است
+    # aiobale Message فقط sender_id دارد — متن واقعی واریز کافی است
     if looks_like_postbank_notice(text):
         LOG.info(
-            "PostBank deposit accepted by text (sender=%s chat=%s)",
-            message_sender_username(msg) or "?",
-            message_peer_username(msg) or "?",
+            "PostBank deposit accepted by text (sender_id=%s chat_id=%s)",
+            getattr(msg, "sender_id", "?"),
+            getattr(getattr(msg, "chat", None), "id", "?"),
         )
         return True
     return False
@@ -255,6 +298,233 @@ class BotPeerCache:
         self.chat_type = None
 
 
+async def resolve_postbank_peer(client, state):
+    if state.postbank_bot_id is not None and state.postbank_chat_id is not None:
+        return state.postbank_chat_id, state.postbank_chat_type
+
+    resp = await client.search_username("postbank_bot")
+    user = getattr(resp, "user", None)
+    if user is None:
+        raise ValueError("postbank_bot user not found")
+
+    bot_id = getattr(user, "id", None) or getattr(user, "user_id", None)
+    if bot_id is None:
+        raise ValueError("postbank_bot id missing")
+
+    state.postbank_bot_id = int(bot_id)
+    state.postbank_chat_id = int(bot_id)
+    state.postbank_chat_type = bale_enums.ChatType.BOT
+    LOG.info("Resolved @postbank_bot id=%s", state.postbank_bot_id)
+    return state.postbank_chat_id, state.postbank_chat_type
+
+
+async def ensure_my_user_id(client, state):
+    if state.my_user_id is not None:
+        return state.my_user_id
+
+    me = getattr(client, "me", None)
+    if me is not None and getattr(me, "id", None) is not None:
+        state.my_user_id = int(me.id)
+        return state.my_user_id
+
+    try:
+        full = await client.get_me()
+        if full is not None and getattr(full, "id", None) is not None:
+            state.my_user_id = int(full.id)
+            LOG.info("Session user id=%s", state.my_user_id)
+            return state.my_user_id
+    except Exception as exc:
+        LOG.warning("Could not load session user: %s", exc)
+
+    return None
+
+
+async def process_deposit_message(
+    msg,
+    text,
+    *,
+    client,
+    state,
+    bot_cache,
+    ingest_url,
+    ingest_secret,
+    webhook_url,
+    admin_chat_id,
+    forward_bot_username,
+    source_label="push",
+):
+    key = re.sub(r"\s+", " ", text)[:240]
+    if key in state.recent_text_keys:
+        LOG.info("Duplicate ignored (%s)", source_label)
+        return
+    state.recent_text_keys.add(key)
+    if len(state.recent_text_keys) > 300:
+        state.recent_text_keys.clear()
+
+    LOG.info(
+        "Card deposit [%s] sender_id=%s chat_id=%s preview=%s",
+        source_label,
+        getattr(msg, "sender_id", "?"),
+        getattr(getattr(msg, "chat", None), "id", "?"),
+        key[:120],
+    )
+
+    delivered = False
+    if forward_bot_username:
+        try:
+            delivered = await deliver_deposit_to_bot(client, bot_cache, msg, text, forward_bot_username)
+            if not delivered:
+                LOG.warning("Could not deliver deposit to @%s", forward_bot_username.lstrip("@"))
+        except Exception as exc:
+            LOG.error("Deliver to bot via userbot failed: %s", exc)
+    else:
+        LOG.warning("POSTBANK_FORWARD_BOT not set — skipping forward to JayPusbankbot")
+
+    ingest_result = {}
+    try:
+        ingest_result = await post_ingest(ingest_url, ingest_secret, text, source=f"aiobale-{source_label}")
+    except Exception as exc:
+        LOG.exception("Ingest failed: %s", exc)
+
+    if isinstance(ingest_result, dict):
+        LOG.info(
+            "Ingest http=%s paid=%s ignored=%s err=%s",
+            ingest_result.get("_http"),
+            ingest_result.get("paid"),
+            ingest_result.get("ignored"),
+            ingest_result.get("error"),
+        )
+        if ingest_result.get("_http") == 401:
+            LOG.error("Ingest unauthorized — update POSTBANK_INGEST_SECRET in db/postbank-listener.env")
+
+    if ingest_result.get("ignored"):
+        LOG.info("Ignored (no open order): %s", ingest_result.get("error"))
+        if delivered:
+            LOG.info("Deposit already forwarded to bot for visibility")
+        return
+
+    paid = ingest_is_paid(ingest_result)
+
+    if not paid and webhook_url:
+        try:
+            wh = await post_bot_webhook(webhook_url, admin_chat_id, text)
+            LOG.info(
+                "Webhook fallback http=%s paid=%s ok=%s err=%s",
+                wh.get("_http"),
+                wh.get("paid"),
+                wh.get("ok"),
+                wh.get("error"),
+            )
+            if wh.get("paid") is True:
+                paid = True
+            elif wh.get("_http") == 500:
+                LOG.error("Webhook returned HTTP 500 — deploy bale-webhook.php + instant_pay_lib.php")
+        except Exception as exc:
+            LOG.exception("Webhook fallback failed: %s", exc)
+
+    if paid:
+        LOG.info("Payment confirmed via ingest/webhook")
+    elif delivered:
+        LOG.warning("Forwarded to bot but payment not confirmed — check open order amount/window")
+
+
+async def postbank_poll_loop(
+    client,
+    state,
+    bot_cache,
+    ingest_url,
+    ingest_secret,
+    webhook_url,
+    admin_chat_id,
+    forward_bot_username,
+    poll_sec,
+):
+    await asyncio.sleep(5)
+    while not client._stopped:
+        try:
+            await ensure_my_user_id(client, state)
+            chat_id, chat_type = await resolve_postbank_peer(client, state)
+            messages = await client.load_history(
+                chat_id=chat_id,
+                chat_type=chat_type,
+                limit=20,
+            )
+
+            if not state.poll_initialized:
+                for msg in messages or []:
+                    mid = getattr(msg, "message_id", None)
+                    if mid is not None:
+                        state.seen_message_ids.add(int(mid))
+                state.poll_initialized = True
+                LOG.info("PostBank poll baseline: %d messages in chat", len(messages or []))
+            else:
+                for msg in messages or []:
+                    mid = getattr(msg, "message_id", None)
+                    if mid is None:
+                        continue
+                    mid = int(mid)
+                    if mid in state.seen_message_ids:
+                        continue
+                    state.seen_message_ids.add(mid)
+                    text = extract_message_text(msg)
+                    if not text:
+                        continue
+                    if not should_process_message(
+                        msg,
+                        text,
+                        state.postbank_bot_id,
+                        state.my_user_id,
+                    ):
+                        continue
+                    await process_deposit_message(
+                        msg,
+                        text,
+                        client=client,
+                        state=state,
+                        bot_cache=bot_cache,
+                        ingest_url=ingest_url,
+                        ingest_secret=ingest_secret,
+                        webhook_url=webhook_url,
+                        admin_chat_id=admin_chat_id,
+                        forward_bot_username=forward_bot_username,
+                        source_label="poll",
+                    )
+
+            if len(state.seen_message_ids) > 2000:
+                state.seen_message_ids = set(list(state.seen_message_ids)[-1000:])
+        except Exception as exc:
+            LOG.exception("PostBank poll error: %s", exc)
+
+        await asyncio.sleep(max(5, poll_sec))
+
+
+def make_listener_lifespan(state, bot_cache, ingest_url, ingest_secret, webhook_url, admin_chat_id, forward_bot_username, poll_sec):
+    @asynccontextmanager
+    async def lifespan(client):
+        poll_task = asyncio.create_task(
+            postbank_poll_loop(
+                client,
+                state,
+                bot_cache,
+                ingest_url,
+                ingest_secret,
+                webhook_url,
+                admin_chat_id,
+                forward_bot_username,
+                poll_sec,
+            )
+        )
+        LOG.info("PostBank poll every %ss enabled", poll_sec)
+        try:
+            yield
+        finally:
+            poll_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await poll_task
+
+    return lifespan
+
+
 async def resolve_bot_peer(client, cache, bot_username):
     if cache.chat_id is not None and cache.chat_type is not None:
         return cache.chat_id, cache.chat_type
@@ -340,116 +610,72 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
         LOG.error("POSTBANK_ADMIN_CHAT_ID missing (set env or db/bale.json admin_chat_ids)")
         raise SystemExit(2)
 
-    dp = Dispatcher()
-    client = Client(dp, session_file=str(session_file))
-    recent = set()
+    poll_sec = int(os.environ.get("POSTBANK_POLL_SEC", str(DEFAULT_POLL_SEC)) or DEFAULT_POLL_SEC)
+    state = ListenerState()
     bot_cache = BotPeerCache()
+    dp = Dispatcher()
+    lifespan = make_listener_lifespan(
+        state,
+        bot_cache,
+        ingest_url,
+        ingest_secret,
+        webhook_url,
+        admin_chat_id,
+        forward_bot_username,
+        poll_sec,
+    )
+    client = Client(dp, session_file=str(session_file), lifespan=lifespan)
 
     @dp.message()
     async def on_message(msg):
-        text = ""
-        if getattr(msg, "text", None):
-            text = str(msg.text or "").strip()
-        if not text:
-            text = str(getattr(msg, "caption", "") or "").strip()
-
+        text = extract_message_text(msg)
         if not text:
             return
 
-        if is_postbank_card_deposit(text) and not should_process_message(msg, text):
+        await ensure_my_user_id(client, state)
+
+        if is_postbank_card_deposit(text) and not should_process_message(
+            msg,
+            text,
+            state.postbank_bot_id,
+            state.my_user_id,
+        ):
             LOG.debug(
-                "Skipped postbank-shaped message sender=%s chat=%s outgoing=%s",
-                message_sender_username(msg) or "?",
-                message_peer_username(msg) or "?",
-                is_outgoing_message(msg),
+                "Skipped postbank-shaped push sender_id=%s chat_id=%s",
+                getattr(msg, "sender_id", "?"),
+                getattr(getattr(msg, "chat", None), "id", "?"),
             )
             return
 
-        if not should_process_message(msg, text):
+        if not should_process_message(msg, text, state.postbank_bot_id, state.my_user_id):
             return
 
-        key = re.sub(r"\s+", " ", text)[:240]
-        if key in recent:
-            LOG.info("Duplicate ignored")
-            return
-        recent.add(key)
-        if len(recent) > 300:
-            recent.clear()
+        mid = getattr(msg, "message_id", None)
+        if mid is not None:
+            state.seen_message_ids.add(int(mid))
 
-        sender = message_sender_username(msg)
-        LOG.info(
-            "Card deposit from @%s chat=%s preview=%s",
-            sender or "?",
-            message_peer_username(msg) or "?",
-            key[:120],
+        await process_deposit_message(
+            msg,
+            text,
+            client=client,
+            state=state,
+            bot_cache=bot_cache,
+            ingest_url=ingest_url,
+            ingest_secret=ingest_secret,
+            webhook_url=webhook_url,
+            admin_chat_id=admin_chat_id,
+            forward_bot_username=forward_bot_username,
+            source_label="push",
         )
 
-        delivered = False
-        if forward_bot_username:
-            try:
-                delivered = await deliver_deposit_to_bot(client, bot_cache, msg, text, forward_bot_username)
-                if not delivered:
-                    LOG.warning("Could not deliver deposit to @%s", forward_bot_username.lstrip("@"))
-            except Exception as exc:
-                LOG.error("Deliver to bot via userbot failed: %s", exc)
-        else:
-            LOG.warning("POSTBANK_FORWARD_BOT not set — skipping forward to JayPusbankbot")
-
-        ingest_result = {}
-        try:
-            ingest_result = await post_ingest(ingest_url, ingest_secret, text)
-        except Exception as exc:
-            LOG.exception("Ingest failed: %s", exc)
-
-        if isinstance(ingest_result, dict):
-            LOG.info(
-                "Ingest http=%s paid=%s ignored=%s err=%s",
-                ingest_result.get("_http"),
-                ingest_result.get("paid"),
-                ingest_result.get("ignored"),
-                ingest_result.get("error"),
-            )
-
-            if ingest_result.get("_http") == 401:
-                LOG.error("Ingest unauthorized — update POSTBANK_INGEST_SECRET in db/postbank-listener.env")
-
-        if ingest_result.get("ignored"):
-            LOG.info("Ignored (no open order): %s", ingest_result.get("error"))
-            if delivered:
-                LOG.info("Deposit already forwarded to bot for visibility")
-            return
-
-        paid = ingest_is_paid(ingest_result)
-
-        if not paid and webhook_url:
-            try:
-                wh = await post_bot_webhook(webhook_url, admin_chat_id, text)
-                LOG.info(
-                    "Webhook fallback http=%s paid=%s ok=%s err=%s",
-                    wh.get("_http"),
-                    wh.get("paid"),
-                    wh.get("ok"),
-                    wh.get("error"),
-                )
-                if wh.get("paid") is True:
-                    paid = True
-                elif wh.get("_http") == 500:
-                    LOG.error("Webhook returned HTTP 500 — deploy bale-webhook.php + instant_pay_lib.php")
-            except Exception as exc:
-                LOG.exception("Webhook fallback failed: %s", exc)
-
-        if paid:
-            LOG.info("Payment confirmed via ingest/webhook")
-        elif delivered:
-            LOG.warning("Forwarded to bot but payment not confirmed — check open order amount/window")
-
     LOG.info(
-        "Listening… session=%s ingest=%s webhook=%s admin=%s forward_bot=%s",
+        "Listening… session=%s ingest=%s webhook=%s admin=%s forward_bot=%s poll=%ss",
         session_file,
         ingest_url,
         webhook_url or "(disabled)",
         admin_chat_id,
         forward_bot_username or "(disabled)",
+        poll_sec,
     )
     client.run()
 
@@ -462,19 +688,22 @@ def self_test():
 
     class FakeMsg:
         text = sample
+        sender_id = 123456
         out = False
+        chat = type("C", (), {"id": 123456})()
         from_user = type("U", (), {"username": "postbank_bot"})()
 
     assert is_postbank_card_deposit(sample)
-    assert should_process_message(FakeMsg(), sample)
+    assert should_process_message(FakeMsg(), sample, postbank_bot_id=123456)
 
     class NoUserMsg:
         text = sample
+        sender_id = 999001
         out = False
         from_user = type("U", (), {"username": None})()
-        chat = type("C", (), {"username": "postbank_bot"})()
+        chat = type("C", (), {"id": 999001, "username": "postbank_bot"})()
 
-    assert should_process_message(NoUserMsg(), sample)
+    assert should_process_message(NoUserMsg(), sample, postbank_bot_id=999001)
     print("postbank-listener self-test OK")
 
 
