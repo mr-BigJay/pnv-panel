@@ -363,6 +363,16 @@ export function AdminApp() {
     [activeUser, api, bumpPins, csrf, loadTickets, pinScope],
   );
 
+  useEffect(() => {
+    const body = document.body;
+    if (!config.embedded && isMobile && activeUser) {
+      body.classList.add('adminSupportChatOpen');
+    } else {
+      body.classList.remove('adminSupportChatOpen');
+    }
+    return () => body.classList.remove('adminSupportChatOpen');
+  }, [activeUser, config.embedded, isMobile]);
+
   return (
     <div
       className={`support-v2-shell flex h-full overflow-hidden bg-[#0e1621] text-[#e4ecf4] ${

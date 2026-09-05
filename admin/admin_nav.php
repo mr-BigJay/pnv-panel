@@ -327,8 +327,18 @@ overflow:hidden;
 body.adminHasBottomNav{padding-bottom:84px}
 body.adminHasBottomNav .content{padding-bottom:84px !important}
 body.adminHasBottomNav .content-support{padding-bottom:0 !important}
-body.adminPageSupport .adminBottomNav{display:none !important}
-body.adminPageSupport{padding-bottom:0}
+body.adminHasBottomNav.adminPageSupport:not(.adminSupportChatOpen){
+padding-bottom:0;
+}
+body.adminHasBottomNav.adminPageSupport:not(.adminSupportChatOpen) .content-support{
+max-height:calc(100dvh - 84px - env(safe-area-inset-bottom,0)) !important;
+height:calc(100dvh - 84px - env(safe-area-inset-bottom,0)) !important;
+}
+body.adminPageSupport.adminSupportChatOpen .adminBottomNav{display:none !important}
+body.adminPageSupport.adminSupportChatOpen .content-support{
+max-height:100dvh !important;
+height:100% !important;
+}
 }
 </style>';
     }

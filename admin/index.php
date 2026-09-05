@@ -1018,7 +1018,7 @@ box-sizing:border-box;
 
 </head>
 
-<body class="<?php echo in_array($page, ['support', 'support-v2'], true) ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
+<body class="<?php echo in_array($page, ['support', 'support-v2'], true) ? 'adminPageSupport adminHasBottomNav' : 'adminHasBottomNav'; ?>">
 
 <button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
 <div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
