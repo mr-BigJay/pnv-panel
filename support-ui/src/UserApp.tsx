@@ -97,12 +97,7 @@ export function UserApp() {
   }, [loadMessages, pollMs]);
 
   const scrollChatToEnd = useCallback(() => {
-    requestAnimationFrame(() => {
-      chatPanelRef.current?.scrollToEnd();
-    });
-    [150, 500, 1200, 2500].forEach((ms) => {
-      window.setTimeout(() => chatPanelRef.current?.scrollToEnd(), ms);
-    });
+    chatPanelRef.current?.scrollToEnd();
   }, []);
 
   const mergeMessage = useCallback(

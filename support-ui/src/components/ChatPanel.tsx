@@ -148,6 +148,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const initialScrollDoneRef = useRef(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const grouped = useMemo(() => messages, [messages]);
 
@@ -163,8 +164,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
     };
     scroll();
     requestAnimationFrame(scroll);
-    requestAnimationFrame(() => requestAnimationFrame(scroll));
-    [100, 300, 600, 1200, 2500].forEach((ms) => window.setTimeout(scroll, ms));
+    [100, 400, 800].forEach((ms) => window.setTimeout(scroll, ms));
   }, []);
 
   useImperativeHandle(ref, () => ({ scrollToEnd }), [scrollToEnd]);
@@ -173,22 +173,15 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
     messageRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  const lastMessageIdRef = useRef('');
+  useEffect(() => {
+    initialScrollDoneRef.current = false;
+  }, [user]);
 
   useLayoutEffect(() => {
-    if (selectMode || messages.length === 0) return;
-    const last = messages[messages.length - 1];
-    if (!last) return;
-    if (last.id !== lastMessageIdRef.current) {
-      lastMessageIdRef.current = last.id;
-      scrollToEnd();
-    }
-  }, [messages, selectMode, scrollToEnd]);
-
-  useEffect(() => {
-    if (selectMode || sending) return;
+    if (selectMode || loading || messages.length === 0 || initialScrollDoneRef.current) return;
+    initialScrollDoneRef.current = true;
     scrollToEnd();
-  }, [sending, selectMode, scrollToEnd]);
+  }, [user, loading, messages.length, selectMode, scrollToEnd]);
 
   if (!user) {
     return (
@@ -373,7 +366,6 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
                           alt=""
                           loading="lazy"
                           draggable={false}
-                          onLoad={scrollToEnd}
                           className="tg-msg-image block max-h-[360px] w-full max-w-[280px] object-contain"
                         />
                       </button>
