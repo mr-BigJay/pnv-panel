@@ -57,6 +57,21 @@ echo 'ingest_file: ' . __DIR__ . '/../postbank-ingest.php exists=' . (is_file(__
 echo 'ingest_secret: ' . (trim((string)($config['ingest_secret'] ?? '')) !== '' ? 'yes' : 'no') . "\n";
 echo 'listener_env: ' . (is_file(__DIR__ . '/../db/postbank-listener.env') ? 'yes' : 'no') . "\n";
 echo 'listener_session: ' . (is_file(__DIR__ . '/../db/bale_user_session.bale') ? 'yes' : 'no') . "\n";
+if(is_file(__DIR__ . '/../db/postbank-listener.env')){
+    $envLines = file(__DIR__ . '/../db/postbank-listener.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+    $envKeys = [];
+    foreach($envLines as $line){
+        $line = trim((string)$line);
+        if($line === '' || $line[0] === '#'){
+            continue;
+        }
+        $parts = explode('=', $line, 2);
+        $envKeys[] = trim($parts[0] ?? '');
+    }
+    echo 'listener_env_keys: ' . implode(', ', $envKeys) . "\n";
+    echo 'listener_has_secret: ' . (in_array('POSTBANK_INGEST_SECRET', $envKeys, true) ? 'yes' : 'no') . "\n";
+    echo 'listener_has_admin_chat: ' . (in_array('POSTBANK_ADMIN_CHAT_ID', $envKeys, true) ? 'yes' : 'no') . "\n";
+}
 
 $logPath = baleWebhookLogPath();
 echo 'log_file: ' . $logPath . ' exists=' . (is_file($logPath) ? 'yes' : 'no') . "\n";

@@ -71,6 +71,14 @@ fi
 touch "${ROOT}/db/bale_webhook.log" 2>/dev/null || true
 chmod 664 "${ROOT}/db/bale_webhook.log" 2>/dev/null || true
 
+say "=== Listener self-test ==="
+if [[ -x "${ROOT}/tools/postbank-venv/bin/python" ]]; then
+  "${ROOT}/tools/postbank-venv/bin/python" "${ROOT}/tools/postbank_bale_listener.py" --self-test
+else
+  python3 "${ROOT}/tools/postbank_bale_listener.py" --self-test
+fi
+say "OK listener self-test"
+
 say "=== Endpoints ==="
 curl -fsS "${ROOT%/html}/html/postbank-ingest.php" 2>/dev/null | head -c 100 || curl -fsS "https://panel.ticketin.ir/postbank-ingest.php" | head -c 100 || true
 echo ""

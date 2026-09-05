@@ -70,26 +70,83 @@ def is_postbank_card_deposit(text):
     return False
 
 
+def message_peer_username(msg):
+    for attr in ("chat", "peer", "peer_id"):
+        obj = getattr(msg, attr, None)
+        if obj is None:
+            continue
+        username = getattr(obj, "username", None) or getattr(obj, "user_name", None)
+        if username:
+            return str(username).strip().lower().lstrip("@")
+        title = getattr(obj, "title", None) or getattr(obj, "first_name", None)
+        if title:
+            t = str(title).strip().lower().lstrip("@")
+            if t in POSTBANK_USERNAMES or "postbank" in t:
+                return t
+    return ""
+
+
 def message_sender_username(msg):
     for attr in ("from_user", "sender", "user"):
         obj = getattr(msg, attr, None)
         if obj is None:
             continue
-        username = getattr(obj, "username", None)
+        username = getattr(obj, "username", None) or getattr(obj, "user_name", None)
         if username:
             return str(username).strip().lower().lstrip("@")
     peer = getattr(msg, "peer_id", None) or getattr(msg, "peer", None)
     if peer is not None:
-        username = getattr(peer, "username", None)
+        username = getattr(peer, "username", None) or getattr(peer, "user_name", None)
         if username:
             return str(username).strip().lower().lstrip("@")
     return ""
 
 
-def should_process_message(msg, text):
-    if message_sender_username(msg) not in POSTBANK_USERNAMES:
+def is_outgoing_message(msg):
+    for attr in ("out", "is_outgoing", "outgoing"):
+        val = getattr(msg, attr, None)
+        if val is True:
+            return True
+    return False
+
+
+def looks_like_postbank_notice(text):
+    t = (text or "").strip()
+    if not t:
         return False
-    return is_postbank_card_deposit(text)
+    if "postbank" in t.lower():
+        return True
+    if "پست" in t and "بانک" in t:
+        return True
+    return False
+
+
+def is_postbank_source(msg):
+    sender = message_sender_username(msg)
+    if sender in POSTBANK_USERNAMES:
+        return True
+    chat = message_peer_username(msg)
+    if chat in POSTBANK_USERNAMES:
+        return True
+    return False
+
+
+def should_process_message(msg, text):
+    if is_outgoing_message(msg):
+        return False
+    if not is_postbank_card_deposit(text):
+        return False
+    if is_postbank_source(msg):
+        return True
+    # بعضی نسخه‌های API بله username نمی‌فرستند — متن واقعی واریز کافی است
+    if looks_like_postbank_notice(text):
+        LOG.info(
+            "PostBank deposit accepted by text (sender=%s chat=%s)",
+            message_sender_username(msg) or "?",
+            message_peer_username(msg) or "?",
+        )
+        return True
+    return False
 
 
 def ingest_is_paid(result):
@@ -228,23 +285,37 @@ async def deliver_deposit_to_bot(client, cache, msg, text, bot_username):
 
     chat_id, chat_type = await resolve_bot_peer(client, cache, bot_username)
 
-    try:
-        await msg.forward_to(chat_id=chat_id, chat_type=chat_type)
-        LOG.info("Forwarded deposit to @%s", bot_username.lstrip("@"))
-        return True
-    except Exception as exc:
-        LOG.warning("Forward failed (%s), trying send_message", exc)
+    forward = getattr(msg, "forward_to", None)
+    if forward is None:
+        forward = getattr(msg, "forward", None)
+
+    if callable(forward):
+        try:
+            await forward(chat_id=chat_id, chat_type=chat_type)
+            LOG.info("Forwarded deposit to @%s", bot_username.lstrip("@"))
+            return True
+        except TypeError:
+            try:
+                await forward(chat_id, chat_type)
+                LOG.info("Forwarded deposit to @%s (positional)", bot_username.lstrip("@"))
+                return True
+            except Exception as exc:
+                LOG.warning("Forward failed (%s), trying send_message", exc)
+        except Exception as exc:
+            LOG.warning("Forward failed (%s), trying send_message", exc)
 
     send = getattr(client, "send_message", None)
     if send is None:
         LOG.error("client.send_message unavailable")
         return False
 
+    wrapped = "پست بانک\n" + text if not looks_like_postbank_notice(text) else text
+
     try:
         try:
-            await send(chat_id=chat_id, text=text, chat_type=chat_type)
+            await send(chat_id=chat_id, text=wrapped, chat_type=chat_type)
         except TypeError:
-            await send(chat_id, text)
+            await send(chat_id, wrapped)
         LOG.info("Sent deposit text to @%s via send_message", bot_username.lstrip("@"))
         return True
     except Exception as exc2:
@@ -282,6 +353,18 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
         if not text:
             text = str(getattr(msg, "caption", "") or "").strip()
 
+        if not text:
+            return
+
+        if is_postbank_card_deposit(text) and not should_process_message(msg, text):
+            LOG.debug(
+                "Skipped postbank-shaped message sender=%s chat=%s outgoing=%s",
+                message_sender_username(msg) or "?",
+                message_peer_username(msg) or "?",
+                is_outgoing_message(msg),
+            )
+            return
+
         if not should_process_message(msg, text):
             return
 
@@ -294,7 +377,23 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
             recent.clear()
 
         sender = message_sender_username(msg)
-        LOG.info("Card deposit from @%s preview=%s", sender or "?", key[:120])
+        LOG.info(
+            "Card deposit from @%s chat=%s preview=%s",
+            sender or "?",
+            message_peer_username(msg) or "?",
+            key[:120],
+        )
+
+        delivered = False
+        if forward_bot_username:
+            try:
+                delivered = await deliver_deposit_to_bot(client, bot_cache, msg, text, forward_bot_username)
+                if not delivered:
+                    LOG.warning("Could not deliver deposit to @%s", forward_bot_username.lstrip("@"))
+            except Exception as exc:
+                LOG.error("Deliver to bot via userbot failed: %s", exc)
+        else:
+            LOG.warning("POSTBANK_FORWARD_BOT not set — skipping forward to JayPusbankbot")
 
         ingest_result = {}
         try:
@@ -316,6 +415,8 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
 
         if ingest_result.get("ignored"):
             LOG.info("Ignored (no open order): %s", ingest_result.get("error"))
+            if delivered:
+                LOG.info("Deposit already forwarded to bot for visibility")
             return
 
         paid = ingest_is_paid(ingest_result)
@@ -337,18 +438,10 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
             except Exception as exc:
                 LOG.exception("Webhook fallback failed: %s", exc)
 
-        if forward_bot_username:
-            try:
-                delivered = await deliver_deposit_to_bot(client, bot_cache, msg, text, forward_bot_username)
-                if not delivered:
-                    LOG.warning("Could not deliver deposit to @%s", forward_bot_username.lstrip("@"))
-            except Exception as exc:
-                LOG.error("Deliver to bot via userbot failed: %s", exc)
-        else:
-            LOG.warning("POSTBANK_FORWARD_BOT not set — skipping forward to JayPusbankbot")
-
         if paid:
             LOG.info("Payment confirmed via ingest/webhook")
+        elif delivered:
+            LOG.warning("Forwarded to bot but payment not confirmed — check open order amount/window")
 
     LOG.info(
         "Listening… session=%s ingest=%s webhook=%s admin=%s forward_bot=%s",
@@ -359,6 +452,30 @@ def run_listener(session_file, ingest_url, ingest_secret, webhook_url, admin_cha
         forward_bot_username or "(disabled)",
     )
     client.run()
+
+
+def self_test():
+    sample = (
+        "پست بانک\nواريز به کارت: 6156\n+998,190\n"
+        "1405/05/10\n9:47\nمانده: 44,108,899 ريال"
+    )
+
+    class FakeMsg:
+        text = sample
+        out = False
+        from_user = type("U", (), {"username": "postbank_bot"})()
+
+    assert is_postbank_card_deposit(sample)
+    assert should_process_message(FakeMsg(), sample)
+
+    class NoUserMsg:
+        text = sample
+        out = False
+        from_user = type("U", (), {"username": None})()
+        chat = type("C", (), {"username": "postbank_bot"})()
+
+    assert should_process_message(NoUserMsg(), sample)
+    print("postbank-listener self-test OK")
 
 
 def parse_args(argv=None):
@@ -380,6 +497,7 @@ def parse_args(argv=None):
         help="Forward real card deposits to this Bale bot (JayPusbankbot)",
     )
     p.add_argument("--login", action="store_true", help="One-time interactive phone login")
+    p.add_argument("--self-test", action="store_true", help="Run detection self-test and exit")
     p.add_argument("--log-level", default="INFO")
     return p.parse_args(argv)
 
@@ -391,6 +509,10 @@ def main(argv=None):
         format="%(asctime)s %(levelname)s %(message)s",
     )
     session_file = Path(args.session).expanduser().resolve()
+
+    if args.self_test:
+        self_test()
+        return
 
     if args.login:
         run_login(session_file)
