@@ -79,6 +79,13 @@ else
 fi
 say "OK listener self-test"
 
+if grep -q 'postbank_poll_loop' "${ROOT}/tools/postbank_bale_listener.py"; then
+  say "OK listener poll fallback present"
+else
+  say "FAIL listener missing poll fallback"
+  exit 1
+fi
+
 say "=== Endpoints ==="
 curl -fsS "${ROOT%/html}/html/postbank-ingest.php" 2>/dev/null | head -c 100 || curl -fsS "https://panel.ticketin.ir/postbank-ingest.php" | head -c 100 || true
 echo ""
