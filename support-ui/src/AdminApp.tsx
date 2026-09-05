@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createAdminSupportApi } from './api/client';
 import { ChatPanel, type ChatPanelHandle } from './components/ChatPanel';
 import { TicketSidebar } from './components/TicketSidebar';
@@ -25,7 +25,9 @@ export function AdminApp() {
   const [sidebarError, setSidebarError] = useState('');
   const [chatError, setChatError] = useState('');
   const [draft, setDraft] = useState('');
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches,
+  );
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [menuState, setMenuState] = useState<MessageContextMenuState | null>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
@@ -44,11 +46,33 @@ export function AdminApp() {
   const showChat = isMobile ? !!activeUser : true;
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const media = window.matchMedia('(max-width: 768px)');
+    const check = () => setIsMobile(media.matches);
     check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    media.addEventListener('change', check);
+    return () => media.removeEventListener('change', check);
   }, []);
+
+  const chatViewOpen = isMobile && !!activeUser;
+
+  useLayoutEffect(() => {
+    const body = document.body;
+    body.classList.toggle('adminSupportChatOpen', chatViewOpen);
+    const root = document.getElementById('support-v2-root');
+    if (root) {
+      if (chatViewOpen) {
+        root.dataset.chatView = '1';
+      } else {
+        delete root.dataset.chatView;
+      }
+    }
+    return () => {
+      body.classList.remove('adminSupportChatOpen');
+      if (root) {
+        delete root.dataset.chatView;
+      }
+    };
+  }, [chatViewOpen]);
 
   useEffect(() => {
     setReplyTarget(null);
@@ -363,22 +387,13 @@ export function AdminApp() {
     [activeUser, api, bumpPins, csrf, loadTickets, pinScope],
   );
 
-  useEffect(() => {
-    const body = document.body;
-    if (isMobile && activeUser) {
-      body.classList.add('adminSupportChatOpen');
-    } else {
-      body.classList.remove('adminSupportChatOpen');
-    }
-    return () => body.classList.remove('adminSupportChatOpen');
-  }, [activeUser, isMobile]);
-
   return (
     <div
       className={`support-v2-shell flex h-full overflow-hidden bg-[#0e1621] text-[#e4ecf4] ${
         config.embedded ? 'support-v2-embedded' : ''
       }`}
       dir="rtl"
+      data-chat-view={chatViewOpen ? '1' : '0'}
     >
       <TicketSidebar
         tickets={tickets}

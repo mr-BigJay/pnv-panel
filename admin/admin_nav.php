@@ -327,14 +327,19 @@ overflow:hidden;
 body.adminHasBottomNav{padding-bottom:84px}
 body.adminHasBottomNav .content{padding-bottom:84px !important}
 body.adminHasBottomNav .content-support{padding-bottom:0 !important}
-body.adminHasBottomNav.adminPageSupport:not(.adminSupportChatOpen){
+body.adminHasBottomNav.adminPageSupport:not(:has(.tg-chat-panel.flex:not(.hidden))){
 padding-bottom:0;
 }
-body.adminHasBottomNav.adminPageSupport:not(.adminSupportChatOpen) .content-support{
+body.adminHasBottomNav.adminPageSupport:not(:has(.tg-chat-panel.flex:not(.hidden))) .content-support{
 max-height:calc(100dvh - 84px - env(safe-area-inset-bottom,0)) !important;
 height:calc(100dvh - 84px - env(safe-area-inset-bottom,0)) !important;
 }
-body.adminPageSupport.adminSupportChatOpen .adminBottomNav{display:none !important}
+/* Mobile chat open: hide bottom nav (list view keeps tg-chat-panel.hidden) */
+body.adminPageSupport:has(.tg-chat-panel.flex:not(.hidden)) .adminBottomNav,
+body.adminPageSupport.adminSupportChatOpen .adminBottomNav{
+display:none !important;
+}
+body.adminPageSupport:has(.tg-chat-panel.flex:not(.hidden)) .content-support,
 body.adminPageSupport.adminSupportChatOpen .content-support{
 max-height:100dvh !important;
 height:100% !important;

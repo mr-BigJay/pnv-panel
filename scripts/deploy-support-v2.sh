@@ -65,6 +65,13 @@ else
   exit 1
 fi
 
+if grep -q 'tg-chat-panel.flex:not(.hidden)' "${ROOT}/admin/admin_nav.php"; then
+  echo "  OK admin_nav.php chat-view nav hide CSS"
+else
+  echo "  FAIL admin_nav.php missing chat-view nav CSS!"
+  exit 1
+fi
+
 if grep -q 'adminSupportChatOpen' "${ROOT}/assets/support/admin/support-admin.js"; then
   echo "  OK support list toggles chat-open nav hide"
 else

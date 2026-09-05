@@ -61,6 +61,18 @@ body,
     min-height: 0;
     height: 100%;
   }
+
+  /* Admin embedded: bottom nav only on ticket list, not inside chat */
+  body.adminPageSupport:has(.tg-chat-panel.flex:not(.hidden)) .adminBottomNav,
+  body.adminPageSupport:has(#support-v2-root[data-chat-view='1']) .adminBottomNav {
+    display: none !important;
+  }
+
+  body.adminPageSupport:has(.tg-chat-panel.flex:not(.hidden)) .content-support,
+  body.adminPageSupport:has(#support-v2-root[data-chat-view='1']) .content-support {
+    max-height: 100dvh !important;
+    height: 100% !important;
+  }
 }
 
 body {
