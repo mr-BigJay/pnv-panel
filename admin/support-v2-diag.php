@@ -33,6 +33,14 @@ foreach($checks as $label => $path){
         echo '  has supportTicketsListForApi: '
             . (strpos($src, 'function supportTicketsListForApi') !== false ? 'yes' : 'NO') . "\n";
     }
+    if($ok && $label === 'assets/support/admin/support-admin.js'){
+        $src = file_get_contents($path);
+        echo '  voice UI (tg-voice-player): '
+            . (strpos($src, 'tg-voice-player') !== false ? 'yes' : 'NO — deploy again!') . "\n";
+        echo '  image toolbar (support-media-toolbar): '
+            . (strpos($src, 'support-media-toolbar') !== false ? 'yes' : 'NO') . "\n";
+        echo '  mtime: ' . date('c', filemtime($path)) . "\n";
+    }
 }
 
 echo "\n";

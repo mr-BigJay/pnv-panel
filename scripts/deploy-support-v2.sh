@@ -10,6 +10,7 @@ echo "=== Deploy support v2 (branch: ${BR}) ==="
 echo "Target: ${ROOT}"
 
 files=(
+  "support.php"
   "support_lib.php"
   "admin/support-api.php"
   "admin/support-v2.php"
@@ -45,6 +46,16 @@ if [[ ! -s "${ROOT}/assets/support/admin/support-admin.js" ]]; then
   echo "  FAIL support-admin.js is empty!"
   exit 1
 fi
+
+if grep -q 'tg-voice-player' "${ROOT}/assets/support/admin/support-admin.js"; then
+  echo "  OK voice UI (tg-voice-player) in support-admin.js"
+else
+  echo "  FAIL tg-voice-player missing — old JS still deployed!"
+  exit 1
+fi
+
+js_bytes=$(wc -c < "${ROOT}/assets/support/admin/support-admin.js" | tr -d ' ')
+echo "  support-admin.js size: ${js_bytes} bytes"
 
 echo ""
 echo "=== Ping API (no login) ==="
