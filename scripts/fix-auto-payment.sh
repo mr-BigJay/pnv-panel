@@ -2,11 +2,29 @@
 # تعمیر یک‌مرحله‌ای خرید/تمدید خودکار — روی server3 اجرا کنید
 set -euo pipefail
 
-BR="${BR:-cursor/telegram-user-bot-058b}"
+BR="${BR:-cursor/instant-pay-back-no-cancel-f8e6}"
 BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/${BR}"
-ROOT="${ROOT:-/var/www/html}"
+ROOT="${ROOT:-}"
 
 say(){ echo "[fix-auto] $*"; }
+
+detect_root(){
+  local candidate found
+  for candidate in /var/www/html /var/www/pnv-panel /var/www/panel /usr/share/nginx/html; do
+    if [[ -f "${candidate}/instant_pay_lib.php" ]]; then
+      ROOT="$candidate"
+      return
+    fi
+  done
+
+  found="$(find /var/www /home -maxdepth 6 -name instant_pay_lib.php 2>/dev/null | head -n 1 || true)"
+  [[ -n "$found" ]] || { say "ERROR: panel path not found; run with ROOT=/real/path"; exit 1; }
+  ROOT="$(dirname "$found")"
+}
+
+if [[ -z "$ROOT" || ! -f "${ROOT}/instant_pay_lib.php" ]]; then
+  detect_root
+fi
 
 say "=== Fix auto payment (branch ${BR}) ==="
 say "Target: ${ROOT}"
@@ -18,11 +36,11 @@ files=(
   "instant_pay_lib.php"
   "xui_lib.php"
   "telegram_lib.php"
-  "telegram_user_lib.php"
   "tools/postbank_bale_listener.py"
   "tools/postbank-listener.service"
+  "tools/requirements-postbank.txt"
+  "scripts/setup-postbank-listener.sh"
   "admin/diag-bale.php"
-  "bigjay_controller/diag-bale.php"
 )
 
 for rel in "${files[@]}"; do
@@ -49,27 +67,29 @@ if(empty($am) || intval($am[0]) !== 998190) { fwrite(STDERR, "FAIL amount parse\
 echo "OK parser amount=".intval($am[0])."\n";
 '
 
-say "=== Listener unit + venv ==="
-if [[ -x "${ROOT}/scripts/fix-postbank-listener-unit.sh" ]]; then
-  ROOT="${ROOT}" BR="${BR}" bash "${ROOT}/scripts/fix-postbank-listener-unit.sh" || true
+say "=== Listener ==="
+if systemctl cat postbank-listener >/dev/null 2>&1 && [[ -x "${ROOT}/tools/postbank-venv/bin/python" ]]; then
+  systemctl daemon-reload
+  systemctl restart postbank-listener
+  systemctl is-active --quiet postbank-listener || {
+    journalctl -u postbank-listener -n 30 --no-pager
+    exit 1
+  }
+  say "OK listener restarted"
 else
-  curl -fsSL "${BASE}/scripts/fix-postbank-listener-unit.sh" | ROOT="${ROOT}" BR="${BR}" bash || true
-fi
-
-if [[ -x "${ROOT}/scripts/setup-postbank-listener.sh" ]] && [[ ! -x "${ROOT}/tools/postbank-venv/bin/python" ]]; then
-  say "venv missing — run setup-postbank-listener.sh"
+  ROOT="${ROOT}" BR="${BR}" bash "${ROOT}/scripts/setup-postbank-listener.sh"
 fi
 
 touch "${ROOT}/db/bale_webhook.log" 2>/dev/null || true
 chmod 664 "${ROOT}/db/bale_webhook.log" 2>/dev/null || true
 
-say "=== Endpoints ==="
-curl -fsS "${ROOT%/html}/html/postbank-ingest.php" 2>/dev/null | head -c 100 || curl -fsS "https://panel.ticketin.ir/postbank-ingest.php" | head -c 100 || true
+say "=== Endpoint ==="
+curl -fsS "https://panel.ticketin.ir/postbank-ingest.php" | head -c 200 || true
 echo ""
 
 say ""
 say "Done."
-say "  1) https://panel.ticketin.ir/bigjay_controller/diag-bale.php"
+say "  1) https://panel.ticketin.ir/bigjay_controller/diag-bale.php (if wrapper exists)"
 say "  2) systemctl status postbank-listener"
 say "  3) journalctl -u postbank-listener -n 30 --no-pager"
 say "  4) tail -30 ${ROOT}/db/bale_webhook.log"

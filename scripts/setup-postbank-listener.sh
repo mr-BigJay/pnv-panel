@@ -2,7 +2,7 @@
 # PNV Panel — نصب/رفع postbank-listener (وابستگی‌های Python + systemd)
 #
 # یک خط (روی سرور با root):
-#   bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/telegram-user-bot-058b/scripts/setup-postbank-listener.sh)
+#   bash <(curl -Ls https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/instant-pay-back-no-cancel-f8e6/scripts/setup-postbank-listener.sh)
 #
 # فقط venv/deps (بدون deploy):
 #   DEPLOY=0 bash <(curl -Ls .../setup-postbank-listener.sh)
@@ -11,7 +11,7 @@ set -euo pipefail
 
 ROOT="${ROOT:-}"
 REPO="${REPO:-mr-BigJay/pnv-panel}"
-BR="${BR:-cursor/telegram-user-bot-058b}"
+BR="${BR:-cursor/instant-pay-back-no-cancel-f8e6}"
 DEPLOY="${DEPLOY:-1}"
 RUN_USER="${RUN_USER:-www-data}"
 SERVICE_NAME="${SERVICE_NAME:-postbank-listener}"
