@@ -198,6 +198,15 @@ instantPaySave([$oldCancelled]);
 assertTrue(!instantPayItemMatchable($oldCancelled, $now), 'cancelled order outside grace is not matchable');
 assertTrue(instantPayMatchAmountExact($cancelledAmount) === null, 'old cancelled order does not match');
 
+$typeMismatchRow = $renewRow;
+$typeMismatchRow[6] = 'درحال بررسی';
+xuiSavePayments([$typeMismatchRow]);
+$typeMismatchResult = xuiApprovePaymentIndex(0, 'خرید');
+assertTrue(
+    empty($typeMismatchResult['ok']) && ($typeMismatchResult['error'] ?? '') === 'نوع پرداخت با سفارش مطابقت ندارد',
+    'buy/renew type mismatch is rejected before provisioning'
+);
+
 restoreFile(dirname(__DIR__) . '/db/instant_payments.json', $instantBak);
 restoreFile(dirname(__DIR__) . '/invoices/payments.csv', $csvBak);
 

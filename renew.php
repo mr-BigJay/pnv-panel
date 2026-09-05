@@ -1118,7 +1118,8 @@ function ensureInstantPay(forceRestart){
         const sameCard = String(currentPay.card || '') === card;
         const selectedPlan = planSelect.value.trim();
         const orderPlan = String(currentPay.plan_value || currentPay.plan || '').trim();
-        if(sameCard && orderPlan === selectedPlan){
+        const sameSub = String(currentPay.sub || '').trim() === sub;
+        if(sameCard && orderPlan === selectedPlan && sameSub){
             return;
         }
     }

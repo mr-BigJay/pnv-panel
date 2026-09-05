@@ -64,6 +64,13 @@ if($action === 'create'){
     }
 
     $type = trim((string)($input['type'] ?? 'خرید'));
+
+    if(!in_array($type, ['خرید', 'تمدید'], true)){
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'نوع سفارش نامعتبر است'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     $plan = trim((string)($input['plan'] ?? ''));
     $card = trim((string)($input['card'] ?? ''));
     $cardName = trim((string)($input['card_name'] ?? ''));

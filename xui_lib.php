@@ -2185,7 +2185,22 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $row = $payments[$index];
-        $type = trim((string)($row[9] ?? $typeHint));
+        $rowType = trim((string)($row[9] ?? ''));
+        $hintType = trim((string)$typeHint);
+
+        if($rowType !== '' && !in_array($rowType, ['خرید', 'تمدید'], true)){
+            return ['ok' => false, 'error' => 'نوع پرداخت ذخیره‌شده نامعتبر است'];
+        }
+
+        if($hintType !== '' && !in_array($hintType, ['خرید', 'تمدید'], true)){
+            return ['ok' => false, 'error' => 'نوع پرداخت درخواستی نامعتبر است'];
+        }
+
+        if($rowType !== '' && $hintType !== '' && $rowType !== $hintType){
+            return ['ok' => false, 'error' => 'نوع پرداخت با سفارش مطابقت ندارد'];
+        }
+
+        $type = xuiResolvePaymentType($row, $hintType);
         $status = trim((string)($row[6] ?? ''));
 
         if($status === 'تایید شد'){

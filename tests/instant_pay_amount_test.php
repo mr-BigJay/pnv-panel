@@ -114,6 +114,35 @@ $oldCancelled = $cancelledFresh;
 $oldCancelled['cancelled_at'] = $now - instantPayCancelGraceSeconds() - 60;
 assertTrue(!instantPayItemMatchable($oldCancelled, $now), 'cancelled order outside cancel grace is not matchable');
 
+$expiredCodeItem = $expiredItem;
+$expiredCodeItem['code'] = 7340;
+$expiredCodeItem['expires_at'] = $now - 60;
+$reservedCodes = instantPayActiveCodes([$expiredCodeItem, $cancelledFresh, $oldCancelled]);
+assertTrue(in_array('7340', $reservedCodes, true), 'expired matchable order keeps its code reserved');
+assertTrue(in_array('8650', $reservedCodes, true), 'cancelled recoverable order keeps its code reserved');
+
+$baseSignature = [
+    'type' => 'خرید',
+    'plan' => '10 گیگ',
+    'subname' => 'cfg-one',
+    'card' => '6037',
+    'discount_percent' => 0,
+];
+$discountSignature = $baseSignature;
+$discountSignature['discount_source'] = 'admin_discount';
+$discountSignature['discount_final_thousands'] = 120;
+assertTrue(
+    instantPayOptsSignature($baseSignature) !== instantPayOptsSignature($discountSignature),
+    'fixed-price discount changes reusable-order signature'
+);
+$badTypeResult = instantPayCreate([
+    'user' => 'demo',
+    'type' => 'renew',
+    'plan' => '10 گیگ',
+    'card' => '6037',
+]);
+assertTrue(empty($badTypeResult['ok']) && ($badTypeResult['error'] ?? '') === 'نوع سفارش نامعتبر است', 'invalid payment type is rejected');
+
 // CSV fallback matcher
 $csvRow = array_fill(0, 14, '');
 $csvRow[0] = 'demo';

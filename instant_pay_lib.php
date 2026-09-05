@@ -588,11 +588,9 @@ if(!function_exists('instantPayPath')){
         $codes = [];
 
         foreach($items as $item){
-            if(($item['status'] ?? '') !== 'waiting'){
-                continue;
-            }
-
-            if(intval($item['expires_at'] ?? 0) < $now){
+            // هر سفارشی که هنوز می‌تواند با واریز مچ شود باید کدش رزرو بماند.
+            // در غیر این صورت سفارش جدید ممکن است مبلغ یکسان بگیرد.
+            if(!instantPayItemMatchable($item, $now)){
                 continue;
             }
 
@@ -1018,13 +1016,15 @@ if(!function_exists('instantPayPath')){
 
     function instantPayOptsSignature($opts){
         return implode('|', [
-            trim((string)($opts['type'] ?? 'خرید')),
+            instantPayNormalizeType($opts['type'] ?? 'خرید'),
             trim((string)($opts['plan'] ?? '')),
             trim((string)($opts['subname'] ?? '')),
             trim((string)($opts['sub'] ?? '')),
             trim((string)($opts['card'] ?? '')),
             strtoupper(trim((string)($opts['coupon_code'] ?? ''))),
             (string)intval($opts['discount_percent'] ?? 0),
+            trim((string)($opts['discount_source'] ?? '')),
+            (string)intval($opts['discount_final_thousands'] ?? 0),
         ]);
     }
 
@@ -1037,6 +1037,8 @@ if(!function_exists('instantPayPath')){
             'card' => $item['card'] ?? '',
             'coupon_code' => $item['coupon_code'] ?? '',
             'discount_percent' => $item['discount_percent'] ?? 0,
+            'discount_source' => $item['discount_source'] ?? '',
+            'discount_final_thousands' => $item['discount_final_thousands'] ?? 0,
         ]);
     }
 
@@ -1233,7 +1235,12 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if(($item['status'] ?? '') !== 'waiting'){
+            $status = (string)($item['status'] ?? '');
+
+            if($status !== 'waiting' && !(
+                in_array($status, ['expired', 'failed'], true)
+                && instantPayItemMatchable($item, $now)
+            )){
                 continue;
             }
 
@@ -1460,7 +1467,13 @@ if(!function_exists('instantPayPath')){
 
     function instantPayCreate($opts){
         $username = trim((string)($opts['user'] ?? ''));
-        $type = trim((string)($opts['type'] ?? 'خرید'));
+        $rawType = trim((string)($opts['type'] ?? 'خرید'));
+
+        if(!in_array($rawType, ['خرید', 'تمدید'], true)){
+            return ['ok' => false, 'error' => 'نوع سفارش نامعتبر است'];
+        }
+
+        $type = instantPayNormalizeType($rawType);
         $planValue = trim((string)($opts['plan'] ?? ''));
         $subname = trim((string)($opts['subname'] ?? ''));
         $sub = trim((string)($opts['sub'] ?? ''));
