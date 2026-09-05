@@ -365,13 +365,13 @@ export function AdminApp() {
 
   useEffect(() => {
     const body = document.body;
-    if (!config.embedded && isMobile && activeUser) {
+    if (isMobile && activeUser) {
       body.classList.add('adminSupportChatOpen');
     } else {
       body.classList.remove('adminSupportChatOpen');
     }
     return () => body.classList.remove('adminSupportChatOpen');
-  }, [activeUser, config.embedded, isMobile]);
+  }, [activeUser, isMobile]);
 
   return (
     <div
