@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/pnv_date_bootstrap.php';
+require_once __DIR__ . '/payment_list_ui.php';
 
 session_start();
 
@@ -28,17 +29,7 @@ fclose($f);
 }
 
 function statusColor($status){
-
-if($status=="تایید شد"){
-return "#22c55e";
-}
-
-if($status=="رد شد"){
-return "#ef4444";
-}
-
-return "#eab308";
-
+    return paymentListStatusColor($status);
 }
 
 function findEmailBySub($sub){
@@ -190,6 +181,8 @@ text-decoration:none;
 font-size:15px;
 }
 
+<?php echo paymentListTabsCss(); ?>
+
 .empty{
 background:#1e293b;
 padding:20px;
@@ -275,6 +268,11 @@ userBackBar('dashboard.php', 'لیست تمدید ها');
 </h2>
 
 <?php
+$activeTab = paymentListActiveTab('pending');
+paymentListRenderTabs('renew-list.php', $activeTab);
+?>
+
+<?php
 
 $found = false;
 
@@ -292,13 +290,28 @@ if(
 continue;
 }
 
+$listTab = paymentListUserDisplayTab($p);
+
+if($listTab === null || $listTab !== $activeTab){
+continue;
+}
+
 $found = true;
 
-$status = $p[6] ?? "";
+$status = trim((string)($p[6] ?? ''));
+
+if($status === ''){
+$status = 'درحال بررسی';
+}
 
 $email =
 findEmailBySub($p[1]);
 $payWhen = pnvFormatPaymentRowDateTime($p);
+$infoText = paymentListInfoText($status, 'renew');
+
+if($status === 'رد شد' && trim((string)($p[7] ?? '')) !== ''){
+$infoText = trim((string)$p[7]);
+}
 
 ?>
 
@@ -412,21 +425,9 @@ style="background:<?php echo statusColor($status); ?>">
 
 <div class="info">
 
-<?php if($status=="درحال بررسی"){ ?>
+<?php if($infoText !== ''){ ?>
 
-بعد از تایید پرداخت اشتراک شما تمدید خواهد شد.
-
-<?php } ?>
-
-<?php if($status=="تایید شد"){ ?>
-
-اشتراک شما تمدید شد.
-
-<?php } ?>
-
-<?php if($status=="رد شد"){ ?>
-
-<?php echo $p[7]; ?>
+<?php echo htmlspecialchars($infoText, ENT_QUOTES, 'UTF-8'); ?>
 
 <?php } ?>
 
@@ -440,7 +441,7 @@ style="background:<?php echo statusColor($status); ?>">
 
 <div class="empty">
 
-درخواستی برای تمدید ثبت نشده است
+در این بخش درخواستی ثبت نشده است
 
 </div>
 

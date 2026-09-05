@@ -79,6 +79,12 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+if (is_file(__DIR__ . '/../payment_list_ui.php')) {
+    require_once __DIR__ . '/../payment_list_ui.php';
+}
+
+$renewsActiveTab = function_exists('paymentListActiveTab') ? paymentListActiveTab('pending') : 'pending';
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -298,6 +304,12 @@ if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($p
 continue;
 }
 
+$displayTab = function_exists('instantPayAdminDisplayTab') ? instantPayAdminDisplayTab($pay) : 'pending';
+
+if($displayTab === 'hidden' || $displayTab !== $renewsActiveTab){
+continue;
+}
+
 $renews[]=[
 'index'=>$index,
 'data'=>$pay
@@ -325,8 +337,14 @@ $start = ($currentPage - 1) * $perPage;
 $renewsPage = array_slice($renews, $start, $perPage);
 
 if(!function_exists('renewsListUrl')){
-function renewsListUrl($page){
-return pnvAdminUrl('index.php?page=renews&p=' . intval($page));
+function renewsListUrl($page, $tab = null){
+global $renewsActiveTab;
+
+if($tab === null){
+$tab = $renewsActiveTab;
+}
+
+return pnvAdminUrl('index.php?page=renews&p=' . intval($page) . '&tab=' . urlencode($tab));
 }
 }
 
@@ -790,11 +808,21 @@ flex:0 0 20px;
 .statusIcon svg{width:11px;height:11px}
 }
 
+.statusIcon.is-expired{background:#64748b}
+
+<?php if(function_exists('paymentListAdminTabsCss')){ echo paymentListAdminTabsCss(); } ?>
+
 </style>
 
 <div class="box renewsPage">
 
 <h2>لیست تمدید ها</h2>
+
+<?php
+if(function_exists('paymentListRenderAdminTabs')){
+    paymentListRenderAdminTabs(renewsListUrl(1, $renewsActiveTab), $renewsActiveTab);
+}
+?>
 
 <div class="renewList">
 
@@ -826,6 +854,10 @@ if(function_exists('instantPayAdminRowStatusMeta')){
     elseif(($renewStatusMeta['class'] ?? '') === 'statusDot--blue'){
         $statusClass = 'is-progress';
         $statusTitle = 'در حال انجام';
+    }
+    elseif(($renewStatusMeta['title'] ?? '') === 'منقضی' || $status === 'منقضی'){
+        $statusClass = 'is-expired';
+        $statusTitle = 'منقضی';
     }
     elseif($status === 'تایید شد'){
         $statusClass = 'is-ok';

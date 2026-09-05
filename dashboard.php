@@ -16,6 +16,7 @@ $avatarUrl = '';
 
 require_once __DIR__ . '/profile_lib.php';
 require_once __DIR__ . '/subscription_lib.php';
+require_once __DIR__ . '/instant_pay_lib.php';
 require_once __DIR__ . '/support_lib.php';
 require_once __DIR__ . '/dashboard_lib.php';
 

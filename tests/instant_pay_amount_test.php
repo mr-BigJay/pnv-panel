@@ -171,7 +171,8 @@ assertTrue(($meta['title'] ?? '') === 'در حال بررسی', 'in-progress sta
 
 $oldRow = $csvRow;
 $oldRow[8] = time() - instantPayAdminVisibilitySeconds() - 60;
-assertTrue(!instantPayAdminRowVisible($oldRow), 'auto pending outside admin window hidden');
+assertTrue(instantPayAdminRowVisible($oldRow), 'auto pending outside review window still visible as expired');
+assertTrue(instantPayResolveDisplayTab($oldRow) === 'expired', 'old auto order is expired tab');
 
 $cancelRow = $csvRow;
 $cancelRow[8] = time();
