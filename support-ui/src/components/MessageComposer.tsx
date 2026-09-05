@@ -25,6 +25,7 @@ interface MessageComposerProps {
   onSendImage: (file: File, caption?: string) => Promise<void>;
   showVoice?: boolean;
   showAttach?: boolean;
+  onComposerFocus?: () => void;
 }
 
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
@@ -44,6 +45,7 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
       onSendImage,
       showVoice = true,
       showAttach = true,
+      onComposerFocus,
     },
     ref,
   ) {
@@ -194,6 +196,7 @@ export const MessageComposer = forwardRef<MessageComposerHandle, MessageComposer
                   value={draft}
                   onChange={(e) => onDraftChange(e.target.value)}
                   onKeyDown={onKeyDown}
+                  onFocus={() => onComposerFocus?.()}
                   rows={1}
                   placeholder="پیام..."
                   disabled={sending}

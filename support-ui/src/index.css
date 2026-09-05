@@ -24,6 +24,45 @@ body,
   margin: 0;
 }
 
+@media (max-width: 768px) {
+  html,
+  body {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  #support-v2-root,
+  .support-v2-shell {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+  }
+
+  html.tg-keyboard-open,
+  html.tg-keyboard-open body {
+    height: var(--tg-vv-height, 100dvh) !important;
+    max-height: var(--tg-vv-height, 100dvh) !important;
+    overflow: hidden !important;
+  }
+
+  html.tg-keyboard-open body.adminPageSupport {
+    height: var(--tg-vv-height, 100dvh) !important;
+    max-height: var(--tg-vv-height, 100dvh) !important;
+  }
+
+  html.tg-keyboard-open body.adminPageSupport .content-support {
+    height: 100% !important;
+    max-height: 100% !important;
+    transform: translateY(var(--tg-vv-offset-top, 0px));
+  }
+
+  .tg-chat-panel {
+    min-height: 0;
+    height: 100%;
+  }
+}
+
 body {
   font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
   background: var(--tg-bg);

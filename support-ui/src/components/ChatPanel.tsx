@@ -3,6 +3,7 @@ import { BsCheck, BsCheckAll } from 'react-icons/bs';
 import { FiCheck } from 'react-icons/fi';
 import { IoArrowBack } from 'react-icons/io5';
 import { useMessageMenuOpener } from '../hooks/useMessageMenuOpener';
+import { useVisualViewport } from '../hooks/useVisualViewport';
 import { isPinned } from '../lib/messagePins';
 import type { ReplyTarget, SupportMessage, SupportRole } from '../types';
 import { getAvatarColor, getInitials } from '../lib/avatarUtils';
@@ -184,6 +185,13 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
     scrollToEnd();
   }, [user, loading, messages.length, selectMode, scrollToEnd]);
 
+  useVisualViewport(scrollToEnd);
+
+  const handleComposerFocus = useCallback(() => {
+    scrollToEnd();
+    [200, 450, 700].forEach((ms) => window.setTimeout(scrollToEnd, ms));
+  }, [scrollToEnd]);
+
   if (!user) {
     return (
       <section
@@ -201,7 +209,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
 
   return (
     <section
-      className={`flex min-w-0 flex-1 flex-col bg-[#0e1621] text-[#e4ecf4] ${
+      className={`tg-chat-panel flex min-w-0 flex-1 flex-col bg-[#0e1621] text-[#e4ecf4] ${
         mobileVisible ? 'hidden md:flex' : 'flex'
       } ${selectMode ? 'is-select-mode' : ''}`}
     >
@@ -426,6 +434,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
           onSendVoice={onSendVoice}
           onSendImage={onSendImage}
           showVoice={showVoice}
+          onComposerFocus={handleComposerFocus}
         />
       ) : null}
 

@@ -44,7 +44,7 @@ $config = [
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام به پشتیبانی</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -53,8 +53,8 @@ $config = [
 <link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$cssVer; ?>">
 <?php } ?>
 <style>
-html,body{margin:0;padding:0;background:#0e1621;color:#e4ecf4;height:100%;overflow:hidden;}
-#support-v2-root{height:100%;}
+html,body{margin:0;padding:0;background:#0e1621;color:#e4ecf4;height:100%;height:100dvh;overflow:hidden;}
+#support-v2-root{height:100%;min-height:0;}
 </style>
 </head>
 <body>
