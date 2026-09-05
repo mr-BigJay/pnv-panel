@@ -400,6 +400,10 @@ $status != 'تایید شد'
 $status != 'رد شد'
 ){
 
+if(function_exists('instantPayRowCountsAsPendingNotification') && !instantPayRowCountsAsPendingNotification($pay)){
+    continue;
+}
+
 if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
     continue;
 }
@@ -416,6 +420,10 @@ $status != 'تایید شد'
 &&
 $status != 'رد شد'
 ){
+
+if(function_exists('instantPayRowCountsAsPendingNotification') && !instantPayRowCountsAsPendingNotification($pay)){
+    continue;
+}
 
 if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
     continue;

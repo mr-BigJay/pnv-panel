@@ -257,6 +257,12 @@ if(!function_exists('pnvClearedSubsPath')){
             $type = trim((string)($data[9] ?? ''));
 
             if($status !== 'تایید شد' && $status !== 'رد شد'){
+                if(function_exists('instantPayRowCountsAsPendingNotification') && !instantPayRowCountsAsPendingNotification($data)){
+                    continue;
+                }
+                elseif(!function_exists('instantPayRowCountsAsPendingNotification')){
+                    // fallback
+                }
                 if($type === 'تمدید'){
                     $stats['pending_renews']++;
                 }
