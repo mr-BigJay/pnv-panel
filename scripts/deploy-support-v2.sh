@@ -16,6 +16,7 @@ files=(
   "admin/support-v2.php"
   "admin/support-v2-diag.php"
   "admin/index.php"
+  "admin/admin_nav.php"
   "admin/user-profile.php"
   "assets/support/admin/support-admin.js"
   "assets/support/admin/support-admin.css"
@@ -56,6 +57,20 @@ fi
 
 js_bytes=$(wc -c < "${ROOT}/assets/support/admin/support-admin.js" | tr -d ' ')
 echo "  support-admin.js size: ${js_bytes} bytes"
+
+if grep -q 'adminSupportChatOpen' "${ROOT}/admin/admin_nav.php"; then
+  echo "  OK admin_nav.php support bottom nav CSS"
+else
+  echo "  FAIL admin_nav.php missing support nav fix!"
+  exit 1
+fi
+
+if grep -q 'adminSupportChatOpen' "${ROOT}/assets/support/admin/support-admin.js"; then
+  echo "  OK support list toggles chat-open nav hide"
+else
+  echo "  FAIL support-admin.js missing adminSupportChatOpen!"
+  exit 1
+fi
 
 echo ""
 echo "=== Ping API (no login) ==="
