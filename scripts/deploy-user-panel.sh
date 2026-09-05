@@ -2,7 +2,7 @@
 # Deploy user dashboard, renew, and support — run ON THE SERVER
 set -euo pipefail
 
-BR="${BR:-cursor/telegram-user-bot-058b}"
+BR="${BR:-cursor/payment-tabs-058b}"
 BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/${BR}"
 ROOT="${ROOT:-/var/www/html}"
 
@@ -68,6 +68,8 @@ files=(
   "admin/support-api.php"
   "admin/support-users-api.php"
   "admin/user-profile.php"
+  "admin/payments.php"
+  "admin/renews.php"
 )
 
 support_assets=(
