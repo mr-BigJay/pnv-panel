@@ -82,7 +82,7 @@ if (is_file(__DIR__ . '/../payment_list_ui.php')) {
     require_once __DIR__ . '/../payment_list_ui.php';
 }
 
-$paymentsActiveTab = function_exists('paymentListActiveTab') ? paymentListActiveTab('pending') : 'pending';
+$paymentsActiveTab = function_exists('paymentListActiveTab') ? paymentListActiveTab('approved') : 'approved';
 
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';

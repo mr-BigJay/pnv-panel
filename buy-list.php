@@ -58,7 +58,7 @@ body{margin:0;padding:10px;background:#0f172a;font-family:tahoma;direction:rtl;c
 <?php
 require_once __DIR__ . '/user_nav.php';
 userBackBar('dashboard.php', 'لیست خریدها');
-$activeTab = paymentListActiveTab('pending');
+$activeTab = paymentListActiveTab('approved');
 paymentListRenderTabs('buy-list.php', $activeTab);
 $found = false;
 

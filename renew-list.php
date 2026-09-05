@@ -268,7 +268,7 @@ userBackBar('dashboard.php', 'لیست تمدید ها');
 </h2>
 
 <?php
-$activeTab = paymentListActiveTab('pending');
+$activeTab = paymentListActiveTab('approved');
 paymentListRenderTabs('renew-list.php', $activeTab);
 ?>
 

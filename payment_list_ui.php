@@ -37,7 +37,7 @@ if(!function_exists('paymentListEnsureInstantPay')){
         ];
     }
 
-    function paymentListActiveTab($fallback = 'pending'){
+    function paymentListActiveTab($fallback = 'approved'){
         $tab = trim((string)($_GET['tab'] ?? $fallback));
 
         if(!in_array($tab, ['approved', 'pending', 'expired'], true)){

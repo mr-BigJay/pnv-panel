@@ -62,7 +62,7 @@ fi
 
 echo ""
 echo "Done. Hard-refresh:"
-echo "  /renew-list.php?tab=pending"
-echo "  /buy-list.php?tab=pending"
-echo "  /bigjay_controller/?page=payments&tab=pending"
-echo "  /bigjay_controller/?page=renews&tab=pending"
+echo "  /renew-list.php?tab=approved"
+echo "  /buy-list.php?tab=approved"
+echo "  /bigjay_controller/?page=payments&tab=approved"
+echo "  /bigjay_controller/?page=renews&tab=approved"
