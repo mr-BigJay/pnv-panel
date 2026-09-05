@@ -15,6 +15,7 @@ import {
 import { MessageComposer, type MessageComposerHandle } from './MessageComposer';
 import { ImageLightbox } from './ImageLightbox';
 import { PinnedMessagesBar } from './PinnedMessagesBar';
+import { VoiceMessagePlayer } from './VoiceMessagePlayer';
 
 interface ChatPanelProps {
   user: string;
@@ -342,7 +343,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
                     {...bubbleHandlers}
                     className={`msg-bubble max-w-[min(82%,24rem)] ${selectMode ? '' : 'cursor-pointer'} ${
                       msg.image && !msg.text && !msg.audio ? 'p-1' : 'px-3 py-2'
-                    } ${clusterRadius(msg.is_own, pos)} ${
+                    } ${msg.audio && !msg.text && !msg.image ? 'tg-voice-bubble' : ''} ${clusterRadius(msg.is_own, pos)} ${
                       msg.is_own ? 'tg-bubble-admin' : 'tg-bubble-user'
                     } ${pinned ? 'is-pinned' : ''} ${isSelected ? 'is-selected' : ''}`}
                   >
@@ -371,13 +372,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
                       </button>
                     ) : null}
                     {msg.audio ? (
-                      <audio
-                        controls
-                        preload="metadata"
-                        src={msg.audio}
-                        className="mb-2 w-full min-w-[200px]"
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                      <VoiceMessagePlayer src={msg.audio} messageId={msg.id} isOwn={msg.is_own} />
                     ) : null}
                     {msg.text ? (
                       <div

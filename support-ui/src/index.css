@@ -456,6 +456,99 @@ body {
   cursor: not-allowed;
 }
 
+.tg-voice-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  max-width: min(100%, 280px);
+  padding: 2px 0;
+}
+
+.tg-voice-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+}
+
+.tg-voice-player.is-other .tg-voice-play {
+  background: rgba(106, 178, 242, 0.18);
+  color: #6ab2f2;
+}
+
+.tg-voice-play:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.tg-voice-player.is-other .tg-voice-play:hover {
+  background: rgba(106, 178, 242, 0.28);
+}
+
+.tg-voice-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tg-voice-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.tg-voice-bar {
+  flex: 1;
+  min-width: 2px;
+  max-width: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.28);
+  align-self: center;
+  transition: background 0.12s ease;
+}
+
+.tg-voice-player.is-other .tg-voice-bar {
+  background: rgba(141, 168, 196, 0.45);
+}
+
+.tg-voice-bar.is-filled {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.tg-voice-player.is-other .tg-voice-bar.is-filled {
+  background: #6ab2f2;
+}
+
+.tg-voice-duration {
+  align-self: flex-end;
+  font-size: 11px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.tg-voice-player.is-other .tg-voice-duration {
+  color: #8ba4bd;
+}
+
+.tg-voice-bubble {
+  min-width: 240px;
+}
+
+.tg-voice-bubble .tg-voice-player {
+  margin-bottom: 2px;
+}
+
 /* مودال اشتراک‌ها */
 .profile-host {
   position: fixed;
