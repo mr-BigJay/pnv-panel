@@ -17,14 +17,19 @@ files=(
   "instant_pay_lib.php"
   "dashboard.php"
   "admin/campaign_ui.php"
+  "admin/campaign-referral.php"
   "admin/campaigns.php"
   "admin/campaign-discounts.php"
   "admin/campaign-announcements.php"
   "admin/admin_nav.php"
   "admin/index.php"
+  "bigjay_controller/campaign-referral.php"
   "bigjay_controller/campaigns.php"
   "bigjay_controller/campaign-discounts.php"
   "bigjay_controller/campaign-announcements.php"
+  "coupon.php"
+  "coupon_lib.php"
+  "coupon_ui.css"
 )
 
 for rel in "${files[@]}"; do
@@ -34,7 +39,7 @@ for rel in "${files[@]}"; do
   echo "  OK ${rel}"
 done
 
-for name in discount_codes discount_code_usages dashboard_announcements dashboard_announcement_reads; do
+for name in discount_codes discount_code_usages dashboard_announcements dashboard_announcement_reads referral_tiers referral_settings; do
   dest="${ROOT}/db/${name}.json"
   mkdir -p "${ROOT}/db"
   if [[ ! -f "$dest" ]]; then

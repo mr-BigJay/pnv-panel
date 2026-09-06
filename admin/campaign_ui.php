@@ -16,7 +16,7 @@ if(!function_exists('campaignAdminStyles')){
 body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-family:tahoma,system-ui,sans-serif;direction:rtl;color:#f8fafc}
 .campaignShell{max-width:760px;margin:0 auto}
 .campaignPageTitle{margin:0 0 14px;text-align:center;font-size:22px;font-weight:700;color:#f8fafc}
-.campaignTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:16px}
+.campaignTabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px}
 .campaignTab{display:flex;align-items:center;justify-content:center;min-height:42px;padding:8px 6px;border-radius:14px;background:#242d3d;color:#cbd5e1;text-decoration:none;font-size:12px;font-weight:600;text-align:center;line-height:1.5;border:1px solid #334155}
 .campaignTab.is-active{background:#34d399;border-color:#34d399;color:#052e16;box-shadow:0 8px 24px rgba(52,211,153,.18)}
 .campaignCard{background:#1f2937;border:1px solid #334155;border-radius:18px;padding:16px;margin-bottom:16px;overflow:visible}
@@ -89,7 +89,7 @@ body.campaignAdmin{margin:0;padding:16px 14px 28px;background:#171f2e;font-famil
 .campaignBadge.is-special{background:rgba(168,85,247,.16);color:#d8b4fe}
 .campaignItemMessage{font-size:12px;color:#94a3b8;line-height:1.8;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .campaignItemBadges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-@media(max-width:640px){body.campaignAdmin{padding:12px 10px 24px}.campaignGrid2{grid-template-columns:1fr}.campaignItemMeta{grid-template-columns:1fr}}
+@media(max-width:640px){body.campaignAdmin{padding:12px 10px 24px}.campaignTabs{grid-template-columns:repeat(2,minmax(0,1fr))}.campaignGrid2{grid-template-columns:1fr}.campaignItemMeta{grid-template-columns:1fr}}
 body.campaignAdmin.adminHasBottomNav{padding-bottom:calc(84px + env(safe-area-inset-bottom,0))}
 @media(max-width:768px){body.campaignAdmin .adminBottomNav{display:block}}
 .campaignDateInput{cursor:pointer}
@@ -118,8 +118,9 @@ body.campaignAdmin .jdp-container .jdp-icon-plus,body.campaignAdmin .jdp-contain
     function campaignAdminNav($active){
         $tabs = [
             'overview' => ['label' => 'نمای کلی', 'href' => pnvAdminUrl('campaigns.php')],
+            'referral' => ['label' => 'برنامه دعوت', 'href' => pnvAdminUrl('campaign-referral.php')],
             'discounts' => ['label' => 'کدهای تخفیف', 'href' => pnvAdminUrl('campaign-discounts.php')],
-            'announcements' => ['label' => 'پیام‌های داشبورد', 'href' => pnvAdminUrl('campaign-announcements.php')],
+            'announcements' => ['label' => 'پیام', 'href' => pnvAdminUrl('campaign-announcements.php')],
         ];
 
         echo '<h1 class="campaignPageTitle">کمپین‌ها</h1>';

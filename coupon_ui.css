@@ -26,7 +26,17 @@ direction:rtl;
 overflow-x:hidden;
 }
 
-.couponApp{
+.couponProgramNotice{
+margin:0 0 12px;
+padding:12px 14px;
+border-radius:14px;
+border:1px solid rgba(148,163,184,.35);
+background:rgba(51,65,85,.45);
+color:#cbd5e1;
+font-size:12px;
+line-height:1.8;
+}
+
 width:100%;
 max-width:430px;
 margin:0 auto;

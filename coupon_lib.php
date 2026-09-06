@@ -170,6 +170,320 @@ if(!function_exists('couponLoadCoupons')){
 
     }
 
+    function referralSettingsPath(){
+        return __DIR__ . '/db/referral_settings.json';
+    }
+
+    function referralTiersPath(){
+        return __DIR__ . '/db/referral_tiers.json';
+    }
+
+    function referralDefaultSettings(){
+        return [
+            'enabled' => true,
+            'starts_at' => 0,
+            'expires_at' => 0,
+            'invite_base_url' => 'https://panel.ticketin.ir/register.php?ref=',
+            'hint_text' => 'هر دعوت باید با خرید و فعال‌سازی اشتراک توسط دوست شما تکمیل شود تا برای شما ثبت گردد. با استفاده از هر کد تخفیف، شمارش دعوت‌ها از صفر شروع می‌شود.',
+            'updated_at' => 0,
+        ];
+    }
+
+    function referralDefaultTiers(){
+        return [
+            [
+                'min_invites' => 3,
+                'percent' => 20,
+                'qty' => 1,
+                'title' => '۳ دعوت موفق',
+                'desc' => 'یک کد تخفیف ۲۰٪',
+                'chip' => '۲۰٪',
+            ],
+            [
+                'min_invites' => 5,
+                'percent' => 40,
+                'qty' => 1,
+                'title' => '۵ دعوت موفق',
+                'desc' => 'یک کد تخفیف ۴۰٪',
+                'chip' => '۴۰٪',
+            ],
+            [
+                'min_invites' => 10,
+                'percent' => 100,
+                'qty' => 1,
+                'title' => '۱۰ دعوت موفق',
+                'desc' => 'یک کد تخفیف ۱۰۰٪',
+                'chip' => '۱۰۰٪',
+            ],
+            [
+                'min_invites' => 20,
+                'percent' => 100,
+                'qty' => 3,
+                'title' => '۲۰ دعوت موفق',
+                'desc' => '۳ کد ۱۰۰٪ (هر کد یک‌بار مصرف)',
+                'chip' => '۳×۱۰۰٪',
+            ],
+        ];
+    }
+
+    function referralLoadSettings(){
+        $defaults = referralDefaultSettings();
+        $path = referralSettingsPath();
+
+        if(!file_exists($path)){
+            return $defaults;
+        }
+
+        $data = json_decode((string)file_get_contents($path), true);
+
+        if(!is_array($data)){
+            return $defaults;
+        }
+
+        return array_merge($defaults, $data);
+    }
+
+    function referralSaveSettings($settings){
+        $dir = dirname(referralSettingsPath());
+
+        if(!is_dir($dir)){
+            mkdir($dir, 0775, true);
+        }
+
+        $payload = array_merge(referralDefaultSettings(), is_array($settings) ? $settings : []);
+        $payload['updated_at'] = time();
+
+        return file_put_contents(
+            referralSettingsPath(),
+            json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        ) !== false;
+    }
+
+    function referralNormalizeTiers($tiers){
+        $items = [];
+
+        if(!is_array($tiers)){
+            return referralDefaultTiers();
+        }
+
+        foreach($tiers as $tier){
+            if(!is_array($tier)){
+                continue;
+            }
+
+            $minInvites = max(1, intval($tier['min_invites'] ?? 0));
+            $percent = max(1, min(100, intval($tier['percent'] ?? 0)));
+            $qty = max(1, intval($tier['qty'] ?? 1));
+            $title = trim((string)($tier['title'] ?? ''));
+            $desc = trim((string)($tier['desc'] ?? ''));
+            $chip = trim((string)($tier['chip'] ?? ''));
+
+            if($title === ''){
+                $title = $minInvites . ' دعوت موفق';
+            }
+
+            if($desc === ''){
+                $desc = referralBuildRewardLabel($percent, $qty);
+            }
+
+            if($chip === ''){
+                $chip = $percent . '٪';
+            }
+
+            $items[] = [
+                'min_invites' => $minInvites,
+                'percent' => $percent,
+                'qty' => $qty,
+                'title' => $title,
+                'desc' => $desc,
+                'chip' => $chip,
+            ];
+        }
+
+        if(empty($items)){
+            return referralDefaultTiers();
+        }
+
+        usort($items, static function($a, $b){
+            return intval($a['min_invites']) <=> intval($b['min_invites']);
+        });
+
+        return $items;
+    }
+
+    function referralLoadTiers(){
+        $path = referralTiersPath();
+
+        if(!file_exists($path)){
+            return referralDefaultTiers();
+        }
+
+        $data = json_decode((string)file_get_contents($path), true);
+
+        return referralNormalizeTiers($data);
+    }
+
+    function referralSaveTiers($tiers){
+        $dir = dirname(referralTiersPath());
+
+        if(!is_dir($dir)){
+            mkdir($dir, 0775, true);
+        }
+
+        $payload = referralNormalizeTiers($tiers);
+
+        return file_put_contents(
+            referralTiersPath(),
+            json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        ) !== false;
+    }
+
+    function referralBuildRewardLabel($percent, $qty){
+        $percent = intval($percent);
+        $qty = max(1, intval($qty));
+
+        if($qty > 1){
+            return $qty . ' عدد کد تخفیف ' . $percent . ' درصدی';
+        }
+
+        if($percent >= 100){
+            return 'کد تخفیف 100 درصدی';
+        }
+
+        return 'تخفیف ' . $percent . ' درصدی';
+    }
+
+    function referralProgramIsActive($now = null){
+        $settings = referralLoadSettings();
+        $now = $now === null ? time() : intval($now);
+
+        if(empty($settings['enabled'])){
+            return false;
+        }
+
+        $startsAt = intval($settings['starts_at'] ?? 0);
+        $expiresAt = intval($settings['expires_at'] ?? 0);
+
+        if($startsAt > 0 && $now < $startsAt){
+            return false;
+        }
+
+        if($expiresAt > 0 && $now > $expiresAt){
+            return false;
+        }
+
+        return true;
+    }
+
+    function referralProgramStatusText($now = null){
+        $settings = referralLoadSettings();
+        $now = $now === null ? time() : intval($now);
+
+        if(empty($settings['enabled'])){
+            return 'برنامه دعوت غیرفعال است';
+        }
+
+        $startsAt = intval($settings['starts_at'] ?? 0);
+        $expiresAt = intval($settings['expires_at'] ?? 0);
+
+        if($startsAt > 0 && $now < $startsAt){
+            return 'برنامه دعوت هنوز شروع نشده';
+        }
+
+        if($expiresAt > 0 && $now > $expiresAt){
+            return 'برنامه دعوت به پایان رسیده';
+        }
+
+        return '';
+    }
+
+    function referralInviteBaseUrl(){
+        $settings = referralLoadSettings();
+        $base = trim((string)($settings['invite_base_url'] ?? ''));
+
+        if($base === ''){
+            $base = 'https://panel.ticketin.ir/register.php?ref=';
+        }
+
+        return $base;
+    }
+
+    function referralTiersForDisplay(){
+        $tiers = referralLoadTiers();
+        $display = [];
+
+        foreach($tiers as $tier){
+            $display[] = [
+                'need' => intval($tier['min_invites'] ?? 0),
+                'title' => (string)($tier['title'] ?? ''),
+                'desc' => (string)($tier['desc'] ?? ''),
+                'chip' => (string)($tier['chip'] ?? ''),
+            ];
+        }
+
+        return $display;
+    }
+
+    function referralRewardForCount($count){
+        $count = max(0, intval($count));
+        $tiers = referralLoadTiers();
+        $match = null;
+
+        foreach($tiers as $tier){
+            if($count >= intval($tier['min_invites'] ?? 0)){
+                $match = $tier;
+            }
+        }
+
+        if(!$match){
+            return [
+                'percent' => 0,
+                'qty' => 0,
+                'label' => 'هنوز پاداشی فعال نشده',
+            ];
+        }
+
+        $percent = intval($match['percent'] ?? 0);
+        $qty = max(1, intval($match['qty'] ?? 1));
+        $label = trim((string)($match['desc'] ?? ''));
+
+        if($label === ''){
+            $label = referralBuildRewardLabel($percent, $qty);
+        }
+
+        return [
+            'percent' => $percent,
+            'qty' => $qty,
+            'label' => $label,
+        ];
+    }
+
+    function referralAdminStats(){
+        $coupons = couponLoadCoupons();
+        $issued = count($coupons);
+        $used = 0;
+        $active = 0;
+
+        foreach($coupons as $coupon){
+            if(!empty($coupon['used'])){
+                $used++;
+            }
+            else{
+                $active++;
+            }
+        }
+
+        return [
+            'issued' => $issued,
+            'used' => $used,
+            'active' => $active,
+            'tiers' => count(referralLoadTiers()),
+            'program_active' => referralProgramIsActive(),
+        ];
+    }
+
     function couponCountSuccessfulReferrals($ownerUser, $users, $resetAt){
 
         $approvedMap = couponLoadApprovedPaymentTimes();
@@ -198,29 +512,7 @@ if(!function_exists('couponLoadCoupons')){
     }
 
     function couponRewardForCount($count){
-
-        if($count >= 20){
-            return ['percent' => 100, 'qty' => 3, 'label' => '3 عدد کد تخفیف 100 درصدی'];
-        }
-
-        if($count >= 10){
-            return ['percent' => 100, 'qty' => 1, 'label' => 'کد تخفیف 100 درصدی'];
-        }
-
-        if($count >= 5){
-            return ['percent' => 40, 'qty' => 1, 'label' => 'تخفیف 40 درصدی'];
-        }
-
-        if($count >= 3){
-            return ['percent' => 20, 'qty' => 1, 'label' => 'تخفیف 20 درصدی'];
-        }
-
-        return [
-            'percent' => 0,
-            'qty' => 0,
-            'label' => 'هنوز پاداشی فعال نشده'
-        ];
-
+        return referralRewardForCount($count);
     }
 
     function couponGenerateCode($length = 10){
@@ -289,7 +581,7 @@ if(!function_exists('couponLoadCoupons')){
         $reward = couponRewardForCount($count);
         $coupons = couponLoadCoupons();
 
-        if(($reward['percent'] ?? 0) <= 0){
+        if(!referralProgramIsActive() || ($reward['percent'] ?? 0) <= 0){
             return couponGetOwnerUnusedCoupons($coupons, $username);
         }
 

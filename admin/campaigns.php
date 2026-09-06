@@ -47,9 +47,13 @@ $stats = campaignOverviewStats();
 <div class="campaignCard">
 <h2 class="campaignCardTitle" style="margin:0 0 14px">بخش‌ها</h2>
 <div class="campaignLinks">
+<a class="campaignLink" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-referral.php'), ENT_QUOTES, 'UTF-8'); ?>">
+<strong>برنامه دعوت</strong>
+<span>سطوح پاداش صفحه coupon.php — تعداد دعوت، درصد تخفیف، بازه زمانی</span>
+</a>
 <a class="campaignLink" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-discounts.php'), ENT_QUOTES, 'UTF-8'); ?>">
 <strong>کدهای تخفیف</strong>
-<span>ایجاد، ویرایش، محدودیت استفاده و اتصال به فرآیند خرید</span>
+<span>کدهای تبلیغاتی دستی — محدودیت استفاده و اتصال به خرید</span>
 </a>
 <a class="campaignLink" href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-announcements.php'), ENT_QUOTES, 'UTF-8'); ?>">
 <strong>پیام‌های داشبورد</strong>

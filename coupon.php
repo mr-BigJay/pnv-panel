@@ -18,43 +18,21 @@ if(!$summary){
 }
 
 $myCode = (string)($summary['referral_code'] ?? '');
-$myLink = 'https://panel.ticketin.ir/register.php?ref=' . urlencode($myCode);
+$myLink = referralInviteBaseUrl() . urlencode($myCode);
 $inviteCount = intval($summary['successful_count'] ?? 0);
 $reward = $summary['reward'] ?? [];
 $rewardLabel = trim((string)($reward['label'] ?? ''));
-$rewardActive = intval($reward['percent'] ?? 0) > 0;
+$rewardActive = referralProgramIsActive() && intval($reward['percent'] ?? 0) > 0;
 $activeCodes = $summary['active_codes'] ?? [];
+$programStatus = referralProgramStatusText();
+$referralSettings = referralLoadSettings();
+$hintText = trim((string)($referralSettings['hint_text'] ?? ''));
 
 if($rewardLabel === ''){
     $rewardLabel = 'هنوز پاداشی فعال نشده';
 }
 
-$tiers = [
-    [
-        'need' => 3,
-        'title' => '۳ دعوت موفق',
-        'desc' => 'یک کد تخفیف ۲۰٪',
-        'chip' => '۲۰٪',
-    ],
-    [
-        'need' => 5,
-        'title' => '۵ دعوت موفق',
-        'desc' => 'یک کد تخفیف ۴۰٪',
-        'chip' => '۴۰٪',
-    ],
-    [
-        'need' => 10,
-        'title' => '۱۰ دعوت موفق',
-        'desc' => 'یک کد تخفیف ۱۰۰٪',
-        'chip' => '۱۰۰٪',
-    ],
-    [
-        'need' => 20,
-        'title' => '۲۰ دعوت موفق',
-        'desc' => '۳ کد ۱۰۰٪ (هر کد یک‌بار مصرف)',
-        'chip' => '۳×۱۰۰٪',
-    ],
-];
+$tiers = referralTiersForDisplay();
 
 $nextNeed = null;
 foreach($tiers as $tier){
@@ -65,7 +43,11 @@ foreach($tiers as $tier){
 }
 
 $progressPct = 100;
-$progressDenom = $nextNeed ?? 20;
+$maxNeed = 0;
+foreach($tiers as $tierRow){
+    $maxNeed = max($maxNeed, intval($tierRow['need'] ?? 0));
+}
+$progressDenom = $nextNeed ?? ($maxNeed > 0 ? $maxNeed : 1);
 if($nextNeed !== null && $nextNeed > 0){
     $progressPct = max(0, min(100, round(($inviteCount / $nextNeed) * 100)));
 }
@@ -96,13 +78,17 @@ $iconBulb = '<svg class="couponIcon" viewBox="0 0 24 24" aria-hidden="true"><pat
 <title>دعوت دوستان</title>
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="coupon_ui.css?v=3">
+<link rel="stylesheet" href="coupon_ui.css?v=4">
 </head>
 <body class="couponPage">
 
 <div class="couponApp">
 
 <?php userBackBar('dashboard.php', 'دعوت دوستان'); ?>
+
+<?php if($programStatus !== ''){ ?>
+<div class="couponProgramNotice"><?php echo $h($programStatus); ?></div>
+<?php } ?>
 
 <section class="couponSection">
 <div class="couponCodeCard">
@@ -222,7 +208,7 @@ $iconBulb = '<svg class="couponIcon" viewBox="0 0 24 24" aria-hidden="true"><pat
 
 <div class="couponHint">
 <span class="couponHintIcon" aria-hidden="true"><?php echo $iconBulb; ?></span>
-<span>هر دعوت باید با خرید و فعال‌سازی اشتراک توسط دوست شما تکمیل شود تا برای شما ثبت گردد. با استفاده از هر کد تخفیف، شمارش دعوت‌ها از صفر شروع می‌شود.</span>
+<span><?php echo $h($hintText !== '' ? $hintText : 'هر دعوت باید با خرید و فعال‌سازی اشتراک توسط دوست شما تکمیل شود تا برای شما ثبت گردد. با استفاده از هر کد تخفیف، شمارش دعوت‌ها از صفر شروع می‌شود.'); ?></span>
 </div>
 
 </div>
