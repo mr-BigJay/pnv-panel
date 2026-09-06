@@ -438,6 +438,64 @@ if(!function_exists('instantPayPath')){
     }
 
     /**
+     * بعد از تأیید پرداخت، کد تخفیف (دعوت یا ادمین) را مصرف‌شده علامت بزن.
+     */
+    function instantPayMarkDiscountForApprovedRow($row, $item = null, $csvIndex = -1){
+        if(!is_array($row)){
+            return;
+        }
+
+        if(!function_exists('checkoutMarkDiscountPaid')){
+            require_once __DIR__ . '/pnv_campaign_bootstrap.php';
+        }
+
+        if(!function_exists('checkoutMarkDiscountPaid')){
+            return;
+        }
+
+        $user = trim((string)($row[0] ?? ''));
+        $tracking = trim((string)($row[3] ?? ''));
+        $couponFromCsv = strtoupper(trim((string)($row[10] ?? '')));
+        $discountPercent = intval($row[11] ?? 0);
+        $payload = is_array($item) ? $item : [];
+
+        if($user !== '' && $tracking !== '' && function_exists('instantPayFindJsonByTracking')){
+            $jsonItem = instantPayFindJsonByTracking($user, $tracking);
+
+            if(is_array($jsonItem)){
+                $payload = array_merge($jsonItem, $payload);
+            }
+        }
+
+        if($csvIndex >= 0){
+            $payload['csv_index'] = $csvIndex;
+        }
+
+        if($user !== '' && trim((string)($payload['user'] ?? '')) === ''){
+            $payload['user'] = $user;
+        }
+
+        if($couponFromCsv !== '' && trim((string)($payload['coupon_code'] ?? '')) === ''){
+            $payload['coupon_code'] = $couponFromCsv;
+        }
+
+        if(trim((string)($payload['discount_source'] ?? '')) === '' && $couponFromCsv !== ''){
+            $payload['discount_source'] = 'referral';
+        }
+
+        if(intval($payload['discount_percent'] ?? 0) <= 0 && $discountPercent > 0){
+            $payload['discount_percent'] = $discountPercent;
+        }
+
+        if(
+            trim((string)($payload['coupon_code'] ?? '')) !== ''
+            || trim((string)($payload['discount_source'] ?? '')) !== ''
+        ){
+            checkoutMarkDiscountPaid($payload);
+        }
+    }
+
+    /**
      * بعد از تأیید CSV (AUTO)، ردیف JSON را هم paid کن — مثلاً تأیید از پنل/ربات ادمین.
      */
     function instantPaySyncJsonAfterCsvApproval($csvIndex, $row, $result = []){
@@ -457,6 +515,7 @@ if(!function_exists('instantPayPath')){
         $link = trim((string)($result['link'] ?? ($row[7] ?? '')));
         $items = instantPayLoad();
         $changed = false;
+        $matchedItem = null;
 
         foreach($items as $i => $item){
             $matches = false;
@@ -477,6 +536,7 @@ if(!function_exists('instantPayPath')){
             }
 
             if(($item['status'] ?? '') === 'paid'){
+                instantPayMarkDiscountForApprovedRow($row, $item, $csvIndex);
                 return true;
             }
 
@@ -487,12 +547,14 @@ if(!function_exists('instantPayPath')){
             $items[$i]['csv_index'] = $csvIndex;
             $items[$i]['csv_purged'] = false;
             unset($items[$i]['processing_at']);
+            $matchedItem = $items[$i];
             $changed = true;
             break;
         }
 
         if($changed){
             instantPaySave($items);
+            instantPayMarkDiscountForApprovedRow($row, $matchedItem, $csvIndex);
         }
 
         return $changed;
@@ -1663,11 +1725,9 @@ if(!function_exists('instantPayPath')){
         instantPaySave($items);
 
         if(!empty($found['coupon_code']) || !empty($found['discount_source'])){
-            if(!function_exists('checkoutMarkDiscountPaid')){
-                require_once __DIR__ . '/pnv_campaign_bootstrap.php';
-            }
-
-            checkoutMarkDiscountPaid($found);
+            $payments = xuiLoadPayments();
+            $paidRow = isset($payments[$csvIndex]) && is_array($payments[$csvIndex]) ? $payments[$csvIndex] : null;
+            instantPayMarkDiscountForApprovedRow($paidRow ?: [], $found, $csvIndex);
         }
 
         $payments = xuiLoadPayments();

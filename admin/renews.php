@@ -201,6 +201,14 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
+if(isset($payments[$index]) && is_file(__DIR__ . '/../instant_pay_lib.php')){
+require_once __DIR__ . '/../instant_pay_lib.php';
+
+if(function_exists('instantPayMarkDiscountForApprovedRow')){
+instantPayMarkDiscountForApprovedRow($payments[$index], null, $index);
+}
+}
+
 if(isset($payments[$index]) && is_file(__DIR__ . '/../telegram_user_lib.php')){
 require_once __DIR__ . '/../telegram_user_lib.php';
 

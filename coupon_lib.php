@@ -906,6 +906,10 @@ if(!function_exists('couponLoadCoupons')){
                 continue;
             }
 
+            if(!empty($coupon['used'])){
+                return true;
+            }
+
             $owner = $coupon['owner'] ?? '';
             $coupons[$i]['used'] = true;
             $coupons[$i]['used_at'] = time();
@@ -923,6 +927,59 @@ if(!function_exists('couponLoadCoupons')){
 
         return false;
 
+    }
+
+    function couponSyncUsedFromApprovedPayments(){
+        $coupons = couponLoadCoupons();
+        $path = couponPaymentsPath();
+
+        if(empty($coupons) || !file_exists($path)){
+            return ['updated' => 0];
+        }
+
+        $handle = fopen($path, 'r');
+
+        if(!$handle){
+            return ['updated' => 0];
+        }
+
+        $updated = 0;
+        $changed = false;
+
+        while(($row = fgetcsv($handle)) !== false){
+            $status = trim((string)($row[6] ?? ''));
+            $couponCode = strtoupper(trim((string)($row[10] ?? '')));
+            $usedBy = trim((string)($row[0] ?? ''));
+
+            if($status !== 'تایید شد' || $couponCode === ''){
+                continue;
+            }
+
+            foreach($coupons as $i => $coupon){
+                if(strtoupper((string)($coupon['code'] ?? '')) !== $couponCode){
+                    continue;
+                }
+
+                if(!empty($coupon['used'])){
+                    break;
+                }
+
+                $coupons[$i]['used'] = true;
+                $coupons[$i]['used_at'] = intval($row[8] ?? 0) > 0 ? intval($row[8]) : time();
+                $coupons[$i]['used_by'] = $usedBy !== '' ? $usedBy : (string)($coupon['owner'] ?? '');
+                $updated++;
+                $changed = true;
+                break;
+            }
+        }
+
+        fclose($handle);
+
+        if($changed){
+            couponSaveCoupons($coupons);
+        }
+
+        return ['updated' => $updated];
     }
 
 }

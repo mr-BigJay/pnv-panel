@@ -30,6 +30,10 @@ files=(
   "bigjay_controller/campaign-announcements.php"
   "coupon.php"
   "coupon_lib.php"
+  "instant_pay_lib.php"
+  "xui_lib.php"
+  "admin/payments.php"
+  "admin/renews.php"
   "coupon_ui.css"
 )
 

@@ -101,6 +101,11 @@ if(isset($_POST['save_referral_tiers'])){
 
 $settings = referralLoadSettings();
 $tiers = referralLoadTiers();
+
+if(function_exists('couponSyncUsedFromApprovedPayments')){
+    couponSyncUsedFromApprovedPayments();
+}
+
 $stats = referralAdminStats();
 $coupons = couponLoadCoupons();
 
@@ -139,7 +144,7 @@ function referralAdminCouponStatus($row){
             return ['label' => 'باطل‌شده', 'class' => 'is-inactive'];
         }
 
-        return ['label' => 'استفاده‌شده', 'class' => 'is-inactive'];
+        return ['label' => 'منقضی (مصرف‌شده)', 'class' => 'is-inactive'];
     }
 
     return ['label' => 'فعال', 'class' => 'is-active'];

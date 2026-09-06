@@ -1889,6 +1889,10 @@ if(!function_exists('xuiConfigPath')){
             xuiSyncAutoPayJsonRow($index, $row, $link);
             xuiTelegramNotifyApproved($row, $type, $link);
 
+            if(function_exists('instantPayMarkDiscountForApprovedRow')){
+                instantPayMarkDiscountForApprovedRow($row, null, $index);
+            }
+
             return $result;
         }
 
@@ -1943,6 +1947,10 @@ if(!function_exists('xuiConfigPath')){
         xuiTelegramNotifyApproved($payments[$index], $type, $result['link'] ?? '');
 
         xuiSyncAutoPayJsonRow($index, $payments[$index], $result['link'] ?? '');
+
+        if(function_exists('instantPayMarkDiscountForApprovedRow')){
+            instantPayMarkDiscountForApprovedRow($payments[$index], null, $index);
+        }
 
         return $result;
     }
