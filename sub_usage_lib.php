@@ -160,11 +160,21 @@ if(!function_exists('subUsageCachePath')){
         $time = is_array($usage['time'] ?? null) ? $usage['time'] : [];
         $volPct = !empty($vol['unlimited']) ? 100.0 : floatval($vol['remain_pct'] ?? 0);
         $timePct = !empty($time['unlimited']) ? 100.0 : floatval($time['remain_pct'] ?? 0);
-        $volGone = empty($vol['unlimited']) && $volPct <= 0.05;
-        $timeCounts = empty($time['unlimited']) && empty($time['estimated']);
-        $timeGone = $timeCounts && $timePct <= 0.05;
+        $volLabel = trim((string)($vol['label'] ?? ''));
+        $timeLabel = trim((string)($time['label'] ?? ''));
 
-        return $volGone || ($timeGone && $volPct <= 5);
+        $volGone = empty($vol['unlimited']) && (
+            $volPct <= 0.05
+            || $volLabel === 'حجم تمام شده'
+        );
+
+        $timeGone = empty($time['unlimited']) && (
+            $timeLabel === 'منقضی'
+            || $timeLabel === 'زمان تمام شده'
+            || (empty($time['estimated']) && $timePct <= 0.05)
+        );
+
+        return $volGone || $timeGone;
     }
 
     function subUsageViewLooksDepleted($view){

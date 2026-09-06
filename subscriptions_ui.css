@@ -467,15 +467,18 @@ border:0;
 .btnRenew:active{filter:brightness(.92)}
 
 /* منقضی: کارت خاکستری، دکمه تمدید سبز می‌ماند */
-.subChip.is-expired{
-border-color:#475569;
-background:#1e293b;
+.subChip.is-expired,
+.subChip.is-ok.is-expired{
+border-color:#475569 !important;
+background:#1e293b !important;
 opacity:1;
-filter:grayscale(.85);
+filter:grayscale(.88);
 }
-.subChip.is-expired.is-open{
-border-color:#64748b;
-background:#1e293b;
+.subChip.is-expired.is-open,
+.subChip.is-ok.is-expired.is-open{
+border-color:#64748b !important;
+background:#1e293b !important;
+filter:grayscale(.88);
 }
 .subChip.is-expired .subName,
 .subChip.is-expired .subPlan,
@@ -491,12 +494,19 @@ color:#94a3b8 !important;
 border-color:rgba(100,116,139,.45);
 background:rgba(15,23,42,.55);
 }
-.subChip.is-expired .subBadge{
-background:#64748b;
-color:#e2e8f0;
+.subChip.is-expired .subBadge,
+.subChip.is-ok.is-expired .subBadge{
+background:#64748b !important;
+color:#e2e8f0 !important;
 }
-.subChip.is-expired .usageTrack{background:#475569}
-.subChip.is-expired .usageFill{filter:grayscale(1);opacity:.55}
+.subChip.is-expired .usageTrack{background:#475569 !important}
+.subChip.is-expired .usageFill,
+.subChip.is-expired .usageFill--vol,
+.subChip.is-expired .usageFill--time{
+background:#64748b !important;
+filter:none;
+opacity:.65;
+}
 .subLifeTag{
 display:block;
 margin-top:5px;

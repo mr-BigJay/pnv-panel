@@ -88,7 +88,7 @@ $firstOkOpen = true;
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=17">
+<link rel="stylesheet" href="subscriptions_ui.css?v=18">
 </head>
 <body>
 <div class="box">
@@ -439,11 +439,15 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
         var time = row.time || {};
         var volPct = vol.unlimited ? 100 : Math.max(0, Math.min(100, Number(vol.remain_pct || 0)));
         var timePct = time.unlimited ? 100 : Math.max(0, Math.min(100, Number(time.remain_pct || 0)));
-        var volGone = !vol.unlimited && volPct <= 0.05;
-        var timeCounts = !time.unlimited && !time.estimated;
-        var timeGone = timeCounts && timePct <= 0.05;
+        var volGone = !vol.unlimited && (volPct <= 0.05 || (vol.label || '') === 'حجم تمام شده');
+        var timeLabelText = (time.label || '').trim();
+        var timeGone = !time.unlimited && (
+            timeLabelText === 'منقضی'
+            || timeLabelText === 'زمان تمام شده'
+            || (!time.estimated && timePct <= 0.05)
+        );
         var fromPanel = row.source === 'panel';
-        var expired = fromPanel && (volGone || (timeGone && volPct <= 5));
+        var expired = fromPanel && (volGone || timeGone);
 
         if(volFill){
             volFill.style.width = volPct + '%';
