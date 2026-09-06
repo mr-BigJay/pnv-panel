@@ -335,6 +335,14 @@ max-height:calc(100dvh - 84px - env(safe-area-inset-bottom,0)) !important;
 height:calc(100dvh - 84px - env(safe-area-inset-bottom,0)) !important;
 }
 /* Mobile chat open: hide bottom nav (list view keeps tg-chat-panel.hidden) */
+body.adminPageSupport:has(.tg-chat-panel.flex:not(.hidden)),
+body.adminPageSupport.adminSupportChatOpen{
+padding-bottom:0 !important;
+}
+body.adminPageSupport:has(.tg-chat-panel.flex:not(.hidden)) .content,
+body.adminPageSupport.adminSupportChatOpen .content{
+padding-bottom:0 !important;
+}
 body.adminPageSupport:has(.tg-chat-panel.flex:not(.hidden)) .adminBottomNav,
 body.adminPageSupport.adminSupportChatOpen .adminBottomNav{
 display:none !important;
@@ -343,6 +351,7 @@ body.adminPageSupport:has(.tg-chat-panel.flex:not(.hidden)) .content-support,
 body.adminPageSupport.adminSupportChatOpen .content-support{
 max-height:100dvh !important;
 height:100% !important;
+padding-bottom:0 !important;
 }
 }
 </style>';
