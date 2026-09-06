@@ -480,7 +480,13 @@ if(!function_exists('instantPayPath')){
         }
 
         if(trim((string)($payload['discount_source'] ?? '')) === '' && $couponFromCsv !== ''){
-            $payload['discount_source'] = 'referral';
+            if(function_exists('couponLoadCoupons') && function_exists('couponFindByCode')){
+                $refCoupon = couponFindByCode(couponLoadCoupons(), $couponFromCsv);
+
+                if(is_array($refCoupon)){
+                    $payload['discount_source'] = 'referral';
+                }
+            }
         }
 
         if(intval($payload['discount_percent'] ?? 0) <= 0 && $discountPercent > 0){

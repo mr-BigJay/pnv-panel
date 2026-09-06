@@ -10,6 +10,7 @@ echo "=== Deploy campaigns (branch: ${BR}) ==="
 echo "Target: ${ROOT}"
 
 files=(
+  "pnv_campaign_bootstrap.php"
   "campaign_lib.php"
   "announcement-api.php"
   "coupon-api.php"
