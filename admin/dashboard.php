@@ -3,6 +3,9 @@ $telegramEnabled = false;
 $telegramConfigured = false;
 $baleEnabled = false;
 $baleConfigured = false;
+$referralProgramActive = false;
+$referralTierCount = 0;
+$referralActiveCodes = 0;
 
 if(file_exists(__DIR__ . '/../telegram_lib.php')){
     require_once __DIR__ . '/../telegram_lib.php';
@@ -19,6 +22,18 @@ if(file_exists(__DIR__ . '/../bale_lib.php')){
         $baleConfig = baleLoadConfig();
         $baleConfigured = trim((string)($baleConfig['bot_token'] ?? '')) !== '';
         $baleEnabled = !empty($baleConfig['enabled']) && $baleConfigured;
+    }
+}
+
+if(file_exists(__DIR__ . '/../coupon_lib.php')){
+    require_once __DIR__ . '/../coupon_lib.php';
+    if(function_exists('referralProgramIsActive')){
+        $referralProgramActive = referralProgramIsActive();
+    }
+    if(function_exists('referralAdminStats')){
+        $referralStats = referralAdminStats();
+        $referralTierCount = intval($referralStats['tiers'] ?? 0);
+        $referralActiveCodes = intval($referralStats['active'] ?? 0);
     }
 }
 ?>
@@ -108,6 +123,32 @@ if(file_exists(__DIR__ . '/../bale_lib.php')){
         </div>
         <div class="setupDesc">پرداخت آنی کارت‌به‌کارت با فوروارد واریز پست‌بانک</div>
         <div class="setupAction">تنظیمات بله ←</div>
+    </a>
+
+    <a class="setupCard" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('campaign-referral.php') : 'campaign-referral.php', ENT_QUOTES, 'UTF-8'); ?>">
+        <div class="setupTop">
+            <div class="setupTitle">برنامه دعوت</div>
+            <?php if(!empty($referralProgramActive)){ ?>
+                <span class="setupBadge is-on">فعال</span>
+            <?php } else { ?>
+                <span class="setupBadge is-warn">غیرفعال</span>
+            <?php } ?>
+        </div>
+        <div class="setupDesc">مدیریت کوپن تخفیف دعوت دوستان — تعداد دعوت، درصد تخفیف و بازه زمانی</div>
+        <div class="setupAction">مدیریت برنامه دعوت ←</div>
+    </a>
+
+    <a class="setupCard" href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('campaigns.php') : 'campaigns.php', ENT_QUOTES, 'UTF-8'); ?>">
+        <div class="setupTop">
+            <div class="setupTitle">کمپین‌ها</div>
+            <?php if($referralActiveCodes > 0){ ?>
+                <span class="setupBadge is-on"><?php echo number_format($referralActiveCodes); ?> کد فعال</span>
+            <?php } else { ?>
+                <span class="setupBadge"><?php echo max(0, $referralTierCount); ?> سطح</span>
+            <?php } ?>
+        </div>
+        <div class="setupDesc">کدهای تخفیف تبلیغاتی و پیام‌های داشبورد کاربران</div>
+        <div class="setupAction">مدیریت کمپین‌ها ←</div>
     </a>
 
 </div>

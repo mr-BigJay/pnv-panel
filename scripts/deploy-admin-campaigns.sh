@@ -22,6 +22,7 @@ files=(
   "admin/campaign-discounts.php"
   "admin/campaign-announcements.php"
   "admin/admin_nav.php"
+  "admin/dashboard.php"
   "admin/index.php"
   "bigjay_controller/campaign-referral.php"
   "bigjay_controller/campaigns.php"

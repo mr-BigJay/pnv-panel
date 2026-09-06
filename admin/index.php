@@ -1097,6 +1097,12 @@ class="supportMenu">
 
 </a>
 
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('campaign-referral.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+برنامه دعوت (کوپن)
+
+</a>
+
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=cards'), ENT_QUOTES, 'UTF-8'); ?>">
 
 مدیریت کارت ها
