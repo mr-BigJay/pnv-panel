@@ -1753,6 +1753,16 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiApprovePaymentIndex($index, $typeHint = ''){
+        if(function_exists('instantPayWithApproveLock')){
+            return instantPayWithApproveLock(function() use ($index, $typeHint){
+                return xuiApprovePaymentIndexLocked($index, $typeHint);
+            });
+        }
+
+        return xuiApprovePaymentIndexLocked($index, $typeHint);
+    }
+
+    function xuiApprovePaymentIndexLocked($index, $typeHint = ''){
         $payments = xuiLoadPayments();
 
         if(!isset($payments[$index])){
@@ -1764,10 +1774,16 @@ if(!function_exists('xuiConfigPath')){
         $status = trim((string)($row[6] ?? ''));
 
         if($status === 'تایید شد'){
+            $link = $row[7] ?? '';
+
+            if(function_exists('instantPaySyncJsonAfterCsvApproval')){
+                instantPaySyncJsonAfterCsvApproval($index, $row, ['link' => $link]);
+            }
+
             return [
                 'ok' => true,
                 'already' => true,
-                'link' => $row[7] ?? ''
+                'link' => $link
             ];
         }
 
@@ -1780,6 +1796,29 @@ if(!function_exists('xuiConfigPath')){
 
         if(empty($result['ok'])){
             return $result;
+        }
+
+        // دوباره بخوان؛ ممکن است همزمان تأیید شده باشد
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$index])){
+            return ['ok' => false, 'error' => 'پرداخت بعد از صدور پیدا نشد'];
+        }
+
+        $latestStatus = trim((string)($payments[$index][6] ?? ''));
+
+        if($latestStatus === 'تایید شد'){
+            $link = $payments[$index][7] ?? ($result['link'] ?? '');
+
+            if(function_exists('instantPaySyncJsonAfterCsvApproval')){
+                instantPaySyncJsonAfterCsvApproval($index, $payments[$index], ['link' => $link]);
+            }
+
+            return [
+                'ok' => true,
+                'already' => true,
+                'link' => $link
+            ];
         }
 
         $payments[$index][6] = 'تایید شد';
@@ -1800,6 +1839,10 @@ if(!function_exists('xuiConfigPath')){
             if(!empty($result['link'])){
                 subUsageInvalidateLink($result['link']);
             }
+        }
+
+        if(function_exists('instantPaySyncJsonAfterCsvApproval')){
+            instantPaySyncJsonAfterCsvApproval($index, $payments[$index], $result);
         }
 
         return $result;

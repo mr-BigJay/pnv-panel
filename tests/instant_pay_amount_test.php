@@ -198,5 +198,45 @@ $freshOrder = [
 ];
 assertTrue(instantPayOrderMatchesPlans($freshOrder, $plansNew), 'fresh order matches current plans');
 
+// جلوگیری از تأیید دوباره وقتی سفارش در حال پردازش است
+$processingOrder = [
+    'id' => 'proc1',
+    'user' => 'demo',
+    'type' => 'تمدید',
+    'status' => 'processing',
+    'processing_at' => time(),
+    'code' => 3030,
+    'amount' => 3030300,
+    'currency' => 'rial',
+    'expires_at' => time() + 600,
+    'csv_index' => 0,
+];
+instantPaySave([$processingOrder]);
+$blocked = instantPayMarkPaid('proc1', ['amount' => 3030300]);
+assertTrue(empty($blocked['ok']), 'processing order blocks duplicate markPaid');
+assertTrue(strpos((string)($blocked['error'] ?? ''), 'در حال پردازش') !== false, 'processing block message');
+
+$staleProcessing = $processingOrder;
+$staleProcessing['id'] = 'proc2';
+$staleProcessing['processing_at'] = time() - instantPayProcessingTimeoutSeconds() - 10;
+instantPaySave([$staleProcessing]);
+$recovered = instantPayRecoverStaleProcessing();
+$gotStale = null;
+foreach($recovered as $row){
+    if(($row['id'] ?? '') === 'proc2'){
+        $gotStale = $row;
+        break;
+    }
+}
+assertTrue(is_array($gotStale) && ($gotStale['status'] ?? '') === 'failed', 'stale processing recovered to failed');
+
+// dedup پیام واریز تکراری
+$depositText = "پست بانک\nواريز به کارت: 6156\n+1,111,110\n1405/05/10\n9:47";
+$fp = instantPayDepositFingerprint($depositText, [1111110]);
+instantPayRecordProcessedDeposit($fp, ['amount' => 1111110, 'order_id' => 'ord1']);
+assertTrue(is_array(instantPayFindProcessedDeposit($fp)), 'processed deposit fingerprint stored');
+$dup = instantPayHandleDepositText($depositText, ['date' => '1405/05/10', 'time' => '9:47']);
+assertTrue(!empty($dup['duplicate_deposit']), 'duplicate deposit ignored by fingerprint');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

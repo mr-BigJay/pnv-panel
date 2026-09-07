@@ -220,6 +220,249 @@ if(!function_exists('instantPayPath')){
         return false;
     }
 
+    function instantPayApproveLockPath(){
+        return __DIR__ . '/db/payment_approve.lock';
+    }
+
+    /**
+     * قفل سراسری تأیید پرداخت — جلوگیری از صدور دوباره اشتراک در race/webhook تکراری.
+     */
+    function instantPayWithApproveLock($callback){
+        if(!is_dir(__DIR__ . '/db')){
+            @mkdir(__DIR__ . '/db', 0755, true);
+        }
+
+        $fp = @fopen(instantPayApproveLockPath(), 'c+');
+
+        if($fp === false || !flock($fp, LOCK_EX)){
+            if(is_resource($fp)){
+                fclose($fp);
+            }
+
+            return ['ok' => false, 'error' => 'سیستم مشغول است؛ چند لحظه بعد دوباره تلاش کنید'];
+        }
+
+        try{
+            return $callback();
+        }
+        finally{
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+
+    function instantPayProcessingTimeoutSeconds(){
+        return 180;
+    }
+
+    function instantPayProcessingIsStale($item, $now = null){
+        if(($item['status'] ?? '') !== 'processing'){
+            return false;
+        }
+
+        $now = $now ?? time();
+        $started = intval($item['processing_at'] ?? 0);
+
+        if($started <= 0){
+            $started = intval($item['created_at'] ?? 0);
+        }
+
+        if($started <= 0){
+            return true;
+        }
+
+        return ($now - $started) >= instantPayProcessingTimeoutSeconds();
+    }
+
+    function instantPayRecoverStaleProcessing($items = null){
+        if($items === null){
+            $items = instantPayLoad();
+        }
+
+        $now = time();
+        $changed = false;
+
+        foreach($items as $i => $item){
+            if(!instantPayProcessingIsStale($item, $now)){
+                continue;
+            }
+
+            $items[$i]['status'] = 'failed';
+            $items[$i]['message'] = 'تأیید نیمه‌کاره؛ دوباره تلاش می‌شود';
+            unset($items[$i]['processing_at']);
+            $changed = true;
+        }
+
+        if($changed){
+            instantPaySave($items);
+        }
+
+        return $items;
+    }
+
+    /**
+     * بعد از تأیید CSV (AUTO)، ردیف JSON را هم paid کن — مثلاً تأیید همزمان از webhook و ادمین.
+     */
+    function instantPaySyncJsonAfterCsvApproval($csvIndex, $row, $result = []){
+        if(!is_array($row)){
+            return false;
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') !== 0){
+            return false;
+        }
+
+        $csvIndex = intval($csvIndex);
+        $userKey = strtolower(trim((string)($row[0] ?? '')));
+        $trackingKey = instantPayNormalizeTracking($tracking);
+        $link = trim((string)($result['link'] ?? ($row[7] ?? '')));
+        $items = instantPayLoad();
+        $changed = false;
+
+        foreach($items as $i => $item){
+            $matches = false;
+
+            if($csvIndex >= 0 && intval($item['csv_index'] ?? -1) === $csvIndex){
+                $matches = true;
+            }
+            elseif(
+                $userKey !== ''
+                && strtolower(trim((string)($item['user'] ?? ''))) === $userKey
+                && instantPayNormalizeTracking(instantPayTrackingCode($item)) === $trackingKey
+            ){
+                $matches = true;
+            }
+
+            if(!$matches){
+                continue;
+            }
+
+            if(($item['status'] ?? '') === 'paid'){
+                return true;
+            }
+
+            $items[$i]['status'] = 'paid';
+            $items[$i]['paid_at'] = time();
+            $items[$i]['link'] = $link;
+            $items[$i]['message'] = 'پرداخت تأیید شد';
+            $items[$i]['csv_index'] = $csvIndex;
+            $items[$i]['csv_purged'] = false;
+            unset($items[$i]['processing_at']);
+            $changed = true;
+            break;
+        }
+
+        if($changed){
+            instantPaySave($items);
+        }
+
+        return $changed;
+    }
+
+    function instantPayProcessedDepositsPath(){
+        return __DIR__ . '/db/processed_deposits.json';
+    }
+
+    function instantPayLoadProcessedDeposits(){
+        $path = instantPayProcessedDepositsPath();
+
+        if(!file_exists($path)){
+            return [];
+        }
+
+        $data = json_decode(file_get_contents($path), true);
+        return is_array($data) ? $data : [];
+    }
+
+    function instantPaySaveProcessedDeposits($entries){
+        if(!is_dir(__DIR__ . '/db')){
+            @mkdir(__DIR__ . '/db', 0755, true);
+        }
+
+        file_put_contents(
+            instantPayProcessedDepositsPath(),
+            json_encode(array_values($entries), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+            LOCK_EX
+        );
+    }
+
+    function instantPayDepositFingerprint($text, $amounts = []){
+        $text = preg_replace('/\s+/u', ' ', trim((string)$text));
+        $amounts = array_values(array_map('intval', (array)$amounts));
+        sort($amounts, SORT_NUMERIC);
+
+        return hash('sha256', $text . '|' . implode(',', $amounts));
+    }
+
+    function instantPayProcessedDepositTtlSeconds(){
+        return 72 * 3600;
+    }
+
+    function instantPayPruneProcessedDeposits($entries, $now = null){
+        $now = $now ?? time();
+        $ttl = instantPayProcessedDepositTtlSeconds();
+        $out = [];
+
+        foreach((array)$entries as $entry){
+            if(!is_array($entry)){
+                continue;
+            }
+
+            if(($now - intval($entry['at'] ?? 0)) >= $ttl){
+                continue;
+            }
+
+            $out[] = $entry;
+        }
+
+        return $out;
+    }
+
+    function instantPayFindProcessedDeposit($fingerprint){
+        $fingerprint = trim((string)$fingerprint);
+
+        if($fingerprint === ''){
+            return null;
+        }
+
+        $entries = instantPayPruneProcessedDeposits(instantPayLoadProcessedDeposits());
+
+        foreach($entries as $entry){
+            if(($entry['fp'] ?? '') === $fingerprint){
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
+    function instantPayRecordProcessedDeposit($fingerprint, $meta = []){
+        $fingerprint = trim((string)$fingerprint);
+
+        if($fingerprint === ''){
+            return;
+        }
+
+        $entries = instantPayPruneProcessedDeposits(instantPayLoadProcessedDeposits());
+
+        foreach($entries as $entry){
+            if(($entry['fp'] ?? '') === $fingerprint){
+                return;
+            }
+        }
+
+        $entries[] = [
+            'fp' => $fingerprint,
+            'at' => time(),
+            'amount' => intval($meta['amount'] ?? 0),
+            'order_id' => trim((string)($meta['order_id'] ?? '')),
+        ];
+
+        instantPaySaveProcessedDeposits($entries);
+    }
+
     function instantPayResolveCsvIndex($item){
         $csvIndex = intval($item['csv_index'] ?? -1);
 
@@ -994,6 +1237,7 @@ if(!function_exists('instantPayPath')){
             $items = instantPayLoad();
         }
 
+        $items = instantPayRecoverStaleProcessing($items);
         $now = time();
         $changed = false;
 
@@ -1332,6 +1576,12 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayMarkPaid($id, $meta = [], $opts = []){
+        return instantPayWithApproveLock(function() use ($id, $meta, $opts){
+            return instantPayMarkPaidLocked($id, $meta, $opts);
+        });
+    }
+
+    function instantPayMarkPaidLocked($id, $meta = [], $opts = []){
         $force = !empty($opts['force']);
         $items = instantPayExpireDue();
         $id = trim((string)$id);
@@ -1352,6 +1602,10 @@ if(!function_exists('instantPayPath')){
 
         if(($found['status'] ?? '') === 'paid'){
             return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
+        }
+
+        if(($found['status'] ?? '') === 'processing' && !instantPayProcessingIsStale($found)){
+            return ['ok' => false, 'error' => 'سفارش در حال پردازش است؛ چند لحظه صبر کنید'];
         }
 
         if(!$force && !instantPayItemMatchable($found)){
@@ -1389,12 +1643,13 @@ if(!function_exists('instantPayPath')){
             xuiSavePayments($payments);
         }
 
-        // اول وضعیت را روی processing بگذار تا UI هنوز «تأیید شد» نگوید
+        // اول وضعیت را روی processing بگذار تا race/webhook دوباره صدور نکند
         $items[$idx]['status'] = 'processing';
+        $items[$idx]['processing_at'] = time();
         $items[$idx]['message'] = 'در حال صدور اشتراک…';
         instantPaySave($items);
 
-        $result = xuiApprovePaymentIndex($csvIndex, $found['type'] ?? 'خرید');
+        $result = xuiApprovePaymentIndexLocked($csvIndex, $found['type'] ?? 'خرید');
 
         // دوباره بخوان (ممکن است همزمان تغییر کرده باشد)
         $items = instantPayLoad();
@@ -1412,6 +1667,7 @@ if(!function_exists('instantPayPath')){
         if(empty($result['ok'])){
             $items[$idx]['status'] = 'failed';
             $items[$idx]['message'] = $result['error'] ?? 'تأیید ناموفق';
+            unset($items[$idx]['processing_at']);
             instantPaySave($items);
             return $result;
         }
@@ -1423,6 +1679,7 @@ if(!function_exists('instantPayPath')){
         $items[$idx]['message'] = 'پرداخت تأیید شد';
         $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
         $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
+        unset($items[$idx]['processing_at']);
         instantPaySave($items);
 
         if(!empty($found['coupon_code']) || !empty($found['discount_source'])){
@@ -1473,6 +1730,12 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayMarkPaidFromCsv($csvIndex, $meta = []){
+        return instantPayWithApproveLock(function() use ($csvIndex, $meta){
+            return instantPayMarkPaidFromCsvLocked($csvIndex, $meta);
+        });
+    }
+
+    function instantPayMarkPaidFromCsvLocked($csvIndex, $meta = []){
         if(!function_exists('xuiLoadPayments')){
             return ['ok' => false, 'error' => 'سیستم پرداخت در دسترس نیست'];
         }
@@ -1532,7 +1795,7 @@ if(!function_exists('instantPayPath')){
                 break;
             }
 
-            return instantPayMarkPaid($jsonItem['id'], $meta, ['force' => true]);
+            return instantPayMarkPaidLocked($jsonItem['id'], $meta, ['force' => true]);
         }
 
         if(isset($payments[$csvIndex])){
@@ -1542,7 +1805,7 @@ if(!function_exists('instantPayPath')){
             xuiSavePayments($payments);
         }
 
-        $result = xuiApprovePaymentIndex($csvIndex, trim((string)($row[9] ?? 'خرید')));
+        $result = xuiApprovePaymentIndexLocked($csvIndex, trim((string)($row[9] ?? 'خرید')));
 
         if(empty($result['ok'])){
             return $result;
@@ -1615,9 +1878,7 @@ if(!function_exists('instantPayPath')){
             $result['matched_amount'] = $amount;
             $result['matched_via'] = 'json';
 
-            if(!empty($result['ok'])){
-                return $result;
-            }
+            return $result;
         }
 
         $csvMatch = instantPayFindCsvMatchByAmount($amount);
@@ -1771,6 +2032,25 @@ if(!function_exists('instantPayPath')){
             return ['ok' => false, 'error' => 'مبلغی در پیام پیدا نشد'];
         }
 
+        instantPayRecoverStaleProcessing();
+
+        $depositFingerprint = instantPayDepositFingerprint($text, $amounts);
+        $processed = instantPayFindProcessedDeposit($depositFingerprint);
+
+        if(is_array($processed)){
+            return [
+                'ok' => true,
+                'already' => true,
+                'ignored' => true,
+                'duplicate_deposit' => true,
+                'item' => [
+                    'status' => 'paid',
+                    'ready' => true,
+                    'amount_text' => number_format(intval($processed['amount'] ?? 0)) . ' ریال',
+                ],
+            ];
+        }
+
         // پیام پست‌بانک: مبالغ ریال‌اند؛ «مانده» را از قبل حذف کرده‌ایم
         $rialOnly = function_exists('baleLooksLikePostBankNotice') && baleLooksLikePostBankNotice($text);
         $candidates = instantPayExpandAmountCandidates($amounts, ['rial_only' => $rialOnly]);
@@ -1786,6 +2066,14 @@ if(!function_exists('instantPayPath')){
             }
 
             $result['parsed_amounts'] = $amounts;
+
+            if(!empty($result['ok'])){
+                instantPayRecordProcessedDeposit($depositFingerprint, [
+                    'amount' => intval($result['matched_amount'] ?? $amount),
+                    'order_id' => trim((string)(($result['item'] ?? [])['id'] ?? '')),
+                ]);
+            }
+
             return $result;
         }
 
