@@ -1025,7 +1025,7 @@ margin:0 !important;
 box-sizing:border-box;
 }
 
-#support-v2-root button{
+#support-v2-root button:not(.tg-btn-send){
 background:unset !important;
 color:inherit !important;
 padding:unset;
@@ -1033,6 +1033,23 @@ border:unset;
 border-radius:unset;
 cursor:pointer;
 font:inherit;
+}
+
+#support-v2-root .tg-composer-action.tg-btn-send,
+#support-v2-root .tg-btn-send{
+background:#5288c1 !important;
+color:#fff !important;
+border-radius:50% !important;
+}
+
+#support-v2-root .tg-composer-action.tg-btn-send:hover,
+#support-v2-root .tg-btn-send:hover{
+background:#3d6fa8 !important;
+}
+
+#support-v2-root .tg-composer-icon{
+background:transparent !important;
+color:#6d8399 !important;
 }
 
 .content:not(.content-support) input,
