@@ -23,6 +23,10 @@ files=(
   "admin/renews.php"
   "admin/index.php"
   "admin/users.php"
+  "admin/support.php"
+  "support_ui.css"
+  "support_ui.js"
+  "support.php"
   "buy-list.php"
   "renew-list.php"
 )
@@ -41,6 +45,8 @@ grep -q 'instantPayWithApproveLock' "${ROOT}/instant_pay_lib.php" && echo "  OK 
 grep -q 'instantPayResolveDisplayTab' "${ROOT}/instant_pay_lib.php" && echo "  OK admin payment tabs"
 grep -q 'positionUserMenu' "${ROOT}/admin/users.php" && echo "  OK users dropdown fixed menu"
 grep -q 'data-payments-ui="cards"' "${ROOT}/admin/payments.php" && echo "  OK admin payments card UI"
+grep -q 'supportEmbedded' "${ROOT}/admin/support.php" && echo "  OK admin support page"
+grep -q 'supportPage.supportEmbedded' "${ROOT}/support_ui.css" && echo "  OK support UI stylesheet"
 
 if id www-data >/dev/null 2>&1; then
   chown www-data:www-data "${files[@]/#/${ROOT}/}" 2>/dev/null || true
