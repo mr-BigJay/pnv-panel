@@ -2065,4 +2065,111 @@ if(!function_exists('supportUserHasUnread')){
         supportAjaxRespond(['ok' => false, 'error' => 'درخواست پردازش نشد'], 400);
 
     }
+
+    function supportV2AssetMeta(){
+
+        static $meta = null;
+
+        if($meta !== null){
+            return $meta;
+        }
+
+        $assetDir = __DIR__ . '/assets/support/admin';
+        $jsFile = 'support-admin.js';
+        $cssFile = '';
+
+        if(is_dir($assetDir)){
+            foreach(glob($assetDir . '/support-admin*.css') ?: [] as $cssPath){
+                $cssFile = basename($cssPath);
+                break;
+            }
+        }
+
+        $jsPath = $assetDir . '/' . $jsFile;
+        $cssPath = $cssFile !== '' ? $assetDir . '/' . $cssFile : '';
+
+        $meta = [
+            'assetBase' => '/assets/support/admin/',
+            'jsFile' => $jsFile,
+            'cssFile' => $cssFile,
+            'jsPath' => $jsPath,
+            'cssPath' => $cssPath,
+            'jsVer' => is_file($jsPath) ? filemtime($jsPath) : time(),
+            'cssVer' => ($cssPath !== '' && is_file($cssPath)) ? filemtime($cssPath) : time(),
+            'hasJs' => is_file($jsPath),
+            'hasCss' => $cssFile !== '' && is_file($cssPath),
+        ];
+
+        return $meta;
+
+    }
+
+    function supportV2AdminConfig($opts = []){
+
+        $embedded = !empty($opts['embedded']);
+        $initialUser = supportNormalizeUsername(
+            $opts['initialUser']
+            ?? $_GET['user']
+            ?? ''
+        );
+
+        if(function_exists('pnvAdminUrl')){
+            $apiUrl = pnvAdminUrl('support-api.php');
+            $profileApiUrl = pnvAdminUrl('user-profile.php');
+        }
+        elseif(defined('PNV_ADMIN_BASE')){
+            $apiUrl = rtrim(PNV_ADMIN_BASE, '/') . '/support-api.php';
+            $profileApiUrl = rtrim(PNV_ADMIN_BASE, '/') . '/user-profile.php';
+        }
+        else{
+            $apiUrl = '/bigjay_controller/support-api.php';
+            $profileApiUrl = '/bigjay_controller/user-profile.php';
+        }
+
+        return [
+            'apiUrl' => $apiUrl,
+            'profileApiUrl' => $profileApiUrl,
+            'csrf' => supportCsrfToken(),
+            'embedded' => $embedded,
+            'role' => 'admin',
+            'initialUser' => $initialUser,
+            'pollIntervalMs' => 3000,
+        ];
+
+    }
+
+    function supportV2RenderHeadAssets(){
+
+        $assets = supportV2AssetMeta();
+
+        if(!$assets['hasCss']){
+            return;
+        }
+
+        echo '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n";
+        echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
+        echo '<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">' . "\n";
+        echo '<link rel="stylesheet" href="'
+            . htmlspecialchars($assets['assetBase'] . $assets['cssFile'], ENT_QUOTES, 'UTF-8')
+            . '?v=' . (int)$assets['cssVer'] . '">' . "\n";
+
+    }
+
+    function supportV2RenderModuleScript(){
+
+        $assets = supportV2AssetMeta();
+
+        if(!$assets['hasJs']){
+            echo '<div style="padding:24px;color:#fecaca;font-family:sans-serif;text-align:center;">'
+                . 'فایل UI پشتیبانی v2 روی سرور نیست — اسکریپت restore-support-telegram.sh را اجرا کنید.'
+                . '</div>';
+            return;
+        }
+
+        echo '<script type="module" src="'
+            . htmlspecialchars($assets['assetBase'] . $assets['jsFile'], ENT_QUOTES, 'UTF-8')
+            . '?v=' . (int)$assets['jsVer'] . '"></script>' . "\n";
+
+    }
+
 }

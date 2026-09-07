@@ -21,49 +21,19 @@ if(!$supportEmbedded){
 
 }
 
-$assetDir = __DIR__ . '/../assets/support/admin';
-$jsFile = 'support-admin.js';
-$cssFile = '';
+$initialUser = supportNormalizeUsername(
+    $supportV2InitialUser
+    ?? $_GET['user']
+    ?? ''
+);
 
-if(is_dir($assetDir)){
-    foreach(glob($assetDir . '/support-admin*.css') ?: [] as $cssPath){
-        $cssFile = basename($cssPath);
-        break;
-    }
-}
-
-$initialUser = supportNormalizeUsername($_GET['user'] ?? '');
-
-if(function_exists('pnvAdminUrl')){
-    $apiUrl = pnvAdminUrl('support-api.php');
-    $profileApiUrl = pnvAdminUrl('user-profile.php');
-}
-elseif(defined('PNV_ADMIN_BASE')){
-    $apiUrl = rtrim(PNV_ADMIN_BASE, '/') . '/support-api.php';
-    $profileApiUrl = rtrim(PNV_ADMIN_BASE, '/') . '/user-profile.php';
-}
-else{
-    $apiUrl = '/bigjay_controller/support-api.php';
-    $profileApiUrl = '/bigjay_controller/user-profile.php';
-}
-
-$assetBase = '/assets/support/admin/';
-$jsPath = $assetDir . '/' . $jsFile;
-$cssPath = $cssFile !== '' ? $assetDir . '/' . $cssFile : '';
-$jsVer = is_file($jsPath) ? filemtime($jsPath) : time();
-$cssVer = ($cssPath !== '' && is_file($cssPath)) ? filemtime($cssPath) : time();
-
-$config = [
-    'apiUrl' => $apiUrl,
-    'profileApiUrl' => $profileApiUrl,
-    'csrf' => supportCsrfToken(),
+$config = supportV2AdminConfig([
     'embedded' => (bool)$supportEmbedded,
-    'role' => 'admin',
     'initialUser' => $initialUser,
-    'pollIntervalMs' => 3000,
-];
+]);
 
 $rootHeight = $supportEmbedded ? '100%' : '100vh';
+$assets = supportV2AssetMeta();
 
 if(!$supportEmbedded){
 ?>
@@ -73,35 +43,25 @@ if(!$supportEmbedded){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>پیام‌های کاربران</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
-<?php if($cssFile !== ''){ ?>
-<link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$cssVer; ?>">
-<?php } ?>
+<?php supportV2RenderHeadAssets(); ?>
 </head>
 <body style="margin:0;background:#0e1621;min-height:100vh;">
-<?php } else { ?>
-<?php if($cssFile !== ''){ ?>
-<link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$cssVer; ?>">
-<?php } ?>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
 <?php } ?>
 
-<div id="support-v2-root" style="height:<?php echo htmlspecialchars($rootHeight, ENT_QUOTES, 'UTF-8'); ?>;"></div>
+<div id="support-v2-root" data-support-ui="v2" style="height:<?php echo htmlspecialchars($rootHeight, ENT_QUOTES, 'UTF-8'); ?>;"></div>
 
 <script>
 window.SUPPORT_CONFIG = <?php echo json_encode($config, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 
-<?php if(!is_file($assetDir . '/' . $jsFile)){ ?>
+<?php if($supportEmbedded){ ?>
+<?php /* CSS + module script loaded from admin/index.php head/footer */ ?>
+<?php } elseif(!$assets['hasJs']){ ?>
 <div style="padding:24px;color:#fecaca;font-family:sans-serif;text-align:center;">
-    فایل‌های UI ساخته نشده‌اند. در پوشه <code>support-ui</code> دستور <code>npm run build</code> را اجرا کنید.
+    فایل‌های UI ساخته نشده‌اند. اسکریپت <code>restore-support-telegram.sh</code> را اجرا کنید.
 </div>
 <?php } else { ?>
-<script type="module" src="<?php echo htmlspecialchars($assetBase . $jsFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$jsVer; ?>"></script>
+<?php supportV2RenderModuleScript(); ?>
 <?php } ?>
 
 <?php if(!$supportEmbedded){ ?>

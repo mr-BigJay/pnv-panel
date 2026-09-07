@@ -14,6 +14,7 @@ files=(
   "support_lib.php"
   "support-api.php"
   "admin/support-v2.php"
+  "admin/support.php"
   "admin/support-v2-diag.php"
   "admin/support-api.php"
   "admin/admin_nav.php"
@@ -36,7 +37,9 @@ echo ""
 echo "Verify..."
 
 grep -q 'support-v2-root' "${ROOT}/support.php" && echo "  OK user support uses React v2"
-grep -q 'pnvAdminInclude' "${ROOT}/admin/index.php" && grep -q 'support-v2.php' "${ROOT}/admin/index.php" && echo "  OK admin loads support-v2"
+grep -q 'data-support-ui="v2"' "${ROOT}/admin/support-v2.php" && echo "  OK admin support-v2 shell"
+grep -q 'supportV2RenderModuleScript' "${ROOT}/support_lib.php" && echo "  OK support v2 asset helpers"
+grep -q 'pnvAdminInclude' "${ROOT}/admin/index.php" && grep -q 'support-v2.php' "${ROOT}/admin/index.php" && echo "  OK admin index loads support-v2"
 grep -q 'tg-voice-player' "${ROOT}/assets/support/admin/support-admin.js" && echo "  OK Telegram UI bundle"
 
 js_bytes=$(wc -c < "${ROOT}/assets/support/admin/support-admin.js" | tr -d ' ')

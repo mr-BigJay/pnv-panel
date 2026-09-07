@@ -695,6 +695,10 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-
 
 <link rel="stylesheet" href="/fonts.css">
 
+<?php if(in_array($page, ['support', 'support-v2'], true) && function_exists('supportV2RenderHeadAssets')){ ?>
+<?php supportV2RenderHeadAssets(); ?>
+<?php } ?>
+
 <style>
 
 body{
@@ -1003,6 +1007,19 @@ font-variant-numeric:tabular-nums;
 text-shadow:none !important;
 }
 
+.content-support input,
+.content-support select,
+.content-support button,
+.content-support textarea,
+#support-v2-root input,
+#support-v2-root button,
+#support-v2-root textarea{
+width:auto !important;
+max-width:none !important;
+margin:0 !important;
+box-sizing:border-box;
+}
+
 input,
 select,
 button{
@@ -1155,6 +1172,7 @@ class="red">
 
 <?php
 $supportEmbedded = true;
+$supportV2InitialUser = supportNormalizeUsername($_GET['user'] ?? '');
 pnvAdminInclude('support-v2.php');
 ?>
 
@@ -1394,6 +1412,10 @@ adminPageEnd([
     setInterval(checkUnread, 10000);
 })();
 </script>
+
+<?php if(in_array($page, ['support', 'support-v2'], true) && function_exists('supportV2RenderModuleScript')){ ?>
+<?php supportV2RenderModuleScript(); ?>
+<?php } ?>
 
 <?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
 
