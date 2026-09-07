@@ -686,10 +686,6 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-
 
 <link rel="stylesheet" href="/fonts.css">
 
-<?php if($page === 'support'){ ?>
-<link rel="stylesheet" href="/support_ui.css?v=42">
-<?php } ?>
-
 <style>
 
 body{
@@ -876,6 +872,14 @@ opacity:1;
 }
 
 
+.content-support{
+margin-right:280px;
+padding:0;
+height:100vh;
+overflow:hidden;
+background:#0b1220;
+}
+
 @media(max-width:768px){
 
 body.adminPageSupport{
@@ -901,14 +905,31 @@ body.adminSidebarOpen .adminSidebarOverlay{
 display:block;
 }
 
-.content:not(.content-support){
+.content{
 margin-right:0;
 padding-top:64px;
 }
 
-.content:not(.content-support) input,
-.content:not(.content-support) select,
-.content:not(.content-support) button{
+.content-support{
+margin-right:0;
+height:100%;
+max-height:100dvh;
+min-height:0;
+padding-top:0;
+}
+
+.content-support input,
+.content-support select,
+.content-support button,
+.content-support textarea{
+width:auto !important;
+max-width:none !important;
+margin:0 !important;
+}
+
+input,
+select,
+button{
 width:100%;
 box-sizing:border-box;
 }
