@@ -19,7 +19,7 @@ if(!function_exists('paymentListEnsureInstantPay')){
         $tab = instantPayResolveDisplayTab($row);
 
         if($tab === 'rejected'){
-            return 'approved';
+            return null;
         }
 
         if($tab === 'hidden'){

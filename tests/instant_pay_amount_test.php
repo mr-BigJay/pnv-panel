@@ -158,5 +158,33 @@ assertTrue(instantPayAdminRowVisible($expiredRow), 'expired json still visible w
 $meta = instantPayAdminRowStatusMeta($visibleRow);
 assertTrue(($meta['title'] ?? '') === 'در حال بررسی', 'waiting json status label');
 
+$approvedRow = $csvRow;
+$approvedRow[6] = 'تایید شد';
+$approvedRow[7] = 'https://example.com/sub';
+assertTrue(instantPayResolveDisplayTab($approvedRow) === 'approved', 'csv approved row maps to approved tab');
+assertTrue(instantPayAdminDisplayTab($approvedRow) === 'approved', 'admin approved tab for confirmed csv');
+
+$paidJsonRow = $csvRow;
+$paidJsonRow[6] = 'درحال بررسی';
+instantPaySave([[
+    'id' => 'paid-json',
+    'user' => 'demo',
+    'type' => 'خرید',
+    'status' => 'paid',
+    'code' => 2920,
+    'created_at' => time() - 60,
+    'expires_at' => time() + 600,
+    'csv_index' => 0,
+    'link' => 'https://example.com/sub',
+]]);
+assertTrue(instantPayResolveDisplayTab($paidJsonRow) === 'approved', 'json paid maps to approved even if csv pending');
+$paidMeta = instantPayAdminRowStatusMeta($paidJsonRow);
+assertTrue(($paidMeta['title'] ?? '') === 'تایید شد', 'json paid shows confirmed status meta');
+
+$rejectedRow = $csvRow;
+$rejectedRow[6] = 'رد شد';
+$rejectedRow[7] = 'test';
+assertTrue(instantPayAdminDisplayTab($rejectedRow) === 'hidden', 'rejected rows are not listed under approved tab');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

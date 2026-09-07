@@ -17,7 +17,10 @@ fi
 
 files=(
   "admin/payments.php"
+  "admin/renews.php"
+  "admin/index.php"
   "instant_pay_lib.php"
+  "payment_list_ui.php"
 )
 
 for rel in "${files[@]}"; do

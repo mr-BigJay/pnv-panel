@@ -102,6 +102,7 @@ if(!function_exists('instantPayPath')){
             return 'hidden';
         }
 
+        $now = time();
         $status = trim((string)($row[6] ?? ''));
         $tracking = trim((string)($row[3] ?? ''));
 
@@ -135,7 +136,23 @@ if(!function_exists('instantPayPath')){
                 return 'approved';
             }
 
-            if(in_array($jsonSt, ['cancelled', 'failed'], true)){
+            if($jsonSt === 'processing'){
+                return 'pending';
+            }
+
+            if($jsonSt === 'expired'){
+                return 'expired';
+            }
+
+            if($jsonSt === 'failed'){
+                if(instantPayWithinMatchGrace($item, $now)){
+                    return 'pending';
+                }
+
+                return 'expired';
+            }
+
+            if(in_array($jsonSt, ['cancelled'], true)){
                 $reason = trim((string)($row[7] ?? ''));
 
                 if(in_array($reason, ['لغو شد', 'منقضی شد', 'لغو به‌خاطر مبلغ جدید', 'لغو به‌خاطر درخواست جدید'], true)){
@@ -149,7 +166,6 @@ if(!function_exists('instantPayPath')){
         }
 
         $created = intval($row[8] ?? 0);
-        $now = time();
 
         if($created > 0 && ($now - $created) <= instantPayReviewTotalSeconds()){
             if(in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true)){
@@ -172,7 +188,7 @@ if(!function_exists('instantPayPath')){
         $tab = instantPayResolveDisplayTab($row);
 
         if($tab === 'rejected'){
-            return 'approved';
+            return 'hidden';
         }
 
         return $tab;
@@ -200,6 +216,28 @@ if(!function_exists('instantPayPath')){
             $jsonSt = (string)($item['status'] ?? '');
 
             if(in_array($jsonSt, ['paid', 'cancelled'], true)){
+                if($jsonSt === 'paid'){
+                    $csvIdx = intval($item['csv_index'] ?? -1);
+
+                    if($csvIdx < 0){
+                        $csvIdx = instantPayResolveCsvIndex($item);
+                    }
+
+                    if($csvIdx >= 0 && isset($payments[$csvIdx]) && is_array($payments[$csvIdx])){
+                        $csvSt = trim((string)($payments[$csvIdx][6] ?? ''));
+
+                        if($csvSt !== 'تایید شد'){
+                            $payments[$csvIdx][6] = 'تایید شد';
+
+                            if(trim((string)($payments[$csvIdx][7] ?? '')) === '' && trim((string)($item['link'] ?? '')) !== ''){
+                                $payments[$csvIdx][7] = trim((string)$item['link']);
+                            }
+
+                            $csvChanged = true;
+                        }
+                    }
+                }
+
                 continue;
             }
 
@@ -708,20 +746,21 @@ if(!function_exists('instantPayPath')){
 
     function instantPayAdminRowStatusMeta($row){
         $status = trim((string)($row[6] ?? ''));
+        $displayTab = instantPayResolveDisplayTab($row);
 
-        if($status === 'تایید شد'){
+        if($status === 'تایید شد' || $displayTab === 'approved'){
             return ['title' => 'تایید شد', 'class' => 'statusDot--green'];
         }
 
-        if($status === 'رد شد'){
+        if($status === 'رد شد' || $displayTab === 'rejected'){
             return ['title' => 'رد شد', 'class' => 'statusDot--red'];
         }
 
-        if($status === 'منقضی' || instantPayResolveDisplayTab($row) === 'expired'){
+        if($status === 'منقضی' || $displayTab === 'expired'){
             return ['title' => 'منقضی', 'class' => 'statusDot--gray'];
         }
 
-        if(instantPayAdminRowIsInProgress($row)){
+        if($displayTab === 'pending' || instantPayAdminRowIsInProgress($row)){
             $tracking = trim((string)($row[3] ?? ''));
 
             if(strpos($tracking, 'AUTO-') === 0){
@@ -733,6 +772,8 @@ if(!function_exists('instantPayPath')){
 
                 return ['title' => 'در حال بررسی', 'class' => 'statusDot--yellow'];
             }
+
+            return ['title' => 'در حال بررسی', 'class' => 'statusDot--yellow'];
         }
 
         return ['title' => 'در حال بررسی', 'class' => 'statusDot--yellow'];
