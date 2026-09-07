@@ -522,13 +522,12 @@ gap:12px;
 position:relative;
 background:#1e293b;
 border-radius:18px;
-overflow:hidden;
+overflow:visible;
 border:1px solid #334155;
 }
 
-.userCard:has(.dropdown.active){
-overflow:visible;
-z-index:30;
+.userCard--menuOpen{
+z-index:40;
 }
 
 .userCardAccent{
@@ -538,6 +537,8 @@ top:0;
 bottom:0;
 width:4px;
 background:linear-gradient(180deg,#22c55e,#16a34a);
+border-radius:0 18px 18px 0;
+pointer-events:none;
 }
 
 .userCardBody{
@@ -686,11 +687,14 @@ line-height:1;
 display:none;
 position:absolute;
 left:0;
-top:48px;
+right:auto;
+bottom:calc(100% + 8px);
+top:auto;
 background:#0f172a;
+border:1px solid #334155;
 border-radius:12px;
 padding:10px;
-width:220px;
+width:min(220px,calc(100vw - 32px));
 z-index:1000;
 box-shadow:0 10px 25px rgba(0,0,0,0.4);
 }
@@ -1315,38 +1319,41 @@ id="modalContent"></div>
 const usersPageUrl = <?php echo json_encode(pnvAdminUrl('users.php'), JSON_UNESCAPED_UNICODE); ?>;
 const profileApiUrl = <?php echo json_encode(pnvAdminUrl('user-profile.php'), JSON_UNESCAPED_UNICODE); ?>;
 
-function toggleMenu(id){
-
-document
-.querySelectorAll('.dropdown')
-.forEach(function(el){
-
-if(el.id != id){
-
-el.classList.remove('active');
-
+function setUserCardMenuOpen(dropdownEl, isOpen){
+if(!dropdownEl){
+return;
 }
 
+var card = dropdownEl.closest('.userCard');
+
+if(card){
+card.classList.toggle('userCard--menuOpen', !!isOpen);
+}
+}
+
+function closeAllUserMenus(){
+document.querySelectorAll('.dropdown.active').forEach(function(el){
+el.classList.remove('active');
+setUserCardMenuOpen(el, false);
 });
+}
 
-document
-.getElementById(id)
-.classList.toggle('active');
+function toggleMenu(id){
+var target = document.getElementById(id);
+var willOpen = target && !target.classList.contains('active');
 
+closeAllUserMenus();
+
+if(target && willOpen){
+target.classList.add('active');
+setUserCardMenuOpen(target, true);
+}
 }
 
 document.addEventListener('click',function(e){
 
 if(!e.target.closest('.menuWrap')){
-
-document
-.querySelectorAll('.dropdown')
-.forEach(function(el){
-
-el.classList.remove('active');
-
-});
-
+closeAllUserMenus();
 }
 
 });
