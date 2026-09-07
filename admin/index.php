@@ -1052,6 +1052,25 @@ background:transparent !important;
 color:#6d8399 !important;
 }
 
+#support-v2-root button[class*="text-[#6ab2f2]"]{
+color:#6ab2f2 !important;
+}
+
+#support-v2-root button[class*="bg-[#242f3d]"]{
+background:#242f3d !important;
+border-radius:8px !important;
+padding:8px 12px !important;
+}
+
+#support-v2-root button[class*="hover:bg-[#2b5278]"]:hover{
+background:#2b5278 !important;
+color:#fff !important;
+}
+
+#support-v2-root button[class*="hover:bg-[#242f3d]"]:hover{
+background:#242f3d !important;
+}
+
 .content:not(.content-support) input,
 .content:not(.content-support) select,
 .content:not(.content-support) button{
