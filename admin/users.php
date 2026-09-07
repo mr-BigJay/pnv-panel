@@ -685,17 +685,15 @@ line-height:1;
 
 .dropdown{
 display:none;
-position:absolute;
+position:fixed;
 left:0;
-right:auto;
-bottom:calc(100% + 8px);
-top:auto;
+top:0;
 background:#0f172a;
 border:1px solid #334155;
 border-radius:12px;
 padding:10px;
 width:min(220px,calc(100vw - 32px));
-z-index:1000;
+z-index:10001;
 box-shadow:0 10px 25px rgba(0,0,0,0.4);
 }
 
@@ -1179,7 +1177,7 @@ $avatarInitial = pnvUsersAvatarInitial($username);
 class="menuBtn"
 type="button"
 aria-label="منو"
-onclick="toggleMenu('menu<?php echo $i; ?>')">
+onclick="toggleMenu(event,'menu<?php echo $i; ?>')">
 
 ⋮
 
@@ -1187,7 +1185,8 @@ onclick="toggleMenu('menu<?php echo $i; ?>')">
 
 <div
 class="dropdown"
-id="menu<?php echo $i; ?>">
+id="menu<?php echo $i; ?>"
+onclick="event.stopPropagation()">
 
 <button
 type="button"
@@ -1331,32 +1330,119 @@ card.classList.toggle('userCard--menuOpen', !!isOpen);
 }
 }
 
+function resetUserMenuPosition(dropdownEl){
+if(!dropdownEl){
+return;
+}
+
+dropdownEl.style.top = '';
+dropdownEl.style.left = '';
+dropdownEl.style.visibility = '';
+}
+
+function positionUserMenu(dropdownEl){
+var wrap = dropdownEl ? dropdownEl.closest('.menuWrap') : null;
+var btn = wrap ? wrap.querySelector('.menuBtn') : null;
+
+if(!dropdownEl || !btn){
+return;
+}
+
+dropdownEl.style.visibility = 'hidden';
+dropdownEl.style.display = 'block';
+
+var rect = btn.getBoundingClientRect();
+var menuW = dropdownEl.offsetWidth;
+var menuH = dropdownEl.offsetHeight;
+var gap = 8;
+var pad = 8;
+var top = rect.top - menuH - gap;
+
+if(top < pad){
+top = rect.bottom + gap;
+}
+
+if(top + menuH > window.innerHeight - pad){
+top = Math.max(pad, window.innerHeight - menuH - pad);
+}
+
+var left = rect.left;
+
+if(left + menuW > window.innerWidth - pad){
+left = window.innerWidth - menuW - pad;
+}
+
+if(left < pad){
+left = pad;
+}
+
+dropdownEl.style.top = top + 'px';
+dropdownEl.style.left = left + 'px';
+dropdownEl.style.visibility = '';
+dropdownEl.style.display = '';
+}
+
 function closeAllUserMenus(){
 document.querySelectorAll('.dropdown.active').forEach(function(el){
 el.classList.remove('active');
+resetUserMenuPosition(el);
 setUserCardMenuOpen(el, false);
 });
 }
 
-function toggleMenu(id){
-var target = document.getElementById(id);
-var willOpen = target && !target.classList.contains('active');
+function openUserMenu(dropdownEl){
+if(!dropdownEl){
+return;
+}
 
 closeAllUserMenus();
+dropdownEl.classList.add('active');
+positionUserMenu(dropdownEl);
+setUserCardMenuOpen(dropdownEl, true);
+}
 
-if(target && willOpen){
-target.classList.add('active');
-setUserCardMenuOpen(target, true);
+function toggleMenu(e, id){
+if(e){
+if(e.preventDefault){ e.preventDefault(); }
+if(e.stopPropagation){ e.stopPropagation(); }
 }
+
+var target = document.getElementById(id);
+
+if(!target){
+return;
 }
+
+if(target.classList.contains('active')){
+closeAllUserMenus();
+return;
+}
+
+openUserMenu(target);
+}
+
+var userMenuIgnoreUntil = 0;
 
 document.addEventListener('click',function(e){
 
-if(!e.target.closest('.menuWrap')){
+if(Date.now() < userMenuIgnoreUntil){
+return;
+}
+
+if(!e.target.closest('.menuWrap') && !e.target.closest('.dropdown.active')){
 closeAllUserMenus();
 }
 
 });
+
+document.addEventListener('keydown', function(ev){
+if(ev.key === 'Escape'){
+closeAllUserMenus();
+}
+});
+
+window.addEventListener('resize', closeAllUserMenus);
+window.addEventListener('scroll', closeAllUserMenus, true);
 
 function closeModal(){
 
@@ -1367,6 +1453,8 @@ document
 }
 
 function openModal(html){
+
+closeAllUserMenus();
 
 document
 .getElementById('modalContent')
