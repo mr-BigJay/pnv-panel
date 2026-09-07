@@ -790,20 +790,20 @@ font-size:13px;
 display:inline-block;
 }
 
-.content:not(.content-support) input,
-.content:not(.content-support) select,
-.content:not(.content-support) button,
-.box input,
-.box select,
-.box button{
+.content:not(.content-support):not(.content-payments):not(.content-renews) input,
+.content:not(.content-support):not(.content-payments):not(.content-renews) select,
+.content:not(.content-support):not(.content-payments):not(.content-renews) button,
+.box:not(.paymentsPage):not(.renewsPage) input,
+.box:not(.paymentsPage):not(.renewsPage) select,
+.box:not(.paymentsPage):not(.renewsPage) button{
 padding:12px;
 border:none;
 border-radius:8px;
 margin:5px;
 }
 
-.content:not(.content-support) button,
-.box button{
+.content:not(.content-support):not(.content-payments):not(.content-renews) button,
+.box:not(.paymentsPage):not(.renewsPage) button{
 background:#22c55e;
 color:white;
 cursor:pointer;
@@ -1071,9 +1071,9 @@ color:#fff !important;
 background:#242f3d !important;
 }
 
-.content:not(.content-support) input,
-.content:not(.content-support) select,
-.content:not(.content-support) button{
+.content:not(.content-support):not(.content-payments):not(.content-renews) input,
+.content:not(.content-support):not(.content-payments):not(.content-renews) select,
+.content:not(.content-support):not(.content-payments):not(.content-renews) button{
 width:100%;
 box-sizing:border-box;
 }
@@ -1211,7 +1211,17 @@ class="red">
 
 </div>
 
-<div class="content <?php echo in_array($page, ['support', 'support-v2'], true) ? 'content-support' : ''; ?>">
+<?php
+$contentExtraClass = '';
+if(in_array($page, ['support', 'support-v2'], true)){
+    $contentExtraClass = 'content-support';
+}elseif($page === 'payments'){
+    $contentExtraClass = 'content-payments';
+}elseif($page === 'renews'){
+    $contentExtraClass = 'content-renews';
+}
+?>
+<div class="content <?php echo htmlspecialchars($contentExtraClass, ENT_QUOTES, 'UTF-8'); ?>">
 
 <?php if($page=='dashboard'){ ?>
 

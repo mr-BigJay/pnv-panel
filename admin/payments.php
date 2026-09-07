@@ -82,7 +82,7 @@ if (is_file(__DIR__ . '/../payment_list_ui.php')) {
     require_once __DIR__ . '/../payment_list_ui.php';
 }
 
-$paymentsActiveTab = function_exists('paymentListActiveTab') ? paymentListActiveTab('pending') : 'pending';
+$paymentsActiveTab = function_exists('paymentListActiveTab') ? paymentListActiveTab('approved') : 'approved';
 
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
@@ -828,7 +828,7 @@ flex:0 0 20px;
 
 <div class="box paymentsPage" data-payments-ui="cards">
 
-<h2>لیست خرید های جدید <span class="payUiTag" title="payments UI cards v20260815">cards</span></h2>
+<h2>لیست خرید های جدید</h2>
 
 <?php if($paymentMessage !== ''){ ?>
 <div class="payAlertOk"><?php echo htmlspecialchars($paymentMessage, ENT_QUOTES, 'UTF-8'); ?></div>
