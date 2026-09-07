@@ -250,7 +250,7 @@ required>
 
 </div>
 
-<?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
+<?php require_once __DIR__ . '/../form_validation_fa.php'; if(function_exists('pnvFormValidationFaScript')){ pnvFormValidationFaScript(); } ?>
 
 </body>
 
@@ -790,16 +790,20 @@ font-size:13px;
 display:inline-block;
 }
 
-input,
-select,
-button{
+.content:not(.content-support) input,
+.content:not(.content-support) select,
+.content:not(.content-support) button,
+.box input,
+.box select,
+.box button{
 padding:12px;
 border:none;
 border-radius:8px;
 margin:5px;
 }
 
-button{
+.content:not(.content-support) button,
+.box button{
 background:#22c55e;
 color:white;
 cursor:pointer;
@@ -1011,6 +1015,7 @@ text-shadow:none !important;
 .content-support select,
 .content-support button,
 .content-support textarea,
+#support-v2-root,
 #support-v2-root input,
 #support-v2-root button,
 #support-v2-root textarea{
@@ -1020,9 +1025,19 @@ margin:0 !important;
 box-sizing:border-box;
 }
 
-input,
-select,
-button{
+#support-v2-root button{
+background:unset !important;
+color:inherit !important;
+padding:unset;
+border:unset;
+border-radius:unset;
+cursor:pointer;
+font:inherit;
+}
+
+.content:not(.content-support) input,
+.content:not(.content-support) select,
+.content:not(.content-support) button{
 width:100%;
 box-sizing:border-box;
 }
@@ -1417,7 +1432,7 @@ adminPageEnd([
 <?php supportV2RenderModuleScript(); ?>
 <?php } ?>
 
-<?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
+<?php require_once __DIR__ . '/../form_validation_fa.php'; if(function_exists('pnvFormValidationFaScript')){ pnvFormValidationFaScript(); } ?>
 
 </body>
 

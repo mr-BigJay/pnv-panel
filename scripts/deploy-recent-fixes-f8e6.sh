@@ -23,6 +23,9 @@ files=(
   "admin/renews.php"
   "admin/index.php"
   "admin/users.php"
+  "admin/user-profile-render.php"
+  "form_validation_fa.php"
+  "form_validation_fa.js"
   "buy-list.php"
   "renew-list.php"
 )

@@ -20,9 +20,13 @@ files=(
   "admin/admin_nav.php"
   "admin/index.php"
   "admin/user-profile.php"
+  "admin/user-profile-render.php"
+  "form_validation_fa.php"
+  "form_validation_fa.js"
   "assets/support/admin/support-admin.js"
   "assets/support/admin/support-admin.css"
   "bigjay_controller/support-v2-diag.php"
+  "bigjay_controller/support-v2.php"
 )
 
 for rel in "${files[@]}"; do

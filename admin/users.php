@@ -244,7 +244,39 @@ $profileUser = $openProfile;
 $profilePage =
 max(1, intval($_GET['profile_page'] ?? 1));
 
-require_once __DIR__ . '/user-profile-render.php';
+$__userProfileRender = __DIR__ . '/user-profile-render.php';
+if(is_file($__userProfileRender)){
+    require_once $__userProfileRender;
+}
+
+if(!function_exists('pnvAdminUserProfilePageUrl')){
+    function pnvAdminUserProfilePageUrl($username, $options = []){
+        if(!function_exists('pnvAdminUrl')){
+            return 'users.php';
+        }
+
+        $username = trim((string)$username);
+        $query = ['profile' => $username];
+
+        $search = trim((string)($options['search'] ?? ''));
+        if($search !== ''){
+            $query['search'] = $search;
+        }
+
+        $listPage = max(1, intval($options['list_page'] ?? 1));
+        if($listPage > 1){
+            $query['p'] = $listPage;
+        }
+
+        return pnvAdminUrl('users.php?' . http_build_query($query));
+    }
+}
+
+if(!function_exists('pnvAdminUserProfileHtml')){
+    function pnvAdminUserProfileHtml($username = '', $page = 1, $showAll = false, $options = []){
+        return '';
+    }
+}
 
 if($search != ''){
 
