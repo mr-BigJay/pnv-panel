@@ -26,6 +26,8 @@ files=(
   "date_lib.php"
   "renew.php"
   "renew-list.php"
+  "buy-list.php"
+  "payment_list_ui.php"
   "subscriptions.php"
   "buy.php"
   "plan_ui_lib.php"

@@ -17,7 +17,12 @@ fi
 
 files=(
   "admin/payments.php"
+  "admin/renews.php"
+  "admin/index.php"
   "instant_pay_lib.php"
+  "payment_list_ui.php"
+  "buy-list.php"
+  "renew-list.php"
 )
 
 for rel in "${files[@]}"; do
@@ -37,7 +42,14 @@ else
 fi
 
 if id www-data >/dev/null 2>&1; then
-  chown www-data:www-data "${ROOT}/admin/payments.php" "${ROOT}/instant_pay_lib.php" 2>/dev/null || true
+  chown www-data:www-data \
+    "${ROOT}/admin/payments.php" \
+    "${ROOT}/admin/renews.php" \
+    "${ROOT}/admin/index.php" \
+    "${ROOT}/instant_pay_lib.php" \
+    "${ROOT}/payment_list_ui.php" \
+    "${ROOT}/buy-list.php" \
+    "${ROOT}/renew-list.php" 2>/dev/null || true
 fi
 
 # bust PHP opcache if possible

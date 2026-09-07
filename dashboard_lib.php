@@ -124,6 +124,10 @@ if(!function_exists('pnvDashboardUserPaymentStats')){
                     continue;
                 }
 
+                if(function_exists('instantPayRowCountsAsPendingNotification') && !instantPayRowCountsAsPendingNotification($data)){
+                    continue;
+                }
+
                 if($type === 'تمدید'){
                     $stats['pending_renews']++;
                 }
@@ -165,6 +169,10 @@ if(!function_exists('pnvDashboardUserPaymentStats')){
             $type = trim((string)($data[9] ?? ''));
 
             if($status !== 'تایید شد' && $status !== 'رد شد'){
+                if(function_exists('instantPayRowCountsAsPendingNotification') && !instantPayRowCountsAsPendingNotification($data)){
+                    continue;
+                }
+
                 if($type === 'تمدید'){
                     $stats['pending_renews']++;
                 }
