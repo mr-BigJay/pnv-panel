@@ -6,8 +6,10 @@ if(!function_exists('supportLoad')){
 
     function supportIsEmbeddedRequest(){
 
+        $page = (string)($_GET['page'] ?? '');
+
         return basename($_SERVER['SCRIPT_NAME'] ?? '') === 'index.php'
-            && (($_GET['page'] ?? '') === 'support');
+            && in_array($page, ['support', 'support-v2'], true);
 
     }
 
@@ -151,7 +153,198 @@ if(!function_exists('supportLoad')){
 
     }
 
-    function supportMessageForApi($message){
+    function supportIsAjaxRequest(){
+
+        if(!empty($_POST['support_ajax']) || !empty($_GET['support_ajax'])){
+            return true;
+        }
+
+        $hdr = $_SERVER['HTTP_X_SUPPORT_AJAX'] ?? '';
+
+        return $hdr === '1' || strtolower($hdr) === 'true';
+    }
+
+    function supportAjaxRespond($payload, $httpCode = 200){
+
+        supportApiRespond($payload, $httpCode);
+
+    }
+
+    function supportApiRespond($payload, $httpCode = 200){
+
+        http_response_code($httpCode);
+        header('Content-Type: application/json; charset=utf-8');
+
+        $flags = JSON_UNESCAPED_UNICODE;
+
+        if(defined('JSON_INVALID_UTF8_SUBSTITUTE')){
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+
+        $json = json_encode($payload, $flags);
+
+        if($json === false){
+            http_response_code(500);
+            $json = json_encode([
+                'error' => 'json_encode failed',
+                'detail' => json_last_error_msg(),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
+        echo $json;
+        exit;
+
+    }
+
+    function supportMessageDayKey($message){
+
+        $timestamp = intval($message['timestamp'] ?? 0);
+
+        if($timestamp <= 0){
+            return 'unknown';
+        }
+
+        supportEnsureTehranTimezone();
+
+        return date('Y-m-d', $timestamp);
+    }
+
+    function supportDaySeparatorLabel($message){
+
+        $timestamp = intval($message['timestamp'] ?? 0);
+
+        if($timestamp <= 0){
+            return '—';
+        }
+
+        supportEnsureTehranTimezone();
+        $key = date('Y-m-d', $timestamp);
+        $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+
+        if($key === $today){
+            return 'امروز';
+        }
+
+        if($key === $yesterday){
+            return 'دیروز';
+        }
+
+        return supportFormatFromTimestamp($timestamp)['date'];
+    }
+
+    function supportRenderDaySeparator($message){
+
+        $label = supportDaySeparatorLabel($message);
+
+        return '<div class="msgDaySep" data-day-key="' . htmlspecialchars(supportMessageDayKey($message), ENT_QUOTES, 'UTF-8') . '"><span>'
+            . htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+            . '</span></div>';
+    }
+
+    function supportMessageClusterPos($messages, $index){
+
+        if(!isset($messages[$index]) || !is_array($messages[$index])){
+            return 'single';
+        }
+
+        $cur = $messages[$index];
+        $curSender = (string)($cur['sender'] ?? '');
+        $curTs = intval($cur['timestamp'] ?? 0);
+        $curDay = supportMessageDayKey($cur);
+        $prev = $index > 0 ? $messages[$index - 1] : null;
+        $next = ($index + 1) < count($messages) ? $messages[$index + 1] : null;
+
+        $samePrev = is_array($prev)
+            && (string)($prev['sender'] ?? '') === $curSender
+            && supportMessageDayKey($prev) === $curDay
+            && ($curTs - intval($prev['timestamp'] ?? 0)) <= 600;
+
+        $sameNext = is_array($next)
+            && (string)($next['sender'] ?? '') === $curSender
+            && supportMessageDayKey($next) === $curDay
+            && (intval($next['timestamp'] ?? 0) - $curTs) <= 600;
+
+        if($samePrev && $sameNext){
+            return 'mid';
+        }
+
+        if($samePrev){
+            return 'bot';
+        }
+
+        if($sameNext){
+            return 'top';
+        }
+
+        return 'single';
+    }
+
+    function supportMessageIsOwn($message, $options){
+
+        $sender = (string)($message['sender'] ?? '');
+        $isAdmin = !empty($options['isAdmin']);
+
+        if($isAdmin){
+            return $sender === 'admin';
+        }
+
+        return $sender === 'user';
+    }
+
+    function supportRenderReadTicks($message, $options){
+
+        if(!supportMessageIsOwn($message, $options)){
+            return '';
+        }
+
+        $isAdmin = !empty($options['isAdmin']);
+        $seen = $isAdmin
+            ? !empty($message['seen_by_user'])
+            : !empty($message['seen_by_admin']);
+
+        $class = $seen ? 'msgTicks msgTicks--read' : 'msgTicks';
+
+        return '<span class="' . $class . '" aria-hidden="true">'
+            . ($seen ? '✓✓' : '✓')
+            . '</span>';
+    }
+
+    function supportRenderMessagesList($messages, $options){
+
+        if(!is_array($messages) || count($messages) === 0){
+            return '';
+        }
+
+        $html = '';
+        $lastDay = '';
+
+        foreach($messages as $i => $m){
+
+            if(!is_array($m)){
+                continue;
+            }
+
+            $dayKey = supportMessageDayKey($m);
+
+            if($dayKey !== $lastDay){
+                $html .= supportRenderDaySeparator($m);
+                $lastDay = $dayKey;
+            }
+
+            $msgOptions = $options;
+            $msgOptions['cluster'] = supportMessageClusterPos($messages, $i);
+            $rowClass = supportMessageIsOwn($m, $options) ? 'msgRow msgRow--own' : 'msgRow msgRow--other';
+
+            $html .= '<div class="' . $rowClass . '">';
+            $html .= supportRenderMessageHtml($m, $msgOptions);
+            $html .= '</div>';
+        }
+
+        return $html;
+    }
+
+    function supportMessageForApi($message, $options = []){
 
         $display = supportMessageDisplayTime($message);
         $image = $message['image'] ?? '';
@@ -160,16 +353,26 @@ if(!function_exists('supportLoad')){
             $image = '/' . ltrim($image, '/');
         }
 
+        $audio = $message['audio'] ?? '';
+
+        if($audio !== ''){
+            $audio = '/' . ltrim($audio, '/');
+        }
+
         return [
             'id' => $message['id'] ?? '',
             'sender' => $message['sender'] ?? '',
             'text' => $message['text'] ?? '',
             'image' => $image,
+            'audio' => $audio,
             'date' => $display['date'],
             'time' => $display['time'],
             'timestamp' => intval($message['timestamp'] ?? 0),
             'edited' => !empty($message['edited']),
-            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null
+            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null,
+            'seen_by_admin' => !empty($message['seen_by_admin']),
+            'seen_by_user' => !empty($message['seen_by_user']),
+            'is_own' => supportMessageIsOwn($message, $options),
         ];
 
     }
@@ -198,6 +401,10 @@ if(!function_exists('supportLoad')){
             return '📷 تصویر';
         }
 
+        if($text === '' && !empty($last['audio'])){
+            return '🎤 پیام صوتی';
+        }
+
         if($text === ''){
             return 'پیام';
         }
@@ -219,6 +426,27 @@ if(!function_exists('supportLoad')){
         $last = supportTicketLastMessage($ticket);
 
         return intval($last['timestamp'] ?? 0);
+
+    }
+
+    function supportTicketListTime($timestamp){
+
+        $timestamp = intval($timestamp);
+
+        if($timestamp <= 0){
+            return '';
+        }
+
+        supportEnsureTehranTimezone();
+
+        $formatted = supportFormatFromTimestamp($timestamp);
+        $today = pnvFormatJalaliDate(time(), '/');
+
+        if(($formatted['date'] ?? '') === $today){
+            return $formatted['time'];
+        }
+
+        return $formatted['date'];
 
     }
 
@@ -285,6 +513,54 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportGetUserProfileSummary($username){
+
+        $username = supportNormalizeUsername($username);
+        $summary = [
+            'username' => $username,
+            'mobile' => '-',
+            'exists' => false,
+        ];
+
+        if($username === ''){
+            return $summary;
+        }
+
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!is_file($usersFile)){
+            return $summary;
+        }
+
+        $users = json_decode((string)file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return $summary;
+        }
+
+        foreach($users as $user){
+
+            if(!is_array($user)){
+                continue;
+            }
+
+            $stored = supportNormalizeUsername($user['username'] ?? '');
+
+            if($stored === '' || !supportUsernamesMatch($stored, $username)){
+                continue;
+            }
+
+            $summary['username'] = $stored;
+            $summary['mobile'] = trim((string)($user['mobile'] ?? '')) ?: '-';
+            $summary['exists'] = true;
+            break;
+
+        }
+
+        return $summary;
+
+    }
+
     function supportSortTickets($data){
 
         usort($data, function($a, $b){
@@ -337,7 +613,7 @@ if(!function_exists('supportLoad')){
 
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') !== $username){
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 continue;
             }
 
@@ -369,7 +645,7 @@ if(!function_exists('supportLoad')){
 
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') !== $username){
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 continue;
             }
 
@@ -465,6 +741,102 @@ if(!function_exists('supportLoad')){
 
         if(!move_uploaded_file($tmp, $savePath)){
             return ['ok' => false, 'path' => '', 'error' => 'ذخیره تصویر روی سرور ناموفق بود'];
+        }
+
+        return [
+            'ok' => true,
+            'path' => rtrim($urlPrefix, '/') . '/' . $filename,
+            'error' => ''
+        ];
+
+    }
+
+    function supportHandleVoiceUpload($fileInput, $uploadDir, $urlPrefix){
+
+        if(!is_array($fileInput) || !isset($fileInput['error'])){
+            return ['ok' => false, 'path' => '', 'error' => ''];
+        }
+
+        if(intval($fileInput['error']) === UPLOAD_ERR_NO_FILE || intval($fileInput['size'] ?? 0) <= 0){
+            return ['ok' => false, 'path' => '', 'error' => ''];
+        }
+
+        if(intval($fileInput['error']) !== UPLOAD_ERR_OK){
+            return ['ok' => false, 'path' => '', 'error' => 'آپلود ویس ناموفق بود (خطای سرور)'];
+        }
+
+        $maxBytes = 10 * 1024 * 1024;
+        $phpMax = supportParseIniBytes(ini_get('upload_max_filesize'));
+
+        if($phpMax > 0 && $phpMax < $maxBytes){
+            $maxBytes = $phpMax;
+        }
+
+        if(intval($fileInput['size']) > $maxBytes){
+            return ['ok' => false, 'path' => '', 'error' => 'حجم ویس نباید بیشتر از ' . round($maxBytes / 1024 / 1024, 1) . 'MB باشد'];
+        }
+
+        $ext = strtolower(pathinfo((string)($fileInput['name'] ?? ''), PATHINFO_EXTENSION));
+        $allowedExt = ['webm', 'ogg', 'mp3', 'm4a', 'wav', 'mp4'];
+        $allowedMime = [
+            'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp3', 'audio/mp4',
+            'audio/x-m4a', 'audio/wav', 'audio/x-wav', 'video/webm'
+        ];
+
+        $tmp = (string)($fileInput['tmp_name'] ?? '');
+        $finfo = ($tmp !== '' && function_exists('finfo_open')) ? finfo_open(FILEINFO_MIME_TYPE) : false;
+        $mime = ($finfo && $tmp !== '') ? (string)finfo_file($finfo, $tmp) : (string)($fileInput['type'] ?? '');
+
+        if($finfo){
+            finfo_close($finfo);
+        }
+
+        $mimeOk = false;
+
+        foreach($allowedMime as $allowed){
+            if($mime === $allowed || strpos($mime, rtrim($allowed, '*')) === 0){
+                $mimeOk = true;
+                break;
+            }
+        }
+
+        if(!$mimeOk && !in_array($ext, $allowedExt, true)){
+            return ['ok' => false, 'path' => '', 'error' => 'فرمت ویس پشتیبانی نمی‌شود'];
+        }
+
+        if(!in_array($ext, $allowedExt, true)){
+            if(strpos($mime, 'ogg') !== false){
+                $ext = 'ogg';
+            }
+            elseif(strpos($mime, 'mpeg') !== false || strpos($mime, 'mp3') !== false){
+                $ext = 'mp3';
+            }
+            elseif(strpos($mime, 'wav') !== false){
+                $ext = 'wav';
+            }
+            else{
+                $ext = 'webm';
+            }
+        }
+
+        if(!is_dir($uploadDir)){
+            if(!@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)){
+                return ['ok' => false, 'path' => '', 'error' => 'پوشه آپلود قابل ایجاد نیست'];
+            }
+        }
+
+        if(!is_writable($uploadDir)){
+            @chmod($uploadDir, 0755);
+            if(!is_writable($uploadDir)){
+                return ['ok' => false, 'path' => '', 'error' => 'پوشه آپلود قابل نوشتن نیست'];
+            }
+        }
+
+        $filename = 'voice_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+        $savePath = rtrim($uploadDir, '/') . '/' . $filename;
+
+        if(!move_uploaded_file($tmp, $savePath)){
+            return ['ok' => false, 'path' => '', 'error' => 'ذخیره ویس روی سرور ناموفق بود'];
         }
 
         return [
@@ -575,11 +947,30 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportNormalizeUsername($username){
+
+        return trim((string)$username);
+
+    }
+
+    function supportUsernamesMatch($left, $right){
+
+        $left = supportNormalizeUsername($left);
+        $right = supportNormalizeUsername($right);
+
+        if($left === '' || $right === ''){
+            return false;
+        }
+
+        return strcasecmp($left, $right) === 0;
+
+    }
+
     function supportFindTicketIndex($data, $username){
 
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') === $username){
+            if(supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 return $i;
             }
 
@@ -589,9 +980,27 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportResolveTicketUsername($data, $username){
+
+        $username = supportNormalizeUsername($username);
+
+        if($username === ''){
+            return '';
+        }
+
+        $ticketIndex = supportFindTicketIndex($data, $username);
+
+        if($ticketIndex >= 0){
+            return supportNormalizeUsername($data[$ticketIndex]['user'] ?? $username);
+        }
+
+        return $username;
+
+    }
+
     function supportEnsureTicket(&$data, $username){
 
-        $username = trim($username);
+        $username = supportNormalizeUsername($username);
 
         if($username === ''){
             return -1;
@@ -763,6 +1172,11 @@ if(!function_exists('supportLoad')){
 
         $sender = $m['sender'] ?? 'user';
         $class = ($sender === 'admin') ? 'is-admin admin' : 'is-user usermsg';
+        $cluster = trim((string)($options['cluster'] ?? 'single'));
+
+        if($cluster !== '' && $cluster !== 'single'){
+            $class .= ' cluster-' . $cluster;
+        }
         $currentUser = $options['currentUser'] ?? '';
         $embedded = !empty($options['embedded']);
         $csrfField = $options['csrfField'] ?? '';
@@ -831,7 +1245,7 @@ if(!function_exists('supportLoad')){
             <?php } ?>
 
             <?php if(!empty($m['edited'])){ ?>
-            <small class="msgEdited">(ویرایش شد)</small>
+            <span class="msgEditedInline">ویرایش‌شده</span>
             <?php } ?>
 
             <?php if($image !== ''){ ?>
@@ -841,9 +1255,8 @@ if(!function_exists('supportLoad')){
             <?php } ?>
 
             <div class="msgMeta">
-                <?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?>
-                -
-                <?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
+                <span class="msgTime"><?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?></span>
+                <?php echo supportRenderReadTicks($m, $options); ?>
             </div>
 
             <?php if(
@@ -916,47 +1329,6 @@ if(!function_exists('supportLoad')){
 
     }
 
-    function supportNotifyUserTelegram($username, $replyText){
-
-        $lib = __DIR__ . '/telegram_lib.php';
-
-        if(!is_file($lib)){
-            return;
-        }
-
-        require_once $lib;
-
-        if(!function_exists('telegramNotifyUser')){
-            return;
-        }
-
-        $config = function_exists('telegramLoadConfig') ? telegramLoadConfig() : [];
-
-        if(
-            empty($config['enabled'])
-            || trim((string)($config['bot_token'] ?? '')) === ''
-        ){
-            return;
-        }
-
-        $preview = trim((string)$replyText);
-
-        if(function_exists('mb_strlen') && mb_strlen($preview) > 120){
-            $preview = mb_substr($preview, 0, 120) . '…';
-        } elseif(strlen($preview) > 120){
-            $preview = substr($preview, 0, 120) . '…';
-        }
-
-        $text = "💬 پشتیبانی پاسخ داد\n\n" . $preview . "\n\nبرای مشاهده کامل پاسخ به پنل مراجعه کنید.";
-
-        try{
-            telegramNotifyUser($username, $text, [], $config);
-        }catch(Throwable $e){
-            error_log('support user telegram notify failed: ' . $e->getMessage());
-        }
-
-    }
-
     function supportProcessAdminActions($file, $embedded = false){
 
         $data = supportLoad($file);
@@ -974,6 +1346,14 @@ if(!function_exists('supportLoad')){
 
                 if(supportDeleteMessage($data, $msgId)){
                     supportSave($file, $data);
+                }
+
+                if(supportIsAjaxRequest()){
+                    supportAjaxRespond([
+                        'ok' => true,
+                        'deleted' => true,
+                        'message_id' => $msgId,
+                    ]);
                 }
 
                 $redirect = supportAdminUrl($user, $embedded);
@@ -1002,6 +1382,17 @@ if(!function_exists('supportLoad')){
                         if(($msg['id'] ?? '') === $id){
                             $data[$i]['messages'][$j]['text'] = $text;
                             $data[$i]['messages'][$j]['edited'] = true;
+
+                            if(supportIsAjaxRequest()){
+                                supportAjaxRespond([
+                                    'ok' => true,
+                                    'edited' => true,
+                                    'message' => supportMessageForApi(
+                                        $data[$i]['messages'][$j],
+                                        ['isAdmin' => true]
+                                    ),
+                                ]);
+                            }
                         }
 
                     }
@@ -1038,12 +1429,21 @@ if(!function_exists('supportLoad')){
                     '/uploads/support'
                 );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
+                $voiceUpload = supportHandleVoiceUpload(
+                    $_FILES['voice'] ?? [],
+                    dirname($file) . '/../uploads/support',
+                    '/uploads/support'
+                );
+                $audio = !empty($voiceUpload['ok']) ? ($voiceUpload['path'] ?? '') : '';
 
                 if($image === '' && !empty($upload['error'])){
                     $error = $upload['error'];
                 }
-                elseif($text === '' && $image === ''){
-                    $error = 'متن یا تصویر وارد کنید';
+                elseif($audio === '' && !empty($voiceUpload['error'])){
+                    $error = $voiceUpload['error'];
+                }
+                elseif($text === '' && $image === '' && $audio === ''){
+                    $error = 'متن، تصویر یا ویس وارد کنید';
                 }
                 else{
                     $ticketIndex = supportEnsureTicket($data, $user);
@@ -1062,6 +1462,7 @@ if(!function_exists('supportLoad')){
                             'sender' => 'admin',
                             'text' => $text,
                             'image' => $image,
+                            'audio' => $audio,
                             'date' => $meta['date'],
                             'time' => $meta['time'],
                             'timestamp' => $meta['timestamp'],
@@ -1078,7 +1479,21 @@ if(!function_exists('supportLoad')){
 
                         supportSave($file, $data);
 
-                        supportNotifyUserTelegram($user, $text);
+                        if(!function_exists('tgUserNotifySupportReply') && is_file(__DIR__ . '/telegram_user_lib.php')){
+                            require_once __DIR__ . '/telegram_user_lib.php';
+                        }
+
+                        if(function_exists('tgUserNotifySupportReply')){
+                            $notifyText = $text !== '' ? $text : ($audio !== '' ? '🎤 پیام صوتی' : 'پیام جدید');
+                            tgUserNotifySupportReply($user, $notifyText);
+                        }
+
+                        if(supportIsAjaxRequest()){
+                            supportAjaxRespond([
+                                'ok' => true,
+                                'message' => supportMessageForApi($row, ['isAdmin' => true]),
+                            ]);
+                        }
 
                     }
                     $redirect = supportAdminUrl($user, $embedded);
@@ -1091,10 +1506,12 @@ if(!function_exists('supportLoad')){
         if(
             $redirect === null
             && isset($_GET['user'])
-            && ($_GET['user'] ?? '') !== ''
+            && supportNormalizeUsername($_GET['user'] ?? '') !== ''
         ){
 
-            if(supportMarkSeenByAdmin($data, $_GET['user'])){
+            $viewUser = supportResolveTicketUsername($data, $_GET['user'] ?? '');
+
+            if(supportMarkSeenByAdmin($data, $viewUser)){
                 supportSave($file, $data);
             }
 
@@ -1124,7 +1541,7 @@ if(!function_exists('supportLoad')){
 
                 foreach($data as $i => $ticket){
 
-                    if(($ticket['user'] ?? '') !== $username){
+                    if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                         continue;
                     }
 
@@ -1142,6 +1559,14 @@ if(!function_exists('supportLoad')){
                             unset($data[$i]['messages'][$j]);
                             $data[$i]['messages'] = array_values($data[$i]['messages']);
                             supportSave($file, $data);
+
+                            if(supportIsAjaxRequest()){
+                                supportAjaxRespond([
+                                    'ok' => true,
+                                    'deleted' => true,
+                                    'message_id' => $msgId,
+                                ]);
+                            }
                         }
 
                     }
@@ -1166,7 +1591,7 @@ if(!function_exists('supportLoad')){
 
                 foreach($data as $i => $ticket){
 
-                    if(($ticket['user'] ?? '') !== $username){
+                    if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                         continue;
                     }
 
@@ -1180,6 +1605,17 @@ if(!function_exists('supportLoad')){
                             $data[$i]['messages'][$j]['text'] = $newText;
                             $data[$i]['messages'][$j]['edited'] = true;
                             supportSave($file, $data);
+
+                            if(supportIsAjaxRequest()){
+                                supportAjaxRespond([
+                                    'ok' => true,
+                                    'edited' => true,
+                                    'message' => supportMessageForApi(
+                                        $data[$i]['messages'][$j],
+                                        ['isAdmin' => false]
+                                    ),
+                                ]);
+                            }
                         }
 
                     }
@@ -1213,12 +1649,21 @@ if(!function_exists('supportLoad')){
                     '/uploads/support'
                 );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
+                $voiceUpload = supportHandleVoiceUpload(
+                    $_FILES['voice'] ?? [],
+                    __DIR__ . '/uploads/support',
+                    '/uploads/support'
+                );
+                $audio = !empty($voiceUpload['ok']) ? ($voiceUpload['path'] ?? '') : '';
 
-                if($image === '' && !empty($upload['error'])){
+                if($image === '' && !empty($upload['error']) && !empty($_FILES['image']['name'] ?? '')){
                     $error = $upload['error'];
                 }
-                elseif($text === '' && $image === ''){
-                    $error = 'متن یا تصویر وارد کنید';
+                elseif($audio === '' && !empty($voiceUpload['error']) && !empty($_FILES['voice']['name'] ?? '')){
+                    $error = $voiceUpload['error'];
+                }
+                elseif($text === '' && $image === '' && $audio === ''){
+                    $error = 'متن، تصویر یا ویس وارد کنید';
                 }
                 else{
                     $meta = supportMessageMeta();
@@ -1229,6 +1674,7 @@ if(!function_exists('supportLoad')){
                         'sender' => 'user',
                         'text' => $text,
                         'image' => $image,
+                        'audio' => $audio,
                         'date' => $meta['date'],
                         'time' => $meta['time'],
                         'timestamp' => $meta['timestamp'],
@@ -1256,6 +1702,14 @@ if(!function_exists('supportLoad')){
 
                     supportSave($file, $data);
                     supportNotifyTelegramAdmins($username, $newmsg);
+
+                    if(supportIsAjaxRequest()){
+                        supportAjaxRespond([
+                            'ok' => true,
+                            'message' => supportMessageForApi($newmsg, ['isAdmin' => false]),
+                        ]);
+                    }
+
                     header('Location: support.php');
                     exit;
                 }
@@ -1294,7 +1748,7 @@ if(!function_exists('supportUserHasUnread')){
         }
 
         foreach($data as $ticket){
-            if(strcasecmp(trim((string)($ticket['user'] ?? '')), $username) !== 0){
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 continue;
             }
 
@@ -1306,5 +1760,309 @@ if(!function_exists('supportUserHasUnread')){
         }
 
         return false;
+    }
+
+    function supportTicketForApi($ticket){
+
+        $user = supportNormalizeUsername($ticket['user'] ?? '');
+        $lastTs = supportTicketLastTimestamp($ticket);
+        $profile = supportGetUserProfileSummary($user);
+
+        return [
+            'user' => $user,
+            'initial' => supportUserInitial($user),
+            'preview' => supportTicketPreview($ticket),
+            'relative_time' => supportRelativeTime($lastTs),
+            'list_time' => supportTicketListTime($lastTs),
+            'timestamp' => $lastTs,
+            'unread' => supportAdminUnreadCount($ticket),
+            'status' => $ticket['status'] ?? '',
+            'mobile' => $profile['mobile'] ?? '-',
+            'ticket_id' => $ticket['id'] ?? '',
+        ];
+
+    }
+
+    function supportTicketsListForApi($data){
+
+        $sorted = supportSortTickets($data);
+        $tickets = [];
+
+        foreach($sorted as $ticket){
+            $tickets[] = supportTicketForApi($ticket);
+        }
+
+        return [
+            'tickets' => $tickets,
+            'has_unread' => supportAdminHasUnread($sorted),
+            'unread_count' => supportAdminUnreadTotal($sorted),
+        ];
+
+    }
+
+    function supportAdminApiBootstrap($embedded = false){
+
+        return [
+            'csrf' => supportCsrfToken(),
+            'embedded' => (bool)$embedded,
+            'poll_interval_ms' => 3000,
+        ];
+
+    }
+
+    function supportAdminApiMessages($file, $user, $since = 0, $syncAll = false){
+
+        $data = supportLoad($file);
+        $user = supportResolveTicketUsername($data, $user);
+        $messages = [];
+        $status = '';
+        $sync = [];
+        $unreadUsers = [];
+
+        foreach($data as $ticket){
+
+            if(supportTicketHasUnreadForAdmin($ticket)){
+                $unreadUsers[] = $ticket['user'] ?? '';
+            }
+
+            if($user === '' || !supportUsernamesMatch($ticket['user'] ?? '', $user)){
+                continue;
+            }
+
+            $status = $ticket['status'] ?? '';
+
+            if(empty($ticket['messages'])){
+                continue;
+            }
+
+            foreach($ticket['messages'] as $msg){
+
+                $timestamp = intval($msg['timestamp'] ?? 0);
+
+                if($syncAll){
+                    $sync[] = supportMessageForApi($msg, ['isAdmin' => true]);
+                }
+
+                if($since > 0 && $timestamp <= $since){
+                    continue;
+                }
+
+                $messages[] = supportMessageForApi($msg, ['isAdmin' => true]);
+
+            }
+
+        }
+
+        if($user !== ''){
+            $data = supportLoad($file);
+
+            if(supportMarkSeenByAdmin($data, $user)){
+                supportSave($file, $data);
+            }
+
+        }
+
+        $payload = [
+            'user' => $user,
+            'messages' => $messages,
+            'status' => $status,
+            'unreadUsers' => $unreadUsers,
+            'has_unread' => count($unreadUsers) > 0,
+            'unread_count' => supportAdminUnreadTotal($data),
+        ];
+
+        if($syncAll){
+            $payload['sync'] = $sync;
+        }
+
+        return $payload;
+
+    }
+
+    function supportAdminApiParseInput(){
+
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+
+        if(stripos($contentType, 'application/json') !== false){
+            $raw = file_get_contents('php://input');
+            $json = json_decode($raw, true);
+
+            return is_array($json) ? $json : [];
+        }
+
+        return $_POST;
+
+    }
+
+    function supportAdminApiHandlePost($file, $embedded = false){
+
+        $input = supportAdminApiParseInput();
+        $action = trim((string)($input['action'] ?? ''));
+
+        if($action === 'send' || ($action === '' && isset($input['message'], $input['user']))){
+            $_POST['message'] = $input['message'] ?? '';
+            $_POST['user'] = $input['user'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['reply_to'] = $input['reply_to'] ?? '';
+            $_POST['reply'] = '1';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'send_voice'){
+            $_POST['message'] = trim((string)($input['message'] ?? $_POST['message'] ?? ''));
+            $_POST['user'] = $input['user'] ?? $_POST['user'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? $_POST['csrf'] ?? '';
+            $_POST['reply'] = '1';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'send_image'){
+            $_POST['message'] = trim((string)($_POST['message'] ?? $input['message'] ?? ''));
+            $_POST['user'] = $_POST['user'] ?? $input['user'] ?? '';
+            $_POST['csrf'] = $_POST['csrf'] ?? $input['csrf'] ?? '';
+            $_POST['reply_to'] = $_POST['reply_to'] ?? $input['reply_to'] ?? '';
+            $_POST['reply'] = '1';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'edit'){
+            $_POST['edit_id'] = $input['edit_id'] ?? $input['id'] ?? '';
+            $_POST['edit_text'] = $input['edit_text'] ?? $input['text'] ?? '';
+            $_POST['user'] = $input['user'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'delete'){
+            $_POST['delete_message'] = '1';
+            $_POST['delete_id'] = $input['delete_id'] ?? $input['id'] ?? '';
+            $_POST['user'] = $input['user'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        else{
+            supportAjaxRespond(['ok' => false, 'error' => 'action نامعتبر است'], 400);
+        }
+
+        $result = supportProcessAdminActions($file, $embedded);
+
+        if(!empty($result['error'])){
+            supportAjaxRespond(['ok' => false, 'error' => $result['error']], 400);
+        }
+
+        supportAjaxRespond(['ok' => false, 'error' => 'درخواست پردازش نشد'], 400);
+
+    }
+
+    function supportUserApiBootstrap(){
+
+        return [
+            'csrf' => supportCsrfToken(),
+            'poll_interval_ms' => 5000,
+        ];
+
+    }
+
+    function supportUserApiMessages($file, $username, $since = 0, $syncAll = false){
+
+        $data = supportLoad($file);
+        $messages = [];
+        $status = '';
+        $sync = [];
+
+        foreach($data as $ticket){
+
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
+                continue;
+            }
+
+            $status = $ticket['status'] ?? '';
+
+            if(empty($ticket['messages'])){
+                break;
+            }
+
+            foreach($ticket['messages'] as $msg){
+
+                $timestamp = intval($msg['timestamp'] ?? 0);
+
+                if($syncAll){
+                    $sync[] = supportMessageForApi($msg, ['isAdmin' => false]);
+                }
+
+                if($since > 0 && $timestamp <= $since){
+                    continue;
+                }
+
+                $messages[] = supportMessageForApi($msg, ['isAdmin' => false]);
+
+            }
+
+            break;
+
+        }
+
+        if(supportMarkSeenByUser($data, $username)){
+            supportSave($file, $data);
+        }
+
+        $payload = [
+            'messages' => $messages,
+            'status' => $status,
+        ];
+
+        if($syncAll){
+            $payload['sync'] = $sync;
+        }
+
+        return $payload;
+
+    }
+
+    function supportUserApiHandlePost($file, $username){
+
+        $input = supportAdminApiParseInput();
+        $action = trim((string)($input['action'] ?? ''));
+
+        if($action === 'send' || ($action === '' && isset($input['message']))){
+            $_POST['send'] = '1';
+            $_POST['message'] = $input['message'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['reply_to'] = $input['reply_to'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'edit'){
+            $_POST['edit_id'] = $input['edit_id'] ?? $input['id'] ?? '';
+            $_POST['edit_text'] = $input['edit_text'] ?? $input['text'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'send_image'){
+            $_POST['send'] = '1';
+            $_POST['message'] = trim((string)($_POST['message'] ?? $input['message'] ?? ''));
+            $_POST['csrf'] = $_POST['csrf'] ?? $input['csrf'] ?? '';
+            $_POST['reply_to'] = $_POST['reply_to'] ?? $input['reply_to'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'send_voice'){
+            $_POST['send'] = '1';
+            $_POST['message'] = '';
+            $_POST['csrf'] = $_POST['csrf'] ?? $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        elseif($action === 'delete'){
+            $_POST['delete_message'] = '1';
+            $_POST['delete_id'] = $input['delete_id'] ?? $input['id'] ?? '';
+            $_POST['csrf'] = $input['csrf'] ?? '';
+            $_POST['support_ajax'] = '1';
+        }
+        else{
+            supportAjaxRespond(['ok' => false, 'error' => 'action نامعتبر است'], 400);
+        }
+
+        $result = supportProcessUserActions($file, $username);
+
+        if(!empty($result['error'])){
+            supportAjaxRespond(['ok' => false, 'error' => $result['error']], 400);
+        }
+
+        supportAjaxRespond(['ok' => false, 'error' => 'درخواست پردازش نشد'], 400);
+
     }
 }

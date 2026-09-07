@@ -9,137 +9,69 @@ if(!isset($_SESSION['user'])){
 
 require_once __DIR__ . '/support_lib.php';
 
-$user = $_SESSION['user'];
-$file = __DIR__ . '/db/support.json';
-$csrfField = supportCsrfField();
-$actionResult = supportProcessUserActions($file, $user);
-$supportError = $actionResult['error'] ?? '';
-$data = $actionResult['data'];
-$messages = [];
-$editId = $_GET['edit'] ?? '';
+$assetDir = __DIR__ . '/assets/support/admin';
+$jsFile = 'support-admin.js';
+$cssFile = '';
 
-foreach($data as $ticket){
-
-    if(($ticket['user'] ?? '') === $user){
-
-        if(isset($ticket['messages'])){
-            $messages = $ticket['messages'];
-        }
-
+if(is_dir($assetDir)){
+    foreach(glob($assetDir . '/support-admin*.css') ?: [] as $cssPath){
+        $cssFile = basename($cssPath);
         break;
-
     }
-
 }
+
+$assetBase = '/assets/support/admin/';
+$jsPath = $assetDir . '/' . $jsFile;
+$cssPath = $cssFile !== '' ? $assetDir . '/' . $cssFile : '';
+$jsVer = is_file($jsPath) ? filemtime($jsPath) : time();
+$cssVer = ($cssPath !== '' && is_file($cssPath)) ? filemtime($cssPath) : time();
+
+$config = [
+    'apiUrl' => 'support-api.php',
+    'csrf' => supportCsrfToken(),
+    'embedded' => false,
+    'role' => 'user',
+    'initialUser' => 'support',
+    'displayTitle' => 'پشتیبانی',
+    'displaySubtitle' => 'معمولاً در کمتر از ۱ ساعت پاسخ می‌دهیم',
+    'backUrl' => 'dashboard.php',
+    'pinScope' => 'user',
+    'pollIntervalMs' => 5000,
+];
 
 ?>
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام به پشتیبانی</title>
-<link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="support_ui.css?v=41">
-<link rel="stylesheet" href="fonts.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
+<?php if($cssFile !== ''){ ?>
+<link rel="stylesheet" href="<?php echo htmlspecialchars($assetBase . $cssFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$cssVer; ?>">
+<?php } ?>
 <style>
-html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overflow:hidden;}
+html,body{margin:0;padding:0;background:#0e1621;color:#e4ecf4;height:100%;height:100dvh;overflow:hidden;}
+#support-v2-root{height:100%;min-height:0;}
 </style>
 </head>
 <body>
 
-<div class="msgApp msgApp--user">
+<div id="support-v2-root"></div>
 
-<header class="msgHeader">
-<a href="dashboard.php" class="userBack" title="بازگشت">بازگشت</a>
-<div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($user), ENT_QUOTES, 'UTF-8'); ?></div>
-<div class="msgHeaderInfo">
-<h1>پشتیبانی</h1>
-</div>
-</header>
-
-<?php if($supportError){ ?>
-<div class="msgFlash"><?php echo htmlspecialchars($supportError, ENT_QUOTES, 'UTF-8'); ?></div>
-<?php } ?>
-
-<div class="msgBody" id="userChat">
-
-<?php if(count($messages) === 0){ ?>
-<div class="msgEmpty">
-<div class="msgEmptyIcon">💬</div>
-هنوز پیامی نفرستاده‌اید<br>
-اولین پیام را پایین بنویسید
-</div>
-<?php } ?>
-
-<?php foreach($messages as $m){
-    echo supportRenderMessageHtml($m, [
-        'ownUsername' => $user,
-        'csrfField' => $csrfField,
-        'editId' => $editId,
-        'baseUrl' => 'support.php'
-    ]);
-} ?>
-
-</div>
-
-<footer class="msgComposer">
-<form method="POST" enctype="multipart/form-data" id="userSupportForm" class="msgComposerInner" action="support.php">
-
-<?php echo $csrfField; ?>
-<input type="hidden" name="send" value="1">
-
-<div class="msgComposerRow">
-<button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtn" title="پیوست تصویر" aria-label="پیوست تصویر">📎</button>
-<input type="file" name="image" id="userImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
-
-<textarea
-    name="message"
-    id="message"
-    placeholder="ارسال پیام . . . ."
-    rows="1"></textarea>
-
-<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
-</div>
-
-</form>
-</footer>
-
-</div>
-
-<script src="support_ui.js?v=41"></script>
 <script>
-(function(){
-    const userChat = document.getElementById('userChat');
-    const messageInput = document.getElementById('message');
-    const userSupportForm = document.getElementById('userSupportForm');
-
-    SupportUI.bindTextareaGrow(messageInput);
-    SupportUI.bindEnterToSend(messageInput, userSupportForm, true);
-    SupportUI.bindFormGuard(userSupportForm, messageInput, 'userImage');
-    SupportUI.bindImageAttach(userSupportForm, 'userImage', 'attachBtn');
-    SupportUI.bindMessageActions({
-        chatEl: userChat,
-        form: userSupportForm,
-        role: 'user'
-    });
-
-    SupportUI.initPolling({
-        chatEl: userChat,
-        pollUrl: 'support-api.php',
-        getParams: function(since){
-            return '?since=' + (since || 0);
-        },
-        classMap: {admin:'admin', user:'usermsg'},
-        actionMeta: {isAdmin: false, ownSender: 'user'},
-        interval: 5000
-    });
-
-    if(userChat){
-        SupportUI.scrollToBottomOnOpen(userChat);
-    }
-})();
+window.SUPPORT_CONFIG = <?php echo json_encode($config, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
+
+<?php if(!is_file($assetDir . '/' . $jsFile)){ ?>
+<div style="padding:24px;color:#fecaca;font-family:sans-serif;text-align:center;">
+    فایل‌های UI ساخته نشده‌اند. در پوشه <code>support-ui</code> دستور <code>npm run build</code> را اجرا کنید.
+</div>
+<?php } else { ?>
+<script type="module" src="<?php echo htmlspecialchars($assetBase . $jsFile, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo (int)$jsVer; ?>"></script>
+<?php } ?>
 
 </body>
 </html>

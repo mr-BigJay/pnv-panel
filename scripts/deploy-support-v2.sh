@@ -1,0 +1,94 @@
+#!/bin/bash
+# Deploy support v2 (API + PHP shell + built React assets) — run ON THE SERVER
+set -euo pipefail
+
+BR="${BR:-cursor/telegram-user-bot-058b}"
+BASE="https://raw.githubusercontent.com/mr-BigJay/pnv-panel/${BR}"
+ROOT="${ROOT:-/var/www/html}"
+
+echo "=== Deploy support v2 (branch: ${BR}) ==="
+echo "Target: ${ROOT}"
+
+files=(
+  "support.php"
+  "support_lib.php"
+  "admin/support-api.php"
+  "admin/support-v2.php"
+  "admin/support-v2-diag.php"
+  "admin/index.php"
+  "admin/admin_nav.php"
+  "admin/user-profile.php"
+  "assets/support/admin/support-admin.js"
+  "assets/support/admin/support-admin.css"
+  "bigjay_controller/support-v2-diag.php"
+)
+
+for rel in "${files[@]}"; do
+  dest="${ROOT}/${rel}"
+  mkdir -p "$(dirname "$dest")"
+  curl -fsSL "${BASE}/${rel}?v=$(date +%s)" -o "${dest}"
+  echo "  OK ${rel}"
+done
+
+echo ""
+echo "=== Verify ==="
+
+php -l "${ROOT}/support_lib.php"
+php -l "${ROOT}/admin/support-api.php"
+
+if grep -q 'function supportTicketsListForApi' "${ROOT}/support_lib.php"; then
+  echo "  OK supportTicketsListForApi in support_lib.php"
+else
+  echo "  FAIL supportTicketsListForApi missing!"
+  exit 1
+fi
+
+if [[ ! -s "${ROOT}/assets/support/admin/support-admin.js" ]]; then
+  echo "  FAIL support-admin.js is empty!"
+  exit 1
+fi
+
+if grep -q 'tg-voice-player' "${ROOT}/assets/support/admin/support-admin.js"; then
+  echo "  OK voice UI (tg-voice-player) in support-admin.js"
+else
+  echo "  FAIL tg-voice-player missing — old JS still deployed!"
+  exit 1
+fi
+
+js_bytes=$(wc -c < "${ROOT}/assets/support/admin/support-admin.js" | tr -d ' ')
+echo "  support-admin.js size: ${js_bytes} bytes"
+
+if grep -q 'adminSupportChatOpen' "${ROOT}/admin/admin_nav.php"; then
+  echo "  OK admin_nav.php support bottom nav CSS"
+else
+  echo "  FAIL admin_nav.php missing support nav fix!"
+  exit 1
+fi
+
+if grep -q 'tg-chat-panel.flex:not(.hidden)' "${ROOT}/admin/admin_nav.php"; then
+  echo "  OK admin_nav.php chat-view nav hide CSS"
+else
+  echo "  FAIL admin_nav.php missing chat-view nav CSS!"
+  exit 1
+fi
+
+if grep -q 'adminSupportChatOpen' "${ROOT}/assets/support/admin/support-admin.js"; then
+  echo "  OK support list toggles chat-open nav hide"
+else
+  echo "  FAIL support-admin.js missing adminSupportChatOpen!"
+  exit 1
+fi
+
+echo ""
+echo "=== Ping API (no login) ==="
+curl -fsSL "https://panel.ticketin.ir/bigjay_controller/support-api.php?action=ping" || \
+curl -fsSL "${ROOT%/html}/html/bigjay_controller/support-api.php?action=ping" 2>/dev/null || \
+echo "  (open manually: /bigjay_controller/support-api.php?action=ping)"
+
+echo ""
+echo ""
+echo "Done. Hard-refresh:"
+echo "  /bigjay_controller/?page=support"
+echo ""
+echo "If still broken, open while logged in:"
+echo "  /bigjay_controller/support-v2-diag.php"

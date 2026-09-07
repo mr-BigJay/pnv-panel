@@ -250,6 +250,8 @@ required>
 
 </div>
 
+<?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
+
 </body>
 
 </html>
@@ -263,43 +265,50 @@ exit;
 $page = $_GET['page'] ?? 'dashboard';
 $pnvRootDir = dirname(__DIR__);
 
-foreach ([__DIR__ . '/admin_nav.php', __DIR__ . '/../admin/admin_nav.php'] as $__navFile) {
-    if (is_file($__navFile)) {
-        require_once $__navFile;
-        break;
-    }
-}
+require_once __DIR__ . '/admin_nav.php';
 
-if(!function_exists('adminBottomNavStyles')){
-    function adminBottomNavStyles(){}
-    function adminBottomNav($options = []){}
-    function adminBottomNavScript(){}
+if(!function_exists('adminPageEnd')){
+    function adminPageEnd($options = []){
+        if(function_exists('adminBottomNavStyles')){
+            adminBottomNavStyles();
+        }
+        if(function_exists('adminBottomNav')){
+            adminBottomNav($options);
+        }
+        if(function_exists('adminBottomNavScript')){
+            adminBottomNavScript();
+        }
+    }
 }
 
 $supportActionResult = null;
 
-if($page === 'support' && file_exists(__DIR__ . '/../support_lib.php')){
+// Support v2 uses JSON API — legacy v1 form POST removed
 
-require_once __DIR__ . '/../support_lib.php';
+// تأیید/رد/حذف لیست خرید و تمدید — قبل از خروجی HTML (وگرنه redirect خراب می‌شود)
+if(
+    isset($_POST['approve_payment'])
+    || isset($_POST['reject_payment'])
+    || isset($_GET['deletepayment'])
+){
+    $actionPage = $_GET['page'] ?? $_POST['page'] ?? '';
 
-if($_SERVER['REQUEST_METHOD'] === 'POST'){
+    if($actionPage === 'payments' || $actionPage === 'renews'){
+        ob_start();
 
-$supportActionResult =
-supportProcessAdminActions(
-$pnvRootDir . '/db/support.json',
-true
-);
+        foreach([
+            __DIR__ . '/' . $actionPage . '.php',
+            __DIR__ . '/../admin/' . $actionPage . '.php',
+        ] as $actionFile){
+            if(is_file($actionFile)){
+                include $actionFile;
+                break;
+            }
+        }
 
-if($supportActionResult['redirect']){
-
-header('Location: ' . $supportActionResult['redirect']);
-
-exit;
-
-}
-
-}
-
+        ob_end_clean();
+        exit;
+    }
 }
 
 $plansFile = $pnvRootDir . '/db/plans.json';
@@ -877,7 +886,10 @@ margin-right:280px;
 padding:0;
 height:100vh;
 overflow:hidden;
-background:#0b1220;
+background:#0e1621;
+display:flex;
+flex-direction:column;
+min-height:0;
 }
 
 @media(max-width:768px){
@@ -927,6 +939,70 @@ max-width:none !important;
 margin:0 !important;
 }
 
+#support-v2-root .tg-composer-bar,
+#support-v2-root .tg-composer-row{
+width:100% !important;
+box-sizing:border-box;
+}
+
+#support-v2-root .tg-composer-row{
+display:flex !important;
+flex-direction:row !important;
+align-items:flex-end !important;
+gap:8px !important;
+}
+
+#support-v2-root .tg-composer-row > .tg-composer-input{
+flex:1 1 0 !important;
+min-width:0 !important;
+width:auto !important;
+max-width:none !important;
+min-height:48px !important;
+overflow-y:hidden !important;
+scrollbar-width:none !important;
+}
+
+#support-v2-root .tg-composer-row > .tg-composer-input::-webkit-scrollbar{
+display:none !important;
+width:0 !important;
+height:0 !important;
+}
+
+#support-v2-root .tg-composer-row > .tg-composer-action,
+#support-v2-root .tg-composer-row > .tg-composer-icon,
+#support-v2-root .tg-composer-row > .tg-composer-send{
+flex:0 0 auto !important;
+}
+
+#support-v2-root .tg-composer-action,
+#support-v2-root .tg-composer-send{
+width:44px !important;
+min-width:44px !important;
+max-width:44px !important;
+height:44px !important;
+}
+
+#support-v2-root .tg-composer-icon{
+width:40px !important;
+min-width:40px !important;
+max-width:40px !important;
+height:40px !important;
+}
+
+#support-v2-root .support-chat-title,
+#support-v2-root .support-chat-item-name{
+font-weight:500 !important;
+-webkit-font-smoothing:antialiased;
+-moz-osx-font-smoothing:grayscale;
+text-shadow:none !important;
+filter:none !important;
+}
+
+#support-v2-root .support-chat-item-time{
+font-variant-numeric:tabular-nums;
+text-shadow:none !important;
+}
+
 input,
 select,
 button{
@@ -942,7 +1018,7 @@ box-sizing:border-box;
 
 </head>
 
-<body class="<?php echo $page === 'support' ? 'adminPageSupport' : 'adminHasBottomNav'; ?>">
+<body class="<?php echo in_array($page, ['support', 'support-v2'], true) ? 'adminPageSupport adminHasBottomNav' : 'adminHasBottomNav'; ?>">
 
 <button type="button" class="adminMenuBtn" id="adminMenuBtn" aria-label="منو">☰</button>
 <div class="adminSidebarOverlay" id="adminSidebarOverlay"></div>
@@ -1067,7 +1143,7 @@ class="red">
 
 </div>
 
-<div class="content <?php echo $page=='support' ? 'content-support' : ''; ?>">
+<div class="content <?php echo in_array($page, ['support', 'support-v2'], true) ? 'content-support' : ''; ?>">
 
 <?php if($page=='dashboard'){ ?>
 
@@ -1075,11 +1151,11 @@ class="red">
 
 <?php } ?>
 
-<?php if($page=='support'){ ?>
+<?php if($page=='support' || $page=='support-v2'){ ?>
 
 <?php
 $supportEmbedded = true;
-pnvAdminInclude('support.php');
+pnvAdminInclude('support-v2.php');
 ?>
 
 <?php } ?>
@@ -1240,17 +1316,18 @@ name="uploadcsv">
 </div>
 
 <?php
-$adminBottomActive = in_array($page, ['support', 'renews', 'payments'], true) ? $page : '';
-adminBottomNav([
+$adminBottomActive = 'dashboard';
+if(in_array($page, ['support', 'support-v2', 'renews', 'payments'], true)){
+    $adminBottomActive = $page === 'support-v2' ? 'support' : $page;
+}
+adminPageEnd([
     'active' => $adminBottomActive,
-    'more_mode' => 'sidebar',
     'badges' => [
         'support' => $supportUnreadCount,
         'renews' => $pendingRenewsCount,
         'payments' => $pendingPaymentsCount,
     ],
 ]);
-adminBottomNavScript();
 ?>
 
 <script>
@@ -1317,6 +1394,8 @@ adminBottomNavScript();
     setInterval(checkUnread, 10000);
 })();
 </script>
+
+<?php require_once __DIR__ . '/../form_validation_fa.php'; pnvFormValidationFaScript(); ?>
 
 </body>
 
