@@ -1290,7 +1290,9 @@ if(!function_exists('instantPayPath')){
             'expires_at' => $expires,
             'remaining' => $remaining,
             'link' => $item['link'] ?? '',
-            'message' => $item['message'] ?? ''
+            'message' => $item['message'] ?? '',
+            'renew_reserved' => !empty($item['renew_reserved']),
+            'renew_reserved_plan' => trim((string)($item['renew_reserved_plan'] ?? '')),
         ];
     }
 
@@ -1606,7 +1608,13 @@ if(!function_exists('instantPayPath')){
         $items[$idx]['status'] = 'paid';
         $items[$idx]['paid_at'] = time();
         $items[$idx]['link'] = $result['link'] ?? ($found['sub'] ?? '');
-        $items[$idx]['message'] = 'پرداخت تأیید شد';
+        $items[$idx]['renew_reserved'] = !empty($result['reserved']);
+        $items[$idx]['renew_reserved_plan'] = !empty($result['reserved'])
+            ? trim((string)($found['plan'] ?? ''))
+            : '';
+        $items[$idx]['message'] = !empty($result['reserved'])
+            ? 'تمدید رزرو شد — با اتمام اشتراک فعلی اعمال می‌شود'
+            : 'پرداخت تأیید شد';
         $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
         $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
         instantPaySave($items);

@@ -936,6 +936,17 @@ font-size:11px;
 color:#94a3b8;
 line-height:1.5;
 }
+.resultReservedNotice{
+padding:12px 14px;
+border-radius:14px;
+background:rgba(37,99,235,.14);
+border:1px solid rgba(96,165,250,.35);
+color:#dbeafe;
+font-size:12px;
+line-height:1.75;
+text-align:right;
+}
+.resultReservedNotice b{color:#bfdbfe}
 .resultPlanSummary{margin:0}
 .resultPlanSummary .planSummaryCard{margin:0;padding:12px 14px}
 .resultTitle{

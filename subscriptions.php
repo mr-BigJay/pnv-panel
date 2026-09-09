@@ -6,12 +6,19 @@ require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/sub_usage_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
 
+if(is_file(__DIR__ . '/reserved_renewal_lib.php')){
+    require_once __DIR__ . '/reserved_renewal_lib.php';
+}
+
 if(!isset($_SESSION['user'])){
     header("Location: index.php");
     exit;
 }
 
 $user = $_SESSION['user'];
+
+$reservedMap = function_exists('reservedRenewalMapForUser') ? reservedRenewalMapForUser($user, 'waiting') : [];
+$reservedCount = count($reservedMap);
 
 $h = static function($v){
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
@@ -46,6 +53,7 @@ foreach($activeSubs as $sub){
         'link_cleared' => false,
         'qr' => $qrUrl,
         'usage_key' => subUsageCacheKey($link),
+        'reserved' => $reservedMap[subUsageCacheKey($link)] ?? null,
     ];
 }
 
@@ -113,6 +121,9 @@ $firstOkOpen = true;
 <button type="button" class="filterChip is-active" data-filter="main">همه</button>
 <button type="button" class="filterChip" data-filter="active">فعال</button>
 <button type="button" class="filterChip" data-filter="expired">منقضی</button>
+<?php if($reservedCount > 0){ ?>
+<button type="button" class="filterChip" data-filter="reserved">رزرو (<?php echo (int)$reservedCount; ?>)</button>
+<?php } ?>
 </div>
 
 <?php
@@ -179,8 +190,12 @@ $visibleItems = array_values(array_filter($items, static function($it){
     $lifeTagHidden = $usageExpired ? '' : ' hidden';
     $lifeTagText = $usageExpired ? 'منقضی شده — با تمدید فعال می‌شود' : 'منقضی شده';
     $badgeText = $usageExpired ? '!' : '✓';
+    $hasReserved = is_array($item['reserved'] ?? null);
+    if($hasReserved){
+        $chipClass .= ' is-reserved';
+    }
 ?>
-<article class="<?php echo $h($chipClass); ?>" data-state="ok" data-life="<?php echo $h($lifeState); ?>" data-id="<?php echo (int)$item['i']; ?>" data-link="<?php echo $h($item['link']); ?>">
+<article class="<?php echo $h($chipClass); ?>" data-state="ok" data-life="<?php echo $h($lifeState); ?>" data-id="<?php echo (int)$item['i']; ?>" data-link="<?php echo $h($item['link']); ?>" data-reserved="<?php echo $hasReserved ? '1' : '0'; ?>">
 <button type="button" class="subHead" aria-expanded="<?php echo $open ? 'true' : 'false'; ?>">
 <span class="subBadge" aria-hidden="true"><?php echo $h($badgeText); ?></span>
 <span class="subMeta">
@@ -191,6 +206,16 @@ $visibleItems = array_values(array_filter($items, static function($it){
 <path d="M6 9l6 6 6-6"/>
 </svg>
 </button>
+
+<?php if($hasReserved){
+    $reservedPlan = trim((string)($item['reserved']['plan_text'] ?? $item['plan'] ?? ''));
+?>
+<div class="subReservedBox" data-reserved-box>
+<div class="subReservedTitle">تمدید رزرو شده</div>
+<div class="subReservedPlan"><?php echo $h($reservedPlan !== '' ? $reservedPlan : 'پلن انتخابی'); ?></div>
+<div class="subReservedHint">اشتراک فعلی هنوز فعال است. با اتمام آن، این پلن خودکار اعمال می‌شود.</div>
+</div>
+<?php } ?>
 
 <div class="<?php echo $h($usageBoxClass); ?>" data-usage-link="<?php echo $h($item['link']); ?>">
 <div class="usageRow">
@@ -266,8 +291,10 @@ echo $h(implode(' • ', $foot));
 
 <script>
 window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+window.__subReservedInitial = <?php echo json_encode($reservedMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 (function(){
     var initialUsage = window.__subUsageInitial || {};
+    var reservedMap = window.__subReservedInitial || {};
     var list = document.getElementById('subList');
     var toast = document.getElementById('toast');
     var modal = document.getElementById('qrModal');
@@ -311,8 +338,45 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
             var show = true;
             if(f === 'active') show = life === 'active';
             else if(f === 'expired') show = life === 'expired';
+            else if(f === 'reserved') show = item.getAttribute('data-reserved') === '1';
             else show = (life === 'active' || life === 'expired'); // main: بدون ردشده
             item.hidden = !show;
+        });
+    }
+
+    function syncReservedUi(map){
+        reservedMap = map || {};
+        document.querySelectorAll('.subChip').forEach(function(chip){
+            var link = chip.getAttribute('data-link') || '';
+            var key = usageKeyFromLink(link);
+            var item = (key && reservedMap[key]) ? reservedMap[key] : null;
+            chip.setAttribute('data-reserved', item ? '1' : '0');
+            chip.classList.toggle('is-reserved', !!item);
+            var box = chip.querySelector('[data-reserved-box]');
+            if(box){
+                box.parentNode.removeChild(box);
+            }
+            if(item){
+                var host = chip.querySelector('.subHead');
+                var wrap = document.createElement('div');
+                wrap.className = 'subReservedBox';
+                wrap.setAttribute('data-reserved-box', '1');
+                wrap.innerHTML = '<div class="subReservedTitle">تمدید رزرو شده</div>'
+                    + '<div class="subReservedPlan">' + escapeHtml(item.plan_text || 'پلن انتخابی') + '</div>'
+                    + '<div class="subReservedHint">اشتراک فعلی هنوز فعال است. با اتمام آن، این پلن خودکار اعمال می‌شود.</div>';
+                if(host && host.nextSibling){
+                    chip.insertBefore(wrap, host.nextSibling);
+                } else if(host){
+                    host.insertAdjacentElement('afterend', wrap);
+                }
+            }
+        });
+        applyListFilter();
+    }
+
+    function escapeHtml(s){
+        return String(s || '').replace(/[&<>"']/g, function(c){
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);
         });
     }
 
@@ -508,6 +572,9 @@ window.__subUsageInitial = <?php echo json_encode($usageMap, JSON_UNESCAPED_UNIC
             if(!data || !data.ok){
                 boxes.forEach(function(b){ applyUsage(b, null); });
                 return;
+            }
+            if(data.reserved){
+                syncReservedUi(data.reserved);
             }
             var map = data.items || {};
             boxes.forEach(function(box){

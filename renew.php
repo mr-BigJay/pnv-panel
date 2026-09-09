@@ -79,7 +79,7 @@ $h = static function($v){
 <title>تمدید اشتراک</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="plan_step_ui.css?v=25">
+<link rel="stylesheet" href="plan_step_ui.css?v=26">
 <style>
 .topBar .brand{
 font-size:24px;
@@ -290,9 +290,12 @@ pointer-events:none !important;
 <div class="resultSuccessBanner">
 <span class="resultSuccessTick" aria-hidden="true">✅</span>
 <div class="resultSuccessText">
-<strong>تمدید با موفقیت انجام شد</strong>
-<span>لینک و QR آماده است</span>
+<strong id="resultSuccessTitle">تمدید با موفقیت انجام شد</strong>
+<span id="resultSuccessSub">لینک و QR آماده است</span>
 </div>
+</div>
+<div class="resultReservedNotice" id="resultReservedNotice" hidden>
+<p>پرداخت تأیید شد. اشتراک فعلی شما هنوز فعال است و پلن انتخابی <b>رزرو</b> شده است. با اتمام اشتراک فعلی (کمتر از ۱ دقیقه)، پلن جدید خودکار اعمال می‌شود. وضعیت را در «اشتراک من» ببینید.</p>
 </div>
 <div class="resultPlanSummary planSummary is-visible">
 <div class="planSummaryCard">
@@ -383,6 +386,9 @@ const instantStatus = document.getElementById('instantStatus');
 const instantApproved = document.getElementById('instantApproved');
 const resultPlanLine1 = document.getElementById('resultPlanLine1');
 const resultPlanLine2 = document.getElementById('resultPlanLine2');
+const resultSuccessTitle = document.getElementById('resultSuccessTitle');
+const resultSuccessSub = document.getElementById('resultSuccessSub');
+const resultReservedNotice = document.getElementById('resultReservedNotice');
 const resultLink = document.getElementById('resultLink');
 const resultQrWrap = document.getElementById('resultQrWrap');
 const resultQrImg = document.getElementById('resultQrImg');
@@ -993,6 +999,19 @@ function fillResult(item){
     resultPlanLine2.innerHTML = 'اکانت: <span class="planSummaryHighlight">' + escapeHtml(displayName) + '</span>';
     resultLink.textContent = link;
     showResultQr(link);
+
+    const isReserved = !!(item.renew_reserved || item.renew_reserved_plan);
+    if(resultReservedNotice){
+        resultReservedNotice.hidden = !isReserved;
+    }
+    if(resultSuccessTitle){
+        resultSuccessTitle.textContent = isReserved ? 'تمدید رزرو شد' : 'تمدید با موفقیت انجام شد';
+    }
+    if(resultSuccessSub){
+        resultSuccessSub.textContent = isReserved
+            ? 'پلن جدید با اتمام اشتراک فعلی اعمال می‌شود'
+            : 'لینک و QR آماده است';
+    }
 }
 
 toStep3Btn.addEventListener('click', function(){

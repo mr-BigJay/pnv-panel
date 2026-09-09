@@ -1788,6 +1788,105 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
+    /**
+     * تمدید محدود زمانی: حجم و expiry از نو (بدون اضافه کردن به باقیمانده).
+     */
+    function xuiResetClientForRenew($paymentRow){
+        $config = xuiLoadConfig();
+
+        if(!xuiIsEnabled($config)){
+            return ['ok' => false, 'error' => 'اتوماسیون 3x-ui غیرفعال است'];
+        }
+
+        $subLink = trim((string)($paymentRow[1] ?? ''));
+        $planText = trim((string)($paymentRow[2] ?? ''));
+        $gb = xuiParsePlanGb($planText);
+
+        if($gb <= 0){
+            return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
+        }
+
+        $parsed = xuiParseSubLink($subLink);
+
+        if(!$parsed){
+            return ['ok' => false, 'error' => 'لینک اشتراک تمدید معتبر نیست'];
+        }
+
+        $server = xuiFindServerByHost($parsed['host'], $config);
+
+        if(!$server){
+            return ['ok' => false, 'error' => 'سرور مربوط به لینک پیدا نشد: ' . $parsed['host']];
+        }
+
+        $allowed = $config['renew_server_ids'] ?? [];
+
+        if(is_array($allowed) && count($allowed) > 0 && !in_array($server['id'] ?? '', $allowed, true)){
+            return ['ok' => false, 'error' => 'این سرور برای تمدید مجاز نیست'];
+        }
+
+        $client = xuiFindClientBySubId($server, $parsed['sub_id'], $subLink);
+
+        if(!$client){
+            return ['ok' => false, 'error' => 'کاربر با Sub ID پیدا نشد: ' . $parsed['sub_id']];
+        }
+
+        $days = xuiResolvePlanDaysForRenew($planText, $client);
+
+        if($days <= 0){
+            return ['ok' => false, 'error' => 'مدت پلن زمان‌دار قابل تشخیص نیست: ' . $planText];
+        }
+
+        $email = trim((string)($client['email'] ?? ''));
+        $clientId = trim((string)($client['id'] ?? ''));
+        $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
+        $bytes = xuiGbToBytes($gb);
+
+        if($email === '' || $clientId === '' || $inboundId <= 0){
+            return ['ok' => false, 'error' => 'اطلاعات کلاینت برای ریست تمدید ناقص است'];
+        }
+
+        $updated = $client;
+        unset($updated['_inbound_id']);
+        $updated['totalGB'] = $bytes;
+        $updated['up'] = 0;
+        $updated['down'] = 0;
+        $updated['enable'] = true;
+        $updated['expiryTime'] = xuiExpiryTimeMsFromDays($days);
+
+        if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
+            $updated['subId'] = $client['subId'];
+        }
+
+        $result = xuiApiRequest($server, 'POST', '/panel/api/inbounds/updateClient/' . rawurlencode($clientId), [
+            'id' => $inboundId,
+            'settings' => json_encode([
+                'clients' => [$updated]
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        ]);
+
+        if(empty($result['success'])){
+            return [
+                'ok' => false,
+                'error' => $result['msg'] ?? 'ریست تمدید با updateClient ناموفق بود'
+            ];
+        }
+
+        if($email !== ''){
+            xuiApiRequest($server, 'POST', '/panel/api/inbounds/resetClientTraffic/' . rawurlencode($email), []);
+        }
+
+        return [
+            'ok' => true,
+            'link' => xuiBuildSubLink($parsed['host'], $parsed['sub_id'], $config),
+            'email' => $email,
+            'sub_id' => $parsed['sub_id'],
+            'server_id' => $server['id'] ?? '',
+            'gb' => $gb,
+            'days' => $days,
+            'method' => 'resetRenew',
+        ];
+    }
+
     function xuiAdjustClientTraffic($server, $email, $addGb, $client = null, $addDays = 0){
         $bytes = xuiGbToBytes($addGb);
         $email = trim((string)$email);
@@ -1957,13 +2056,59 @@ if(!function_exists('xuiConfigPath')){
             return ['ok' => false, 'error' => 'مدت پلن زمان‌دار قابل تشخیص نیست: ' . $planText];
         }
 
+        // پلن محدود زمانی: ریست فوری یا رزرو
+        if($days > 0){
+            if(!function_exists('subUsageLimitedRenewShouldReserve') && is_file(__DIR__ . '/reserved_renewal_lib.php')){
+                require_once __DIR__ . '/reserved_renewal_lib.php';
+            }
+
+            $usage = function_exists('subUsageRefreshOne')
+                ? subUsageRefreshOne($subLink, ['plan' => $planText], null, true)
+                : null;
+
+            if(function_exists('subUsageLimitedRenewShouldReserve') && subUsageLimitedRenewShouldReserve($usage)){
+                if(!function_exists('reservedRenewalCreate')){
+                    require_once __DIR__ . '/reserved_renewal_lib.php';
+                }
+
+                $reserved = reservedRenewalCreate([
+                    'user' => trim((string)($paymentRow[0] ?? '')),
+                    'sub_link' => $subLink,
+                    'plan_text' => $planText,
+                    'plan_value' => $planText,
+                    'csv_index' => intval($paymentRow['csv_index'] ?? -1),
+                    'instant_id' => trim((string)($paymentRow['instant_id'] ?? '')),
+                    'paid_at' => time(),
+                ]);
+
+                if(empty($reserved['ok'])){
+                    return $reserved;
+                }
+
+                return [
+                    'ok' => true,
+                    'link' => $subLink,
+                    'email' => trim((string)($client['email'] ?? '')),
+                    'sub_id' => $parsed['sub_id'],
+                    'server_id' => $server['id'] ?? '',
+                    'gb' => $gb,
+                    'days' => $days,
+                    'reserved' => true,
+                    'reservation' => $reserved['item'] ?? null,
+                    'method' => 'reservedRenew',
+                ];
+            }
+
+            return xuiResetClientForRenew($paymentRow);
+        }
+
         $email = trim((string)($client['email'] ?? ''));
 
         if($email === ''){
             return ['ok' => false, 'error' => 'ایمیل کلاینت خالی است'];
         }
 
-        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
+        $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, 0);
 
         if(empty($adjusted['ok'])){
             return $adjusted;
@@ -2020,6 +2165,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $row = $payments[$index];
+        $row['csv_index'] = $index;
         $type = trim((string)($row[9] ?? $typeHint));
         $status = trim((string)($row[6] ?? ''));
 
@@ -2044,6 +2190,11 @@ if(!function_exists('xuiConfigPath')){
 
         $payments[$index][6] = 'تایید شد';
         $payments[$index][7] = $result['link'];
+
+        if(!empty($result['reserved'])){
+            $payments[$index][7] = trim((string)($row[1] ?? ($result['link'] ?? '')));
+        }
+
         xuiSavePayments($payments);
 
         if(!function_exists('subUsageInvalidateLink') && is_file(__DIR__ . '/sub_usage_lib.php')){

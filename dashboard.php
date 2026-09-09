@@ -19,6 +19,10 @@ require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/support_lib.php';
 require_once __DIR__ . '/dashboard_lib.php';
 
+if(is_file(__DIR__ . '/reserved_renewal_lib.php')){
+    require_once __DIR__ . '/reserved_renewal_lib.php';
+}
+
 $avatarUrl = profileGetUserAvatar($user);
 $hasUnreadSupport = supportUserHasUnread($user);
 
@@ -26,6 +30,7 @@ $dashStats = pnvDashboardUserPaymentStats($user);
 $approvedSubs = intval($dashStats['approved_subs'] ?? 0);
 $pendingBuys = intval($dashStats['pending_buys'] ?? 0);
 $pendingRenews = intval($dashStats['pending_renews'] ?? 0);
+$reservedRenews = function_exists('reservedRenewalCountForUser') ? reservedRenewalCountForUser($user, 'waiting') : 0;
 
 function dashH($value){
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -238,6 +243,13 @@ white-space:nowrap;
 color:#4ade80;
 font-size:12px;
 font-weight:700;
+}
+.dashChip--reserved{
+border-color:rgba(96,165,250,.35);
+color:#bfdbfe;
+}
+.dashChip--reserved b{
+color:#93c5fd;
 }
 .dashPrimaryGrid{
 display:grid;
@@ -556,6 +568,9 @@ max-width:360px;
 <span class="dashChip"><b><?php echo (int)$approvedSubs; ?></b> اشتراک فعال</span>
 <span class="dashChip"><b><?php echo (int)$pendingBuys; ?></b> خرید در انتظار</span>
 <span class="dashChip"><b><?php echo (int)$pendingRenews; ?></b> تمدید در انتظار</span>
+<?php if($reservedRenews > 0){ ?>
+<span class="dashChip dashChip--reserved"><b><?php echo (int)$reservedRenews; ?></b> تمدید رزرو شده</span>
+<?php } ?>
 </div>
 </div>
 </div>

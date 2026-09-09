@@ -119,6 +119,34 @@ color:#fff;
 font-weight:700;
 }
 
+.subReservedBox{
+margin:0 0 12px;
+padding:12px 14px;
+border-radius:14px;
+background:linear-gradient(135deg, rgba(37,99,235,.22), rgba(14,116,144,.18));
+border:1px solid rgba(96,165,250,.35);
+}
+.subReservedTitle{
+font-size:13px;
+font-weight:700;
+color:#bfdbfe;
+margin-bottom:6px;
+}
+.subReservedPlan{
+font-size:12.5px;
+color:#e2e8f0;
+margin-bottom:6px;
+line-height:1.6;
+}
+.subReservedHint{
+font-size:11.5px;
+color:#94a3b8;
+line-height:1.65;
+}
+.subChip.is-reserved{
+border-color:rgba(96,165,250,.35);
+}
+
 .subUsageNotice{
 margin:0 0 12px;
 padding:10px 12px;

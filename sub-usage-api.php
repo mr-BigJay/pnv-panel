@@ -100,6 +100,20 @@ if(isset($input['max_fresh'])){
 $forceRefresh = !empty($input['force']);
 $result = subUsageGetForItems($items, $maxFresh, $forceRefresh);
 
+if(is_file(__DIR__ . '/reserved_renewal_lib.php')){
+    require_once __DIR__ . '/reserved_renewal_lib.php';
+
+    if($forceRefresh && function_exists('reservedRenewalsTryActivateForUser')){
+        reservedRenewalsTryActivateForUser($username);
+        $result = subUsageGetForItems($items, $maxFresh, true);
+    }
+
+    if(function_exists('reservedRenewalMapForUser')){
+        $result['reserved'] = reservedRenewalMapForUser($username, 'waiting');
+        $result['reserved_count'] = count($result['reserved']);
+    }
+}
+
 $pending = 0;
 
 foreach(($result['items'] ?? []) as $row){
