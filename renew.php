@@ -469,7 +469,7 @@ echo json_encode($metaMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>;
 
 function lockMessageFor(cat){
-    if(subTimeCategory !== 'limited' && cat === 'limited'){
+    if(subTimeCategory === 'unlimited' && cat === 'limited'){
         return 'این اشتراک <b>نامحدود زمانی</b> است و نمی‌توان آن را با پلن <b>زمان‌دار</b> تمدید کرد. در صورت نیاز <a href="buy.php">خرید اشتراک جدید</a> را بزنید.';
     }
     if(subTimeCategory === 'limited' && cat === 'unlimited'){
@@ -532,7 +532,7 @@ function syncCategoryLocks(){
     document.querySelectorAll('.catCard').forEach(function(card){
         var cat = card.getAttribute('data-cat');
         var locked = false;
-        if(subTimeCategory !== 'limited' && cat === 'limited') locked = true;
+        if(subTimeCategory === 'unlimited' && cat === 'limited') locked = true;
         if(subTimeCategory === 'limited' && cat === 'unlimited') locked = true;
         card.classList.toggle('is-locked', locked);
         if(locked && card.classList.contains('is-active')){
@@ -658,7 +658,7 @@ function renderPlanSummaryHtml(plan, category, extraHtml){
 function updateContinueState(){
     if(!toStep2Btn) return;
     const locked = selectedCategory && (
-        (subTimeCategory !== 'limited' && selectedCategory === 'limited') ||
+        (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
         (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
     );
     const hasPlan = !!(selectedCategory && selectedPlan && planSelect && planSelect.value);
@@ -675,7 +675,7 @@ function renderPlans(){
         return;
     }
     const categoryLocked = (
-        (subTimeCategory !== 'limited' && selectedCategory === 'limited') ||
+        (subTimeCategory === 'unlimited' && selectedCategory === 'limited') ||
         (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
     );
     if(planBlock) planBlock.classList.add('is-visible');
@@ -734,7 +734,7 @@ document.querySelectorAll('.catCard').forEach(function(card){
     card.addEventListener('click', function(){
         const cat = card.getAttribute('data-cat');
         const locked = (
-            (subTimeCategory !== 'limited' && cat === 'limited') ||
+            (subTimeCategory === 'unlimited' && cat === 'limited') ||
             (subTimeCategory === 'limited' && cat === 'unlimited')
         );
         if(locked){

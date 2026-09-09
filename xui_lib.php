@@ -201,6 +201,14 @@ if(!function_exists('xuiConfigPath')){
             return 0;
         }
 
+        if(preg_match('/(\d+)\s*ماه(?:ه)?/u', $planText, $m)){
+            return max(0, intval($m[1]) * 30);
+        }
+
+        if(preg_match('/(\d+)\s*روز(?:ه)?/u', $planText, $m)){
+            return max(0, intval($m[1]));
+        }
+
         $catalog = xuiLoadPlansCatalog();
         $strLen = function_exists('mb_strlen') ? 'mb_strlen' : 'strlen';
         $strIpos = function_exists('mb_stripos') ? 'mb_stripos' : 'stripos';
@@ -228,14 +236,6 @@ if(!function_exists('xuiConfigPath')){
             if(preg_match('/^\d+$/', $days)){
                 return max(0, intval($days));
             }
-        }
-
-        if(preg_match('/(\d+)\s*ماه/u', $planText, $m)){
-            return max(0, intval($m[1]) * 30);
-        }
-
-        if(preg_match('/(\d+)\s*روز/u', $planText, $m)){
-            return max(0, intval($m[1]));
         }
 
         return 0;
@@ -290,7 +290,7 @@ if(!function_exists('xuiConfigPath')){
                     return max(0, intval(trim(substr($part, 7))));
                 }
 
-                return 0;
+                return null;
             }
         }
 

@@ -218,6 +218,7 @@ if(!function_exists('pnvFormatPlanPrice')){
     function pnvResolveSubTimeCategory($link, $planText = '', $username = ''){
         $link = trim((string)$link);
         $username = trim((string)$username);
+        $planText = trim((string)$planText);
 
         if(
             $link !== ''
@@ -232,12 +233,8 @@ if(!function_exists('pnvFormatPlanPrice')){
             }
         }
 
-        if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
-            $expire = xuiFetchSubUserinfoExpire($link);
-
-            if($expire !== null){
-                return $expire > 0 ? 'limited' : 'unlimited';
-            }
+        if($planText === '' && $username !== '' && function_exists('pnvFindSubPlanTextFromCsv')){
+            $planText = trim((string)pnvFindSubPlanTextFromCsv($username, $link));
         }
 
         $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
@@ -246,7 +243,41 @@ if(!function_exists('pnvFormatPlanPrice')){
             return 'limited';
         }
 
-        return 'unlimited';
+        if($planText !== '' && function_exists('pnvFindPlanByValue') && function_exists('pnvLoadPlans')){
+            $matchedPlan = pnvFindPlanByValue($planText, pnvLoadPlans());
+
+            if(is_array($matchedPlan) && !pnvPlanIsUnlimited($matchedPlan)){
+                return 'limited';
+            }
+        }
+
+        if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
+            $expire = xuiFetchSubUserinfoExpire($link);
+
+            if($expire !== null){
+                return $expire > 0 ? 'limited' : 'unlimited';
+            }
+        }
+
+        if($planText !== '' && function_exists('pnvLoadPlans')){
+            $strIpos = function_exists('mb_stripos') ? 'mb_stripos' : 'stripos';
+
+            foreach(pnvLoadPlans() as $plan){
+                if(!is_array($plan)){
+                    continue;
+                }
+
+                $name = trim((string)($plan['name'] ?? ''));
+
+                if($name === '' || $strIpos($planText, $name) === false){
+                    continue;
+                }
+
+                return pnvPlanIsUnlimited($plan) ? 'unlimited' : 'limited';
+            }
+        }
+
+        return 'unknown';
     }
 
     function pnvExtractSubIdFromLink($link){
@@ -863,7 +894,7 @@ if(!function_exists('pnvFormatPlanPrice')){
         }
 
         $target = strtolower(rtrim($subLink, '/'));
-        $planText = '';
+        $candidates = [];
 
         $handle = fopen($file, 'r');
 
@@ -879,22 +910,46 @@ if(!function_exists('pnvFormatPlanPrice')){
             $type = trim((string)($row[9] ?? ''));
             $buyLink = strtolower(rtrim(trim((string)($row[7] ?? '')), '/'));
             $renewLink = strtolower(rtrim(trim((string)($row[1] ?? '')), '/'));
+            $rowPlanText = trim((string)($row[2] ?? ''));
+
+            if($rowPlanText === ''){
+                continue;
+            }
+
+            $matches = false;
 
             if($type === 'خرید' && $buyLink !== '' && ($buyLink === $target || strpos($target, $buyLink) !== false || strpos($buyLink, $target) !== false)){
-                $planText = trim((string)($row[2] ?? ''));
-                break;
+                $matches = true;
             }
 
             if($type === 'تمدید' && $renewLink !== '' && ($renewLink === $target || strpos($target, $renewLink) !== false || strpos($renewLink, $target) !== false)){
-                if($planText === ''){
-                    $planText = trim((string)($row[2] ?? ''));
-                }
+                $matches = true;
+            }
+
+            if($matches){
+                $candidates[] = $rowPlanText;
             }
         }
 
         fclose($handle);
 
-        return $planText;
+        if($candidates === []){
+            return '';
+        }
+
+        $bestText = $candidates[count($candidates) - 1];
+        $bestDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($bestText) : 0;
+
+        foreach($candidates as $candidate){
+            $days = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($candidate) : 0;
+
+            if($days > $bestDays){
+                $bestDays = $days;
+                $bestText = $candidate;
+            }
+        }
+
+        return $bestText;
     }
 
     function pnvValidateRenewPlanCategory($username, $subLink, $planValue, $plans){
@@ -930,6 +985,23 @@ if(!function_exists('pnvFormatPlanPrice')){
 
         if($subCategory === $selectedCategory){
             return ['ok' => true];
+        }
+
+        if($subCategory === 'unknown'){
+            $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
+
+            if($selectedCategory === 'limited' && $planDays > 0){
+                return ['ok' => true];
+            }
+
+            if($selectedCategory === 'unlimited' && $planDays <= 0 && $planText !== ''){
+                return ['ok' => true];
+            }
+
+            return [
+                'ok' => false,
+                'error' => 'نوع پلن این اشتراک مشخص نیست. لطفاً با پشتیبانی تماس بگیرید.'
+            ];
         }
 
         if($subCategory === 'limited'){
