@@ -25,4 +25,11 @@ assertEq('xuiExtendExpiryMs stacks on existing expiry', $future + (30 * 86400 * 
 
 assertEq('xuiExpiryTimeMsFromDays zero for unlimited', 0, xuiExpiryTimeMsFromDays(0));
 
+$limitedClient = ['expiryTime' => (time() + 86400) * 1000];
+assertEq(
+    'xuiResolvePlanDaysForRenew from plan suffix',
+    30,
+    xuiResolvePlanDaysForRenew('20 گیگ - 250 هزار تومان - 1 ماهه', $limitedClient)
+);
+
 echo "All xui plan days tests passed.\n";
