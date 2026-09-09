@@ -284,6 +284,73 @@ if(!function_exists('xuiConfigPath')){
         return 0;
     }
 
+    function xuiResolvePlanDays($planText){
+        $planText = trim((string)$planText);
+        $days = xuiParsePlanDays($planText);
+
+        if($days > 0){
+            return $days;
+        }
+
+        if(!function_exists('pnvFindPlanByValue') && is_file(__DIR__ . '/plan_ui_lib.php')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+
+        if(function_exists('pnvFindPlanByValue') && function_exists('pnvLoadPlans') && function_exists('pnvPlanIsUnlimited')){
+            $matchedPlan = pnvFindPlanByValue($planText, pnvLoadPlans());
+
+            if(is_array($matchedPlan) && !pnvPlanIsUnlimited($matchedPlan)){
+                $rawDays = trim((string)($matchedPlan['days'] ?? ''));
+
+                if(preg_match('/^\d+$/', $rawDays)){
+                    return max(0, intval($rawDays));
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    function xuiNormalizeExpiryMs($expiry){
+        $expiry = max(0, intval($expiry));
+
+        if($expiry <= 0){
+            return 0;
+        }
+
+        if($expiry < 10000000000){
+            return $expiry * 1000;
+        }
+
+        return $expiry;
+    }
+
+    function xuiExpiryTimeMsFromDays($days, $fromMs = null){
+        $days = max(0, intval($days));
+
+        if($days <= 0){
+            return 0;
+        }
+
+        $fromMs = $fromMs === null ? (time() * 1000) : max(0, intval($fromMs));
+
+        return $fromMs + ($days * 86400 * 1000);
+    }
+
+    function xuiExtendExpiryMs($currentExpiry, $addDays){
+        $addDays = max(0, intval($addDays));
+
+        if($addDays <= 0){
+            return xuiNormalizeExpiryMs($currentExpiry);
+        }
+
+        $nowMs = time() * 1000;
+        $currentMs = xuiNormalizeExpiryMs($currentExpiry);
+        $baseMs = $currentMs > $nowMs ? $currentMs : $nowMs;
+
+        return $baseMs + ($addDays * 86400 * 1000);
+    }
+
     /**
      * expire از هدر subscription-userinfo
      * null = نامشخص | 0 = نامحدود | >0 = محدود (unix)
@@ -1424,7 +1491,7 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
-    function xuiCreateClient($server, $email, $gb, $subId = ''){
+    function xuiCreateClient($server, $email, $gb, $subId = '', $days = 0){
         $email = xuiSanitizeClientEmail($email);
 
         if($email === ''){
@@ -1438,12 +1505,14 @@ if(!function_exists('xuiConfigPath')){
         $inboundId = intval($server['inbound_id'] ?? 1);
         $bytes = xuiGbToBytes($gb);
         $uuid = xuiGenerateUuid();
+        $days = max(0, intval($days));
+        $expiryTime = xuiExpiryTimeMsFromDays($days);
 
         $client = [
             'id' => $uuid,
             'email' => $email,
             'enable' => true,
-            'expiryTime' => 0,
+            'expiryTime' => $expiryTime,
             'totalGB' => $bytes,
             'limitIp' => 0,
             'subId' => $subId,
@@ -1563,11 +1632,12 @@ if(!function_exists('xuiConfigPath')){
         return $expiry;
     }
 
-    function xuiAdjustClientTrafficLegacy($server, $client, $addGb){
+    function xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays = 0){
         $email = trim((string)($client['email'] ?? ''));
         $clientId = trim((string)($client['id'] ?? ''));
         $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
         $addBytes = xuiGbToBytes($addGb);
+        $addDays = max(0, intval($addDays));
 
         if($email === '' || $clientId === '' || $inboundId <= 0){
             return [
@@ -1582,6 +1652,10 @@ if(!function_exists('xuiConfigPath')){
         $currentTotal = xuiClientTotalBytes($client);
         $updated['totalGB'] = $currentTotal + $addBytes;
         $updated['enable'] = true;
+
+        if($addDays > 0){
+            $updated['expiryTime'] = xuiExtendExpiryMs($client['expiryTime'] ?? 0, $addDays);
+        }
 
         if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
             $updated['subId'] = $client['subId'];
@@ -1633,7 +1707,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         if(is_array($client)){
-            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb);
+            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays);
 
             if(!empty($legacy['ok'])){
                 return $legacy;
@@ -1661,6 +1735,7 @@ if(!function_exists('xuiConfigPath')){
         $configName = trim((string)($paymentRow[1] ?? ''));
         $planText = trim((string)($paymentRow[2] ?? ''));
         $gb = xuiParsePlanGb($planText);
+        $days = xuiResolvePlanDays($planText);
 
         if($gb <= 0){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
@@ -1685,7 +1760,7 @@ if(!function_exists('xuiConfigPath')){
             $email .= '_' . substr(xuiGenerateSubId(6), 0, 4);
         }
 
-        $created = xuiCreateClient($server, $email, $gb);
+        $created = xuiCreateClient($server, $email, $gb, '', $days);
 
         if(empty($created['ok'])){
             return $created;
@@ -1697,7 +1772,8 @@ if(!function_exists('xuiConfigPath')){
             'email' => $created['email'],
             'sub_id' => $created['sub_id'],
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'days' => $days,
         ];
     }
 
@@ -1711,7 +1787,7 @@ if(!function_exists('xuiConfigPath')){
         $subLink = trim((string)($paymentRow[1] ?? ''));
         $planText = trim((string)($paymentRow[2] ?? ''));
         $gb = xuiParsePlanGb($planText);
-        $days = xuiParsePlanDays($planText);
+        $days = xuiResolvePlanDays($planText);
 
         if($gb <= 0){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
@@ -1759,7 +1835,8 @@ if(!function_exists('xuiConfigPath')){
             'email' => $email,
             'sub_id' => $parsed['sub_id'],
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'days' => $days,
         ];
     }
 
