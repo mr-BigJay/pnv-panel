@@ -78,6 +78,12 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+if (is_file(__DIR__ . '/../payment_list_ui.php')) {
+    require_once __DIR__ . '/../payment_list_ui.php';
+}
+
+$paymentsActiveTab = function_exists('paymentListActiveTab') ? paymentListActiveTab('approved') : 'approved';
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -333,6 +339,12 @@ foreach($payments as $index => $pay){
             continue;
         }
 
+        $displayTab = function_exists('instantPayAdminDisplayTab') ? instantPayAdminDisplayTab($pay) : 'pending';
+
+        if($displayTab === 'hidden' || $displayTab !== $paymentsActiveTab){
+            continue;
+        }
+
         $buyPayments[] = [
 
             'index' => $index,
@@ -371,10 +383,16 @@ $start = ($currentPage - 1) * $perPage;
 
 $buyPaymentsPage = array_slice($buyPayments, $start, $perPage);
 
-function paymentsListUrl($page, $per){
+function paymentsListUrl($page, $per, $tab = null){
+
+    global $paymentsActiveTab;
+
+    if($tab === null){
+        $tab = $paymentsActiveTab;
+    }
 
     return pnvAdminUrl(
-        'index.php?page=payments&p=' . intval($page) . '&per=' . intval($per)
+        'index.php?page=payments&p=' . intval($page) . '&per=' . intval($per) . '&tab=' . urlencode($tab)
     );
 
 }
@@ -775,6 +793,10 @@ margin-bottom:14px;
 line-height:1.8;
 }
 
+.statusIcon.is-expired{background:#64748b}
+
+<?php if(function_exists('paymentListAdminTabsCss')){ echo paymentListAdminTabsCss(); } ?>
+
 @media(max-width:560px){
 .content > .box.paymentsPage{
 padding:16px 12px 14px;
@@ -817,6 +839,12 @@ flex:0 0 20px;
 <div class="payAlertErr"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
 <?php } ?>
 
+<?php
+if(function_exists('paymentListRenderAdminTabs')){
+    paymentListRenderAdminTabs(paymentsListUrl(1, $perPage, $paymentsActiveTab), $paymentsActiveTab);
+}
+?>
+
 <div class="payList">
 
 <?php if($totalItems === 0){ ?>
@@ -846,6 +874,10 @@ if(function_exists('instantPayAdminRowStatusMeta')){
     }
     elseif(($payStatusMeta['class'] ?? '') === 'statusDot--blue'){
         $statusClass = 'is-progress';
+    }
+    elseif(($payStatusMeta['title'] ?? '') === 'منقضی' || $status === 'منقضی'){
+        $statusClass = 'is-expired';
+        $statusTitle = 'منقضی';
     }
     elseif($status === 'تایید شد'){
         $statusClass = 'is-ok';
