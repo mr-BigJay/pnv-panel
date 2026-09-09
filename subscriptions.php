@@ -96,7 +96,7 @@ $firstOkOpen = true;
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="user_bg.css?v=5">
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="subscriptions_ui.css?v=17">
+<link rel="stylesheet" href="subscriptions_ui.css?v=18">
 </head>
 <body>
 <div class="box">
