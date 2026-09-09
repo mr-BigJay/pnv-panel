@@ -602,6 +602,29 @@ function setSubInputMode(mode, link){
     }
 }
 
+function applySubTimeCategory(cat){
+    subTimeCategory = cat || 'unknown';
+    hideCatLockHint();
+    selectedPlan = null;
+    if(planSelect) planSelect.value = '';
+    syncCategoryLocks();
+}
+
+function fetchSubTimeCategory(link, fallback){
+    fallback = fallback || 'unknown';
+    return fetch('renew-sub-meta-api.php?link=' + encodeURIComponent(link), {credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(data && data.ok && data.time_category){
+                return data.time_category;
+            }
+            return fallback;
+        })
+        .catch(function(){
+            return fallback;
+        });
+}
+
 function pickSubscription(){
     const select = document.getElementById('subSelect');
     const input = document.getElementById('subInput');
@@ -628,11 +651,13 @@ function pickSubscription(){
     }
 
     setSubInputMode('picked', value);
-    subTimeCategory = (opt && opt.getAttribute('data-time-category')) || resolveSubTimeCategory(value) || 'unknown';
-    hideCatLockHint();
-    selectedPlan = null;
-    if(planSelect) planSelect.value = '';
-    syncCategoryLocks();
+    var cached = (opt && opt.getAttribute('data-time-category')) || resolveSubTimeCategory(value) || 'unknown';
+    applySubTimeCategory(cached);
+    fetchSubTimeCategory(value, cached).then(function(cat){
+        if(cat !== subTimeCategory){
+            applySubTimeCategory(cat);
+        }
+    });
 }
 window.pickSubscription = pickSubscription;
 
@@ -761,14 +786,23 @@ const subInputEl = document.getElementById('subInput');
 if(subInputEl){
     subInputEl.addEventListener('change', function(){
         if(subInputEl.classList.contains('is-hidden-input')) return;
-        subTimeCategory = resolveSubTimeCategory(subInputEl.value);
-        hideCatLockHint();
-        syncCategoryLocks();
+        var link = String(subInputEl.value || '').trim();
+        applySubTimeCategory(resolveSubTimeCategory(link));
+        if(link){
+            fetchSubTimeCategory(link, subTimeCategory).then(function(cat){
+                if(cat !== subTimeCategory) applySubTimeCategory(cat);
+            });
+        }
     });
     subInputEl.addEventListener('blur', function(){
         if(subInputEl.classList.contains('is-hidden-input')) return;
-        subTimeCategory = resolveSubTimeCategory(subInputEl.value);
-        syncCategoryLocks();
+        var link = String(subInputEl.value || '').trim();
+        applySubTimeCategory(resolveSubTimeCategory(link));
+        if(link){
+            fetchSubTimeCategory(link, subTimeCategory).then(function(cat){
+                if(cat !== subTimeCategory) applySubTimeCategory(cat);
+            });
+        }
     });
 }
 
@@ -1396,8 +1430,10 @@ document.getElementById('copyLinkBtn').addEventListener('click', function(){ cop
             }
         }
         setSubInputMode(matched ? 'picked' : 'manual', sub);
-        subTimeCategory = resolveSubTimeCategory(sub);
-        syncCategoryLocks();
+        applySubTimeCategory(resolveSubTimeCategory(sub));
+        fetchSubTimeCategory(sub, subTimeCategory).then(function(cat){
+            if(cat !== subTimeCategory) applySubTimeCategory(cat);
+        });
     }
 })();
 </script>

@@ -209,12 +209,55 @@ if(!function_exists('xuiConfigPath')){
             return max(0, intval($m[1]));
         }
 
+        $priceHint = 0;
+
+        if(preg_match('/([\d,]+)\s*میلیون/u', $planText, $m)){
+            $priceHint = intval(str_replace(',', '', $m[1])) * 1000;
+        }
+        elseif(preg_match('/([\d,]+)\s*(?:هزار|تومان|تومن)/u', $planText, $m)){
+            $priceHint = intval(str_replace(',', '', $m[1]));
+        }
+
         $catalog = xuiLoadPlansCatalog();
         $strLen = function_exists('mb_strlen') ? 'mb_strlen' : 'strlen';
         $strIpos = function_exists('mb_stripos') ? 'mb_stripos' : 'stripos';
         usort($catalog, static function($a, $b) use ($strLen){
             return $strLen((string)($b['name'] ?? '')) <=> $strLen((string)($a['name'] ?? ''));
         });
+
+        $limitedDays = 0;
+
+        foreach($catalog as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $name = trim((string)($plan['name'] ?? ''));
+
+            if($name === '' || $strIpos($planText, $name) === false){
+                continue;
+            }
+
+            $planPrice = intval($plan['price'] ?? 0);
+
+            if($priceHint > 0 && $planPrice > 0 && $planPrice !== $priceHint){
+                continue;
+            }
+
+            $days = trim((string)($plan['days'] ?? ''));
+
+            if($days === '' || $days === 'نامحدود' || strcasecmp($days, 'unlimited') === 0){
+                continue;
+            }
+
+            if(preg_match('/^\d+$/', $days)){
+                $limitedDays = max($limitedDays, max(0, intval($days)));
+            }
+        }
+
+        if($limitedDays > 0){
+            return $limitedDays;
+        }
 
         foreach($catalog as $plan){
             if(!is_array($plan)){

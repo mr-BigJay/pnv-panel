@@ -215,6 +215,58 @@ if(!function_exists('pnvFormatPlanPrice')){
         return $found !== '' ? (pnvNormalizeSubLinkValue($found) ?: $found) : $subLink;
     }
 
+    function pnvResolveSubTimeCategoryFromPanel($link){
+        $link = trim((string)$link);
+
+        if($link === '' || !preg_match('#^https?://#i', $link)){
+            return null;
+        }
+
+        if(!function_exists('xuiParseSubLink')){
+            if(is_file(__DIR__ . '/xui_lib.php')){
+                require_once __DIR__ . '/xui_lib.php';
+            }
+        }
+
+        if(!function_exists('xuiParseSubLink') || !function_exists('xuiLoadConfig') || !function_exists('xuiFindServerByHost')){
+            return null;
+        }
+
+        $config = xuiLoadConfig();
+
+        if(function_exists('xuiIsEnabled') && !xuiIsEnabled($config)){
+            return null;
+        }
+
+        $parsed = xuiParseSubLink($link);
+
+        if(!is_array($parsed)){
+            return null;
+        }
+
+        $server = xuiFindServerByHost($parsed['host'] ?? '', $config);
+
+        if(!is_array($server) || !function_exists('xuiFindClientBySubId')){
+            return null;
+        }
+
+        $client = xuiFindClientBySubId($server, $parsed['sub_id'] ?? '', $link);
+
+        if(!is_array($client)){
+            return null;
+        }
+
+        if(function_exists('xuiHydrateClientByEmail')){
+            $client = xuiHydrateClientByEmail($server, $client);
+        }
+
+        if(!is_array($client) || !function_exists('xuiClientExpiryMs')){
+            return null;
+        }
+
+        return xuiClientExpiryMs($client) > 0 ? 'limited' : 'unlimited';
+    }
+
     function pnvResolveSubTimeCategory($link, $planText = '', $username = ''){
         $link = trim((string)$link);
         $username = trim((string)$username);
@@ -251,11 +303,17 @@ if(!function_exists('pnvFormatPlanPrice')){
             }
         }
 
+        $panelCategory = pnvResolveSubTimeCategoryFromPanel($link);
+
+        if($panelCategory !== null){
+            return $panelCategory;
+        }
+
         if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
             $expire = xuiFetchSubUserinfoExpire($link);
 
-            if($expire !== null){
-                return $expire > 0 ? 'limited' : 'unlimited';
+            if($expire !== null && $expire > 0){
+                return 'limited';
             }
         }
 
@@ -899,7 +957,12 @@ if(!function_exists('pnvFormatPlanPrice')){
         $handle = fopen($file, 'r');
 
         while(($row = fgetcsv($handle)) !== false){
-            if(($row[0] ?? '') !== $username){
+            if(function_exists('pnvPaymentUsernameMatches')){
+                if(!pnvPaymentUsernameMatches($row[0] ?? '', $username)){
+                    continue;
+                }
+            }
+            elseif(($row[0] ?? '') !== $username){
                 continue;
             }
 
