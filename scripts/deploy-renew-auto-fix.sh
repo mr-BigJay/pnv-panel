@@ -84,6 +84,8 @@ FILES=(
   "bale_lib.php"
   "bale-webhook.php"
   "payment_provision_idempotency.php"
+  "admin/payments.php"
+  "admin/renews.php"
   "tests/xui_renew_resolve_test.php"
   "tests/instant_pay_amount_test.php"
   "tests/payment_provision_idempotency_test.php"

@@ -687,6 +687,42 @@ if(!function_exists('instantPayPath')){
     }
 
     /**
+     * دستهٔ نمایش در تب‌های ادمین: pending | confirmed | expired
+     * بر اساس ستون وضعیت CSV (نه فقط JSON instant pay).
+     */
+    function instantPayAdminRowListBucket($row){
+        if(!is_array($row)){
+            return 'pending';
+        }
+
+        $status = trim((string)($row[6] ?? ''));
+
+        if($status === 'تایید شد'){
+            return 'confirmed';
+        }
+
+        if($status === 'رد شد'){
+            return 'expired';
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') === 0){
+            if(!instantPayAdminRowIsInProgress($row)){
+                return 'expired';
+            }
+
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+
+            if(is_array($item) && in_array((string)($item['status'] ?? ''), ['expired', 'cancelled', 'failed'], true)){
+                return 'expired';
+            }
+        }
+
+        return 'pending';
+    }
+
+    /**
      * آیا این ردیف CSV در لیست ادمین نمایش داده شود؟
      * سفارش AUTOِ درحال‌انجام تا پایان مهلت پرداخت + ۱۰ دقیقه دیده می‌شود.
      */

@@ -277,6 +277,24 @@ $renews[]=[
 
 $renews=array_reverse($renews);
 
+$renewsListView = trim((string)($_GET['view'] ?? 'pending'));
+
+if(!in_array($renewsListView, ['pending', 'confirmed', 'expired'], true)){
+    $renewsListView = 'pending';
+}
+
+if(function_exists('instantPayAdminRowListBucket')){
+    $renews = array_values(array_filter($renews, static function($row) use ($renewsListView){
+        $pay = $row['data'] ?? [];
+
+        if(!is_array($pay)){
+            return false;
+        }
+
+        return instantPayAdminRowListBucket($pay) === $renewsListView;
+    }));
+}
+
 $perPage = 20;
 $currentPage = intval($_GET['p'] ?? 1);
 if($currentPage < 1){
@@ -293,8 +311,10 @@ $start = ($currentPage - 1) * $perPage;
 $renewsPage = array_slice($renews, $start, $perPage);
 
 if(!function_exists('renewsListUrl')){
-function renewsListUrl($page){
-return pnvAdminUrl('index.php?page=renews&p=' . intval($page));
+function renewsListUrl($page, $view = 'pending'){
+    $view = in_array($view, ['pending', 'confirmed', 'expired'], true) ? $view : 'pending';
+
+    return pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($view) . '&p=' . intval($page));
 }
 }
 
@@ -438,6 +458,32 @@ font-family:"Lalezar",tahoma,sans-serif;
 font-weight:400;
 letter-spacing:0;
 text-align:right;
+color:#fff;
+}
+
+.renewViewTabs{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+justify-content:flex-end;
+margin:-6px 0 16px;
+}
+
+.renewViewTab{
+display:inline-flex;
+align-items:center;
+padding:8px 14px;
+border-radius:999px;
+border:1px solid rgba(148,163,184,.22);
+background:#1e293b;
+color:#cbd5e1;
+font-size:13px;
+text-decoration:none;
+}
+
+.renewViewTab.is-active{
+background:#2563eb;
+border-color:#2563eb;
 color:#fff;
 }
 
@@ -764,6 +810,21 @@ flex:0 0 20px;
 
 <h2>لیست تمدید ها</h2>
 
+<div class="renewViewTabs" role="tablist" aria-label="فیلتر وضعیت تمدید">
+<?php
+$renewViewLabels = [
+    'confirmed' => 'تایید شده',
+    'pending' => 'درحال بررسی',
+    'expired' => 'منقضی',
+];
+foreach($renewViewLabels as $viewKey => $viewLabel){
+    $active = $renewsListView === $viewKey ? ' is-active' : '';
+    $href = renewsListUrl(1, $viewKey);
+    ?>
+<a class="renewViewTab<?php echo $active; ?>" role="tab" href="<?php echo htmlspecialchars($href, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($viewLabel, ENT_QUOTES, 'UTF-8'); ?></a>
+<?php } ?>
+</div>
+
 <div class="renewList">
 
 <?php if($totalItems === 0){ ?>
@@ -905,7 +966,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 <div class="pagination">
 <?php for($x = 1; $x <= $totalPages; $x++){ ?>
 <a
-href="<?php echo htmlspecialchars(renewsListUrl($x), ENT_QUOTES, 'UTF-8'); ?>"
+href="<?php echo htmlspecialchars(renewsListUrl($x, $renewsListView), ENT_QUOTES, 'UTF-8'); ?>"
 class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 <?php echo $x; ?>
 </a>
@@ -924,7 +985,7 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 var renewResultMessage = <?php echo json_encode($paymentMessage, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultDetail = <?php echo json_encode($paymentMessageDetail, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultError = <?php echo json_encode($paymentError, JSON_UNESCAPED_UNICODE); ?>;
-var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews'), JSON_UNESCAPED_UNICODE); ?>;
+var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($renewsListView)), JSON_UNESCAPED_UNICODE); ?>;
 
 function closeMenus(){
 document.querySelectorAll('.dropdown.active').forEach(function(el){
