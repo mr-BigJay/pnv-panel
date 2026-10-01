@@ -181,7 +181,9 @@ assertTrue(strpos($renewMsg, 'پیگیری: AUTO-9680') !== false, 'renew notify
 assertTrue(strpos($renewMsg, 'reza001') !== false && strpos($renewMsg, 'vip3') !== false, 'renew notify account/server');
 assertTrue(strpos($renewMsg, 'تمدید شد') !== false, 'renew notify footer');
 
-$buyMsg = baleFormatPaymentConfirmed(array_merge($renewRow, [9 => 'خرید']), 'خرید', [
+$buyRow = $renewRow;
+$buyRow[9] = 'خرید';
+$buyMsg = baleFormatPaymentConfirmed($buyRow, 'خرید', [
     'provision' => ['email' => 'reza001', 'server_id' => 'vip'],
 ]);
 assertTrue(strpos($buyMsg, 'خرید | niknam') !== false, 'buy notify kind line');
