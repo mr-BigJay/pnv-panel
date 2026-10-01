@@ -2108,6 +2108,22 @@ if(!function_exists('xuiConfigPath')){
             }
         }
 
+        if(!function_exists('baleNotifyPaymentConfirmedRow') && is_file(__DIR__ . '/bale_lib.php')){
+            require_once __DIR__ . '/bale_lib.php';
+        }
+
+        if(function_exists('baleNotifyPaymentConfirmedRow')){
+            try{
+                $notifyRow = $payments[$index] ?? $row;
+                baleNotifyPaymentConfirmedRow($notifyRow, $type, [
+                    'link' => $result['link'] ?? '',
+                    'provision' => $result,
+                ]);
+            }catch(Throwable $e){
+                error_log('bale payment confirm notify failed: ' . $e->getMessage());
+            }
+        }
+
         return $result;
     }
 

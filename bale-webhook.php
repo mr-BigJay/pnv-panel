@@ -94,24 +94,42 @@ $result = instantPayHandleDepositText($text, pnvNowParts());
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];
     $paidId = $item['id'] ?? '';
-    $raw = $paidId !== '' ? instantPayGet($paidId) : null;
-    $userLabel = is_array($raw) ? ($raw['user'] ?? '-') : '-';
 
-    $msg = "✅ پرداخت تأیید شد\n"
-        . 'کاربر: ' . $userLabel . "\n"
-        . 'مبلغ: ' . ($item['amount_text'] ?? '-') . "\n"
-        . 'پلن: ' . ($item['plan'] ?? '-') . "\n"
-        . 'کد: ' . ($item['code'] ?? '-');
+    // پیام «واریز تأیید شد» از xuiApprovePaymentIndex → baleNotifyPaymentConfirmedRow ارسال می‌شود.
+    // اگر dedup مانع شد، همان متن را یک‌بار به چت فورواردکننده بفرست.
+    if(function_exists('baleConfirmNotifyWasSent') && function_exists('xuiLoadPayments')){
+        $payments = xuiLoadPayments();
+        $csvIndex = intval($item['csv_index'] ?? -1);
 
-    if(!empty($item['link'])){
-        $msg .= "\nلینک:\n" . $item['link'];
+        if($csvIndex < 0 && $paidId !== '' && function_exists('instantPayGet')){
+            $raw = instantPayGet($paidId);
+
+            if(is_array($raw)){
+                $csvIndex = intval($raw['csv_index'] ?? -1);
+            }
+        }
+
+        if($csvIndex >= 0 && isset($payments[$csvIndex])){
+            $dedupKey = baleConfirmNotifyKey($payments[$csvIndex]);
+
+            if($dedupKey !== '' && baleConfirmNotifyWasSent($dedupKey, 120)){
+                echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId, 'notify' => 'dedup']);
+                exit;
+            }
+
+            $provision = is_array($result['provision'] ?? null) ? $result['provision'] : [];
+            $msg = baleFormatPaymentConfirmed(
+                $payments[$csvIndex],
+                trim((string)($payments[$csvIndex][9] ?? 'خرید')),
+                [
+                    'provision' => $provision,
+                    'amount_rial' => intval($item['amount'] ?? 0),
+                ]
+            );
+            baleSendMessage($chatId, $msg, [], $config);
+        }
     }
 
-    if(!empty($result['matched_via'])){
-        $msg .= "\nمسیر: " . $result['matched_via'];
-    }
-
-    baleSendMessage($chatId, $msg, [], $config);
     echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId]);
     exit;
 }
