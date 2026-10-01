@@ -181,8 +181,22 @@ assertTrue(strpos($renewMsg, 'پیگیری: AUTO-9680') !== false, 'renew notify
 assertTrue(strpos($renewMsg, 'reza001') !== false && strpos($renewMsg, 'vip3') !== false, 'renew notify account/server');
 assertTrue(strpos($renewMsg, 'تمدید شد') !== false, 'renew notify footer');
 
-$buyRow = $renewRow;
-$buyRow[9] = 'خرید';
+// خرید: col1 نام کانفیگ است (نه URL) — وگرنه xuiPaymentRowType از روی لینک «تمدید» استنتاج می‌کند
+$buyRow = [
+    'niknam',
+    'reza001',
+    '20 گیگ - 250 هزار تومان',
+    'AUTO-9680',
+    '',
+    '',
+    'تایید شد',
+    '',
+    time(),
+    'خرید',
+    '',
+    '',
+    2499680,
+];
 $buyMsg = baleFormatPaymentConfirmed($buyRow, 'خرید', [
     'provision' => ['email' => 'reza001', 'server_id' => 'vip'],
 ]);
