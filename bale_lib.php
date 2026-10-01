@@ -421,10 +421,19 @@ if(!function_exists('baleConfigPath')){
     }
 
     function baleConfirmNotifyMarkSent($key, $kind = ''){
+        baleConfirmNotifyTryClaim($key, $kind, 86400);
+    }
+
+    /**
+     * با قفل فایل، قبل از ارسال پیام claim می‌کند تا دو درخواست هم‌زمان دوبار notify نزنند.
+     *
+     * @return bool true اگر این caller باید پیام بفرستد
+     */
+    function baleConfirmNotifyTryClaim($key, $kind = '', $withinSeconds = 300){
         $key = trim((string)$key);
 
         if($key === ''){
-            return;
+            return true;
         }
 
         if(!is_dir(__DIR__ . '/db')){
@@ -432,30 +441,57 @@ if(!function_exists('baleConfigPath')){
         }
 
         $file = baleConfirmNotifyDedupPath();
-        $data = [];
+        $fp = fopen($file, 'c+');
 
-        if(file_exists($file)){
-            $decoded = json_decode((string)file_get_contents($file), true);
-            $data = is_array($decoded) ? $decoded : [];
+        if($fp === false){
+            return true;
         }
 
-        $data[$key] = [
-            'sent_at' => time(),
-            'kind' => ($kind === 'تمدید') ? 'تمدید' : 'خرید',
-        ];
+        $claim = false;
 
-        if(count($data) > 500){
-            uasort($data, static function($a, $b){
-                return intval($b['sent_at'] ?? 0) <=> intval($a['sent_at'] ?? 0);
-            });
-            $data = array_slice($data, 0, 400, true);
+        try{
+            if(!flock($fp, LOCK_EX)){
+                return false;
+            }
+
+            $raw = stream_get_contents($fp);
+            $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+            $data = is_array($data) ? $data : [];
+            $now = time();
+            $window = max(30, intval($withinSeconds));
+
+            if(isset($data[$key])){
+                $sentAt = intval($data[$key]['sent_at'] ?? 0);
+
+                if($sentAt > 0 && ($now - $sentAt) <= $window){
+                    return false;
+                }
+            }
+
+            $data[$key] = [
+                'sent_at' => $now,
+                'kind' => ($kind === 'تمدید') ? 'تمدید' : 'خرید',
+            ];
+
+            if(count($data) > 500){
+                uasort($data, static function($a, $b){
+                    return intval($b['sent_at'] ?? 0) <=> intval($a['sent_at'] ?? 0);
+                });
+                $data = array_slice($data, 0, 400, true);
+            }
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            fflush($fp);
+            $claim = true;
+        }
+        finally{
+            flock($fp, LOCK_UN);
+            fclose($fp);
         }
 
-        file_put_contents(
-            $file,
-            json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-            LOCK_EX
-        );
+        return $claim;
     }
 
     function baleResolvePaymentKind($row, $hint = ''){
@@ -556,30 +592,17 @@ if(!function_exists('baleConfigPath')){
 
         $forceNotify = !empty($opts['force_notify']);
         $dedupKey = baleConfirmNotifyKey($row);
+        $kind = baleResolvePaymentKind($row, $kindHint);
 
-        if(!$forceNotify && $dedupKey !== '' && baleConfirmNotifyWasSent($dedupKey)){
+        if(!$forceNotify && $dedupKey !== '' && !baleConfirmNotifyTryClaim($dedupKey, $kind)){
             return [];
         }
 
-        $kind = baleResolvePaymentKind($row, $kindHint);
         $text = baleFormatPaymentConfirmed($row, $kindHint, $opts);
         $results = [];
 
         foreach($ids as $chatId){
             $results[] = baleSendMessage($chatId, $text, [], $config);
-        }
-
-        $sent = false;
-
-        foreach($results as $result){
-            if(!empty($result['ok'])){
-                $sent = true;
-                break;
-            }
-        }
-
-        if($sent && $dedupKey !== ''){
-            baleConfirmNotifyMarkSent($dedupKey, $kind);
         }
 
         return $results;

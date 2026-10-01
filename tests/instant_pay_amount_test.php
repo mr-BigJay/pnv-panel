@@ -203,5 +203,9 @@ $buyMsg = baleFormatPaymentConfirmed($buyRow, 'خرید', [
 assertTrue(strpos($buyMsg, 'خرید | niknam') !== false, 'buy notify kind line');
 assertTrue(strpos($buyMsg, 'اشتراک جدید reza001 در پنل vip ایجاد شد') !== false, 'buy notify footer');
 
+$dedupKey = 'dedup-test|' . uniqid('', true) . '|' . time();
+assertTrue(baleConfirmNotifyTryClaim($dedupKey, 'تمدید', 60), 'dedup first claim');
+assertTrue(!baleConfirmNotifyTryClaim($dedupKey, 'تمدید', 60), 'dedup second claim blocked');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

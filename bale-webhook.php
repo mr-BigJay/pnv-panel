@@ -95,41 +95,7 @@ if(!empty($result['ok'])){
     $item = $result['item'] ?? [];
     $paidId = $item['id'] ?? '';
 
-    // پیام «واریز تأیید شد» از xuiApprovePaymentIndex → baleNotifyPaymentConfirmedRow ارسال می‌شود.
-    // اگر dedup مانع شد، همان متن را یک‌بار به چت فورواردکننده بفرست.
-    if(function_exists('baleConfirmNotifyWasSent') && function_exists('xuiLoadPayments')){
-        $payments = xuiLoadPayments();
-        $csvIndex = intval($item['csv_index'] ?? -1);
-
-        if($csvIndex < 0 && $paidId !== '' && function_exists('instantPayGet')){
-            $raw = instantPayGet($paidId);
-
-            if(is_array($raw)){
-                $csvIndex = intval($raw['csv_index'] ?? -1);
-            }
-        }
-
-        if($csvIndex >= 0 && isset($payments[$csvIndex])){
-            $dedupKey = baleConfirmNotifyKey($payments[$csvIndex]);
-
-            if($dedupKey !== '' && baleConfirmNotifyWasSent($dedupKey, 120)){
-                echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId, 'notify' => 'dedup']);
-                exit;
-            }
-
-            $provision = is_array($result['provision'] ?? null) ? $result['provision'] : [];
-            $msg = baleFormatPaymentConfirmed(
-                $payments[$csvIndex],
-                trim((string)($payments[$csvIndex][9] ?? 'خرید')),
-                [
-                    'provision' => $provision,
-                    'amount_rial' => intval($item['amount'] ?? 0),
-                ]
-            );
-            baleSendMessage($chatId, $msg, [], $config);
-        }
-    }
-
+    // نوتیف «واریز تأیید شد» فقط از xuiApprovePaymentIndex → baleNotifyPaymentConfirmedRow (یک‌بار، dedup).
     echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId]);
     exit;
 }

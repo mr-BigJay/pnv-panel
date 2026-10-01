@@ -2058,7 +2058,39 @@ if(!function_exists('xuiConfigPath')){
         fclose($handle);
     }
 
+    function xuiPaymentApproveLockPath($index){
+        $dir = __DIR__ . '/db/locks';
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0755, true);
+        }
+
+        return $dir . '/payment_approve_' . max(0, intval($index)) . '.lock';
+    }
+
     function xuiApprovePaymentIndex($index, $typeHint = ''){
+        $index = intval($index);
+        $lockFp = fopen(xuiPaymentApproveLockPath($index), 'c');
+
+        if($lockFp === false){
+            return ['ok' => false, 'error' => 'قفل تأیید پرداخت در دسترس نیست'];
+        }
+
+        if(!flock($lockFp, LOCK_EX)){
+            fclose($lockFp);
+            return ['ok' => false, 'error' => 'تأیید پرداخت در حال انجام است؛ چند ثانیه بعد دوباره تلاش کنید'];
+        }
+
+        try{
+            return xuiApprovePaymentIndexLocked($index, $typeHint);
+        }
+        finally{
+            flock($lockFp, LOCK_UN);
+            fclose($lockFp);
+        }
+    }
+
+    function xuiApprovePaymentIndexLocked($index, $typeHint = ''){
         $payments = xuiLoadPayments();
 
         if(!isset($payments[$index])){
@@ -2086,6 +2118,20 @@ if(!function_exists('xuiConfigPath')){
 
         if(empty($result['ok'])){
             return $result;
+        }
+
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$index])){
+            return ['ok' => false, 'error' => 'پرداخت پیدا نشد'];
+        }
+
+        if(trim((string)($payments[$index][6] ?? '')) === 'تایید شد'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'link' => $payments[$index][7] ?? ($result['link'] ?? ''),
+            ];
         }
 
         $payments[$index][6] = 'تایید شد';
