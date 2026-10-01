@@ -81,7 +81,10 @@ FILES=(
   "xui_lib.php"
   "subscription_lib.php"
   "instant_pay_lib.php"
+  "bale_lib.php"
+  "bale-webhook.php"
   "tests/xui_renew_resolve_test.php"
+  "tests/instant_pay_amount_test.php"
   "scripts/diag-renew-provision.php"
 )
 
