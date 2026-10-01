@@ -80,12 +80,6 @@ if(!function_exists('xuiPaymentProvisionStorePath')){
     }
 
     function xuiPaymentProvisionWriteStore($fp, array $data){
-        if(!empty($GLOBALS['xuiPaymentProvisionTestFailCommit'])){
-            unset($GLOBALS['xuiPaymentProvisionTestFailCommit']);
-
-            return ['ok' => false, 'error' => 'test: commit write blocked', 'code' => 'write'];
-        }
-
         $encoded = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
         if($encoded === false){
