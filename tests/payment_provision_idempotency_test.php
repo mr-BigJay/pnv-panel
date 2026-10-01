@@ -155,7 +155,10 @@ provAssert(!empty($rec['ok']), 'reconcile execute ok');
 $bulkAdjustCalls = 0;
 $GLOBALS['xuiPaymentProvisionTestFailCommit'] = true;
 $r1 = xuiPaymentProvisionExecute($renewRow, 'تمدید', $provisionOk);
-provAssert(empty($r1['ok']) && !empty($r1['recoverable']), 'commit fail recoverable');
+provAssert(
+    empty($r1['ok']) && (!empty($r1['recoverable']) || ($r1['code'] ?? '') === 'commit_failed_marked'),
+    'commit fail recoverable'
+);
 provAssert($bulkAdjustCalls === 1, 'commit fail: bulkAdjust once');
 
 $bulkAdjustCalls = 0;

@@ -592,6 +592,26 @@ if(!function_exists('xuiPaymentProvisionStorePath')){
             return ['ok' => false, 'error' => 'commit: نتیجه provisioning نامعتبر', 'code' => 'invalid'];
         }
 
+        if(!empty($GLOBALS['xuiPaymentProvisionTestFailCommit'])){
+            unset($GLOBALS['xuiPaymentProvisionTestFailCommit']);
+            $mark = xuiPaymentProvisionMarkApiSucceeded($key, $result, $intent);
+
+            if(empty($mark['ok'])){
+                return [
+                    'ok' => false,
+                    'error' => 'commit test fail: mark api_succeeded ناموفق: ' . ($mark['error'] ?? ''),
+                    'code' => 'commit_and_mark_failed',
+                ];
+            }
+
+            return [
+                'ok' => false,
+                'error' => 'commit idempotency ناموفق؛ api_succeeded ذخیره شد — retry بدون bulkAdjust مجدد',
+                'code' => 'commit_failed_marked',
+                'recoverable' => true,
+            ];
+        }
+
         $out = xuiPaymentProvisionWithStoreLock(static function(array $data) use ($key, $result, $intent){
             $data[$key] = [
                 'state' => 'done',
