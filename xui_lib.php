@@ -2058,14 +2058,189 @@ if(!function_exists('xuiConfigPath')){
         fclose($handle);
     }
 
-    function xuiPaymentApproveLockPath($index){
+    function xuiLocksDir(){
         $dir = __DIR__ . '/db/locks';
 
         if(!is_dir($dir)){
             @mkdir($dir, 0755, true);
         }
 
-        return $dir . '/payment_approve_' . max(0, intval($index)) . '.lock';
+        return $dir;
+    }
+
+    function xuiPaymentProvisionStorePath(){
+        return __DIR__ . '/db/payment_provision_idempotency.json';
+    }
+
+    function xuiPaymentProvisionIdKey($index, $row){
+        if(!is_array($row)){
+            return 'pay:' . max(0, intval($index));
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+        $user = strtolower(trim((string)($row[0] ?? '')));
+        $created = intval($row[8] ?? 0);
+
+        return 'pay:' . max(0, intval($index))
+            . ':' . $tracking
+            . ':' . $user
+            . ':' . $created;
+    }
+
+    /**
+     * @return array{state:string,result?:array}
+     */
+    function xuiPaymentProvisionBegin($key){
+        $key = trim((string)$key);
+
+        if($key === ''){
+            return ['state' => 'owned'];
+        }
+
+        $file = xuiPaymentProvisionStorePath();
+        $fp = fopen($file, 'c+');
+
+        if($fp === false){
+            return ['state' => 'owned'];
+        }
+
+        try{
+            if(!flock($fp, LOCK_EX)){
+                return ['state' => 'busy'];
+            }
+
+            $raw = stream_get_contents($fp);
+            $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+            $data = is_array($data) ? $data : [];
+            $now = time();
+            $entry = is_array($data[$key] ?? null) ? $data[$key] : null;
+
+            if(is_array($entry) && ($entry['state'] ?? '') === 'done' && is_array($entry['result'] ?? null)){
+                return [
+                    'state' => 'done',
+                    'result' => $entry['result'],
+                ];
+            }
+
+            if(is_array($entry) && ($entry['state'] ?? '') === 'running'){
+                $started = intval($entry['started_at'] ?? 0);
+
+                if($started > 0 && ($now - $started) < 900){
+                    return ['state' => 'busy'];
+                }
+            }
+
+            $data[$key] = [
+                'state' => 'running',
+                'started_at' => $now,
+            ];
+
+            if(count($data) > 800){
+                uasort($data, static function($a, $b){
+                    return intval($b['started_at'] ?? $b['done_at'] ?? 0) <=> intval($a['started_at'] ?? $a['done_at'] ?? 0);
+                });
+                $data = array_slice($data, 0, 600, true);
+            }
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            fflush($fp);
+
+            return ['state' => 'owned'];
+        }
+        finally{
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+
+    function xuiPaymentProvisionCommit($key, $result){
+        $key = trim((string)$key);
+
+        if($key === '' || !is_array($result)){
+            return;
+        }
+
+        $file = xuiPaymentProvisionStorePath();
+        $fp = fopen($file, 'c+');
+
+        if($fp === false){
+            return;
+        }
+
+        try{
+            if(!flock($fp, LOCK_EX)){
+                return;
+            }
+
+            $raw = stream_get_contents($fp);
+            $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+            $data = is_array($data) ? $data : [];
+
+            $data[$key] = [
+                'state' => 'done',
+                'done_at' => time(),
+                'result' => $result,
+            ];
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            fflush($fp);
+        }
+        finally{
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+
+    function xuiPaymentProvisionAbort($key){
+        $key = trim((string)$key);
+
+        if($key === ''){
+            return;
+        }
+
+        $file = xuiPaymentProvisionStorePath();
+        $fp = fopen($file, 'c+');
+
+        if($fp === false){
+            return;
+        }
+
+        try{
+            if(!flock($fp, LOCK_EX)){
+                return;
+            }
+
+            $raw = stream_get_contents($fp);
+            $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+            $data = is_array($data) ? $data : [];
+
+            if(!isset($data[$key])){
+                return;
+            }
+
+            if(($data[$key]['state'] ?? '') === 'done'){
+                return;
+            }
+
+            unset($data[$key]);
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            fflush($fp);
+        }
+        finally{
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+
+    function xuiPaymentApproveLockPath($index){
+        return xuiLocksDir() . '/payment_approve_' . max(0, intval($index)) . '.lock';
     }
 
     function xuiApprovePaymentIndex($index, $typeHint = ''){
@@ -2109,15 +2284,35 @@ if(!function_exists('xuiConfigPath')){
             ];
         }
 
-        if($type === 'تمدید'){
-            $result = xuiProvisionRenew($row);
-        }
-        else{
-            $result = xuiProvisionBuy($row);
+        $provisionKey = xuiPaymentProvisionIdKey($index, $row);
+        $claim = xuiPaymentProvisionBegin($provisionKey);
+
+        if(($claim['state'] ?? '') === 'busy'){
+            return [
+                'ok' => false,
+                'error' => 'صدور اشتراک همین پرداخت در حال انجام است',
+                'busy' => true,
+            ];
         }
 
-        if(empty($result['ok'])){
-            return $result;
+        if(($claim['state'] ?? '') === 'done' && is_array($claim['result'] ?? null)){
+            $result = $claim['result'];
+        }
+        else{
+            if($type === 'تمدید'){
+                $result = xuiProvisionRenew($row);
+            }
+            else{
+                $result = xuiProvisionBuy($row);
+            }
+
+            if(empty($result['ok'])){
+                xuiPaymentProvisionAbort($provisionKey);
+
+                return $result;
+            }
+
+            xuiPaymentProvisionCommit($provisionKey, $result);
         }
 
         $payments = xuiLoadPayments();

@@ -34,6 +34,30 @@ if(!function_exists('instantPayPath')){
         );
     }
 
+    function instantPayOrderLockPath($orderId){
+        $orderId = trim((string)$orderId);
+
+        if(!function_exists('xuiLocksDir')){
+            require_once __DIR__ . '/xui_lib.php';
+        }
+
+        $hash = hash('sha256', $orderId);
+
+        return xuiLocksDir() . '/instant_pay_order_' . $hash . '.lock';
+    }
+
+    function instantPayFindItemIndexById($items, $id){
+        $id = trim((string)$id);
+
+        foreach($items as $i => $item){
+            if(($item['id'] ?? '') === $id){
+                return $i;
+            }
+        }
+
+        return -1;
+    }
+
     function instantPayWindowSeconds($config = null){
         if($config === null){
             $config = baleLoadConfig();
@@ -1209,143 +1233,155 @@ if(!function_exists('instantPayPath')){
 
     function instantPayMarkPaid($id, $meta = [], $opts = []){
         $force = !empty($opts['force']);
-        $items = instantPayExpireDue();
         $id = trim((string)$id);
-        $found = null;
-        $idx = -1;
 
-        foreach($items as $i => $item){
-            if(($item['id'] ?? '') === $id){
-                $found = $item;
-                $idx = $i;
-                break;
-            }
-        }
-
-        if(!$found){
+        if($id === ''){
             return ['ok' => false, 'error' => 'سفارش پیدا نشد'];
         }
 
-        if(($found['status'] ?? '') === 'paid'){
-            return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
+        $lockFp = fopen(instantPayOrderLockPath($id), 'c');
+
+        if($lockFp === false){
+            return ['ok' => false, 'error' => 'قفل سفارش در دسترس نیست'];
         }
 
-        if(!$force && !instantPayItemMatchable($found)){
-            return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . ($found['status'] ?? '') . ')'];
+        if(!flock($lockFp, LOCK_EX)){
+            fclose($lockFp);
+
+            return ['ok' => false, 'error' => 'سفارش در حال پردازش است'];
         }
 
-        if($force && ($found['status'] ?? '') === 'cancelled'){
-            $csvIndexCheck = instantPayResolveCsvIndex($found);
+        try{
+            $items = instantPayExpireDue();
+            $idx = instantPayFindItemIndexById($items, $id);
 
-            if($csvIndexCheck < 0){
-                return ['ok' => false, 'error' => 'سفارش لغو شده است'];
+            if($idx < 0){
+                return ['ok' => false, 'error' => 'سفارش پیدا نشد'];
             }
 
-            $items[$idx]['status'] = 'expired';
-            $items[$idx]['message'] = 'بازیابی برای تأیید واریز';
-            $items[$idx]['csv_index'] = $csvIndexCheck;
-            $items[$idx]['csv_purged'] = false;
-            instantPaySave($items);
             $found = $items[$idx];
-        }
 
-        $csvIndex = instantPayResolveCsvIndex($found);
-
-        if($csvIndex < 0){
-            return ['ok' => false, 'error' => 'ایندکس پرداخت نامعتبر است'];
-        }
-
-        // تاریخ/ساعت را برای لاگ پر می‌کنیم
-        $payments = xuiLoadPayments();
-
-        if(isset($payments[$csvIndex])){
-            $nowParts = pnvNowParts();
-            $payments[$csvIndex][4] = $meta['date'] ?? $nowParts['date'];
-            $payments[$csvIndex][5] = $meta['time'] ?? $nowParts['time'];
-            xuiSavePayments($payments);
-        }
-
-        // اول وضعیت را روی processing بگذار تا UI هنوز «تأیید شد» نگوید
-        $items[$idx]['status'] = 'processing';
-        $items[$idx]['message'] = 'در حال صدور اشتراک…';
-        instantPaySave($items);
-
-        $result = xuiApprovePaymentIndex($csvIndex, $found['type'] ?? 'خرید');
-
-        // دوباره بخوان (ممکن است همزمان تغییر کرده باشد)
-        $items = instantPayLoad();
-        $idx = -1;
-        foreach($items as $i => $item){
-            if(($item['id'] ?? '') === $id){
-                $idx = $i;
-                break;
-            }
-        }
-        if($idx < 0){
-            return ['ok' => false, 'error' => 'سفارش بعد از پردازش پیدا نشد'];
-        }
-
-        if(empty($result['ok'])){
-            $items[$idx]['status'] = 'failed';
-            $items[$idx]['message'] = $result['error'] ?? 'تأیید ناموفق';
-            instantPaySave($items);
-            return $result;
-        }
-
-        // فقط وقتی کانفیگ آماده است «paid» می‌شود
-        $items[$idx]['status'] = 'paid';
-        $items[$idx]['paid_at'] = time();
-        $items[$idx]['link'] = $result['link'] ?? ($found['sub'] ?? '');
-        $items[$idx]['message'] = 'پرداخت تأیید شد';
-        $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
-        $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
-        instantPaySave($items);
-
-        if(!empty($found['coupon_code']) || !empty($found['discount_source'])){
-            if(!function_exists('checkoutMarkDiscountPaid')){
-                require_once __DIR__ . '/pnv_campaign_bootstrap.php';
+            if(($found['status'] ?? '') === 'paid'){
+                return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
             }
 
-            checkoutMarkDiscountPaid($found);
-        }
+            if(($found['status'] ?? '') === 'processing' && !$force){
+                return ['ok' => false, 'error' => 'سفارش در حال صدور است'];
+            }
 
-        // اطلاع‌رسانی تلگرام فقط بعد از تأیید نهایی
-        if(function_exists('telegramNotifyNewPayment')){
-            try{
-                $payments = xuiLoadPayments();
-                $notifyRow = $payments[$csvIndex] ?? null;
+            if(!$force && !instantPayItemMatchable($found)){
+                return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . ($found['status'] ?? '') . ')'];
+            }
 
-                if(!is_array($notifyRow)){
-                    $nowParts = pnvNowParts();
-                    $notifyRow = [
-                        $found['user'] ?? '',
-                        ($found['type'] ?? '') === 'تمدید' ? ($found['sub'] ?? '') : ($found['subname'] ?? ''),
-                        $found['plan'] ?? '',
-                        'AUTO-' . ($found['code'] ?? ''),
-                        $meta['date'] ?? $nowParts['date'],
-                        $meta['time'] ?? $nowParts['time'],
-                        'تایید شد',
-                        $items[$idx]['link'] ?? '',
-                        intval($found['created_at'] ?? time()),
-                        $found['type'] ?? 'خرید',
-                        $found['coupon_code'] ?? '',
-                        intval($found['discount_percent'] ?? 0),
-                        intval($found['amount'] ?? 0),
-                        $found['code'] ?? ''
-                    ];
+            if($force && ($found['status'] ?? '') === 'cancelled'){
+                $csvIndexCheck = instantPayResolveCsvIndex($found);
+
+                if($csvIndexCheck < 0){
+                    return ['ok' => false, 'error' => 'سفارش لغو شده است'];
                 }
 
-                telegramNotifyNewPayment($found['type'] ?? 'خرید', $notifyRow, ['confirmed' => true]);
-            }catch(Throwable $e){
-                error_log('instant pay telegram confirm notify failed: ' . $e->getMessage());
+                $items[$idx]['status'] = 'expired';
+                $items[$idx]['message'] = 'بازیابی برای تأیید واریز';
+                $items[$idx]['csv_index'] = $csvIndexCheck;
+                $items[$idx]['csv_purged'] = false;
+                instantPaySave($items);
+                $found = $items[$idx];
             }
-        }
 
-        return [
-            'ok' => true,
-            'item' => instantPayPublicView($items[$idx]),
-            'provision' => $result
-        ];
+            $csvIndex = instantPayResolveCsvIndex($found);
+
+            if($csvIndex < 0){
+                return ['ok' => false, 'error' => 'ایندکس پرداخت نامعتبر است'];
+            }
+
+            $payments = xuiLoadPayments();
+
+            if(isset($payments[$csvIndex])){
+                $nowParts = pnvNowParts();
+                $payments[$csvIndex][4] = $meta['date'] ?? $nowParts['date'];
+                $payments[$csvIndex][5] = $meta['time'] ?? $nowParts['time'];
+                xuiSavePayments($payments);
+            }
+
+            $items[$idx]['status'] = 'processing';
+            $items[$idx]['message'] = 'در حال صدور اشتراک…';
+            instantPaySave($items);
+
+            $result = xuiApprovePaymentIndex($csvIndex, $found['type'] ?? 'خرید');
+
+            $items = instantPayLoad();
+            $idx = instantPayFindItemIndexById($items, $id);
+
+            if($idx < 0){
+                return ['ok' => false, 'error' => 'سفارش بعد از پردازش پیدا نشد'];
+            }
+
+            if(empty($result['ok'])){
+                $items[$idx]['status'] = 'failed';
+                $items[$idx]['message'] = $result['error'] ?? 'تأیید ناموفق';
+                instantPaySave($items);
+
+                return $result;
+            }
+
+            $items[$idx]['status'] = 'paid';
+            $items[$idx]['paid_at'] = time();
+            $items[$idx]['link'] = $result['link'] ?? ($found['sub'] ?? '');
+            $items[$idx]['message'] = 'پرداخت تأیید شد';
+            $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
+            $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
+            instantPaySave($items);
+
+            if(!empty($found['coupon_code']) || !empty($found['discount_source'])){
+                if(!function_exists('checkoutMarkDiscountPaid')){
+                    require_once __DIR__ . '/pnv_campaign_bootstrap.php';
+                }
+
+                checkoutMarkDiscountPaid($found);
+            }
+
+            if(function_exists('telegramNotifyNewPayment') && empty($result['already'])){
+                try{
+                    $payments = xuiLoadPayments();
+                    $notifyRow = $payments[$csvIndex] ?? null;
+
+                    if(!is_array($notifyRow)){
+                        $nowParts = pnvNowParts();
+                        $notifyRow = [
+                            $found['user'] ?? '',
+                            ($found['type'] ?? '') === 'تمدید' ? ($found['sub'] ?? '') : ($found['subname'] ?? ''),
+                            $found['plan'] ?? '',
+                            'AUTO-' . ($found['code'] ?? ''),
+                            $meta['date'] ?? $nowParts['date'],
+                            $meta['time'] ?? $nowParts['time'],
+                            'تایید شد',
+                            $items[$idx]['link'] ?? '',
+                            intval($found['created_at'] ?? time()),
+                            $found['type'] ?? 'خرید',
+                            $found['coupon_code'] ?? '',
+                            intval($found['discount_percent'] ?? 0),
+                            intval($found['amount'] ?? 0),
+                            $found['code'] ?? ''
+                        ];
+                    }
+
+                    telegramNotifyNewPayment($found['type'] ?? 'خرید', $notifyRow, ['confirmed' => true]);
+                }catch(Throwable $e){
+                    error_log('instant pay telegram confirm notify failed: ' . $e->getMessage());
+                }
+            }
+
+            return [
+                'ok' => true,
+                'item' => instantPayPublicView($items[$idx]),
+                'provision' => $result,
+                'already' => !empty($result['already']),
+            ];
+        }
+        finally{
+            flock($lockFp, LOCK_UN);
+            fclose($lockFp);
+        }
     }
 
     function instantPayMarkPaidFromCsv($csvIndex, $meta = []){
