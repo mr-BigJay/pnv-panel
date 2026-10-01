@@ -114,8 +114,23 @@ if [[ -f "${ROOT}/bigjay_controller/xui_lib.php" ]]; then
   fi
 fi
 
+PROVISION_STORE="${ROOT}/db/locks/payment_provision_idempotency.json"
+mkdir -p "${ROOT}/db/locks"
+touch "${PROVISION_STORE}" 2>/dev/null || true
+
 if id www-data >/dev/null 2>&1; then
-  chown www-data:www-data "${ROOT}/xui_lib.php" "${ROOT}/subscription_lib.php" "${ROOT}/instant_pay_lib.php" "${ROOT}/bale_lib.php" "${ROOT}/bale-webhook.php" 2>/dev/null || true
+  chown www-data:www-data \
+    "${ROOT}/xui_lib.php" \
+    "${ROOT}/subscription_lib.php" \
+    "${ROOT}/instant_pay_lib.php" \
+    "${ROOT}/bale_lib.php" \
+    "${ROOT}/bale-webhook.php" \
+    "${ROOT}/payment_provision_idempotency.php" \
+    2>/dev/null || true
+  chown -R www-data:www-data "${ROOT}/db/locks" 2>/dev/null || true
+  chmod 775 "${ROOT}/db/locks" 2>/dev/null || true
+  chmod 664 "${PROVISION_STORE}" 2>/dev/null || true
+  say "  OK db/locks + payment_provision_idempotency.json (www-data)"
 fi
 
 say ""

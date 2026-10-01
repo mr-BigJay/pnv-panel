@@ -7,6 +7,17 @@
 
 if(!function_exists('xuiPaymentProvisionStorePath')){
 
+    function xuiPaymentProvisionStoreDir(){
+        $override = getenv('PNV_PROVISION_STORE_DIR');
+
+        if(is_string($override) && trim($override) !== ''){
+            return rtrim(trim($override), '/');
+        }
+
+        // Same tree as xuiPaymentApproveLockPath (db/locks) — writable under typical www-data deploys.
+        return __DIR__ . '/db/locks';
+    }
+
     function xuiPaymentProvisionStorePath(){
         $override = getenv('PNV_PROVISION_STORE_PATH');
 
@@ -14,7 +25,7 @@ if(!function_exists('xuiPaymentProvisionStorePath')){
             return trim($override);
         }
 
-        return __DIR__ . '/db/payment_provision_idempotency.json';
+        return xuiPaymentProvisionStoreDir() . '/payment_provision_idempotency.json';
     }
 
     function xuiPaymentProvisionIdKeyFromRow($row){
@@ -107,15 +118,31 @@ if(!function_exists('xuiPaymentProvisionStorePath')){
         $dir = dirname($file);
 
         if(!is_dir($dir)){
-            if(!@mkdir($dir, 0755, true) && !is_dir($dir)){
-                return xuiPaymentProvisionStorageError('پوشه idempotency ساخته نشد', 'mkdir');
+            if(!@mkdir($dir, 0775, true) && !is_dir($dir)){
+                return xuiPaymentProvisionStorageError(
+                    'پوشه idempotency ساخته نشد: ' . $dir,
+                    'mkdir'
+                );
             }
+        }
+
+        if(!is_writable($dir)){
+            return xuiPaymentProvisionStorageError(
+                'پوشه idempotency قابل نوشتن نیست: ' . $dir,
+                'mkdir_not_writable'
+            );
         }
 
         $fp = @fopen($file, 'c+');
 
         if($fp === false){
-            return xuiPaymentProvisionStorageError('باز کردن فایل idempotency ناموفق بود', 'fopen');
+            $sys = error_get_last();
+            $hint = is_array($sys) && !empty($sys['message']) ? ' (' . $sys['message'] . ')' : '';
+
+            return xuiPaymentProvisionStorageError(
+                'باز کردن فایل idempotency ناموفق بود: ' . $file . $hint,
+                'fopen'
+            );
         }
 
         try{
