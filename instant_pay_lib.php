@@ -1044,6 +1044,18 @@ if(!function_exists('instantPayPath')){
                 return ['ok' => false, 'error' => 'لینک اشتراک الزامی است'];
             }
 
+            if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+                require_once __DIR__ . '/subscription_lib.php';
+            }
+
+            if(function_exists('pnvNormalizeSubLinkValue')){
+                $normalizedSub = trim((string)pnvNormalizeSubLinkValue($sub));
+
+                if($normalizedSub !== ''){
+                    $sub = $normalizedSub;
+                }
+            }
+
             $validDomains = [
                 'vip.boozhaan.ir',
                 'vip2.boozhaan.ir',
