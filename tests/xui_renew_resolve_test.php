@@ -55,16 +55,4 @@ $bulkSkipped = [
 ];
 xuiRenewTestAssert('bulkAdjust skipped email', !xuiBulkAdjustApplied($bulkSkipped, 'bob'));
 
-$provKey = 'test:' . uniqid('', true);
-$begin1 = xuiPaymentProvisionBegin($provKey);
-xuiRenewTestAssert('provision begin owned', ($begin1['state'] ?? '') === 'owned');
-$begin2 = xuiPaymentProvisionBegin($provKey);
-xuiRenewTestAssert('provision begin busy while running', ($begin2['state'] ?? '') === 'busy');
-$stored = ['ok' => true, 'email' => 'a@b', 'server_id' => 'vip', 'link' => 'https://x/sub/y'];
-xuiPaymentProvisionCommit($provKey, $stored);
-$begin3 = xuiPaymentProvisionBegin($provKey);
-xuiRenewTestAssert('provision begin done', ($begin3['state'] ?? '') === 'done');
-xuiRenewTestAssert('provision cached result', ($begin3['result']['email'] ?? '') === 'a@b');
-xuiPaymentProvisionAbort($provKey);
-
 echo "all xui renew resolve tests passed\n";

@@ -83,8 +83,10 @@ FILES=(
   "instant_pay_lib.php"
   "bale_lib.php"
   "bale-webhook.php"
+  "payment_provision_idempotency.php"
   "tests/xui_renew_resolve_test.php"
   "tests/instant_pay_amount_test.php"
+  "tests/payment_provision_idempotency_test.php"
   "scripts/diag-renew-provision.php"
 )
 
@@ -113,7 +115,7 @@ if [[ -f "${ROOT}/bigjay_controller/xui_lib.php" ]]; then
 fi
 
 if id www-data >/dev/null 2>&1; then
-  chown www-data:www-data "${ROOT}/xui_lib.php" "${ROOT}/subscription_lib.php" "${ROOT}/instant_pay_lib.php" 2>/dev/null || true
+  chown www-data:www-data "${ROOT}/xui_lib.php" "${ROOT}/subscription_lib.php" "${ROOT}/instant_pay_lib.php" "${ROOT}/bale_lib.php" "${ROOT}/bale-webhook.php" 2>/dev/null || true
 fi
 
 say ""
