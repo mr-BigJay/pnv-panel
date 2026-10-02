@@ -220,7 +220,7 @@ if(isset($_POST['approve_payment'])){
     }
 
     if($paymentsXuiEnabled && function_exists('xuiApprovePaymentIndex')){
-        $result = xuiApprovePaymentIndex($index, 'خرید');
+        $result = xuiApprovePaymentIndex($index, '');
 
         if(empty($result['ok'])){
             $_SESSION['payment_error'] = 'تایید ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
@@ -331,6 +331,10 @@ foreach($payments as $index => $pay){
     $type = trim($pay[9] ?? '');
 
     if($type == 'خرید' || $type == ''){
+
+        if(function_exists('xuiPaymentRowType') && xuiPaymentRowType($pay, '', $index) === 'تمدید'){
+            continue;
+        }
 
         if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
             continue;
@@ -1166,7 +1170,6 @@ content=
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
 '<input type="hidden" name="view" value="'+paymentsListView+'">'+
 '<input type="hidden" name="approve_index" value="'+id+'">'+
-'<p style="color:#94a3b8;font-size:13px;margin:0 0 14px;line-height:1.5;">اشتراک روی پنل 3x-ui ساخته می‌شود (مثل پرداخت آنی).</p>'+
 '<div class="modalBtns">'+
 '<button type="submit" name="approve_payment" class="green">تایید</button>'+
 '</div></form>';

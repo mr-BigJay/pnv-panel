@@ -170,26 +170,20 @@ if(!in_array($redirectView, ['pending', 'confirmed', 'expired'], true)){
     $redirectView = 'pending';
 }
 
-$manualOnly = !empty($_POST['approve_manual']);
 $renewsRedirect = pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($redirectView));
 
-if(function_exists('xuiAdminApprovePayment')){
+if($renewsXuiEnabled && function_exists('xuiApprovePaymentIndex')){
 
-$result = xuiAdminApprovePayment($index, 'تمدید', [
-    'approve_link' => $link,
-    'manual_only' => $manualOnly,
-]);
+$result = xuiApprovePaymentIndex($index, 'تمدید');
 
 if(empty($result['ok'])){
-$_SESSION['payment_error'] = ($manualOnly ? 'تأیید دستی ناموفق: ' : 'تمدید خودکار ناموفق: ')
-    . ($result['error'] ?? 'خطای نامشخص');
+$_SESSION['payment_error'] = 'تمدید ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
 header('Location: ' . $renewsRedirect);
 exit;
 }
 
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
-
-$_SESSION['payment_message_detail'] = (string)($result['link'] ?? $link);
+$_SESSION['payment_message_detail'] = (string)($result['link'] ?? '');
 header('Location: ' . $renewsRedirect);
 exit;
 
@@ -273,7 +267,13 @@ foreach($payments as $index=>$pay){
 
 $type=trim($pay[9] ?? '');
 
-if($type=='تمدید'){
+$isRenew = ($type === 'تمدید');
+
+if(!$isRenew && function_exists('xuiPaymentRowType')){
+    $isRenew = xuiPaymentRowType($pay, '', $index) === 'تمدید';
+}
+
+if($isRenew){
 
 if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
 continue;
@@ -958,13 +958,12 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 '<?php echo htmlspecialchars($payWhen['date'],ENT_QUOTES); ?>',
 '<?php echo htmlspecialchars($payWhen['time'],ENT_QUOTES); ?>'
 )">جزئیات پرداخت</button>
-<button type="button" onclick='openAction(<?php echo json_encode([
-    (string)$i,
-    (string)($p[0] ?? '-'),
-    (string)$mobile,
-    (string)($p[2] ?? '-'),
-    (string)($p[1] ?? ''),
-], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP); ?>)'>عملیات</button>
+<button type="button" onclick="openAction(
+'<?php echo $i; ?>',
+'<?php echo htmlspecialchars($p[0] ?? '-',ENT_QUOTES); ?>',
+'<?php echo htmlspecialchars($mobile,ENT_QUOTES); ?>',
+'<?php echo htmlspecialchars($p[2] ?? '-',ENT_QUOTES); ?>'
+)">عملیات</button>
 <button type="button" class="red" onclick="deleteItem('<?php echo $i; ?>')">حذف</button>
 </div>
 
@@ -1000,6 +999,7 @@ var renewResultMessage = <?php echo json_encode($paymentMessage, JSON_UNESCAPED_
 var renewResultDetail = <?php echo json_encode($paymentMessageDetail, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultError = <?php echo json_encode($paymentError, JSON_UNESCAPED_UNICODE); ?>;
 var renewsListView = <?php echo json_encode($renewsListView, JSON_UNESCAPED_UNICODE); ?>;
+var renewsXuiEnabled = <?php echo $renewsXuiEnabled ? 'true' : 'false'; ?>;
 var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($renewsListView)), JSON_UNESCAPED_UNICODE); ?>;
 
 function closeMenus(){
@@ -1117,35 +1117,24 @@ openModal(
 );
 }
 
-function escRenewAttr(value){
-return String(value || '')
-.replace(/&/g,'&amp;')
-.replace(/"/g,'&quot;')
-.replace(/</g,'&lt;');
-}
+function openAction(id,user,mobile,plan){
+var approveForm = renewsXuiEnabled
+? ('<form method="POST">'+
+'<input type="hidden" name="view" value="'+renewsListView+'">'+
+'<input type="hidden" name="approve_index" value="'+id+'">'+
+'<div class="modalBtns"><button class="green" name="approve_payment">تایید</button></div></form>')
+: ('<form method="POST">'+
+'<input type="hidden" name="view" value="'+renewsListView+'">'+
+'<input type="hidden" name="approve_index" value="'+id+'">'+
+'<input type="text" name="approve_link" placeholder="لینک تمدید">'+
+'<div class="modalBtns"><button class="green" name="approve_payment">تایید</button></div></form>');
 
-function openAction(id,user,mobile,plan,subLink){
-subLink = subLink || '';
 openModal(
 '<h3>عملیات تمدید</h3>'+
 '<p><b>کاربر:</b> '+user+'</p>'+
 '<p><b>موبایل:</b> '+mobile+'</p>'+
 '<p><b>پلن:</b> '+plan+'</p>'+
-'<form method="POST">'+
-'<input type="hidden" name="view" value="'+renewsListView+'">'+
-'<input type="hidden" name="approve_index" value="'+id+'">'+
-'<input type="text" name="approve_link" placeholder="لینک subscription یا SubID" value="'+escRenewAttr(subLink)+'">'+
-'<p style="color:#94a3b8;font-size:12px;margin:8px 0 10px;line-height:1.5;">'+
-'اگر تمدید خودکار خطا داد، لینک کامل subscription را اینجا بگذارید یا تیک «تأیید دستی» را بزنید.'+
-'</p>'+
-'<label style="display:block;margin:0 0 12px;color:#cbd5e1;font-size:13px;">'+
-'<input type="checkbox" name="approve_manual" value="1" style="margin-left:6px;">'+
-'حتماً از لینک/subscription واردشده بالا برای تمدید در 3x-ui استفاده شود'+
-'</label>'+
-'<div class="modalBtns">'+
-'<button class="green" name="approve_payment">تایید</button>'+
-'</div>'+
-'</form>'+
+approveForm+
 '<hr style="margin:15px 0;">'+
 '<form method="POST">'+
 '<input type="hidden" name="reject_index" value="'+id+'">'+

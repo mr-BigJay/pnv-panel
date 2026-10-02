@@ -46,12 +46,13 @@ else{
 $config = xuiLoadConfig();
 $out = [
     'xui_enabled' => xuiIsEnabled($config),
-    'row_type' => xuiPaymentRowType($row, 'تمدید'),
+    'row_type' => xuiPaymentRowType($row, 'تمدید', $csvIndex),
     'plan_gb' => xuiParsePlanGb($row[2] ?? ''),
     'plan_days' => xuiParsePlanDays($row[2] ?? ''),
+    'resolved_target' => xuiResolveRenewPaymentTarget($row, '', $csvIndex),
 ];
 
-$ctx = xuiResolveRenewContext($row, $config);
+$ctx = xuiResolveRenewContext($row, $config, $out['resolved_target'] ?? '');
 $out['resolve'] = $ctx;
 
 if(!empty($ctx['ok'])){
