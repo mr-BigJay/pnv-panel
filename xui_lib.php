@@ -661,7 +661,7 @@ if(!function_exists('xuiConfigPath')){
         if($rawLink === ''){
             return [
                 'ok' => false,
-                'error' => 'لینک اشتراک تمدید پیدا نشد. در ادمین لینک subscription را در فرم تأیید بگذارید.',
+                'error' => 'لینک اشتراک تمدید معتبر نیست',
             ];
         }
 
@@ -2281,7 +2281,19 @@ if(!function_exists('xuiConfigPath')){
             require_once __DIR__ . '/payment_provision_idempotency.php';
         }
 
-        $renewOverride = trim((string)($GLOBALS['xuiProvisionRenewOverrideLink'] ?? ''));
+        $renewOverride = '';
+
+        if($type === 'تمدید'){
+            $renewOverride = xuiResolveRenewPaymentTarget($row);
+
+            if($renewOverride !== ''){
+                if(trim((string)($payments[$index][1] ?? '')) !== $renewOverride){
+                    $payments[$index][1] = $renewOverride;
+                    xuiSavePayments($payments);
+                    $row = $payments[$index];
+                }
+            }
+        }
 
         $result = xuiPaymentProvisionExecute($row, $type, static function() use ($type, $row, $renewOverride){
             if($type === 'تمدید'){
@@ -2472,58 +2484,10 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
-    /**
-     * @param array{approve_link?:string,manual_only?:bool,manual_fallback?:bool} $opts
-     */
+    /** @deprecated use xuiApprovePaymentIndex — kept for older admin copies */
     function xuiAdminApprovePayment($index, $typeHint = '', array $opts = []){
-        $index = intval($index);
-        $link = trim((string)($opts['approve_link'] ?? ''));
-        $manualOnly = !empty($opts['manual_only']);
+        unset($opts);
 
-        $payments = xuiLoadPayments();
-
-        if(!isset($payments[$index])){
-            return ['ok' => false, 'error' => 'پرداخت پیدا نشد'];
-        }
-
-        $row = $payments[$index];
-        $type = xuiPaymentRowType($row, $typeHint);
-        $config = xuiLoadConfig();
-        $xuiOn = xuiIsEnabled($config);
-
-        if(!$xuiOn){
-            return xuiAdminManualConfirmPayment($index, $link, $typeHint);
-        }
-
-        if($type === 'تمدید'){
-            $resolved = xuiResolveRenewPaymentTarget($row, $link);
-
-            if($resolved === ''){
-                return [
-                    'ok' => false,
-                    'error' => 'لینک subscription تمدید پیدا نشد. لینک کامل (یا SubID) را در فرم تأیید وارد کنید.',
-                ];
-            }
-
-            if($manualOnly && $link === ''){
-                return [
-                    'ok' => false,
-                    'error' => 'برای تأیید با لینک دستی، فیلد لینک subscription الزامی است.',
-                ];
-            }
-
-            $payments[$index][1] = $resolved;
-            xuiSavePayments($payments);
-            $GLOBALS['xuiProvisionRenewOverrideLink'] = $resolved;
-        }
-
-        try{
-            $result = xuiApprovePaymentIndex($index, $typeHint);
-        }
-        finally{
-            unset($GLOBALS['xuiProvisionRenewOverrideLink']);
-        }
-
-        return $result;
+        return xuiApprovePaymentIndex(intval($index), $typeHint);
     }
 }

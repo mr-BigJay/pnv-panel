@@ -78,6 +78,12 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+$paymentsXuiEnabled = false;
+
+if(function_exists('xuiLoadConfig') && function_exists('xuiIsEnabled')){
+    $paymentsXuiEnabled = xuiIsEnabled(xuiLoadConfig());
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -213,23 +219,16 @@ if(isset($_POST['approve_payment'])){
         $redirectView = 'pending';
     }
 
-    $manualOnly = !empty($_POST['approve_manual']);
-
-    if(function_exists('xuiAdminApprovePayment')){
-        $result = xuiAdminApprovePayment($index, 'خرید', [
-            'approve_link' => $link,
-            'manual_only' => $manualOnly,
-        ]);
+    if($paymentsXuiEnabled && function_exists('xuiApprovePaymentIndex')){
+        $result = xuiApprovePaymentIndex($index, 'خرید');
 
         if(empty($result['ok'])){
-            $_SESSION['payment_error'] = ($manualOnly ? 'تأیید دستی ناموفق: ' : 'تایید خودکار ناموفق: ')
-                . ($result['error'] ?? 'خطای نامشخص');
+            $_SESSION['payment_error'] = 'تایید ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
             header('Location: ' . pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($redirectView) . '&per=' . $redirectPer));
             exit;
         }
 
         $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-
         header('Location: ' . pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($redirectView) . '&per=' . $redirectPer));
         exit;
     }
@@ -1043,6 +1042,7 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 <script>
 
 const paymentsListView = <?php echo json_encode($paymentsListView, JSON_UNESCAPED_UNICODE); ?>;
+const paymentsXuiEnabled = <?php echo $paymentsXuiEnabled ? 'true' : 'false'; ?>;
 const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($paymentsListView)), JSON_UNESCAPED_UNICODE); ?>;
 const paymentsPerPage = <?php echo (int)$perPage; ?>;
 
@@ -1160,20 +1160,30 @@ content='<div style="background:#450a0a;padding:14px;border-radius:12px;line-hei
 '<div class="modalBtns"><button class="gray" onclick="closeModal()">بستن</button></div>';
 }
 else{
+if(paymentsXuiEnabled){
 content=
 '<form method="POST">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
 '<input type="hidden" name="view" value="'+paymentsListView+'">'+
 '<input type="hidden" name="approve_index" value="'+id+'">'+
-'<input type="text" name="approve_link" id="approveLink" placeholder="لینک اشتراک (برای تأیید دستی الزامی)">'+
-'<label style="display:block;margin:10px 0 12px;color:#cbd5e1;font-size:13px;line-height:1.5;">'+
-'<input type="checkbox" name="approve_manual" value="1" style="margin-left:6px;">'+
-'لینک بالا را برای ساخت/تمدید در 3x-ui استفاده کن (اگر خودکار خطا داد)'+
-'</label>'+
+'<p style="color:#94a3b8;font-size:13px;margin:0 0 14px;line-height:1.5;">اشتراک روی پنل 3x-ui ساخته می‌شود (مثل پرداخت آنی).</p>'+
+'<div class="modalBtns">'+
+'<button type="submit" name="approve_payment" class="green">تایید</button>'+
+'</div></form>';
+}
+else{
+content=
+'<form method="POST">'+
+'<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="view" value="'+paymentsListView+'">'+
+'<input type="hidden" name="approve_index" value="'+id+'">'+
+'<input type="text" name="approve_link" id="approveLink" placeholder="لینک اشتراک">'+
 '<div class="modalBtns">'+
 '<button type="button" class="gray" onclick="pasteClipboard()">Paste</button>'+
 '<button type="submit" name="approve_payment" class="green">تایید</button>'+
-'</div></form>'+
+'</div></form>';
+}
+content+=
 '<hr style="margin:20px 0;border-color:#334155;">'+
 '<form method="POST">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+

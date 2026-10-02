@@ -79,6 +79,12 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+$renewsXuiEnabled = false;
+
+if(function_exists('xuiLoadConfig') && function_exists('xuiIsEnabled')){
+    $renewsXuiEnabled = xuiIsEnabled(xuiLoadConfig());
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
