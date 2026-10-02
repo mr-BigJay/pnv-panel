@@ -1420,6 +1420,61 @@ if(!function_exists('instantPayPath')){
         }
     }
 
+    /**
+     * بعد از تأیید دستی ادمین — JSON instant pay را paid می‌کند (بدون xuiApprove).
+     */
+    function instantPaySyncPaidFromCsvRow($csvIndex, $link = ''){
+        if(!function_exists('xuiLoadPayments')){
+            return;
+        }
+
+        $csvIndex = intval($csvIndex);
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$csvIndex]) || !is_array($payments[$csvIndex])){
+            return;
+        }
+
+        $row = $payments[$csvIndex];
+        $user = trim((string)($row[0] ?? ''));
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if($user === '' || $tracking === '' || strpos($tracking, 'AUTO-') !== 0){
+            return;
+        }
+
+        $items = instantPayLoad();
+        $changed = false;
+        $link = trim((string)$link);
+
+        foreach($items as $i => $item){
+            $matchIndex = intval($item['csv_index'] ?? -1) === $csvIndex;
+            $matchTrack = strcasecmp(trim((string)($item['user'] ?? '')), $user) === 0
+                && instantPayNormalizeTracking(instantPayTrackingCode($item)) === instantPayNormalizeTracking($tracking);
+
+            if(!$matchIndex && !$matchTrack){
+                continue;
+            }
+
+            $items[$i]['status'] = 'paid';
+            $items[$i]['paid_at'] = time();
+            $items[$i]['csv_index'] = $csvIndex;
+            $items[$i]['csv_purged'] = false;
+            $items[$i]['message'] = 'تأیید دستی ادمین';
+
+            if($link !== ''){
+                $items[$i]['link'] = $link;
+            }
+
+            $changed = true;
+            break;
+        }
+
+        if($changed){
+            instantPaySave($items);
+        }
+    }
+
     function instantPayMarkPaidFromCsv($csvIndex, $meta = []){
         if(!function_exists('xuiLoadPayments')){
             return ['ok' => false, 'error' => 'سیستم پرداخت در دسترس نیست'];

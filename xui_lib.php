@@ -2222,4 +2222,141 @@ if(!function_exists('xuiConfigPath')){
 
         return ['ok' => true, 'deleted' => $deleted, 'payments' => $payments];
     }
+
+    function xuiAdminIsValidManualLink($link){
+        $link = trim((string)$link);
+
+        if($link === ''){
+            return false;
+        }
+
+        if(xuiParseSubLink($link) || xuiLooksLikeBareSubId($link)){
+            return true;
+        }
+
+        if(!filter_var($link, FILTER_VALIDATE_URL)){
+            return false;
+        }
+
+        $validDomains = [
+            'vip.boozhaan.ir',
+            'vip2.boozhaan.ir',
+            'vip3.boozhaan.ir',
+            'vip4.boozhaan.ir',
+        ];
+
+        foreach($validDomains as $domain){
+            if(stripos($link, $domain) !== false){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * تأیید دستی در ادمین — فقط CSV (بدون bulkAdjust / ساخت اشتراک).
+     */
+    function xuiAdminManualConfirmPayment($index, $link, $typeHint = ''){
+        $index = intval($index);
+        $link = trim((string)$link);
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$index])){
+            return ['ok' => false, 'error' => 'پرداخت پیدا نشد'];
+        }
+
+        $row = $payments[$index];
+        $type = xuiPaymentRowType($row, $typeHint);
+        $status = trim((string)($row[6] ?? ''));
+
+        if($status === 'تایید شد'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'link' => $row[7] ?? '',
+                'manual' => true,
+            ];
+        }
+
+        if($link === ''){
+            return ['ok' => false, 'error' => 'لینک اشتراک برای تأیید دستی الزامی است'];
+        }
+
+        if(!xuiAdminIsValidManualLink($link)){
+            return ['ok' => false, 'error' => 'لینک اشتراک معتبر نیست'];
+        }
+
+        if($type === 'تمدید'){
+            $payments[$index][1] = $link;
+        }
+
+        $payments[$index][6] = 'تایید شد';
+        $payments[$index][7] = $link;
+        xuiSavePayments($payments);
+
+        if(function_exists('instantPaySyncPaidFromCsvRow')){
+            instantPaySyncPaidFromCsvRow($index, $link);
+        }
+
+        return [
+            'ok' => true,
+            'link' => $link,
+            'manual' => true,
+        ];
+    }
+
+    /**
+     * @param array{approve_link?:string,manual_only?:bool,manual_fallback?:bool} $opts
+     */
+    function xuiAdminApprovePayment($index, $typeHint = '', array $opts = []){
+        $index = intval($index);
+        $link = trim((string)($opts['approve_link'] ?? ''));
+        $manualOnly = !empty($opts['manual_only']);
+        $manualFallback = !empty($opts['manual_fallback']);
+
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$index])){
+            return ['ok' => false, 'error' => 'پرداخت پیدا نشد'];
+        }
+
+        $row = $payments[$index];
+        $type = xuiPaymentRowType($row, $typeHint);
+        $config = xuiLoadConfig();
+        $xuiOn = xuiIsEnabled($config);
+
+        if($manualOnly || !$xuiOn){
+            return xuiAdminManualConfirmPayment($index, $link, $typeHint);
+        }
+
+        if($link !== '' && $type === 'تمدید'){
+            $payments[$index][1] = $link;
+            xuiSavePayments($payments);
+        }
+
+        $result = xuiApprovePaymentIndex($index, $typeHint);
+
+        if(!empty($result['ok'])){
+            return $result;
+        }
+
+        if($manualFallback && $link !== ''){
+            $manual = xuiAdminManualConfirmPayment($index, $link, $typeHint);
+
+            if(!empty($manual['ok'])){
+                $manual['auto_error'] = $result['error'] ?? '';
+                $manual['warning'] = 'صدور خودکار ناموفق بود؛ پرداخت به‌صورت دستی تأیید شد.';
+
+                return $manual;
+            }
+
+            return [
+                'ok' => false,
+                'error' => ($result['error'] ?? 'تأیید خودکار ناموفق') . ' | دستی: ' . ($manual['error'] ?? ''),
+            ];
+        }
+
+        return $result;
+    }
 }
