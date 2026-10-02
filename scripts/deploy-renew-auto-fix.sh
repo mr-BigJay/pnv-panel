@@ -80,6 +80,7 @@ clone_if_needed(){
 FILES=(
   "xui_lib.php"
   "subscription_lib.php"
+  "plan_ui_lib.php"
   "instant_pay_lib.php"
   "bale_lib.php"
   "bale-webhook.php"

@@ -219,7 +219,6 @@ if(isset($_POST['approve_payment'])){
         $result = xuiAdminApprovePayment($index, 'خرید', [
             'approve_link' => $link,
             'manual_only' => $manualOnly,
-            'manual_fallback' => !$manualOnly,
         ]);
 
         if(empty($result['ok'])){
@@ -229,15 +228,7 @@ if(isset($_POST['approve_payment'])){
             exit;
         }
 
-        if(!empty($result['warning'])){
-            $_SESSION['payment_message'] = $result['warning'];
-        }
-        elseif(!empty($result['manual'])){
-            $_SESSION['payment_message'] = 'پرداخت به‌صورت دستی تأیید شد';
-        }
-        else{
-            $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-        }
+        $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
 
         header('Location: ' . pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($redirectView) . '&per=' . $redirectPer));
         exit;
@@ -1177,7 +1168,7 @@ content=
 '<input type="text" name="approve_link" id="approveLink" placeholder="لینک اشتراک (برای تأیید دستی الزامی)">'+
 '<label style="display:block;margin:10px 0 12px;color:#cbd5e1;font-size:13px;line-height:1.5;">'+
 '<input type="checkbox" name="approve_manual" value="1" style="margin-left:6px;">'+
-'فقط تأیید دستی (بدون ساخت اشتراک در 3x-ui)'+
+'لینک بالا را برای ساخت/تمدید در 3x-ui استفاده کن (اگر خودکار خطا داد)'+
 '</label>'+
 '<div class="modalBtns">'+
 '<button type="button" class="gray" onclick="pasteClipboard()">Paste</button>'+

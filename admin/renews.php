@@ -172,7 +172,6 @@ if(function_exists('xuiAdminApprovePayment')){
 $result = xuiAdminApprovePayment($index, 'تمدید', [
     'approve_link' => $link,
     'manual_only' => $manualOnly,
-    'manual_fallback' => !$manualOnly,
 ]);
 
 if(empty($result['ok'])){
@@ -182,15 +181,7 @@ header('Location: ' . $renewsRedirect);
 exit;
 }
 
-if(!empty($result['warning'])){
-$_SESSION['payment_message'] = $result['warning'];
-}
-elseif(!empty($result['manual'])){
-$_SESSION['payment_message'] = 'تمدید به‌صورت دستی تأیید شد (حجم را در 3x-ui در صورت نیاز دستی اضافه کنید)';
-}
-else{
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
-}
 
 $_SESSION['payment_message_detail'] = (string)($result['link'] ?? $link);
 header('Location: ' . $renewsRedirect);
@@ -1137,13 +1128,13 @@ openModal(
 '<form method="POST">'+
 '<input type="hidden" name="view" value="'+renewsListView+'">'+
 '<input type="hidden" name="approve_index" value="'+id+'">'+
-'<input type="text" name="approve_link" placeholder="لینک subscription یا SubID" value="'+String(subLink).replace(/"/g,'&quot;')+'">'+
+'<input type="text" name="approve_link" placeholder="لینک subscription یا SubID" value="'+escRenewAttr(subLink)+'">'+
 '<p style="color:#94a3b8;font-size:12px;margin:8px 0 10px;line-height:1.5;">'+
 'اگر تمدید خودکار خطا داد، لینک کامل subscription را اینجا بگذارید یا تیک «تأیید دستی» را بزنید.'+
 '</p>'+
 '<label style="display:block;margin:0 0 12px;color:#cbd5e1;font-size:13px;">'+
 '<input type="checkbox" name="approve_manual" value="1" style="margin-left:6px;">'+
-'فقط تأیید دستی (بدون افزودن حجم در 3x-ui)'+
+'حتماً از لینک/subscription واردشده بالا برای تمدید در 3x-ui استفاده شود'+
 '</label>'+
 '<div class="modalBtns">'+
 '<button class="green" name="approve_payment">تایید</button>'+

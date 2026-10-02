@@ -447,6 +447,160 @@ if(!function_exists('xuiConfigPath')){
      *
      * @return array{server:array,client:array,sub_id:string}|null
      */
+    /**
+     * لینک/subId هدف تمدید از CSV، instant pay، یا خریدهای قبلی همان کاربر.
+     */
+    function xuiResolveRenewPaymentTarget(array $row, $overrideLink = ''){
+        $user = trim((string)($row[0] ?? ''));
+        $overrideLink = trim((string)$overrideLink);
+        $candidates = [];
+
+        if($overrideLink !== ''){
+            $candidates[] = $overrideLink;
+        }
+
+        $candidates[] = trim((string)($row[1] ?? ''));
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') === 0){
+            if(!function_exists('instantPayFindJsonByTracking') && is_file(__DIR__ . '/instant_pay_lib.php')){
+                require_once __DIR__ . '/instant_pay_lib.php';
+            }
+
+            if(function_exists('instantPayFindJsonByTracking')){
+                $item = instantPayFindJsonByTracking($user, $tracking);
+
+                if(is_array($item)){
+                    foreach(['sub', 'link'] as $key){
+                        $value = trim((string)($item[$key] ?? ''));
+
+                        if($value !== ''){
+                            $candidates[] = $value;
+                        }
+                    }
+                }
+            }
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        foreach($candidates as $candidate){
+            $candidate = trim((string)$candidate);
+
+            if($candidate === ''){
+                continue;
+            }
+
+            if(function_exists('pnvNormalizeSubLinkValue')){
+                $normalized = trim((string)pnvNormalizeSubLinkValue($candidate));
+
+                if($normalized !== ''){
+                    $candidate = $normalized;
+                }
+            }
+
+            if(xuiParseSubLink($candidate) || xuiLooksLikeBareSubId($candidate)){
+                return $candidate;
+            }
+
+            if($user !== ''){
+                if(!function_exists('pnvFindSubLinkFromCsv') && is_file(__DIR__ . '/plan_ui_lib.php')){
+                    require_once __DIR__ . '/plan_ui_lib.php';
+                }
+
+                if(function_exists('pnvFindSubLinkFromCsv')){
+                    $resolved = trim((string)pnvFindSubLinkFromCsv($user, $candidate));
+
+                    if($resolved !== ''){
+                        if(function_exists('pnvNormalizeSubLinkValue')){
+                            $resolved = trim((string)pnvNormalizeSubLinkValue($resolved));
+                        }
+
+                        if(xuiParseSubLink($resolved) || xuiLooksLikeBareSubId($resolved)){
+                            return $resolved;
+                        }
+                    }
+                }
+            }
+        }
+
+        $configName = trim((string)($row[1] ?? ''));
+
+        if($configName !== ''){
+            $found = xuiFindRenewServerByClientEmail($configName);
+
+            if(is_array($found) && ($found['sub_id'] ?? '') !== ''){
+                $host = strtolower(trim((string)($found['server']['host'] ?? '')));
+
+                if($host !== ''){
+                    return xuiBuildSubLink($host, (string)$found['sub_id'], $found['config'] ?? null);
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array{server:array,client:array,sub_id:string,config?:array}|null
+     */
+    function xuiFindRenewServerByClientEmail($email, $config = null){
+        if($config === null){
+            $config = xuiLoadConfig();
+        }
+
+        $email = trim((string)$email);
+
+        if($email === ''){
+            return null;
+        }
+
+        $restrictIds = xuiRenewAllowedServerIds($config);
+        $servers = is_array($config['servers'] ?? null) ? $config['servers'] : [];
+
+        foreach($servers as $server){
+            if(!is_array($server)){
+                continue;
+            }
+
+            $serverId = (string)($server['id'] ?? '');
+
+            if(count($restrictIds) > 0 && !in_array($serverId, $restrictIds, true)){
+                continue;
+            }
+
+            $full = xuiApiRequest($server, 'GET', '/panel/api/clients/get/' . rawurlencode($email));
+
+            if(empty($full['success']) || !is_array($full['obj'] ?? null)){
+                continue;
+            }
+
+            $client = xuiNormalizeClientRecord($full['obj']['client'] ?? $full['obj']);
+
+            if(!$client){
+                continue;
+            }
+
+            $subId = trim((string)($client['subId'] ?? ''));
+
+            if($subId === ''){
+                continue;
+            }
+
+            return [
+                'server' => $server,
+                'client' => $client,
+                'sub_id' => $subId,
+                'config' => $config,
+            ];
+        }
+
+        return null;
+    }
+
     function xuiFindRenewServerBySubId($subId, $config = null, $restrictIds = null){
         if($config === null){
             $config = xuiLoadConfig();
@@ -490,15 +644,25 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
-    function xuiResolveRenewContext($paymentRow, $config = null){
+    function xuiResolveRenewContext($paymentRow, $config = null, $overrideLink = ''){
         if($config === null){
             $config = xuiLoadConfig();
         }
 
-        $rawLink = trim((string)($paymentRow[1] ?? ''));
+        $rawLink = xuiResolveRenewPaymentTarget(
+            is_array($paymentRow) ? $paymentRow : [],
+            $overrideLink
+        );
 
         if($rawLink === ''){
-            return ['ok' => false, 'error' => 'لینک اشتراک تمدید خالی است'];
+            $rawLink = trim((string)($paymentRow[1] ?? ''));
+        }
+
+        if($rawLink === ''){
+            return [
+                'ok' => false,
+                'error' => 'لینک اشتراک تمدید پیدا نشد. در ادمین لینک subscription را در فرم تأیید بگذارید.',
+            ];
         }
 
         if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
@@ -1976,7 +2140,7 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
-    function xuiProvisionRenew($paymentRow){
+    function xuiProvisionRenew($paymentRow, $overrideLink = ''){
         $config = xuiLoadConfig();
 
         if(!xuiIsEnabled($config)){
@@ -1991,7 +2155,7 @@ if(!function_exists('xuiConfigPath')){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
         }
 
-        $ctx = xuiResolveRenewContext($paymentRow, $config);
+        $ctx = xuiResolveRenewContext($paymentRow, $config, $overrideLink);
 
         if(empty($ctx['ok'])){
             return [
@@ -2117,9 +2281,11 @@ if(!function_exists('xuiConfigPath')){
             require_once __DIR__ . '/payment_provision_idempotency.php';
         }
 
-        $result = xuiPaymentProvisionExecute($row, $type, static function() use ($type, $row){
+        $renewOverride = trim((string)($GLOBALS['xuiProvisionRenewOverrideLink'] ?? ''));
+
+        $result = xuiPaymentProvisionExecute($row, $type, static function() use ($type, $row, $renewOverride){
             if($type === 'تمدید'){
-                return xuiProvisionRenew($row);
+                return xuiProvisionRenew($row, $renewOverride);
             }
 
             return xuiProvisionBuy($row);
@@ -2313,7 +2479,6 @@ if(!function_exists('xuiConfigPath')){
         $index = intval($index);
         $link = trim((string)($opts['approve_link'] ?? ''));
         $manualOnly = !empty($opts['manual_only']);
-        $manualFallback = !empty($opts['manual_fallback']);
 
         $payments = xuiLoadPayments();
 
@@ -2326,35 +2491,37 @@ if(!function_exists('xuiConfigPath')){
         $config = xuiLoadConfig();
         $xuiOn = xuiIsEnabled($config);
 
-        if($manualOnly || !$xuiOn){
+        if(!$xuiOn){
             return xuiAdminManualConfirmPayment($index, $link, $typeHint);
         }
 
-        if($link !== '' && $type === 'تمدید'){
-            $payments[$index][1] = $link;
-            xuiSavePayments($payments);
-        }
+        if($type === 'تمدید'){
+            $resolved = xuiResolveRenewPaymentTarget($row, $link);
 
-        $result = xuiApprovePaymentIndex($index, $typeHint);
-
-        if(!empty($result['ok'])){
-            return $result;
-        }
-
-        if($manualFallback && $link !== ''){
-            $manual = xuiAdminManualConfirmPayment($index, $link, $typeHint);
-
-            if(!empty($manual['ok'])){
-                $manual['auto_error'] = $result['error'] ?? '';
-                $manual['warning'] = 'صدور خودکار ناموفق بود؛ پرداخت به‌صورت دستی تأیید شد.';
-
-                return $manual;
+            if($resolved === ''){
+                return [
+                    'ok' => false,
+                    'error' => 'لینک subscription تمدید پیدا نشد. لینک کامل (یا SubID) را در فرم تأیید وارد کنید.',
+                ];
             }
 
-            return [
-                'ok' => false,
-                'error' => ($result['error'] ?? 'تأیید خودکار ناموفق') . ' | دستی: ' . ($manual['error'] ?? ''),
-            ];
+            if($manualOnly && $link === ''){
+                return [
+                    'ok' => false,
+                    'error' => 'برای تأیید با لینک دستی، فیلد لینک subscription الزامی است.',
+                ];
+            }
+
+            $payments[$index][1] = $resolved;
+            xuiSavePayments($payments);
+            $GLOBALS['xuiProvisionRenewOverrideLink'] = $resolved;
+        }
+
+        try{
+            $result = xuiApprovePaymentIndex($index, $typeHint);
+        }
+        finally{
+            unset($GLOBALS['xuiProvisionRenewOverrideLink']);
         }
 
         return $result;
