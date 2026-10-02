@@ -179,7 +179,7 @@ if(!function_exists('pnvFormatPlanPrice')){
         $handle = fopen($file, 'r');
 
         while(($row = fgetcsv($handle)) !== false){
-            if(($row[0] ?? '') !== $username){
+            if(strcasecmp(trim((string)($row[0] ?? '')), $username) !== 0){
                 continue;
             }
 
