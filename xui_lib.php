@@ -445,14 +445,12 @@ if(!function_exists('xuiConfigPath')){
     /**
      * وقتی در CSV فقط Sub ID است یا host با تنظیمات فرق دارد، بین سرورهای مجاز جستجو می‌کند.
      *
-     * @return array{server:array,client:array,sub_id:string}|null
-     */
-    /**
      * لینک/subId هدف تمدید از CSV، instant pay، یا خریدهای قبلی همان کاربر.
      */
-    function xuiResolveRenewPaymentTarget(array $row, $overrideLink = ''){
+    function xuiResolveRenewPaymentTarget(array $row, $overrideLink = '', $csvIndex = -1){
         $user = trim((string)($row[0] ?? ''));
         $overrideLink = trim((string)$overrideLink);
+        $csvIndex = intval($csvIndex);
         $candidates = [];
 
         if($overrideLink !== ''){
@@ -460,24 +458,41 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $candidates[] = trim((string)($row[1] ?? ''));
+        $col7 = trim((string)($row[7] ?? ''));
+
+        if($col7 !== ''){
+            $candidates[] = $col7;
+        }
+
+        if(!function_exists('instantPayFindJsonByTracking') && is_file(__DIR__ . '/instant_pay_lib.php')){
+            require_once __DIR__ . '/instant_pay_lib.php';
+        }
+
+        if($csvIndex >= 0 && function_exists('instantPayFindJsonByCsvIndex')){
+            $itemByIndex = instantPayFindJsonByCsvIndex($csvIndex);
+
+            if(is_array($itemByIndex)){
+                foreach(['sub', 'link'] as $key){
+                    $value = trim((string)($itemByIndex[$key] ?? ''));
+
+                    if($value !== ''){
+                        $candidates[] = $value;
+                    }
+                }
+            }
+        }
 
         $tracking = trim((string)($row[3] ?? ''));
 
-        if(strpos($tracking, 'AUTO-') === 0){
-            if(!function_exists('instantPayFindJsonByTracking') && is_file(__DIR__ . '/instant_pay_lib.php')){
-                require_once __DIR__ . '/instant_pay_lib.php';
-            }
+        if(strpos($tracking, 'AUTO-') === 0 && function_exists('instantPayFindJsonByTracking')){
+            $item = instantPayFindJsonByTracking($user, $tracking);
 
-            if(function_exists('instantPayFindJsonByTracking')){
-                $item = instantPayFindJsonByTracking($user, $tracking);
+            if(is_array($item)){
+                foreach(['sub', 'link'] as $key){
+                    $value = trim((string)($item[$key] ?? ''));
 
-                if(is_array($item)){
-                    foreach(['sub', 'link'] as $key){
-                        $value = trim((string)($item[$key] ?? ''));
-
-                        if($value !== ''){
-                            $candidates[] = $value;
-                        }
+                    if($value !== ''){
+                        $candidates[] = $value;
                     }
                 }
             }
@@ -528,9 +543,26 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $configName = trim((string)($row[1] ?? ''));
+        $historyLink = xuiFindConfirmedSubLinkForUser($user, $configName);
+
+        if($historyLink !== ''){
+            return $historyLink;
+        }
+
+        $emailCandidates = [];
 
         if($configName !== ''){
-            $found = xuiFindRenewServerByClientEmail($configName);
+            $emailCandidates[] = $configName;
+        }
+
+        if($user !== ''){
+            $emailCandidates[] = $user;
+        }
+
+        $emailCandidates = array_values(array_unique($emailCandidates));
+
+        foreach($emailCandidates as $emailTry){
+            $found = xuiFindRenewServerByClientEmail($emailTry);
 
             if(is_array($found) && ($found['sub_id'] ?? '') !== ''){
                 $host = strtolower(trim((string)($found['server']['host'] ?? '')));
@@ -539,6 +571,120 @@ if(!function_exists('xuiConfigPath')){
                     return xuiBuildSubLink($host, (string)$found['sub_id'], $found['config'] ?? null);
                 }
             }
+        }
+
+        return '';
+    }
+
+    /**
+     * آخرین لینک تأییدشدهٔ کاربر — تطبیق نام کانفیگ (ستون ۱) با خریدهای قبلی.
+     */
+    function xuiFindConfirmedSubLinkForUser($username, $configHint = ''){
+        $username = trim((string)$username);
+        $configHint = trim((string)$configHint);
+
+        if($username === ''){
+            return '';
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        $payments = xuiLoadPayments();
+        $fallbackLink = '';
+        $fallbackTs = 0;
+
+        foreach($payments as $payRow){
+            if(!is_array($payRow)){
+                continue;
+            }
+
+            if(strcasecmp(trim((string)($payRow[0] ?? '')), $username) !== 0){
+                continue;
+            }
+
+            if(trim((string)($payRow[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            $type = trim((string)($payRow[9] ?? ''));
+            $cfg = trim((string)($payRow[1] ?? ''));
+            $confirmedLink = trim((string)($payRow[7] ?? ''));
+            $ts = intval($payRow[8] ?? 0);
+
+            if($type === 'خرید' && $confirmedLink !== ''){
+                if($configHint !== '' && strcasecmp($cfg, $configHint) === 0){
+                    return xuiNormalizeRenewTargetLink($confirmedLink);
+                }
+
+                if($ts >= $fallbackTs){
+                    $fallbackLink = $confirmedLink;
+                    $fallbackTs = $ts;
+                }
+            }
+
+            if($type === 'تمدید'){
+                $renewTarget = trim((string)($payRow[1] ?? ''));
+                $pick = xuiNormalizeRenewTargetLink($renewTarget);
+
+                if($pick === '' && $confirmedLink !== ''){
+                    $pick = xuiNormalizeRenewTargetLink($confirmedLink);
+                }
+
+                if($pick === ''){
+                    continue;
+                }
+
+                if($configHint !== '' && strcasecmp($cfg, $configHint) === 0){
+                    return $pick;
+                }
+
+                if($ts >= $fallbackTs){
+                    $fallbackLink = $pick;
+                    $fallbackTs = $ts;
+                }
+            }
+        }
+
+        if($configHint === '' && $fallbackLink !== ''){
+            return xuiNormalizeRenewTargetLink($fallbackLink);
+        }
+
+        if($configHint !== '' && !function_exists('pnvFindSubLinkFromCsv') && is_file(__DIR__ . '/plan_ui_lib.php')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+
+        if($configHint !== '' && function_exists('pnvFindSubLinkFromCsv')){
+            $fromCsv = trim((string)pnvFindSubLinkFromCsv($username, $configHint));
+
+            return xuiNormalizeRenewTargetLink($fromCsv);
+        }
+
+        return '';
+    }
+
+    function xuiNormalizeRenewTargetLink($link){
+        $link = trim((string)$link);
+
+        if($link === ''){
+            return '';
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        if(function_exists('pnvNormalizeSubLinkValue')){
+            $normalized = trim((string)pnvNormalizeSubLinkValue($link));
+
+            if($normalized !== ''){
+                $link = $normalized;
+            }
+        }
+
+        if(xuiParseSubLink($link) || xuiLooksLikeBareSubId($link)){
+            return $link;
         }
 
         return '';
@@ -572,13 +718,7 @@ if(!function_exists('xuiConfigPath')){
                 continue;
             }
 
-            $full = xuiApiRequest($server, 'GET', '/panel/api/clients/get/' . rawurlencode($email));
-
-            if(empty($full['success']) || !is_array($full['obj'] ?? null)){
-                continue;
-            }
-
-            $client = xuiNormalizeClientRecord($full['obj']['client'] ?? $full['obj']);
+            $client = xuiFindClientOnServerByEmail($server, $email);
 
             if(!$client){
                 continue;
@@ -596,6 +736,62 @@ if(!function_exists('xuiConfigPath')){
                 'sub_id' => $subId,
                 'config' => $config,
             ];
+        }
+
+        return null;
+    }
+
+    function xuiFindClientOnServerByEmail($server, $email){
+        if(!is_array($server)){
+            return null;
+        }
+
+        $email = trim((string)$email);
+
+        if($email === ''){
+            return null;
+        }
+
+        $full = xuiApiRequest($server, 'GET', '/panel/api/clients/get/' . rawurlencode($email));
+
+        if(!empty($full['success']) && is_array($full['obj'] ?? null)){
+            $client = xuiNormalizeClientRecord($full['obj']['client'] ?? $full['obj']);
+
+            if($client){
+                return $client;
+            }
+        }
+
+        $pageSize = 100;
+        $searched = xuiApiRequest(
+            $server,
+            'GET',
+            '/panel/api/clients/list/paged?page=1&pageSize=' . $pageSize
+            . '&search=' . rawurlencode($email)
+            . '&filter=&protocol=&sort=email&order=ascend'
+        );
+
+        if(empty($searched['success'])){
+            return null;
+        }
+
+        $obj = $searched['obj'] ?? [];
+        $list = $obj['list'] ?? $obj['clients'] ?? [];
+
+        if(!is_array($list)){
+            return null;
+        }
+
+        foreach($list as $item){
+            $client = xuiNormalizeClientRecord($item['client'] ?? $item);
+
+            if(!$client){
+                continue;
+            }
+
+            if(strcasecmp(trim((string)($client['email'] ?? '')), $email) === 0){
+                return xuiHydrateClientByEmail($server, $client);
+            }
         }
 
         return null;
@@ -2284,7 +2480,7 @@ if(!function_exists('xuiConfigPath')){
         $renewOverride = '';
 
         if($type === 'تمدید'){
-            $renewOverride = xuiResolveRenewPaymentTarget($row);
+            $renewOverride = xuiResolveRenewPaymentTarget($row, '', $index);
 
             if($renewOverride !== ''){
                 if(trim((string)($payments[$index][1] ?? '')) !== $renewOverride){

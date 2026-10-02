@@ -129,6 +129,26 @@ if(!function_exists('instantPayPath')){
         return intval($row[12] ?? 0);
     }
 
+    function instantPayFindJsonByCsvIndex($csvIndex, $items = null){
+        $csvIndex = intval($csvIndex);
+
+        if($csvIndex < 0){
+            return null;
+        }
+
+        if($items === null){
+            $items = instantPayLoad();
+        }
+
+        foreach($items as $item){
+            if(intval($item['csv_index'] ?? -1) === $csvIndex){
+                return $item;
+            }
+        }
+
+        return null;
+    }
+
     function instantPayFindJsonByTracking($user, $tracking, $items = null){
         $userKey = strtolower(trim((string)$user));
         $tracking = instantPayNormalizeTracking($tracking);
