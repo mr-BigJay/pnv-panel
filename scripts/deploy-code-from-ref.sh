@@ -16,6 +16,7 @@ ROOT="${ROOT:-/var/www/html}"
 SRC="${SRC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 REF="${REF:-origin/cursor/fix-support-admin-send-cbea}"
 BACKUP="${BACKUP:-1}"
+RSYNC_DELETE="${RSYNC_DELETE:-1}"
 
 if ! git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "ERROR: SRC is not a git repo: $SRC" >&2
@@ -48,7 +49,14 @@ mkdir -p "$ROOT"
 
 echo ">> Rsync (db, invoices, uploads unchanged)..."
 
-rsync -a --delete \
+RSYNC_OPTS=(-a)
+if [[ "$RSYNC_DELETE" == "1" ]]; then
+  RSYNC_OPTS+=(--delete)
+else
+  echo ">> RSYNC_DELETE=0 (not removing extra files on server)"
+fi
+
+rsync "${RSYNC_OPTS[@]}" \
   --exclude 'db/' \
   --exclude 'invoices/' \
   --exclude 'uploads/' \
@@ -56,6 +64,15 @@ rsync -a --delete \
   --exclude '.git/' \
   --exclude 'node_modules/' \
   "$TMP/" "$ROOT/"
+
+for must in index.php bigjay_controller/index.php admin/index.php; do
+  if [[ ! -f "$ROOT/$must" ]]; then
+    echo "ERROR: after deploy missing $ROOT/$must" >&2
+    echo "Wrong ROOT? Run: bash scripts/diag-site-root.sh" >&2
+    exit 1
+  fi
+done
+echo ">> Verified index.php + bigjay_controller + admin"
 
 if id www-data >/dev/null 2>&1; then
   chown -R www-data:www-data "$ROOT/db" "$ROOT/invoices" "$ROOT/uploads" "$ROOT/temp" 2>/dev/null || true
@@ -68,4 +85,6 @@ fi
 echo ""
 echo "Done. Live code = $REF @ $SHA"
 echo "Hard-refresh (Ctrl+Shift+R) or clear site data for panel.ticketin.ir"
-echo "Admin support check (logged in): /bigjay_controller/support-check.php"
+echo "Admin: /bigjay_controller/"
+echo "If browser shows 404, nginx root may differ from ROOT=$ROOT"
+echo "  bash scripts/diag-site-root.sh"
