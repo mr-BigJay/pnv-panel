@@ -551,6 +551,9 @@
 
 .pnv-chat .msgMeta {
   position: static;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
   font-size: 0.6875rem;
   line-height: 1;
   opacity: 0.55;
@@ -558,6 +561,30 @@
   flex-shrink: 0;
   margin: 0;
   direction: ltr;
+}
+
+.pnv-chat .msgTime {
+  font-variant-numeric: tabular-nums;
+}
+
+.pnv-chat .msgChecks {
+  font-size: 0.625rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  flex-shrink: 0;
+}
+
+.pnv-chat .msgChecks.is-sent {
+  opacity: 0.75;
+}
+
+.pnv-chat .msgBubble.pnv-out .msgChecks.is-seen {
+  color: #8ec5ff;
+  opacity: 1;
+}
+
+.pnv-chat[data-pnv-theme="light"] .msgBubble.pnv-out .msgChecks.is-seen {
+  color: var(--pnv-accent);
 }
 
 .pnv-chat .msgImageLink img {
@@ -717,19 +744,51 @@
   color: var(--pnv-text-secondary);
 }
 
-.pnv-chat .msgIconBtn--send {
-  background: var(--pnv-accent) !important;
-  color: #fff !important;
+.pnv-chat .msgComposerAction {
+  position: relative;
+  width: var(--pnv-icon-btn);
+  height: var(--pnv-icon-btn);
+  min-width: var(--pnv-icon-btn);
+  flex: 0 0 var(--pnv-icon-btn);
+  flex-shrink: 0;
 }
 
-.pnv-chat .msgIconBtn--mic {
-  color: var(--pnv-accent) !important;
+.pnv-chat .msgComposerAction .msgIconBtn--mic,
+.pnv-chat .msgComposerAction .msgIconBtn--send {
+  position: absolute;
+  inset: 0;
+  margin: 0 !important;
+  background: var(--pnv-accent) !important;
+  color: #fff !important;
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.pnv-chat .msgComposerAction .msgIconBtn--mic {
+  font-size: 1rem;
+}
+
+.pnv-chat .msgComposerAction .msgIconBtn--send {
   font-size: 1.0625rem;
 }
 
-.pnv-chat .msgIconBtn--send[hidden],
-.pnv-chat .msgIconBtn--mic[hidden] {
-  display: none !important;
+.pnv-chat .msgComposerAction .msgIconBtn--mic[hidden],
+.pnv-chat .msgComposerAction .msgIconBtn--send[hidden] {
+  display: inline-flex !important;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.92);
+}
+
+.pnv-chat .msgComposerAction .msgIconBtn--mic:not([hidden]),
+.pnv-chat .msgComposerAction .msgIconBtn--send:not([hidden]) {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.pnv-chat .msgIconBtn--mic:hover,
+.pnv-chat .msgIconBtn--send:hover {
+  background: var(--pnv-accent-hover) !important;
 }
 
 .pnv-chat .pnv-voice-recording,
@@ -918,10 +977,6 @@ body.adminPageSupport .content-support .pnv-chat.supportPage .pnv-voice-preview 
   padding: 0.375rem 0.5rem !important;
 }
 
-.pnv-chat .msgIconBtn--send:hover {
-  background: var(--pnv-accent-hover);
-}
-
 .pnv-chat .msgFileInput {
   position: absolute;
   width: 1px;
@@ -1012,7 +1067,9 @@ body.adminPageSupport .content-support .pnv-chat.supportPage .msgIconBtn--attach
 }
 
 body.adminPageSupport .content-support .pnv-chat.supportPage .msgIconBtn--send,
-.content-support .pnv-chat.supportPage.supportEmbedded .msgIconBtn--send {
+body.adminPageSupport .content-support .pnv-chat.supportPage .msgIconBtn--mic,
+.content-support .pnv-chat.supportPage.supportEmbedded .msgIconBtn--send,
+.content-support .pnv-chat.supportPage.supportEmbedded .msgIconBtn--mic {
   background: var(--pnv-accent) !important;
   color: #fff !important;
 }

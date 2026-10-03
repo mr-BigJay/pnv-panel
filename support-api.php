@@ -18,15 +18,22 @@ $since = intval($_GET['since'] ?? 0);
 
 $data = supportLoad($file);
 $messages = [];
+$messageStates = [];
 $status = '';
 
-foreach($data as $ticket){
+foreach($data as $i => $ticket){
 
     if(($ticket['user'] ?? '') !== $user){
         continue;
     }
 
     $status = $ticket['status'] ?? '';
+
+    if(supportMarkSeenByUser($data, $user)){
+        supportSave($file, $data);
+    }
+
+    $messageStates = supportTicketMessageStates($data[$i] ?? $ticket);
 
     if(empty($ticket['messages'])){
         break;
@@ -50,5 +57,6 @@ foreach($data as $ticket){
 
 echo json_encode([
     'messages' => $messages,
+    'message_states' => $messageStates,
     'status' => $status
 ], JSON_UNESCAPED_UNICODE);

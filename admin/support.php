@@ -127,10 +127,10 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '5';
+$chatAssetVer = '6';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
-$legacyJsHref = '/support_ui.js?v=42';
+$legacyJsHref = '/support_ui.js?v=43';
 $shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
 $voiceJsHref = $chatAssetBase . 'pnv-support-voice.js?v=' . $chatAssetVer;
 $adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
@@ -331,8 +331,10 @@ if(!$hasMessages){
 
 <textarea name="message" id="supportMessage" placeholder="ارسال پیام . . . ." rows="1"></textarea>
 
+<div class="msgComposerAction">
 <button type="button" class="msgIconBtn msgIconBtn--mic" id="supportMicAdmin" title="پیام صوتی" aria-label="ضبط پیام صوتی">🎤</button>
 <button type="submit" class="msgIconBtn msgIconBtn--send" id="supportSendAdmin" title="ارسال" aria-label="ارسال" hidden>➤</button>
+</div>
 </div>
 
 </form>

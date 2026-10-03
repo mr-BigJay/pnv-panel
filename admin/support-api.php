@@ -33,10 +33,11 @@ if($user !== '' && function_exists('supportResolveTicketUsername')){
 }
 $since = intval($_GET['since'] ?? 0);
 $messages = [];
+$messageStates = [];
 $status = '';
 $unreadUsers = [];
 
-foreach($data as $ticket){
+foreach($data as $i => $ticket){
 
     if(supportTicketHasUnreadForAdmin($ticket)){
         $unreadUsers[] = $ticket['user'] ?? '';
@@ -55,6 +56,12 @@ foreach($data as $ticket){
     }
 
     $status = $ticket['status'] ?? '';
+
+    if(supportMarkSeenByAdmin($data, $user)){
+        supportSave($file, $data);
+    }
+
+    $messageStates = supportTicketMessageStates($data[$i] ?? $ticket);
 
     if(empty($ticket['messages'])){
         continue;
@@ -76,6 +83,7 @@ foreach($data as $ticket){
 
 echo json_encode([
     'messages' => $messages,
+    'message_states' => $messageStates,
     'status' => $status,
     'unreadUsers' => $unreadUsers,
     'has_unread' => count($unreadUsers) > 0,

@@ -40,7 +40,7 @@ foreach($data as $ticket){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=5">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=6">
 <link rel="stylesheet" href="fonts.css">
 <style>
 html,body{margin:0;padding:0;height:100%;overflow:hidden;}
@@ -116,8 +116,10 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
     placeholder="ارسال پیام . . . ."
     rows="1"></textarea>
 
+<div class="msgComposerAction">
 <button type="button" class="msgIconBtn msgIconBtn--mic" id="userMic" title="پیام صوتی" aria-label="ضبط پیام صوتی">🎤</button>
 <button type="submit" class="msgIconBtn msgIconBtn--send" id="userSend" title="ارسال" aria-label="ارسال" hidden>➤</button>
+</div>
 </div>
 
 </form>
@@ -125,10 +127,10 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 
 </div>
 
-<script src="/support_ui.js?v=42"></script>
-<script src="/assets/support-chat/pnv-support-shell.js?v=4"></script>
-<script src="/assets/support-chat/pnv-support-voice.js?v=4"></script>
-<script src="/assets/support-chat/pnv-support-adapter.js?v=4"></script>
+<script src="/support_ui.js?v=43"></script>
+<script src="/assets/support-chat/pnv-support-shell.js?v=6"></script>
+<script src="/assets/support-chat/pnv-support-voice.js?v=6"></script>
+<script src="/assets/support-chat/pnv-support-adapter.js?v=6"></script>
 <script>
 (function(){
     PNVSupportChat.init({

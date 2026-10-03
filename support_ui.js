@@ -624,6 +624,65 @@
         });
     }
 
+    function buildMessageChecksHtml(msg, actionMeta){
+        const meta = actionMeta || {};
+        const sender = msg.sender || 'user';
+        const ownSender = meta.ownSender || 'user';
+        const isOwn = sender === ownSender;
+        if(!isOwn){
+            return '';
+        }
+        const isAdminView = !!meta.isAdmin;
+        const seen = isAdminView ? !!msg.seen_by_user : !!msg.seen_by_admin;
+        const cls = seen ? 'is-seen' : 'is-sent';
+        const label = seen ? 'دیده شده' : 'ارسال شده';
+        const marks = seen ? '✓✓' : '✓';
+        return '<span class="msgChecks '+cls+'" aria-label="'+escapeHtml(label)+'">'+marks+'</span>';
+    }
+
+    function buildMessageMetaHtml(msg, actionMeta){
+        return '<div class="msgMeta"><span class="msgTime">'+
+            escapeHtml(msg.time || '')+
+            '</span>'+buildMessageChecksHtml(msg, actionMeta)+'</div>';
+    }
+
+    function updateMessageStates(chatEl, messageStates, actionMeta){
+        if(!chatEl || !messageStates || typeof messageStates !== 'object'){
+            return;
+        }
+        const meta = actionMeta || {};
+        const isAdminView = !!meta.isAdmin;
+        const ownSender = meta.ownSender || 'user';
+
+        Object.keys(messageStates).forEach(function(msgId){
+            const st = messageStates[msgId];
+            if(!st){
+                return;
+            }
+            const bubble = chatEl.querySelector('[data-msg-id="'+msgId+'"]');
+            if(!bubble || bubble.dataset.own !== '1'){
+                return;
+            }
+            const sender = st.sender || bubble.dataset.sender || '';
+            if(sender !== ownSender){
+                return;
+            }
+            const seen = isAdminView ? !!st.seen_by_user : !!st.seen_by_admin;
+            let checks = bubble.querySelector('.msgChecks');
+            const msgMeta = bubble.querySelector('.msgMeta');
+            if(!msgMeta){
+                return;
+            }
+            if(!checks){
+                checks = document.createElement('span');
+                msgMeta.appendChild(checks);
+            }
+            checks.className = 'msgChecks '+(seen ? 'is-seen' : 'is-sent');
+            checks.setAttribute('aria-label', seen ? 'دیده شده' : 'ارسال شده');
+            checks.textContent = seen ? '✓✓' : '✓';
+        });
+    }
+
     function buildBubbleNode(msg, classMap, actionMeta){
         const sender = msg.sender || 'user';
         const roleCls = classMap[sender] || classMap.user || 'user';
@@ -681,9 +740,7 @@
                 '<span class="pnv-voice-duration">0:00</span>'+
                 '<audio class="pnv-voice-audio" preload="metadata" src="'+escapeHtml(msg.audio)+'"></audio></div>';
         }
-        html += '<div class="msgMeta">'+
-            escapeHtml(msg.time || '') +
-            '</div>';
+        html += buildMessageMetaHtml(msg, actionMeta);
         wrap.innerHTML = html;
         return wrap;
     }
@@ -885,6 +942,7 @@
                     lastPollTimestamp = Math.max(lastPollTimestamp, msg.timestamp || 0);
                     added = true;
                 });
+                updateMessageStates(chatEl, payload.message_states, actionMeta);
                 if(added){
                     if(global.PNVSupportVoice && typeof global.PNVSupportVoice.bindPlayers === 'function'){
                         global.PNVSupportVoice.bindPlayers(chatEl);
@@ -912,6 +970,7 @@
         bindMessageActions: bindMessageActions,
         bindMobileChatLayout: bindMobileChatLayout,
         initPolling: initPolling,
+        updateMessageStates: updateMessageStates,
         submitComposerForm: submitComposerForm
     };
 

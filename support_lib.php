@@ -187,8 +187,73 @@ if(!function_exists('supportLoad')){
             'time' => $display['time'],
             'timestamp' => intval($message['timestamp'] ?? 0),
             'edited' => !empty($message['edited']),
-            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null
+            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null,
+            'seen_by_admin' => !empty($message['seen_by_admin']),
+            'seen_by_user' => !empty($message['seen_by_user'])
         ];
+
+    }
+
+    function supportMessageChecksForView($message, $options){
+
+        $sender = $message['sender'] ?? 'user';
+        $isAdmin = !empty($options['isAdmin']);
+
+        if($isAdmin){
+            if($sender !== 'admin'){
+                return null;
+            }
+
+            return !empty($message['seen_by_user']) ? 'seen' : 'sent';
+        }
+
+        if($sender !== 'user'){
+            return null;
+        }
+
+        return !empty($message['seen_by_admin']) ? 'seen' : 'sent';
+
+    }
+
+    function supportRenderMessageMetaHtml($message, $options){
+
+        $display = supportMessageDisplayTime($message);
+        $checks = supportMessageChecksForView($message, $options);
+
+        ob_start();
+        ?>
+        <div class="msgMeta">
+            <span class="msgTime"><?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?></span>
+            <?php if($checks !== null){ ?>
+            <span class="msgChecks <?php echo $checks === 'seen' ? 'is-seen' : 'is-sent'; ?>" aria-label="<?php echo $checks === 'seen' ? 'دیده شده' : 'ارسال شده'; ?>"><?php echo $checks === 'seen' ? '✓✓' : '✓'; ?></span>
+            <?php } ?>
+        </div>
+        <?php
+        return ob_get_clean();
+
+    }
+
+    function supportTicketMessageStates($ticket){
+
+        $states = [];
+
+        foreach(($ticket['messages'] ?? []) as $msg){
+
+            $id = trim((string)($msg['id'] ?? ''));
+
+            if($id === ''){
+                continue;
+            }
+
+            $states[$id] = [
+                'seen_by_admin' => !empty($msg['seen_by_admin']),
+                'seen_by_user' => !empty($msg['seen_by_user']),
+                'sender' => $msg['sender'] ?? ''
+            ];
+
+        }
+
+        return $states;
 
     }
 
@@ -1163,9 +1228,7 @@ if(!function_exists('supportLoad')){
                 echo supportRenderVoicePlayerHtml($audio);
             } ?>
 
-            <div class="msgMeta">
-                <?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?>
-            </div>
+            <?php echo supportRenderMessageMetaHtml($m, $options); ?>
 
             <?php if(
                 $editId !== ''
