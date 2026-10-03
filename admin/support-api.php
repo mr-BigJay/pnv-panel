@@ -2,9 +2,19 @@
 
 require_once __DIR__ . '/auth.php';
 
+if(session_status() === PHP_SESSION_NONE){
+    session_start();
+}
+
 header('Content-Type: application/json; charset=utf-8');
 
-if(!pnvAdminIsLoggedIn()){
+$supportApiLoggedIn = function_exists('pnvAdminIsLoggedIn') && pnvAdminIsLoggedIn();
+
+if(!$supportApiLoggedIn && !empty($_SESSION['admin']) && !empty($_SESSION['pnv_admin']['user'])){
+    $supportApiLoggedIn = true;
+}
+
+if(!$supportApiLoggedIn){
     http_response_code(403);
     echo json_encode(['error' => 'forbidden']);
     exit;

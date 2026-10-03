@@ -43,7 +43,15 @@ $data = supportSortTickets($actionResult['data']);
 $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
+
+if($supportError === '' && !empty($_SESSION['support_flash_error'])){
+    $supportError = (string)$_SESSION['support_flash_error'];
+    unset($_SESSION['support_flash_error']);
+}
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
+$formAction = function_exists('supportAdminFormAction')
+    ? supportAdminFormAction($currentUser, $supportEmbedded)
+    : $baseUrl;
 $cssHref = '../support_ui.css?v=41';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
@@ -207,7 +215,7 @@ if(!$hasMessages){
 </div>
 
 <footer class="supportSendbox">
-<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner" action="<?php echo htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8'); ?>">
+<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner" action="<?php echo htmlspecialchars($formAction, ENT_QUOTES, 'UTF-8'); ?>">
 
 <?php echo $csrfField; ?>
 <input type="hidden" name="reply" value="1">
