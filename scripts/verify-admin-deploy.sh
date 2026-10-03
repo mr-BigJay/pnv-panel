@@ -47,7 +47,7 @@ check_marker() {
 }
 
 if check_marker admin/payments.php "payViewTabs"; then payments_tabs="yes"; else note "payments.php missing payViewTabs"; fi
-if check_marker admin/renews.php "payViewTabs"; then renewals_tabs="yes"; else note "renews.php missing payViewTabs"; fi
+if check_marker admin/renews.php "renewViewTabs"; then renewals_tabs="yes"; else note "renews.php missing renewViewTabs"; fi
 
 support_ok="no"
 if check_marker admin/support.php "msgSidebar" \
