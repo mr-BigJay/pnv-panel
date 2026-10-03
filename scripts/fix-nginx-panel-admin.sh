@@ -30,9 +30,19 @@ if [[ ! -f "$PRIMARY" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$SCRIPT_DIR/patch-panel-ticketin-nginx.py" ]]; then
+  echo "ERROR: run git pull in /opt/pnv-panel first (missing patch-panel-ticketin-nginx.py)" >&2
+  exit 1
+fi
+
 echo ">> Patch bigjay_controller in $PRIMARY"
 cp -a "$PRIMARY" "${PRIMARY}.bak.$(date +%Y%m%d-%H%M%S)"
 python3 "$SCRIPT_DIR/patch-panel-ticketin-nginx.py" "$PHP_FPM_SOCK" "$PRIMARY"
+
+if ! grep -q "PNV_BIGJAY_PATCHED" "$PRIMARY"; then
+  echo "ERROR: patch did not apply — see manual block in scripts/nginx-bigjay-manual.conf" >&2
+  exit 1
+fi
 
 if [[ -L "$DUPLICATE" || -f "$DUPLICATE" ]]; then
   echo ">> Remove duplicate vhost (causes conflicting server_name): $DUPLICATE"

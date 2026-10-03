@@ -10,8 +10,10 @@ from pathlib import Path
 PHP_SOCK = sys.argv[1] if len(sys.argv) > 1 else "/run/php/php8.3-fpm.sock"
 CONF = Path(sys.argv[2] if len(sys.argv) > 2 else "/etc/nginx/sites-enabled/panel.ticketin.ir")
 
+MARKER = "PNV_BIGJAY_PATCHED"
+
 SNIPPET = f"""
-    # PNV admin (bigjay_controller) — patched {Path(__file__).name}
+    # {MARKER} — bigjay_controller admin routing
     location = /bigjay_controller {{
         return 301 /bigjay_controller/;
     }}
@@ -55,7 +57,7 @@ def strip_bigjay_locations(text: str) -> str:
 
 
 def insert_snippet(text: str) -> str:
-    if "PNV admin (bigjay_controller) — patched" in text:
+    if MARKER in text and re.search(r"location\s+\^~\s+/bigjay_controller/", text):
         return text
 
     markers = [
@@ -83,8 +85,11 @@ def main() -> None:
 
     original = CONF.read_text(encoding="utf-8", errors="replace")
     patched = insert_snippet(strip_bigjay_locations(original))
+    if MARKER not in patched or not re.search(r"location\s+\^~\s+/bigjay_controller/", patched):
+        raise SystemExit("Patch failed: bigjay block missing after edit")
+
     if patched == original:
-        print("No changes needed (already patched?)")
+        print(f"Already OK: {CONF}")
         return
 
     CONF.write_text(patched, encoding="utf-8")
