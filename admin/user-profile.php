@@ -182,9 +182,6 @@ function profileSubscriptionExpireTsLocal($sub){
 function profileSubscriptionVitality($sub){
 
     $status = trim((string)($sub['status'] ?? 'درحال بررسی'));
-    $link = trim((string)($sub['link'] ?? ''));
-    $plan = trim((string)($sub['plan'] ?? ''));
-    $startTs = intval($sub['timestamp'] ?? 0);
 
     if($status === 'درحال بررسی'){
         return [
