@@ -127,7 +127,7 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '8';
+$chatAssetVer = '9';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=43';
@@ -457,7 +457,7 @@ if(!$hasMessages){
             if(!data || !data.ok){
                 alert((data && data.error) ? data.error : 'حذف لینک ناموفق بود');
                 button.disabled = false;
-                button.textContent = 'حذف لینک';
+                button.textContent = 'حذف';
                 return;
             }
             alert(data.message || 'لینک حذف شد');
@@ -466,9 +466,70 @@ if(!$hasMessages){
         .catch(function(){
             alert('خطا در ارتباط با سرور');
             button.disabled = false;
-            button.textContent = 'حذف لینک';
+            button.textContent = 'حذف';
         });
     };
+
+    (function bindProfileModalUi(){
+        if(window.__pnvProfileModalUiBound){
+            return;
+        }
+        window.__pnvProfileModalUiBound = true;
+
+        document.addEventListener('click', function(e){
+            var menuBtn = e.target.closest('.subCardMenuBtn');
+            if(menuBtn){
+                e.preventDefault();
+                e.stopPropagation();
+                var wrap = menuBtn.closest('.subCardMenuWrap');
+                document.querySelectorAll('.subCardMenuWrap.is-open').forEach(function(openWrap){
+                    if(openWrap !== wrap){
+                        openWrap.classList.remove('is-open');
+                    }
+                });
+                if(wrap){
+                    wrap.classList.toggle('is-open');
+                }
+                return;
+            }
+
+            if(!e.target.closest('.subCardMenuWrap')){
+                document.querySelectorAll('.subCardMenuWrap.is-open').forEach(function(openWrap){
+                    openWrap.classList.remove('is-open');
+                });
+            }
+
+            var copyBtn = e.target.closest('.subLinkCopyBtn');
+            if(!copyBtn){
+                return;
+            }
+            e.preventDefault();
+            var field = copyBtn.closest('.subLinkField');
+            var input = field ? field.querySelector('.subLinkInput') : null;
+            var tip = field ? field.querySelector('.subLinkCopyTip') : null;
+            if(!input || !input.value){
+                return;
+            }
+            var text = input.value;
+            var done = function(){
+                if(tip){
+                    tip.hidden = false;
+                    setTimeout(function(){ tip.hidden = true; }, 1600);
+                }
+                copyBtn.classList.add('is-copied');
+                setTimeout(function(){ copyBtn.classList.remove('is-copied'); }, 1600);
+            };
+            if(navigator.clipboard && navigator.clipboard.writeText){
+                navigator.clipboard.writeText(text).then(done).catch(function(){
+                    input.select();
+                    try{ document.execCommand('copy'); done(); }catch(err){}
+                });
+            }else{
+                input.select();
+                try{ document.execCommand('copy'); done(); }catch(err){}
+            }
+        });
+    })();
 
     document.addEventListener('keydown', function(e){
         if(e.key === 'Escape'){

@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../subscription_lib.php';
+require_once __DIR__ . '/../xui_lib.php';
 
 if(!pnvAdminIsLoggedIn()){
     http_response_code(403);
@@ -154,23 +155,92 @@ else{
     $purchasesPage = array_slice($purchases, $start, $perPage);
 }
 
-function profileStatusClass($status){
+function profileSubscriptionVitality($sub){
 
-    if($status === 'تایید شد'){
-        return 'subStatusApproved';
+    $status = trim((string)($sub['status'] ?? 'درحال بررسی'));
+    $link = trim((string)($sub['link'] ?? ''));
+    $plan = trim((string)($sub['plan'] ?? ''));
+    $startTs = intval($sub['timestamp'] ?? 0);
+
+    if($status === 'درحال بررسی'){
+        return [
+            'label' => 'در انتظار',
+            'class' => 'subStatusPending'
+        ];
     }
 
     if($status === 'رد شد'){
-        return 'subStatusRejected';
+        return [
+            'label' => 'رد شده',
+            'class' => 'subStatusRejected'
+        ];
     }
 
-    return 'subStatusPending';
+    if($status !== 'تایید شد' || !empty($sub['link_cleared'])){
+        return [
+            'label' => 'منقضی',
+            'class' => 'subStatusExpired'
+        ];
+    }
+
+    $now = time();
+
+    if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
+        $expire = xuiFetchSubUserinfoExpire($link);
+
+        if($expire !== null){
+            if(intval($expire) === 0){
+                return [
+                    'label' => 'فعال',
+                    'class' => 'subStatusActive'
+                ];
+            }
+
+            return [
+                'label' => (intval($expire) > $now) ? 'فعال' : 'منقضی',
+                'class' => (intval($expire) > $now) ? 'subStatusActive' : 'subStatusExpired'
+            ];
+        }
+    }
+
+    $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($plan) : 0;
+
+    if($planDays === 0){
+        return [
+            'label' => 'فعال',
+            'class' => 'subStatusActive'
+        ];
+    }
+
+    if($startTs <= 0){
+        return [
+            'label' => 'فعال',
+            'class' => 'subStatusActive'
+        ];
+    }
+
+    $expireTs = $startTs + ($planDays * 86400);
+
+    return [
+        'label' => ($expireTs > $now) ? 'فعال' : 'منقضی',
+        'class' => ($expireTs > $now) ? 'subStatusActive' : 'subStatusExpired'
+    ];
+
+}
+
+function profileCanClearSubLink($sub){
+
+    $status = trim((string)($sub['status'] ?? ''));
+
+    return $status === 'تایید شد'
+        && trim((string)($sub['link'] ?? '')) !== ''
+        && empty($sub['link_cleared']);
 
 }
 
 ?>
 
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-profile.css?v=8">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-profile.css?v=9">
 
 <div class="profileOverlay" onclick="closeProfileModal()"></div>
 
@@ -206,7 +276,7 @@ function profileStatusClass($status){
     </div>
 
     <div class="subsTitle">📦 لیست اشتراک‌های خریداری‌شده</div>
-    <div class="subsHint">اگر کاربر اشتباه خرید زده به‌جای تمدید، از «حذف لینک» برای پاک کردن لینک قدیمی از پنل کاربر استفاده کنید. سابقه پرداخت باقی می‌ماند.</div>
+    <div class="subsHint">برای حذف لینک از پنل کاربر، منوی ⋮ کنار وضعیت اشتراک را باز کنید. سابقه پرداخت باقی می‌ماند.</div>
 
     <?php if(count($purchasesPage) === 0){ ?>
 
@@ -217,17 +287,37 @@ function profileStatusClass($status){
     <?php foreach($purchasesPage as $sub){
 
         $status = $sub['status'] ?: 'درحال بررسی';
-        $statusClass = profileStatusClass($status);
+        $vitality = profileSubscriptionVitality($sub);
+        $canClear = profileCanClearSubLink($sub);
 
     ?>
 
     <div class="subCard">
 
-        <div class="subTop">
+        <div class="subCardHead">
+            <div class="subStatusRow">
+                <span class="subStatus <?php echo htmlspecialchars($vitality['class'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <?php echo htmlspecialchars($vitality['label'], ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <?php if($canClear){ ?>
+                <div class="subCardMenuWrap">
+                    <button type="button" class="subCardMenuBtn" aria-label="گزینه‌های اشتراک" aria-haspopup="true">⋮</button>
+                    <div class="subCardMenu" role="menu">
+                        <button
+                            type="button"
+                            class="subCardMenuItem subCardMenuItem--danger"
+                            role="menuitem"
+                            data-user="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-tracking="<?php echo htmlspecialchars($sub['tracking'], ENT_QUOTES, 'UTF-8'); ?>"
+                            data-timestamp="<?php echo intval($sub['timestamp']); ?>"
+                            onclick="clearSubLink(this)">
+                            حذف
+                        </button>
+                    </div>
+                </div>
+                <?php } ?>
+            </div>
             <div class="subPlan"><?php echo htmlspecialchars($sub['plan'], ENT_QUOTES, 'UTF-8'); ?></div>
-            <span class="subStatus <?php echo $statusClass; ?>">
-                <?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>
-            </span>
         </div>
 
         <div class="subMeta">
@@ -238,18 +328,12 @@ function profileStatusClass($status){
 
         <?php if($status === 'تایید شد' && $sub['link'] !== ''){ ?>
 
-        <div class="subLink">
-            <input type="text" readonly value="<?php echo htmlspecialchars($sub['link'], ENT_QUOTES, 'UTF-8'); ?>">
-            <button type="button" onclick="copySub(this)">کپی</button>
-            <button
-                type="button"
-                class="subClearBtn"
-                data-user="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>"
-                data-tracking="<?php echo htmlspecialchars($sub['tracking'], ENT_QUOTES, 'UTF-8'); ?>"
-                data-timestamp="<?php echo intval($sub['timestamp']); ?>"
-                onclick="clearSubLink(this)">
-                حذف لینک
+        <div class="subLinkField">
+            <input type="text" class="subLinkInput" readonly value="<?php echo htmlspecialchars($sub['link'], ENT_QUOTES, 'UTF-8'); ?>">
+            <button type="button" class="subLinkCopyBtn" aria-label="کپی لینک">
+                <span class="subLinkCopyIcon" aria-hidden="true">⎘</span>
             </button>
+            <span class="subLinkCopyTip" aria-live="polite" hidden>کپی شد</span>
         </div>
 
         <?php } elseif(!empty($sub['link_cleared'])){ ?>
