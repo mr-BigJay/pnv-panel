@@ -44,12 +44,12 @@ if ! sudo -u "$WEB_USER" test -w "$ROOT/db/support.json"; then
   exit 1
 fi
 
-if [[ -f "$SRC/scripts/hotfix-admin-support-black.sh" ]]; then
+if [[ "${SKIP_HOTFIX:-0}" != "1" && -f "$SRC/scripts/hotfix-admin-support-black.sh" ]]; then
   ROOT="$ROOT" SRC="$SRC" bash "$SRC/scripts/hotfix-admin-support-black.sh"
 fi
 
 if command -v php >/dev/null 2>&1 && [[ -f "$ROOT/db/support.json" ]]; then
-  php -r '
+  ROOT="$ROOT" php -r '
 $f=getenv("ROOT")."/db/support.json";
 $d=json_decode(file_get_contents($f),true);
 $n=is_array($d)?count($d):0;

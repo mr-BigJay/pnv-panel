@@ -19,8 +19,8 @@ echo "========== 1/4 Code (single branch, db untouched) =========="
 RSYNC_DELETE=0 REF="$REF" ROOT="$ROOT" SRC="$SRC" bash "$SCRIPT_DIR/deploy-code-from-ref.sh"
 
 echo ""
-echo "========== 2/4 Permissions + support.json + dashboard cleanup =========="
-ROOT="$ROOT" SRC="$SRC" bash "$SCRIPT_DIR/fix-server-permissions-and-admin.sh"
+echo "========== 2/4 Permissions + support.json (code already synced in step 1) =========="
+SKIP_HOTFIX=1 ROOT="$ROOT" SRC="$SRC" bash "$SCRIPT_DIR/fix-server-permissions-and-admin.sh"
 
 echo ""
 echo "========== 3/4 Nginx bigjay_controller (if panel.ticketin.ir vhost exists) =========="
