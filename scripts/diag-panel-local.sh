@@ -1,45 +1,64 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run ON server3 — test whether nginx serves /var/www/html for panel.ticketin.ir
+# Run ON the web server — panel.ticketin.ir 404/301 diagnosis
 DOMAIN="${DOMAIN:-panel.ticketin.ir}"
 ROOT="${ROOT:-/var/www/html}"
 
-echo "=== Files on disk (ROOT=$ROOT) ==="
-for f in index.php bigjay_controller/index.php admin/index.php; do
-  if [[ -f "$ROOT/$f" ]]; then
-    echo "  OK $ROOT/$f ($(stat -c%s "$ROOT/$f") bytes)"
-  else
-    echo "  MISSING $ROOT/$f"
+echo "=== This server public IPv4 ==="
+for cmd in "curl -4 -fsS --max-time 5 icanhazip.com" "curl -4 -fsS --max-time 5 api.ipify.org"; do
+  if ip="$($cmd 2>/dev/null)"; then
+    echo "  $ip  ($cmd)"
+    break
   fi
 done
 
 echo ""
-echo "=== Local HTTP (Host: $DOMAIN) ==="
-for path in / /index.php /bigjay_controller/ /bigjay_controller/index.php; do
-  code="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $DOMAIN" "http://127.0.0.1${path}" 2>/dev/null || echo "err")"
-  echo "  $path -> HTTP $code"
-done
-
-echo ""
-echo "=== Nginx server_name + root for $DOMAIN ==="
-if [[ -d /etc/nginx/sites-enabled ]]; then
-  grep -rl "panel.ticketin.ir\|ticketin" /etc/nginx/sites-enabled/ 2>/dev/null | while read -r f; do
-    echo "--- $f ---"
-    awk '
-      /server\s*\{/ { inserver=1; buf=$0 ORS; next }
-      inserver { buf=buf $0 ORS }
-      inserver && /\}/ {
-        if (buf ~ /panel\.ticketin\.ir/ || buf ~ /ticketin/) print buf
-        inserver=0; buf=""
-      }
-    ' "$f" 2>/dev/null | head -c 4000
-    echo ""
-  done
+echo "=== DNS $DOMAIN ==="
+if command -v dig >/dev/null 2>&1; then
+  dig +short A "$DOMAIN" | sed 's/^/  /'
 else
-  echo "No /etc/nginx/sites-enabled"
+  echo "  (dig not installed)"
 fi
 
 echo ""
-echo "If local curl is 200 but public URL is 404, DNS/CDN points to another server."
-echo "If local curl is 404, fix nginx root to $ROOT or remove broken alias for /bigjay_controller"
+echo "=== Files (ROOT=$ROOT) ==="
+for f in index.php bigjay_controller/index.php admin/index.php; do
+  [[ -f "$ROOT/$f" ]] && echo "  OK $ROOT/$f" || echo "  MISSING $ROOT/$f"
+done
+
+echo ""
+echo "=== HTTP localhost (follow redirects) ==="
+for path in / /index.php /bigjay_controller/index.php; do
+  out="$(curl -s -o /dev/null -w 'final=%{url_effective} code=%{http_code} redirects=%{num_redirects}' \
+    -L -H "Host: $DOMAIN" "http://127.0.0.1${path}" 2>/dev/null || echo "curl failed")"
+  echo "  $path -> $out"
+done
+
+echo ""
+echo "=== HTTPS localhost (SNI, insecure) ==="
+if curl -s -o /dev/null -k --max-time 5 "https://127.0.0.1/" 2>/dev/null; then
+  for path in / /bigjay_controller/index.php; do
+    out="$(curl -s -o /dev/null -w 'code=%{http_code}' -k \
+      -H "Host: $DOMAIN" "https://127.0.0.1${path}" 2>/dev/null || echo "fail")"
+    echo "  $path -> $out"
+  done
+else
+  echo "  (no HTTPS on 127.0.0.1 or connection refused)"
+fi
+
+echo ""
+echo "=== Nginx: search all configs ==="
+if [[ -d /etc/nginx ]]; then
+  sudo grep -r "server_name\|ticketin\|bigjay_controller\|root " /etc/nginx/ 2>/dev/null \
+    | grep -v ".default" | head -40 || echo "  (no matches — try: sudo nginx -T | less)"
+else
+  echo "  /etc/nginx not found (Apache?)"
+  [[ -d /etc/apache2 ]] && sudo grep -r "ticketin\|DocumentRoot" /etc/apache2/sites-enabled/ 2>/dev/null | head -20
+fi
+
+echo ""
+echo "=== If DNS IP != this server IP ==="
+echo "  panel.ticketin.ir is served by ANOTHER machine; fix deploy/nginx THERE."
+echo "=== If local HTTPS code=404 ==="
+echo "  Fix ssl server block root -> $ROOT (see scripts/nginx-snippet-panel-root.example)"
