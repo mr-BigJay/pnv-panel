@@ -15,8 +15,9 @@ WEB_USER="${WEB_USER:-www-data}"
 echo ">> Remove legacy bigjay_controller/dashboard.php (use index.php only)"
 legacy="$ROOT/bigjay_controller/dashboard.php"
 if [[ -f "$legacy" ]]; then
-  mv -a "$legacy" "${legacy}.removed.$(date +%Y%m%d-%H%M%S)"
-  echo "   moved aside: $legacy"
+  dest="${legacy}.removed.$(date +%Y%m%d-%H%M%S)"
+  mv "$legacy" "$dest"
+  echo "   moved aside: $dest"
 fi
 
 if [[ ! -f "$ROOT/bigjay_controller/index.php" ]]; then
