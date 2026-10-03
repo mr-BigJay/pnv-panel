@@ -1165,8 +1165,6 @@ if(!function_exists('supportLoad')){
 
             <div class="msgMeta">
                 <?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?>
-                -
-                <?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
             </div>
 
             <?php if(

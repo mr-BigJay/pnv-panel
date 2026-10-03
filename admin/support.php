@@ -127,7 +127,7 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '4';
+$chatAssetVer = '5';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=42';

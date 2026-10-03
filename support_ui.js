@@ -682,7 +682,7 @@
                 '<audio class="pnv-voice-audio" preload="metadata" src="'+escapeHtml(msg.audio)+'"></audio></div>';
         }
         html += '<div class="msgMeta">'+
-            escapeHtml(msg.time || '') + ' - ' + escapeHtml(msg.date || '') +
+            escapeHtml(msg.time || '') +
             '</div>';
         wrap.innerHTML = html;
         return wrap;

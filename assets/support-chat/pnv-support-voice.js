@@ -179,7 +179,7 @@
       form.dataset.pnvVoiceMode = mode;
     }
 
-    function cleanupStream() {
+    function stopTracksOnly() {
       if (mediaStream) {
         mediaStream.getTracks().forEach(function (track) {
           track.stop();
@@ -187,6 +187,10 @@
       }
       mediaStream = null;
       mediaRecorder = null;
+    }
+
+    function cleanupStream() {
+      stopTracksOnly();
       chunks = [];
     }
 
@@ -337,28 +341,33 @@
             }
           };
           mediaRecorder.onstop = function () {
-            cleanupStream();
+            var recordedChunks = chunks.slice();
+            chunks = [];
+            stopTracksOnly();
+
             if (discardRecording) {
               discardRecording = false;
-              chunks = [];
               setComposerMode('idle');
               syncMicSend(textarea, micBtn, sendBtn);
               return;
             }
-            if (!chunks.length) {
+
+            if (!recordedChunks.length) {
               setComposerMode('idle');
               syncMicSend(textarea, micBtn, sendBtn);
               return;
             }
-            var blob = new Blob(chunks, {
+
+            var blob = new Blob(recordedChunks, {
               type: mimeType || 'audio/webm'
             });
-            chunks = [];
+
             if (blob.size <= 0) {
               setComposerMode('idle');
               syncMicSend(textarea, micBtn, sendBtn);
               return;
             }
+
             showPreview(blob);
           };
           recordStart = Date.now();
