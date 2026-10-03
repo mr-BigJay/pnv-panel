@@ -165,16 +165,32 @@
 }
 
 .subCardMenuBtn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  flex: 0 0 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 10px;
   background: #232e3c;
   color: #e2e8f0;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
   padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+#profileHost .subCardMenuBtn {
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
 }
 
 .subCardMenuBtn:hover {
@@ -245,32 +261,39 @@
 .subLinkField {
   position: relative;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   width: 100%;
-  min-height: 44px;
+  gap: 6px;
+  min-height: 42px;
   border-radius: 12px;
   background: #1e293b;
-  overflow: hidden;
+  padding: 0 4px 0 0;
+  box-sizing: border-box;
 }
 
 .subLinkInput {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  height: 42px;
   border: none;
   background: transparent;
   color: #fff;
   font-size: 12px;
   line-height: 1.4;
-  padding: 10px 0.5rem 10px 12px;
+  padding: 0 0.5rem 0 12px;
   box-sizing: border-box;
   direction: ltr;
   text-align: left;
 }
 
 .subLinkCopyBtn {
-  flex-shrink: 0;
-  width: 44px;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  max-width: 42px;
+  flex: 0 0 42px;
   border: none;
+  border-radius: 10px;
   background: #334155;
   color: #e2e8f0;
   cursor: pointer;
@@ -279,6 +302,17 @@
   justify-content: center;
   font-size: 18px;
   padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+#profileHost .subLinkCopyBtn {
+  width: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  height: 42px !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 .subLinkCopyBtn:hover {
@@ -365,5 +399,27 @@
   .profileModal {
     width: calc(100vw - 16px);
     max-height: calc(100dvh - 24px);
+  }
+
+  #profileHost .subCardMenuBtn {
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 36px !important;
+  }
+
+  #profileHost .subLinkCopyBtn {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 42px !important;
+    flex: 0 0 42px !important;
+  }
+
+  .subLinkInput {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
   }
 }

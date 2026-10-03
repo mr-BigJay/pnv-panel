@@ -240,7 +240,7 @@ function profileCanClearSubLink($sub){
 
 ?>
 
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-profile.css?v=10">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-profile.css?v=11">
 
 <div class="profileOverlay" onclick="closeProfileModal()"></div>
 
