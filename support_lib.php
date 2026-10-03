@@ -293,7 +293,11 @@ if(!function_exists('supportLoad')){
             return '?';
         }
 
-        return mb_substr($username, 0, 1);
+        if(function_exists('mb_substr')){
+            return mb_substr($username, 0, 1);
+        }
+
+        return substr($username, 0, 1);
 
     }
 

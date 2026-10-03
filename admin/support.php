@@ -6,6 +6,75 @@ if(!isset($supportEmbedded)){
 
 require_once __DIR__ . '/../support_lib.php';
 
+if(!function_exists('supportUsernamesMatch')){
+
+    function supportUsernamesMatch($left, $right){
+
+        $left = trim((string)$left);
+        $right = trim((string)$right);
+
+        if($left === '' || $right === ''){
+            return false;
+        }
+
+        return strcasecmp($left, $right) === 0;
+
+    }
+
+}
+
+if(!function_exists('supportGetUserProfileSummary')){
+
+    function supportGetUserProfileSummary($username){
+
+        $username = trim((string)$username);
+        $summary = [
+            'username' => $username,
+            'mobile' => '-',
+            'exists' => false,
+        ];
+
+        if($username === ''){
+            return $summary;
+        }
+
+        $usersFile = dirname(__DIR__) . '/db/users.json';
+
+        if(!is_file($usersFile)){
+            return $summary;
+        }
+
+        $users = json_decode((string)file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return $summary;
+        }
+
+        foreach($users as $user){
+
+            if(!is_array($user)){
+                continue;
+            }
+
+            $stored = trim((string)($user['username'] ?? ''));
+
+            if($stored === '' || !supportUsernamesMatch($stored, $username)){
+                continue;
+            }
+
+            $summary['username'] = $stored;
+            $summary['mobile'] = trim((string)($user['mobile'] ?? '')) ?: '-';
+            $summary['exists'] = true;
+            break;
+
+        }
+
+        return $summary;
+
+    }
+
+}
+
 if(!$supportEmbedded && supportIsEmbeddedRequest()){
     $supportEmbedded = true;
 }
@@ -58,10 +127,10 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$cssHref = '../support_ui.css?v=41';
+$cssHref = '../support_ui.css?v=42';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=41';
+$jsHref = '../support_ui.js?v=42';
 
 if(!$supportEmbedded){
 ?>
