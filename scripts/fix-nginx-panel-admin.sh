@@ -35,12 +35,13 @@ if [[ ! -f "$SCRIPT_DIR/patch-panel-ticketin-nginx.py" ]]; then
   exit 1
 fi
 
+BACKUP="${PRIMARY}.bak.$(date +%Y%m%d-%H%M%S)"
 echo ">> Patch bigjay_controller in $PRIMARY"
-cp -a "$PRIMARY" "${PRIMARY}.bak.$(date +%Y%m%d-%H%M%S)"
+cp -a "$PRIMARY" "$BACKUP"
 python3 "$SCRIPT_DIR/patch-panel-ticketin-nginx.py" "$PHP_FPM_SOCK" "$PRIMARY"
 
 if ! grep -q "PNV_BIGJAY_PATCHED" "$PRIMARY"; then
-  echo "ERROR: patch did not apply — see manual block in scripts/nginx-bigjay-manual.conf" >&2
+  echo "ERROR: patch did not apply — see scripts/nginx-bigjay-manual.conf" >&2
   exit 1
 fi
 
@@ -50,7 +51,12 @@ if [[ -L "$DUPLICATE" || -f "$DUPLICATE" ]]; then
   rm -f "/etc/nginx/sites-available/pnv-panel-panel-ticketin-ir.conf" 2>/dev/null || true
 fi
 
-nginx -t
+if ! nginx -t 2>/dev/null; then
+  echo "ERROR: nginx -t failed — restoring $BACKUP" >&2
+  cp -a "$BACKUP" "$PRIMARY"
+  nginx -t || true
+  exit 1
+fi
 systemctl reload nginx
 
 echo ""

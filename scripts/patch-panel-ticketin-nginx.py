@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch /etc/nginx/sites-enabled/panel.ticketin.ir bigjay_controller → working PHP routing."""
+"""Patch panel.ticketin.ir nginx: bigjay_controller at server level (not inside /admin/)."""
 
 from __future__ import annotations
 
@@ -30,6 +30,24 @@ SNIPPET = f"""
 )
 
 
+def block_end(text: str, loc_start: int) -> int:
+    brace = text.find("{", loc_start)
+    if brace < 0:
+        raise ValueError("no opening brace for location block")
+    depth = 0
+    i = brace
+    while i < len(text):
+        c = text[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    raise ValueError("unclosed location block")
+
+
 def strip_bigjay_locations(text: str) -> str:
     lines = text.splitlines(keepends=True)
     out: list[str] = []
@@ -51,25 +69,39 @@ def strip_bigjay_locations(text: str) -> str:
                 if started and depth <= 0:
                     break
             continue
+        if MARKER in line:
+            i += 1
+            continue
         out.append(line)
         i += 1
     return "".join(out)
+
+
+def insert_after_location(text: str, pattern: str) -> str | None:
+    m = re.search(pattern, text)
+    if not m:
+        return None
+    end = block_end(text, m.start())
+    return text[:end] + "\n" + SNIPPET + "\n" + text[end:]
 
 
 def insert_snippet(text: str) -> str:
     if MARKER in text and re.search(r"location\s+\^~\s+/bigjay_controller/", text):
         return text
 
-    markers = [
-        r"(\n\s*location \^~ /admin/\s*\{)",
-        r"(\n\s*location = /admin\.php\s*\{)",
-        r"(\n\s*client_max_body_size\s+\d+M;)",
-    ]
-    for pat in markers:
-        m = re.search(pat, text)
-        if m:
-            pos = m.end()
-            return text[:pos] + "\n" + SNIPPET + "\n" + text[pos:]
+    for pat in (
+        r"\n\s*location\s+\^~\s+/admin/\s*\{",
+        r"\n\s*location\s+=\s+/admin\.php\s*\{",
+        r"\n\s*location\s+=\s+/admin\s*\{",
+    ):
+        inserted = insert_after_location(text, pat)
+        if inserted is not None:
+            return inserted
+
+    m = re.search(r"\n(\s*)client_max_body_size\s+\d+M;\s*\n", text)
+    if m:
+        pos = m.end()
+        return text[:pos] + SNIPPET + "\n" + text[pos:]
 
     m = re.search(r"(root\s+/var/www/html;\s*\n)", text)
     if m:
@@ -84,7 +116,9 @@ def main() -> None:
         raise SystemExit(f"Config not found: {CONF}")
 
     original = CONF.read_text(encoding="utf-8", errors="replace")
-    patched = insert_snippet(strip_bigjay_locations(original))
+    stripped = strip_bigjay_locations(original)
+    patched = insert_snippet(stripped)
+
     if MARKER not in patched or not re.search(r"location\s+\^~\s+/bigjay_controller/", patched):
         raise SystemExit("Patch failed: bigjay block missing after edit")
 
