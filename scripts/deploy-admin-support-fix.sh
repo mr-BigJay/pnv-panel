@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Admin support chat + send fix (PR #3 branch)
 # Usage on server:
-#   export DEPLOY_COMMIT=fa5ce41   # or newer on cursor/fix-support-admin-send-cbea / main after merge
+#   export DEPLOY_COMMIT=6d55fd8   # cursor/fix-support-admin-send-cbea (or main after merge)
 #   ROOT=/var/www/html bash scripts/deploy-admin-support-fix.sh
 
 ROOT="${ROOT:-/var/www/html}"
