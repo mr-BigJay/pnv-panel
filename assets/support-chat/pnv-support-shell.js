@@ -12,6 +12,56 @@
     return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
   }
 
+  function chatModeFromRoot(root) {
+    if (!root) {
+      return 'admin';
+    }
+    if (root.dataset.pnvMode === 'user' || root.classList.contains('pnv-chat--user')) {
+      return 'user';
+    }
+    return 'admin';
+  }
+
+  function applyBubbleLanes(container, root) {
+    if (!container) {
+      return;
+    }
+    var mode = chatModeFromRoot(root);
+    container.querySelectorAll('.msgBubble').forEach(function (bubble) {
+      bubble.classList.remove('pnv-out', 'pnv-in');
+      var sender = bubble.dataset.sender || '';
+      var outgoing =
+        mode === 'admin' ? sender === 'admin' : sender === 'user';
+      bubble.classList.add(outgoing ? 'pnv-out' : 'pnv-in');
+    });
+  }
+
+  function layoutBubbleMeta(container) {
+    if (!container) {
+      return;
+    }
+    container.querySelectorAll('.msgBubble').forEach(function (bubble) {
+      var meta = bubble.querySelector(':scope > .msgMeta');
+      var edited = bubble.querySelector(':scope > .msgEdited');
+      if (!meta && !edited) {
+        return;
+      }
+      var footer = bubble.querySelector(':scope > .pnv-bubble-footer');
+      if (!footer) {
+        footer = document.createElement('div');
+        footer.className = 'pnv-bubble-footer';
+        bubble.appendChild(footer);
+      }
+      footer.textContent = '';
+      if (edited) {
+        footer.appendChild(edited);
+      }
+      if (meta) {
+        footer.appendChild(meta);
+      }
+    });
+  }
+
   function applyBubbleGrouping(container, root) {
     if (!container) {
       return;
@@ -80,6 +130,8 @@
   }
 
   function decorateMessages(container, root) {
+    applyBubbleLanes(container, root);
+    layoutBubbleMeta(container);
     applyBubbleGrouping(container, root);
     applyDateDividers(container);
   }
@@ -167,6 +219,9 @@
     root.classList.add('pnv-chat');
     if (cfg.mode === 'user') {
       root.classList.add('pnv-chat--user');
+      root.dataset.pnvMode = 'user';
+    } else {
+      root.dataset.pnvMode = 'admin';
     }
 
     applyTheme(root, readTheme());

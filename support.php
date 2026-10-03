@@ -34,13 +34,13 @@ foreach($data as $ticket){
 
 ?>
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=2">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=3">
 <link rel="stylesheet" href="fonts.css">
 <style>
 html,body{margin:0;padding:0;height:100%;overflow:hidden;}
@@ -51,10 +51,11 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 <div class="msgApp msgApp--user pnv-chat pnv-chat--user" id="userSupportPage">
 
 <header class="msgHeader">
-<a href="dashboard.php" class="userBack" title="بازگشت">بازگشت</a>
+<a href="dashboard.php" class="userBack pnv-topbar-back" title="بازگشت" aria-label="بازگشت">←</a>
 <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($user), ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="msgHeaderInfo">
 <h1>پشتیبانی</h1>
+<p>آنلاین</p>
 </div>
 <button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle" aria-label="تغییر تم">حالت روشن</button>
 </header>
@@ -109,8 +110,8 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 </div>
 
 <script src="/support_ui.js?v=42"></script>
-<script src="/assets/support-chat/pnv-support-shell.js?v=2"></script>
-<script src="/assets/support-chat/pnv-support-adapter.js?v=2"></script>
+<script src="/assets/support-chat/pnv-support-shell.js?v=3"></script>
+<script src="/assets/support-chat/pnv-support-adapter.js?v=3"></script>
 <script>
 (function(){
     PNVSupportChat.init({

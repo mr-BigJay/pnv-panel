@@ -127,7 +127,7 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '2';
+$chatAssetVer = '3';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=42';
@@ -239,14 +239,14 @@ $profileSummary = supportGetUserProfileSummary($currentUser);
 
 <div class="supportChatTop" id="supportChatTop">
 <header class="msgHeader">
-<button type="button" class="supportBackBtn" id="supportBackBtn">لیست ←</button>
+<button type="button" class="supportBackBtn pnv-topbar-back" id="supportBackBtn" aria-label="بازگشت به لیست">←</button>
 <div class="msgAvatar"><?php echo htmlspecialchars(supportUserInitial($currentUser), ENT_QUOTES, 'UTF-8'); ?></div>
 <div class="msgHeaderInfo">
 <h2><?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?></h2>
 <p><?php echo htmlspecialchars($profileSummary['mobile'] !== '-' ? $profileSummary['mobile'] : '—', ENT_QUOTES, 'UTF-8'); ?></p>
 </div>
 <div class="supportChatHeaderActions">
-<button type="button" class="viewSubsBtn" onclick="openUserSubscriptions()">اشتراک‌ها</button>
+<button type="button" class="viewSubsBtn pnv-topbar-action" onclick="openUserSubscriptions()" title="اشتراک‌ها" aria-label="اشتراک‌ها">📋</button>
 </div>
 </header>
 </div>
