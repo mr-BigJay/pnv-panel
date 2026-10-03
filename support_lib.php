@@ -297,6 +297,67 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportUsernamesMatch($left, $right){
+
+        $left = trim((string)$left);
+        $right = trim((string)$right);
+
+        if($left === '' || $right === ''){
+            return false;
+        }
+
+        return strcasecmp($left, $right) === 0;
+
+    }
+
+    function supportGetUserProfileSummary($username){
+
+        $username = trim((string)$username);
+        $summary = [
+            'username' => $username,
+            'mobile' => '-',
+            'exists' => false,
+        ];
+
+        if($username === ''){
+            return $summary;
+        }
+
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!is_file($usersFile)){
+            return $summary;
+        }
+
+        $users = json_decode((string)file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return $summary;
+        }
+
+        foreach($users as $user){
+
+            if(!is_array($user)){
+                continue;
+            }
+
+            $stored = trim((string)($user['username'] ?? ''));
+
+            if($stored === '' || !supportUsernamesMatch($stored, $username)){
+                continue;
+            }
+
+            $summary['username'] = $stored;
+            $summary['mobile'] = trim((string)($user['mobile'] ?? '')) ?: '-';
+            $summary['exists'] = true;
+            break;
+
+        }
+
+        return $summary;
+
+    }
+
     function supportSortTickets($data){
 
         usort($data, function($a, $b){
@@ -349,7 +410,7 @@ if(!function_exists('supportLoad')){
 
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') !== $username){
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 continue;
             }
 

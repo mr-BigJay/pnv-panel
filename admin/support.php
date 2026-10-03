@@ -40,7 +40,13 @@ if($actionResult['redirect']){
 }
 
 $data = supportSortTickets($actionResult['data']);
-$currentUser = $_GET['user'] ?? '';
+$currentUser = trim((string)($_GET['user'] ?? ''));
+if($currentUser !== '' && function_exists('supportResolveTicketUsername')){
+    $resolvedUser = supportResolveTicketUsername($data, $currentUser);
+    if($resolvedUser !== ''){
+        $currentUser = $resolvedUser;
+    }
+}
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 
@@ -98,7 +104,9 @@ if(!$supportEmbedded){
 <?php foreach($data as $ticket){
 
     $ticketUser = $ticket['user'] ?? '';
-    $isActive = $currentUser === $ticketUser;
+    $isActive = function_exists('supportUsernamesMatch')
+        ? supportUsernamesMatch($currentUser, $ticketUser)
+        : ($currentUser === $ticketUser);
     $unread = supportAdminUnreadCount($ticket);
     $preview = supportTicketPreview($ticket);
     $lastTs = supportTicketLastTimestamp($ticket);
@@ -179,7 +187,11 @@ $hasMessages = false;
 
 foreach($data as $ticket){
 
-    if(($ticket['user'] ?? '') !== $currentUser){
+    if(
+        function_exists('supportUsernamesMatch')
+            ? !supportUsernamesMatch($ticket['user'] ?? '', $currentUser)
+            : ($ticket['user'] ?? '') !== $currentUser
+    ){
         continue;
     }
 

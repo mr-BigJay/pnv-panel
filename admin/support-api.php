@@ -23,10 +23,15 @@ if(!$supportApiLoggedIn){
 require_once __DIR__ . '/../support_lib.php';
 
 $file = __DIR__ . '/../db/support.json';
-$user = trim($_GET['user'] ?? '');
-$since = intval($_GET['since'] ?? 0);
-
 $data = supportLoad($file);
+$user = trim($_GET['user'] ?? '');
+if($user !== '' && function_exists('supportResolveTicketUsername')){
+    $resolvedUser = supportResolveTicketUsername($data, $user);
+    if($resolvedUser !== ''){
+        $user = $resolvedUser;
+    }
+}
+$since = intval($_GET['since'] ?? 0);
 $messages = [];
 $status = '';
 $unreadUsers = [];
@@ -37,7 +42,15 @@ foreach($data as $ticket){
         $unreadUsers[] = $ticket['user'] ?? '';
     }
 
-    if($user === '' || ($ticket['user'] ?? '') !== $user){
+    if($user === ''){
+        continue;
+    }
+
+    if(
+        function_exists('supportUsernamesMatch')
+            ? !supportUsernamesMatch($ticket['user'] ?? '', $user)
+            : ($ticket['user'] ?? '') !== $user
+    ){
         continue;
     }
 
