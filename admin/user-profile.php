@@ -155,6 +155,30 @@ else{
     $purchasesPage = array_slice($purchases, $start, $perPage);
 }
 
+function profileSubscriptionExpireTsLocal($sub){
+
+    $storedExpire = intval($sub['expire_ts'] ?? $sub['expiry_ts'] ?? $sub['expire'] ?? 0);
+
+    if($storedExpire > 0){
+        return $storedExpire;
+    }
+
+    $plan = trim((string)($sub['plan'] ?? ''));
+    $startTs = intval($sub['timestamp'] ?? 0);
+    $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($plan) : 0;
+
+    if($planDays <= 0){
+        return 0;
+    }
+
+    if($startTs <= 0){
+        return -1;
+    }
+
+    return $startTs + ($planDays * 86400);
+
+}
+
 function profileSubscriptionVitality($sub){
 
     $status = trim((string)($sub['status'] ?? 'درحال بررسی'));
@@ -184,46 +208,25 @@ function profileSubscriptionVitality($sub){
     }
 
     $now = time();
+    $expireTs = profileSubscriptionExpireTsLocal($sub);
 
-    if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
-        $expire = xuiFetchSubUserinfoExpire($link);
-
-        if($expire !== null){
-            if(intval($expire) === 0){
-                return [
-                    'label' => 'فعال',
-                    'class' => 'subStatusActive'
-                ];
-            }
-
-            return [
-                'label' => (intval($expire) > $now) ? 'فعال' : 'منقضی',
-                'class' => (intval($expire) > $now) ? 'subStatusActive' : 'subStatusExpired'
-            ];
-        }
-    }
-
-    $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($plan) : 0;
-
-    if($planDays === 0){
+    if($expireTs === 0){
         return [
             'label' => 'فعال',
             'class' => 'subStatusActive'
         ];
     }
 
-    if($startTs <= 0){
+    if($expireTs > 0){
         return [
-            'label' => 'فعال',
-            'class' => 'subStatusActive'
+            'label' => ($expireTs > $now) ? 'فعال' : 'منقضی',
+            'class' => ($expireTs > $now) ? 'subStatusActive' : 'subStatusExpired'
         ];
     }
-
-    $expireTs = $startTs + ($planDays * 86400);
 
     return [
-        'label' => ($expireTs > $now) ? 'فعال' : 'منقضی',
-        'class' => ($expireTs > $now) ? 'subStatusActive' : 'subStatusExpired'
+        'label' => 'فعال',
+        'class' => 'subStatusActive'
     ];
 
 }
@@ -240,7 +243,7 @@ function profileCanClearSubLink($sub){
 
 ?>
 
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-profile.css?v=9">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-profile.css?v=10">
 
 <div class="profileOverlay" onclick="closeProfileModal()"></div>
 

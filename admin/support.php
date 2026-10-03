@@ -127,7 +127,7 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '9';
+$chatAssetVer = '10';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=43';
@@ -377,10 +377,7 @@ if(!$hasMessages){
 
     window.loadProfile = function(user, page){
         page = parseInt(page, 10) || 1;
-        var url = profileApiUrl + '?user=' + encodeURIComponent(user) + '&all=1';
-        if(page > 1){
-            url += '&p=' + page;
-        }
+        var url = profileApiUrl + '?user=' + encodeURIComponent(user) + '&p=' + page;
         fetch(url, {credentials:'same-origin'})
         .then(function(r){
             if(!r.ok){
