@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # Pre/post deploy verification for server3 (no UI changes).
+# Exits 0 unless a critical failure occurs (missing ROOT, cannot write report).
+# Optional checks (no log matches, missing markers) only add to "Remaining issue".
+#
 # Usage:
 #   ROOT=/var/www/html SRC=/opt/pnv-panel bash scripts/verify-admin-deploy.sh
 #   PHASE=before|after (default: after)
@@ -30,6 +33,15 @@ remaining="none"
 
 note(){ remaining="${remaining:+$remaining; }$1"; }
 
+# grep pipeline safe under pipefail (no match => empty, not exit)
+log_grep_tail() {
+  local file="$1" pattern="$2" lines="${3:-5}"
+  [[ -r "$file" ]] || return 0
+  {
+    grep -E "$pattern" "$file" 2>/dev/null | tail -n "$lines" | tr '\n' ' ' || true
+  }
+}
+
 # --- 1) Git clone ---
 if [[ -d "$SRC/.git" ]]; then
   branch="$(git -C "$SRC" branch --show-current 2>/dev/null || echo detached)"
@@ -43,7 +55,8 @@ fi
 # --- 2) File markers on disk ---
 check_marker() {
   local file="$1" marker="$2"
-  [[ -f "$ROOT/$file" ]] && grep -q "$marker" "$ROOT/$file" 2>/dev/null
+  [[ -f "$ROOT/$file" ]] && grep -q "$marker" "$ROOT/$file" 2>/dev/null || return 1
+  return 0
 }
 
 if check_marker admin/payments.php "payViewTabs"; then payments_tabs="yes"; else note "payments.php missing payViewTabs"; fi
@@ -87,7 +100,11 @@ if [[ -d /etc/nginx ]]; then
 fi
 
 root_real="$(readlink -f "$ROOT" 2>/dev/null || echo "$ROOT")"
-if [[ "$root_real" != "$(readlink -f "$nginx_root" 2>/dev/null || echo "$nginx_root")" ]] && [[ "$nginx_root" != "(not found in sites-enabled)" ]]; then
+nginx_root_real="$nginx_root"
+if [[ -d "$nginx_root" ]]; then
+  nginx_root_real="$(readlink -f "$nginx_root" 2>/dev/null || echo "$nginx_root")"
+fi
+if [[ "$root_real" != "$nginx_root_real" && "$nginx_root" != "(not found in sites-enabled)" ]]; then
   note "ROOT=$ROOT != nginx root=$nginx_root"
 fi
 
@@ -96,15 +113,17 @@ for dup in /var/www/pnv-panel /var/www/html/panel /opt/pnv-panel/public; do
 done
 
 if [[ -L "$ROOT" ]]; then
-  note "ROOT is symlink -> $(readlink "$ROOT")"
+  note "ROOT is symlink -> $(readlink "$ROOT" 2>/dev/null || true)"
 fi
 
 # --- 4) Asset HTTP + path in HTML ---
 css_path="../support_ui.css"
 js_path="../support_ui.js"
+css_href=""
+js_href=""
 if [[ -f "$ROOT/admin/support.php" ]]; then
-  css_href="$(grep -oE 'support_ui\.css[^"\047]*' "$ROOT/admin/support.php" | head -1 || true)"
-  js_href="$(grep -oE 'support_ui\.js[^"\047]*' "$ROOT/admin/support.php" | head -1 || true)"
+  css_href="$(grep -oE 'support_ui\.css[^"\047]*' "$ROOT/admin/support.php" 2>/dev/null | head -1 || true)"
+  js_href="$(grep -oE 'support_ui\.js[^"\047]*' "$ROOT/admin/support.php" 2>/dev/null | head -1 || true)"
   [[ -n "$css_href" ]] && css_path="${css_href%%\?*}"
   [[ -n "$js_href" ]] && js_path="${js_href%%\?*}"
 fi
@@ -136,8 +155,12 @@ fi
 # --- 5) Permissions ---
 if id "$WEB_USER" >/dev/null 2>&1; then
   for f in admin/support.php support_ui.css support_ui.js admin/payments.php admin/renews.php bigjay_controller/index.php; do
-    if [[ -f "$ROOT/$f" ]] && ! sudo -u "$WEB_USER" test -r "$ROOT/$f" 2>/dev/null; then
-      note "$WEB_USER cannot read $f"
+    if [[ -f "$ROOT/$f" ]]; then
+      if command -v sudo >/dev/null 2>&1; then
+        sudo -u "$WEB_USER" test -r "$ROOT/$f" 2>/dev/null || note "$WEB_USER cannot read $f"
+      elif ! su -s /bin/sh "$WEB_USER" -c "test -r '$ROOT/$f'" 2>/dev/null; then
+        note "$WEB_USER cannot read $f"
+      fi
     fi
   done
 else
@@ -158,22 +181,27 @@ else
   php_errors="php CLI not installed"
 fi
 
-# --- 7) Recent logs (support / fatal) ---
+# --- 7) Recent logs (support / fatal) — no match must not abort ---
 if [[ -r /var/log/nginx/error.log ]]; then
-  nginx_errors="$(grep -E "support|bigjay|Fatal|Permission denied" /var/log/nginx/error.log 2>/dev/null | tail -5 | tr '\n' ' ' || echo none)"
-  [[ -z "$nginx_errors" ]] && nginx_errors="none recent"
+  nginx_tail="$(log_grep_tail /var/log/nginx/error.log 'support|bigjay|Fatal|Permission denied' 5)"
+  [[ -n "$nginx_tail" ]] && nginx_errors="$nginx_tail" || nginx_errors="none recent"
 fi
+
 for log in /var/log/php8.3-fpm.log /var/log/php8.2-fpm.log; do
-  [[ -r "$log" ]] || continue
-  php_errors="${php_errors}; fpm: $(grep -iE 'fatal|support' "$log" 2>/dev/null | tail -3 | tr '\n' ' ')"
+  fpm_tail="$(log_grep_tail "$log" 'fatal|support' 3)"
+  if [[ -n "$fpm_tail" ]]; then
+    php_errors="${php_errors}; fpm: $fpm_tail"
+  fi
 done
 
 # Manifest from last restore
 if [[ -f "$ROOT/.pnv-admin-ui-manifest.txt" ]]; then
-  files_restored="$(head -20 "$ROOT/.pnv-admin-ui-manifest.txt" | tr '\n' '; ')"
+  files_restored="$(head -20 "$ROOT/.pnv-admin-ui-manifest.txt" | tr '\n' '; ' || true)"
 fi
 
 # --- Report ---
+[[ -d "$ROOT" ]] || { echo "CRITICAL: ROOT missing: $ROOT" >&2; exit 1; }
+
 output() {
   cat <<EOF
 === PNV deploy verify ($PHASE) ===
@@ -183,7 +211,7 @@ Git status:
 ${git_status:-(clean or n/a)}
 
 Nginx root: $nginx_root
-Deploy ROOT: $ROOT ($(readlink -f "$ROOT" 2>/dev/null || echo "?"))
+Deploy ROOT: $ROOT ($root_real)
 Support UI markers: $support_ok
 Support UI version: $support_ui_ver
 Payments tabs: $payments_tabs
@@ -202,3 +230,4 @@ EOF
 }
 
 output | tee "${REPORT:-/dev/stdout}"
+exit 0
