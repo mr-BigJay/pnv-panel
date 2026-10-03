@@ -170,14 +170,7 @@ function profileStatusClass($status){
 
 ?>
 
-<style>
-.subsHint{font-size:12px;line-height:24px;color:#94a3b8;margin:-4px 0 14px}
-.subClearedNote{font-size:13px;line-height:26px;padding:10px;border-radius:10px;background:#1e293b;color:#fbbf24}
-.subLink{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.subLink input{flex:1;min-width:140px;padding:10px;border:none;border-radius:10px;background:#1e293b;color:#fff;font-size:12px}
-.subLink button{border:none;border-radius:10px;background:#22c55e;color:#fff;padding:10px 14px;cursor:pointer;font-family:tahoma;white-space:nowrap}
-.subLink .subClearBtn{background:#dc2626}
-</style>
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-profile.css?v=8">
 
 <div class="profileOverlay" onclick="closeProfileModal()"></div>
 

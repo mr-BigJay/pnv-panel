@@ -127,13 +127,14 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '7';
+$chatAssetVer = '8';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=43';
 $shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
 $voiceJsHref = $chatAssetBase . 'pnv-support-voice.js?v=' . $chatAssetVer;
 $adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
+$profileCssHref = $chatAssetBase . 'pnv-support-profile.css?v=' . $chatAssetVer;
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
 
@@ -146,8 +147,10 @@ if(!$supportEmbedded){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام‌های کاربران</title>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($shellCssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($profileCssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } else { ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($shellCssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($profileCssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
 
 <div class="supportPage pnv-chat <?php echo $supportEmbedded ? 'supportEmbedded' : ''; ?> <?php echo $currentUser !== '' ? 'chat-active' : ''; ?>" id="supportPage">
@@ -372,18 +375,33 @@ if(!$hasMessages){
         loadProfile(currentUser);
     };
 
-    window.loadProfile = function(user){
-        fetch(
-            profileApiUrl + '?user=' + encodeURIComponent(user) + '&all=1',
-            {credentials:'same-origin'}
-        )
-        .then(function(r){ return r.text(); })
+    window.loadProfile = function(user, page){
+        page = parseInt(page, 10) || 1;
+        var url = profileApiUrl + '?user=' + encodeURIComponent(user) + '&all=1';
+        if(page > 1){
+            url += '&p=' + page;
+        }
+        fetch(url, {credentials:'same-origin'})
+        .then(function(r){
+            if(!r.ok){
+                throw new Error('HTTP ' + r.status);
+            }
+            return r.text();
+        })
         .then(function(html){
-            document.getElementById('profileHost').innerHTML = html;
-            document.getElementById('profileHost').style.display = 'block';
+            if(!html || !String(html).trim()){
+                throw new Error('empty response');
+            }
+            var host = document.getElementById('profileHost');
+            if(!host){
+                throw new Error('profileHost missing');
+            }
+            host.innerHTML = html;
+            host.style.display = 'block';
             document.body.style.overflow = 'hidden';
         })
-        .catch(function(){
+        .catch(function(err){
+            console.error('support subscriptions:', err);
             alert('خطا در بارگذاری اشتراک‌ها');
         });
     };

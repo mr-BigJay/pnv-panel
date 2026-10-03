@@ -1,0 +1,255 @@
+/* Support admin — subscriptions profile modal (self-contained) */
+
+#profileHost {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 7000;
+  pointer-events: none;
+}
+
+#profileHost:not(:empty) {
+  pointer-events: auto;
+}
+
+.profileOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 7000;
+}
+
+.profileModal {
+  position: fixed;
+  z-index: 7001;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(80vh, 720px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #17212b;
+  color: #fff;
+  border-radius: 16px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  direction: rtl;
+  padding: 0 0 16px;
+  box-sizing: border-box;
+  font-family: tahoma, sans-serif;
+}
+
+.profileModal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.profileModal::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.profileHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 14px 16px;
+  margin: 0;
+  background: #17212b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.profileCloseBtn {
+  border: none;
+  background: #232e3c;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.profileCloseBtn:hover {
+  background: #2b3948;
+}
+
+.profileInfo {
+  background: #0f172a;
+  border-radius: 14px;
+  padding: 14px;
+  margin: 14px 16px 16px;
+  line-height: 1.85;
+  font-size: 14px;
+}
+
+.infoItem span {
+  color: #94a3b8;
+  display: inline-block;
+  min-width: 110px;
+}
+
+.subsTitle {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 16px 12px;
+}
+
+.subsHint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #94a3b8;
+  margin: -4px 16px 14px;
+}
+
+.emptySubs {
+  text-align: center;
+  color: #94a3b8;
+  padding: 24px 16px;
+}
+
+.subCard {
+  background: #0f172a;
+  border-radius: 14px;
+  padding: 14px;
+  margin: 0 16px 12px;
+}
+
+.subTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.subPlan {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.subStatus {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.subStatusApproved {
+  background: #14532d;
+  color: #bbf7d0;
+}
+
+.subStatusRejected {
+  background: #450a0a;
+  color: #fecaca;
+}
+
+.subStatusPending {
+  background: #422006;
+  color: #fde68a;
+}
+
+.subMeta {
+  font-size: 13px;
+  line-height: 1.75;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+
+.subMeta b {
+  color: #94a3b8;
+}
+
+.subLink {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.subLink input {
+  flex: 1;
+  min-width: 140px;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: #1e293b;
+  color: #fff;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.subLink button,
+.profilePagination button {
+  border: none;
+  border-radius: 10px;
+  background: #22c55e;
+  color: #fff;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.subLink .subClearBtn {
+  background: #dc2626;
+}
+
+.subClearedNote {
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 10px;
+  border-radius: 10px;
+  background: #1e293b;
+  color: #fbbf24;
+}
+
+.subRejectReason,
+.subPendingNote {
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 10px;
+  border-radius: 10px;
+  background: #1e293b;
+}
+
+.subRejectReason {
+  color: #fecaca;
+}
+
+.subPendingNote {
+  color: #fde68a;
+}
+
+.profilePagination {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 14px 16px 0;
+  flex-wrap: wrap;
+}
+
+.profilePagination button {
+  background: #334155;
+  min-width: 38px;
+}
+
+.profilePagination .activePage {
+  background: #22c55e;
+}
+
+@media (max-width: 600px) {
+  .profileModal {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 24px);
+  }
+}
