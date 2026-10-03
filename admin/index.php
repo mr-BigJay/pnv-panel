@@ -674,6 +674,19 @@ exit;
 
 }
 
+// Payments approve/reject/delete must run before HTML output (payments.php uses header() redirects).
+if(
+    $page === 'payments'
+    && (
+        isset($_POST['approve_payment'])
+        || isset($_POST['reject_payment'])
+        || isset($_GET['deletepayment'])
+    )
+){
+    pnvAdminInclude('payments.php');
+    exit;
+}
+
 ?>
 
 <!DOCTYPE html>

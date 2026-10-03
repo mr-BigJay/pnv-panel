@@ -30,8 +30,20 @@ php_errors="none scanned"
 nginx_errors="none scanned"
 files_restored="n/a"
 remaining="none"
+php_fpm_user="$WEB_USER"
+php_fpm_group="$WEB_USER"
+db_support_mode="n/a"
+db_locks_mode="n/a"
+db_support_owner="n/a"
+db_locks_owner="n/a"
 
 note(){ remaining="${remaining:+$remaining; }$1"; }
+
+log_has_runtime_errors() {
+  local blob="$1"
+  [[ -z "$blob" || "$blob" == "none recent" || "$blob" == "none scanned" ]] && return 1
+  echo "$blob" | grep -qiE 'Permission denied|Fatal|headers already sent'
+}
 
 # grep pipeline safe under pipefail (no match => empty, not exit)
 log_grep_tail() {
@@ -152,7 +164,46 @@ else
   js_http="curl missing"
 fi
 
+# --- PHP-FPM pool user (when config exists) ---
+for pool in /etc/php/8.3/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf; do
+  if [[ -r "$pool" ]]; then
+    u="$(grep -E '^\s*user\s*=' "$pool" 2>/dev/null | tail -1 | sed -E 's/.*=\s*//; s/\s//g' || true)"
+    g="$(grep -E '^\s*group\s*=' "$pool" 2>/dev/null | tail -1 | sed -E 's/.*=\s*//; s/\s//g' || true)"
+    [[ -n "$u" ]] && php_fpm_user="$u"
+    [[ -n "$g" ]] && php_fpm_group="$g"
+    break
+  fi
+done
+[[ "$php_fpm_user" != "$WEB_USER" ]] && note "WEB_USER=$WEB_USER but php-fpm pool user=$php_fpm_user"
+
 # --- 5) Permissions ---
+stat_path() {
+  local p="$1"
+  [[ -e "$p" ]] || return 0
+  stat -c '%U:%G %a' "$p" 2>/dev/null || stat -f '%Su:%Sg %OLp' "$p" 2>/dev/null || true
+}
+
+if [[ -e "$ROOT/db/support.json" ]]; then
+  db_support_owner="$(stat_path "$ROOT/db/support.json")"
+  db_support_mode="$(stat -c '%a' "$ROOT/db/support.json" 2>/dev/null || echo '?')"
+fi
+if [[ -d "$ROOT/db/locks" ]]; then
+  db_locks_owner="$(stat_path "$ROOT/db/locks")"
+  db_locks_mode="$(stat -c '%a' "$ROOT/db/locks" 2>/dev/null || echo '?')"
+fi
+
+runtime_write_user="${php_fpm_user:-$WEB_USER}"
+if id "$runtime_write_user" >/dev/null 2>&1; then
+  for w in db db/support.json db/locks uploads/support; do
+    [[ -e "$ROOT/$w" ]] || continue
+    if command -v sudo >/dev/null 2>&1; then
+      sudo -u "$runtime_write_user" test -w "$ROOT/$w" 2>/dev/null || note "$runtime_write_user cannot write $w"
+    elif ! su -s /bin/sh "$runtime_write_user" -c "test -w '$ROOT/$w'" 2>/dev/null; then
+      note "$runtime_write_user cannot write $w"
+    fi
+  done
+fi
+
 if id "$WEB_USER" >/dev/null 2>&1; then
   for f in admin/support.php support_ui.css support_ui.js admin/payments.php admin/renews.php bigjay_controller/index.php; do
     if [[ -f "$ROOT/$f" ]]; then
@@ -181,16 +232,20 @@ else
   php_errors="php CLI not installed"
 fi
 
-# --- 7) Recent logs (support / fatal) — no match must not abort ---
+# --- 7) Recent logs — Permission denied / Fatal / headers already sent ---
+LOG_ERR_PATTERN='Permission denied|Fatal|headers already sent|support|bigjay'
+
 if [[ -r /var/log/nginx/error.log ]]; then
-  nginx_tail="$(log_grep_tail /var/log/nginx/error.log 'support|bigjay|Fatal|Permission denied' 5)"
+  nginx_tail="$(log_grep_tail /var/log/nginx/error.log "$LOG_ERR_PATTERN" 8)"
   [[ -n "$nginx_tail" ]] && nginx_errors="$nginx_tail" || nginx_errors="none recent"
+  log_has_runtime_errors "$nginx_errors" && note "nginx log: Permission denied / Fatal / headers already sent"
 fi
 
 for log in /var/log/php8.3-fpm.log /var/log/php8.2-fpm.log; do
-  fpm_tail="$(log_grep_tail "$log" 'fatal|support' 3)"
+  fpm_tail="$(log_grep_tail "$log" "$LOG_ERR_PATTERN" 5)"
   if [[ -n "$fpm_tail" ]]; then
     php_errors="${php_errors}; fpm: $fpm_tail"
+    log_has_runtime_errors "$fpm_tail" && note "php-fpm log: Permission denied / Fatal / headers already sent"
   fi
 done
 
@@ -212,6 +267,9 @@ ${git_status:-(clean or n/a)}
 
 Nginx root: $nginx_root
 Deploy ROOT: $ROOT ($root_real)
+PHP-FPM user/group: $php_fpm_user / $php_fpm_group
+db/support.json owner/mode: $db_support_owner (mode $db_support_mode)
+db/locks owner/mode: $db_locks_owner (mode $db_locks_mode)
 Support UI markers: $support_ok
 Support UI version: $support_ui_ver
 Payments tabs: $payments_tabs

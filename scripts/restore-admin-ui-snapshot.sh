@@ -9,7 +9,7 @@
 #     support_ui.css, support_ui.js
 #
 # Does NOT: modify db/*.json content, nginx, invoices/, env configs.
-# Does: optional chown www-data on db/uploads for write access only.
+# Does: ensure db/locks + db/uploads write access for PHP-FPM (no db/*.json content edits).
 #
 #   sudo ROOT=/var/www/html bash scripts/restore-admin-ui-snapshot.sh
 set -euo pipefail
@@ -91,10 +91,20 @@ for f in "${UI_FILES[@]}"; do
   install_one "$SUPPORT_UI_REF" "$f"
 done
 
-mkdir -p "$ROOT/db" "$ROOT/uploads/support"
+mkdir -p "$ROOT/db/locks" "$ROOT/uploads/support"
 if id "$WEB_USER" >/dev/null 2>&1; then
   chown "$WEB_USER:$WEB_USER" "$ROOT/db" "$ROOT/uploads" 2>/dev/null || true
-  [[ -f "$ROOT/db/support.json" ]] && chown "$WEB_USER:$WEB_USER" "$ROOT/db/support.json" && chmod 664 "$ROOT/db/support.json"
+  chown "$WEB_USER:$WEB_USER" "$ROOT/db/locks" 2>/dev/null || true
+  chmod 775 "$ROOT/db" "$ROOT/db/locks" "$ROOT/uploads" 2>/dev/null || true
+  if [[ -f "$ROOT/db/support.json" ]]; then
+    chown "$WEB_USER:$WEB_USER" "$ROOT/db/support.json"
+    chmod 664 "$ROOT/db/support.json"
+  fi
+  if [[ -d "$ROOT/db/locks" ]]; then
+    find "$ROOT/db/locks" -type f -exec chown "$WEB_USER:$WEB_USER" {} + 2>/dev/null || true
+    find "$ROOT/db/locks" -type f -exec chmod 664 {} + 2>/dev/null || true
+  fi
+  chmod 775 "$ROOT/uploads/support" 2>/dev/null || true
 fi
 
 if command -v php >/dev/null 2>&1; then

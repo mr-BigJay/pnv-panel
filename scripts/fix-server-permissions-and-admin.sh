@@ -28,11 +28,12 @@ find "$ROOT" -type d -exec chmod 755 {} \;
 find "$ROOT" -type f -exec chmod 644 {} \;
 
 echo ">> Writable data (support messages, uploads, payments)"
-mkdir -p "$ROOT/db" "$ROOT/uploads/support" "$ROOT/invoices" "$ROOT/temp"
+mkdir -p "$ROOT/db/locks" "$ROOT/uploads/support" "$ROOT/invoices" "$ROOT/temp"
 touch "$ROOT/db/support.json" 2>/dev/null || true
 chown -R "$WEB_USER:$WEB_USER" "$ROOT/db" "$ROOT/uploads" "$ROOT/invoices" "$ROOT/temp"
-chmod 775 "$ROOT/db" "$ROOT/uploads" "$ROOT/temp"
+chmod 775 "$ROOT/db" "$ROOT/db/locks" "$ROOT/uploads" "$ROOT/temp"
 chmod 664 "$ROOT/db/support.json" 2>/dev/null || true
+find "$ROOT/db/locks" -type f -exec chmod 664 {} + 2>/dev/null || true
 chmod -R 775 "$ROOT/uploads" 2>/dev/null || true
 
 if ! sudo -u "$WEB_USER" test -r "$ROOT/bigjay_controller/index.php"; then
