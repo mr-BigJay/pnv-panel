@@ -135,6 +135,19 @@
       ui.bindFormGuard(form, textarea, cfg.imageInputId);
     }
 
+    if (form && global.PNVSupportVoice) {
+      global.PNVSupportVoice.bindComposer({
+        formEl: form,
+        textareaEl: textarea,
+        micBtnEl: cfg.micBtnEl,
+        sendBtnEl: cfg.sendBtnEl,
+        audioInputId: cfg.audioInputId
+      });
+      if (messagesEl && typeof global.PNVSupportVoice.bindPlayers === 'function') {
+        global.PNVSupportVoice.bindPlayers(messagesEl);
+      }
+    }
+
     if (form) {
       ui.bindImageAttach(form, cfg.imageInputId, cfg.attachBtnId);
       ui.bindMessageActions({

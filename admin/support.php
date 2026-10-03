@@ -127,11 +127,12 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '3';
+$chatAssetVer = '4';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=42';
 $shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
+$voiceJsHref = $chatAssetBase . 'pnv-support-voice.js?v=' . $chatAssetVer;
 $adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
@@ -309,13 +310,29 @@ if(!$hasMessages){
 <input type="hidden" name="reply" value="1">
 <input type="hidden" name="user" value="<?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?>">
 
+<div class="pnv-voice-recording" hidden>
+<span class="pnv-voice-recording-dot" aria-hidden="true"></span>
+<span class="pnv-voice-recording-time">0:00</span>
+<span class="pnv-voice-recording-label">در حال ضبط…</span>
+<button type="button" class="pnv-voice-recording-cancel" aria-label="لغو ضبط">لغو</button>
+<button type="button" class="pnv-voice-recording-stop" aria-label="توقف ضبط">توقف</button>
+</div>
+<div class="pnv-voice-preview" hidden>
+<button type="button" class="pnv-voice-preview-play" aria-label="پخش پیش‌نمایش">▶</button>
+<audio preload="metadata"></audio>
+<span class="pnv-voice-preview-duration">0:00</span>
+<button type="button" class="pnv-voice-preview-send">ارسال</button>
+<button type="button" class="pnv-voice-preview-cancel">لغو</button>
+</div>
 <div class="msgComposerRow">
 <button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtnAdmin" title="تصویر" aria-label="پیوست تصویر">📎</button>
 <input type="file" name="image" id="supportImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+<input type="file" name="audio" id="supportAudio" class="msgFileInput" accept="audio/webm,audio/ogg,video/webm">
 
 <textarea name="message" id="supportMessage" placeholder="ارسال پیام . . . ." rows="1"></textarea>
 
-<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
+<button type="button" class="msgIconBtn msgIconBtn--mic" id="supportMicAdmin" title="پیام صوتی" aria-label="ضبط پیام صوتی">🎤</button>
+<button type="submit" class="msgIconBtn msgIconBtn--send" id="supportSendAdmin" title="ارسال" aria-label="ارسال" hidden>➤</button>
 </div>
 
 </form>
@@ -331,6 +348,7 @@ if(!$hasMessages){
 
 <script src="<?php echo htmlspecialchars($legacyJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($shellJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($voiceJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($adapterJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
 (function(){
@@ -451,6 +469,9 @@ if(!$hasMessages){
         backBtnEl: document.getElementById('supportBackBtn'),
         imageInputId: 'supportImage',
         attachBtnId: 'attachBtnAdmin',
+        audioInputId: 'supportAudio',
+        micBtnEl: document.getElementById('supportMicAdmin'),
+        sendBtnEl: document.getElementById('supportSendAdmin'),
         currentUser: currentUser,
         pollUrl: pollUrl,
         usersApiUrl: usersApiUrl,

@@ -134,6 +134,12 @@
     layoutBubbleMeta(container);
     applyBubbleGrouping(container, root);
     applyDateDividers(container);
+    if (
+      global.PNVSupportVoice &&
+      typeof global.PNVSupportVoice.bindPlayers === 'function'
+    ) {
+      global.PNVSupportVoice.bindPlayers(container);
+    }
   }
 
   function observeMessages(container, root) {

@@ -40,7 +40,7 @@ foreach($data as $ticket){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=3">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=4">
 <link rel="stylesheet" href="fonts.css">
 <style>
 html,body{margin:0;padding:0;height:100%;overflow:hidden;}
@@ -91,9 +91,24 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 <?php echo $csrfField; ?>
 <input type="hidden" name="send" value="1">
 
+<div class="pnv-voice-recording" hidden>
+<span class="pnv-voice-recording-dot" aria-hidden="true"></span>
+<span class="pnv-voice-recording-time">0:00</span>
+<span class="pnv-voice-recording-label">در حال ضبط…</span>
+<button type="button" class="pnv-voice-recording-cancel" aria-label="لغو ضبط">لغو</button>
+<button type="button" class="pnv-voice-recording-stop" aria-label="توقف ضبط">توقف</button>
+</div>
+<div class="pnv-voice-preview" hidden>
+<button type="button" class="pnv-voice-preview-play" aria-label="پخش پیش‌نمایش">▶</button>
+<audio preload="metadata"></audio>
+<span class="pnv-voice-preview-duration">0:00</span>
+<button type="button" class="pnv-voice-preview-send">ارسال</button>
+<button type="button" class="pnv-voice-preview-cancel">لغو</button>
+</div>
 <div class="msgComposerRow">
 <button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtn" title="پیوست تصویر" aria-label="پیوست تصویر">📎</button>
 <input type="file" name="image" id="userImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+<input type="file" name="audio" id="userAudio" class="msgFileInput" accept="audio/webm,audio/ogg,video/webm">
 
 <textarea
     name="message"
@@ -101,7 +116,8 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
     placeholder="ارسال پیام . . . ."
     rows="1"></textarea>
 
-<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
+<button type="button" class="msgIconBtn msgIconBtn--mic" id="userMic" title="پیام صوتی" aria-label="ضبط پیام صوتی">🎤</button>
+<button type="submit" class="msgIconBtn msgIconBtn--send" id="userSend" title="ارسال" aria-label="ارسال" hidden>➤</button>
 </div>
 
 </form>
@@ -110,8 +126,9 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 </div>
 
 <script src="/support_ui.js?v=42"></script>
-<script src="/assets/support-chat/pnv-support-shell.js?v=3"></script>
-<script src="/assets/support-chat/pnv-support-adapter.js?v=3"></script>
+<script src="/assets/support-chat/pnv-support-shell.js?v=4"></script>
+<script src="/assets/support-chat/pnv-support-voice.js?v=4"></script>
+<script src="/assets/support-chat/pnv-support-adapter.js?v=4"></script>
 <script>
 (function(){
     PNVSupportChat.init({
@@ -122,6 +139,9 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
         formEl: document.getElementById('userSupportForm'),
         imageInputId: 'userImage',
         attachBtnId: 'attachBtn',
+        audioInputId: 'userAudio',
+        micBtnEl: document.getElementById('userMic'),
+        sendBtnEl: document.getElementById('userSend'),
         pollUrl: 'support-api.php'
     });
 })();

@@ -109,7 +109,8 @@
             const imageInput = allowEmptyImage ? form.querySelector('input[type="file"]') : null;
             const hasImage = imageInput && imageInput.files && imageInput.files.length > 0;
             const hasPreview = !!form.querySelector('.supportAttachPreview:not([hidden])');
-            if(text === '' && !hasImage && !hasPreview){ return; }
+            const hasVoicePreview = form.dataset.pnvVoiceMode === 'preview';
+            if(text === '' && !hasImage && !hasPreview && !hasVoicePreview){ return; }
             setTimeout(function(){ submitComposerForm(form); }, 0);
         });
     }
@@ -121,9 +122,10 @@
             const image = imageId ? document.getElementById(imageId) : null;
             const hasFile = image && image.files && image.files.length > 0;
             const hasPreview = !!form.querySelector('.supportAttachPreview:not([hidden])');
-            if(text === '' && !hasFile && !hasPreview){
+            const hasVoicePreview = form.dataset.pnvVoiceMode === 'preview';
+            if(text === '' && !hasFile && !hasPreview && !hasVoicePreview){
                 e.preventDefault();
-                alert('متن یا تصویر وارد کنید');
+                alert('متن، تصویر یا پیام صوتی وارد کنید');
             }
         });
     }
@@ -671,6 +673,14 @@
         if(msg.image){
             html += '<a class="msgImageLink" href="'+escapeHtml(msg.image)+'" target="_blank" rel="noopener"><img src="'+escapeHtml(msg.image)+'" alt=""></a>';
         }
+        if(msg.audio){
+            html += '<div class="pnv-voice-player" dir="ltr">'+
+                '<button type="button" class="pnv-voice-play" aria-label="پخش پیام صوتی">'+
+                '<span class="pnv-voice-play-icon" aria-hidden="true">▶</span></button>'+
+                '<div class="pnv-voice-track" aria-hidden="true"><span class="pnv-voice-bars"></span></div>'+
+                '<span class="pnv-voice-duration">0:00</span>'+
+                '<audio class="pnv-voice-audio" preload="metadata" src="'+escapeHtml(msg.audio)+'"></audio></div>';
+        }
         html += '<div class="msgMeta">'+
             escapeHtml(msg.time || '') + ' - ' + escapeHtml(msg.date || '') +
             '</div>';
@@ -875,7 +885,16 @@
                     lastPollTimestamp = Math.max(lastPollTimestamp, msg.timestamp || 0);
                     added = true;
                 });
-                if(added){ scrollToBottom(chatEl, false); }
+                if(added){
+                    if(global.PNVSupportVoice && typeof global.PNVSupportVoice.bindPlayers === 'function'){
+                        global.PNVSupportVoice.bindPlayers(chatEl);
+                    }
+                    if(global.PNVSupportShell && typeof global.PNVSupportShell.decorateMessages === 'function'){
+                        const root = chatEl.closest('.pnv-chat') || chatEl;
+                        global.PNVSupportShell.decorateMessages(chatEl, root);
+                    }
+                    scrollToBottom(chatEl, false);
+                }
             }catch(e){}
         }
 
