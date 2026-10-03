@@ -691,6 +691,7 @@
         wrap.className = 'msgBubble msg ' + typeCls;
         wrap.dataset.msgId = msg.id || '';
         wrap.dataset.timestamp = msg.timestamp || 0;
+        wrap.dataset.jalaliDate = msg.date || '';
         wrap.dataset.sender = sender;
         wrap.dataset.text = msg.text || '';
 

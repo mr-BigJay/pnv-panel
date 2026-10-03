@@ -40,7 +40,7 @@ foreach($data as $ticket){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=6">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=7">
 <link rel="stylesheet" href="fonts.css">
 <style>
 html,body{margin:0;padding:0;height:100%;overflow:hidden;}
@@ -128,9 +128,9 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 </div>
 
 <script src="/support_ui.js?v=43"></script>
-<script src="/assets/support-chat/pnv-support-shell.js?v=6"></script>
-<script src="/assets/support-chat/pnv-support-voice.js?v=6"></script>
-<script src="/assets/support-chat/pnv-support-adapter.js?v=6"></script>
+<script src="/assets/support-chat/pnv-support-shell.js?v=7"></script>
+<script src="/assets/support-chat/pnv-support-voice.js?v=7"></script>
+<script src="/assets/support-chat/pnv-support-adapter.js?v=7"></script>
 <script>
 (function(){
     PNVSupportChat.init({

@@ -12,11 +12,17 @@ $__pnvDateLibCandidates = [
 foreach($__pnvDateLibCandidates as $__pnvDateLibPath){
     if(is_file($__pnvDateLibPath)){
         require_once $__pnvDateLibPath;
+        if(!defined('PNV_DATE_LIB_LOADED')){
+            define('PNV_DATE_LIB_LOADED', 'real');
+        }
         return;
     }
 }
 
 // fallback: جلوگیری از 500 اگر date_lib.php آپلود نشده باشد
+if(!defined('PNV_DATE_LIB_LOADED')){
+    define('PNV_DATE_LIB_LOADED', 'fallback');
+}
 if(!function_exists('pnvEnsureTehranTimezone')){
     function pnvEnsureTehranTimezone(){
         static $set = false;

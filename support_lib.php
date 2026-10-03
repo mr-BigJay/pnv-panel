@@ -1195,6 +1195,7 @@ if(!function_exists('supportLoad')){
             class="msgBubble msg <?php echo $class; ?>"
             data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
             data-timestamp="<?php echo intval($m['timestamp'] ?? 0); ?>"
+            data-jalali-date="<?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>"
             data-sender="<?php echo htmlspecialchars($sender, ENT_QUOTES, 'UTF-8'); ?>"
             data-own="<?php echo $isOwn ? '1' : '0'; ?>"
             data-can-edit="<?php echo $canEdit ? '1' : '0'; ?>"

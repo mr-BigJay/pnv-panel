@@ -83,6 +83,12 @@ else
   note "support.php missing messenger markers"
 fi
 
+date_lib_ok="yes"
+if [[ ! -f "$ROOT/date_lib.php" ]]; then
+  date_lib_ok="missing"
+  note "WARN: $ROOT/date_lib.php missing — Support Jalali dates may use Gregorian fallback"
+fi
+
 # Compare checksums to git (if refs exist)
 file_match() {
   local ref="$1" path="$2"

@@ -281,7 +281,6 @@
 .pnv-chat--user > .msgHeader {
   display: flex;
   flex-direction: row;
-  direction: ltr;
   align-items: center;
   gap: 0.625rem;
   min-height: var(--pnv-topbar-h);
@@ -292,13 +291,55 @@
   border-bottom: none;
 }
 
-.pnv-chat .msgHeaderInfo {
+.pnv-chat.supportPage .supportChatbox .msgHeader,
+.pnv-chat--user > .msgHeader {
   direction: rtl;
-  text-align: right;
+}
+
+.pnv-chat.supportPage .supportChatbox .msgHeader .supportBackBtn,
+.pnv-chat.supportPage .supportChatbox .msgHeader .pnv-topbar-back {
+  order: 1;
+}
+
+.pnv-chat.supportPage .supportChatbox .msgHeader > .msgAvatar {
+  order: 2;
+}
+
+.pnv-chat.supportPage .supportChatbox .msgHeader .msgHeaderInfo {
+  order: 3;
+  flex: 1;
+  min-width: 0;
+}
+
+.pnv-chat.supportPage .supportChatbox .msgHeader .supportChatHeaderActions {
+  order: 4;
+  margin: 0;
+}
+
+.pnv-chat--user > .msgHeader .userBack,
+.pnv-chat--user > .msgHeader .pnv-topbar-back {
+  order: 1;
+}
+
+.pnv-chat--user > .msgHeader > .msgAvatar {
+  order: 2;
+}
+
+.pnv-chat--user > .msgHeader .msgHeaderInfo {
+  order: 3;
+  flex: 1;
+  min-width: 0;
 }
 
 .pnv-chat--user > .msgHeader .pnv-chat-theme-toggle {
-  margin-right: auto;
+  order: 4;
+  margin-inline-end: auto;
+  margin-right: 0;
+}
+
+.pnv-chat .msgHeaderInfo {
+  direction: rtl;
+  text-align: right;
 }
 
 .pnv-chat .msgHeaderInfo {
@@ -368,7 +409,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* ——— Message scroller (layout LTR; bubble text RTL) ——— */
