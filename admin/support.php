@@ -127,10 +127,14 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$cssHref = '../support_ui.css?v=42';
+$chatAssetVer = '2';
+$chatAssetBase = '/assets/support-chat/';
+$shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
+$legacyJsHref = '/support_ui.js?v=42';
+$shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
+$adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=42';
 
 if(!$supportEmbedded){
 ?>
@@ -140,12 +144,12 @@ if(!$supportEmbedded){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام‌های کاربران</title>
-<link rel="stylesheet" href="<?php echo htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($shellCssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } else { ?>
-<link rel="stylesheet" href="<?php echo htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($shellCssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
 
-<div class="supportPage <?php echo $supportEmbedded ? 'supportEmbedded' : ''; ?> <?php echo $currentUser !== '' ? 'chat-active' : ''; ?>" id="supportPage">
+<div class="supportPage pnv-chat <?php echo $supportEmbedded ? 'supportEmbedded' : ''; ?> <?php echo $currentUser !== '' ? 'chat-active' : ''; ?>" id="supportPage">
 
 <aside class="msgSidebar" id="supportSidebar">
 
@@ -153,6 +157,9 @@ if(!$supportEmbedded){
 <div class="msgSidebarHeadRow">
 <a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
 <h2>پیام‌های کاربران</h2>
+</div>
+<div class="pnv-chat-toolbar">
+<button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle" aria-label="تغییر تم">حالت روشن</button>
 </div>
 <div class="msgSearchWrap">
 <input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
@@ -322,15 +329,11 @@ if(!$hasMessages){
 
 <div id="profileHost"></div>
 
-<script src="<?php echo htmlspecialchars($jsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($legacyJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($shellJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($adapterJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
 (function(){
-    const supportMessages = document.getElementById('supportMessages');
-    const supportMessage = document.getElementById('supportMessage');
-    const supportSearch = document.getElementById('supportSearch');
-    const supportUserResults = document.getElementById('supportUserResults');
-    const supportBackBtn = document.getElementById('supportBackBtn');
-    const supportReplyForm = document.getElementById('supportReplyForm');
     const currentUser = <?php echo json_encode($currentUser, JSON_UNESCAPED_UNICODE); ?>;
     const pollUrl = <?php echo json_encode(
         $supportEmbedded && function_exists('pnvAdminUrl')
@@ -341,8 +344,6 @@ if(!$hasMessages){
     const usersApiUrl = <?php echo json_encode($usersApiUrl, JSON_UNESCAPED_UNICODE); ?>;
     const listUrl = <?php echo json_encode(supportAdminUrl('', $supportEmbedded), JSON_UNESCAPED_UNICODE); ?>;
     const profileApiUrl = <?php echo json_encode($profileApiUrl, JSON_UNESCAPED_UNICODE); ?>;
-    let userSearchTimer = null;
-    let userSearchRequest = 0;
 
     window.openUserSubscriptions = function(){
         if(!currentUser){
@@ -437,170 +438,24 @@ if(!$hasMessages){
         }
     });
 
-    SupportUI.bindTextareaGrow(supportMessage);
-    SupportUI.bindEnterToSend(supportMessage, supportReplyForm, true);
-    SupportUI.bindFormGuard(supportReplyForm, supportMessage, 'supportImage');
-    if(supportReplyForm){
-        SupportUI.bindImageAttach(supportReplyForm, 'supportImage', 'attachBtnAdmin');
-        SupportUI.bindMessageActions({
-            chatEl: supportMessages,
-            form: supportReplyForm,
-            role: 'admin'
-        });
-    }
-
-    function hideUserSearchResults(){
-        if(!supportUserResults){
-            return;
-        }
-        supportUserResults.classList.remove('is-open');
-        supportUserResults.innerHTML = '';
-    }
-
-    function openUserChat(username){
-        if(!username){
-            return;
-        }
-        const sep = listUrl.indexOf('?') >= 0 ? '&' : '?';
-        window.location.href = listUrl + sep + 'user=' + encodeURIComponent(username);
-    }
-
-    function renderUserSearchResults(users){
-        if(!supportUserResults){
-            return;
-        }
-
-        supportUserResults.innerHTML = '';
-
-        if(!users || users.length === 0){
-            supportUserResults.innerHTML = '<div class="msgUserSearchEmpty">کاربری یافت نشد</div>';
-            supportUserResults.classList.add('is-open');
-            return;
-        }
-
-        users.forEach(function(user){
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'msgUserSearchItem';
-            btn.innerHTML =
-                '<span class="msgUserSearchName">' + escapeHtml(user.username || '') + '</span>' +
-                '<span class="msgUserSearchMobile">' + escapeHtml(user.mobile || 'بدون موبایل') + '</span>';
-            btn.addEventListener('click', function(){
-                openUserChat(user.username || '');
-            });
-            supportUserResults.appendChild(btn);
-        });
-
-        supportUserResults.classList.add('is-open');
-    }
-
-    function escapeHtml(value){
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
-    function searchUsersByQuery(query){
-        if(!supportUserResults){
-            return;
-        }
-
-        const requestId = ++userSearchRequest;
-
-        fetch(
-            usersApiUrl + '?q=' + encodeURIComponent(query),
-            {credentials:'same-origin'}
-        )
-        .then(function(r){ return r.json(); })
-        .then(function(data){
-            if(requestId !== userSearchRequest){
-                return;
-            }
-            renderUserSearchResults(data.users || []);
-        })
-        .catch(function(){
-            if(requestId !== userSearchRequest){
-                return;
-            }
-            hideUserSearchResults();
-        });
-    }
-
-    if(supportSearch){
-        supportSearch.addEventListener('input', function(){
-            const q = this.value.trim();
-            const qLower = q.toLowerCase();
-
-            document.querySelectorAll('.msgConv[data-username]').forEach(function(item){
-                const name = (item.dataset.username || '').toLowerCase();
-                item.style.display = name.includes(qLower) ? 'flex' : 'none';
-            });
-
-            clearTimeout(userSearchTimer);
-
-            if(q.length < 2){
-                hideUserSearchResults();
-                return;
-            }
-
-            userSearchTimer = setTimeout(function(){
-                searchUsersByQuery(q);
-            }, 250);
-        });
-
-        supportSearch.addEventListener('keydown', function(e){
-            if(e.key === 'Escape'){
-                hideUserSearchResults();
-            }
-        });
-    }
-
-    document.addEventListener('click', function(e){
-        if(
-            supportUserResults
-            && supportSearch
-            && !supportUserResults.contains(e.target)
-            && e.target !== supportSearch
-        ){
-            hideUserSearchResults();
-        }
+    PNVSupportChat.init({
+        mode: 'admin',
+        rootEl: document.getElementById('supportPage'),
+        containerEl: document.querySelector('.content-support') || document.getElementById('supportPage'),
+        messagesEl: document.getElementById('supportMessages'),
+        textareaEl: document.getElementById('supportMessage'),
+        formEl: document.getElementById('supportReplyForm'),
+        chatTopEl: document.getElementById('supportChatTop'),
+        searchEl: document.getElementById('supportSearch'),
+        userResultsEl: document.getElementById('supportUserResults'),
+        backBtnEl: document.getElementById('supportBackBtn'),
+        imageInputId: 'supportImage',
+        attachBtnId: 'attachBtnAdmin',
+        currentUser: currentUser,
+        pollUrl: pollUrl,
+        usersApiUrl: usersApiUrl,
+        listUrl: listUrl
     });
-
-    if(supportBackBtn){
-        supportBackBtn.addEventListener('click', function(){
-            window.location.href = listUrl;
-        });
-    }
-
-    if(currentUser){
-        if('scrollRestoration' in history){
-            history.scrollRestoration = 'manual';
-        }
-
-        SupportUI.bindMobileChatLayout({
-            containerEl: document.querySelector('.content-support') || document.getElementById('supportPage'),
-            messagesEl: supportMessages,
-            textareaEl: supportMessage,
-            chatTopEl: document.getElementById('supportChatTop')
-        });
-
-        SupportUI.initPolling({
-            chatEl: supportMessages,
-            pollUrl: pollUrl,
-            getParams: function(since){
-                return '?user=' + encodeURIComponent(currentUser) + '&since=' + (since || 0);
-            },
-            classMap: {admin:'admin', user:'usermsg'},
-            actionMeta: {isAdmin: true, ownSender: 'admin'},
-            interval: 5000
-        });
-
-        if(supportMessages){
-            SupportUI.scrollToBottomOnOpen(supportMessages);
-        }
-    }
 })();
 </script>
 

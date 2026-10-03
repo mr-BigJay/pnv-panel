@@ -40,15 +40,15 @@ foreach($data as $ticket){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>پیام به پشتیبانی</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="support_ui.css?v=41">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=2">
 <link rel="stylesheet" href="fonts.css">
 <style>
-html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overflow:hidden;}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 </style>
 </head>
 <body>
 
-<div class="msgApp msgApp--user">
+<div class="msgApp msgApp--user pnv-chat pnv-chat--user" id="userSupportPage">
 
 <header class="msgHeader">
 <a href="dashboard.php" class="userBack" title="بازگشت">بازگشت</a>
@@ -56,6 +56,7 @@ html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overfl
 <div class="msgHeaderInfo">
 <h1>پشتیبانی</h1>
 </div>
+<button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle" aria-label="تغییر تم">حالت روشن</button>
 </header>
 
 <?php if($supportError){ ?>
@@ -107,37 +108,21 @@ html,body{margin:0;padding:0;background:#0b1220;color:#f1f5f9;height:100%;overfl
 
 </div>
 
-<script src="support_ui.js?v=41"></script>
+<script src="/support_ui.js?v=42"></script>
+<script src="/assets/support-chat/pnv-support-shell.js?v=2"></script>
+<script src="/assets/support-chat/pnv-support-adapter.js?v=2"></script>
 <script>
 (function(){
-    const userChat = document.getElementById('userChat');
-    const messageInput = document.getElementById('message');
-    const userSupportForm = document.getElementById('userSupportForm');
-
-    SupportUI.bindTextareaGrow(messageInput);
-    SupportUI.bindEnterToSend(messageInput, userSupportForm, true);
-    SupportUI.bindFormGuard(userSupportForm, messageInput, 'userImage');
-    SupportUI.bindImageAttach(userSupportForm, 'userImage', 'attachBtn');
-    SupportUI.bindMessageActions({
-        chatEl: userChat,
-        form: userSupportForm,
-        role: 'user'
+    PNVSupportChat.init({
+        mode: 'user',
+        rootEl: document.getElementById('userSupportPage'),
+        messagesEl: document.getElementById('userChat'),
+        textareaEl: document.getElementById('message'),
+        formEl: document.getElementById('userSupportForm'),
+        imageInputId: 'userImage',
+        attachBtnId: 'attachBtn',
+        pollUrl: 'support-api.php'
     });
-
-    SupportUI.initPolling({
-        chatEl: userChat,
-        pollUrl: 'support-api.php',
-        getParams: function(since){
-            return '?since=' + (since || 0);
-        },
-        classMap: {admin:'admin', user:'usermsg'},
-        actionMeta: {isAdmin: false, ownSender: 'user'},
-        interval: 5000
-    });
-
-    if(userChat){
-        SupportUI.scrollToBottomOnOpen(userChat);
-    }
 })();
 </script>
 
