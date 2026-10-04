@@ -899,12 +899,49 @@
   transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
 
+.pnv-chat .msgComposerAction .msgIconBtn--mic,
+.pnv-chat .msgComposerAction .msgIconBtn--send {
+  color: #fff !important;
+}
+
+.pnv-chat .msgComposerAction .msgIconBtn--mic .msgIconGlyph,
+.pnv-chat .msgComposerAction .msgIconBtn--send .msgIconGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  color: #fff;
+}
+
+.pnv-chat .msgComposerAction .msgIconBtn--mic .msgIconGlyph svg,
+.pnv-chat .msgComposerAction .msgIconBtn--send .msgIconGlyph svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
 .pnv-chat .msgComposerAction .msgIconBtn--mic {
   font-size: 1rem;
 }
 
 .pnv-chat .msgComposerAction .msgIconBtn--send {
   font-size: 1.0625rem;
+}
+
+.pnv-chat .msgBubble .msgText,
+.pnv-chat .msgBubble .msgQuote {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.pnv-chat .msgBubble.is-holding,
+.pnv-chat .msgBubble.is-menu-open {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .pnv-chat .msgComposerAction .msgIconBtn--mic[hidden],
@@ -1556,6 +1593,64 @@ body.adminPageSupport .content-support .pnv-chat.supportPage .pnv-topbar-action 
 .msgBubble.is-menu-open {
   filter: brightness(1.06);
   transition: filter 0.1s ease;
+}
+
+.supportAttachSheet {
+  position: fixed;
+  inset: 0;
+  z-index: 5050;
+  font-family: var(--pnv-font, tahoma, sans-serif);
+}
+
+.supportAttachSheet[hidden] {
+  display: none !important;
+}
+
+.supportAttachSheetBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.supportAttachSheetCard {
+  position: absolute;
+  left: 50%;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(18rem, calc(100vw - 1.5rem));
+  padding: 0.375rem 0;
+  background: var(--pnv-context-menu-bg, #242f3d);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.supportAttachSheetItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--pnv-text, #f5f5f5);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+
+.supportAttachSheetItem:hover,
+.supportAttachSheetItem:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.supportAttachSheetIcon {
+  width: 1.375rem;
+  text-align: center;
+  opacity: 0.95;
 }
 
 .supportMediaComposer {

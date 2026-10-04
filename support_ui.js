@@ -68,6 +68,29 @@
         return e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13;
     }
 
+    function focusComposerTextarea(textarea){
+        if(!textarea){ return; }
+        try{
+            textarea.focus({preventScroll: true});
+        }catch(err){
+            textarea.focus();
+        }
+        requestAnimationFrame(function(){
+            try{
+                textarea.focus({preventScroll: true});
+            }catch(e){
+                textarea.focus();
+            }
+        });
+        setTimeout(function(){
+            try{
+                textarea.focus({preventScroll: true});
+            }catch(e2){
+                textarea.focus();
+            }
+        }, 0);
+    }
+
     function submitComposerForm(form){
         if(!form){ return; }
         const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
@@ -153,10 +176,22 @@
             '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">' +
             '<path d="M6 2v4H2"/><path d="M18 22v-4h4"/><path d="M6 6h12v12H6z"/><path d="M2 6h4"/><path d="M18 18h4"/></svg>' +
             '</button>' +
+            '<button type="button" class="supportMediaBtn" id="supportMediaRotate" aria-label="چرخش">' +
+            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">' +
+            '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>' +
+            '</button>' +
             '<button type="button" class="supportMediaBtn supportMediaBtn--send" id="supportMediaSend" aria-label="ارسال">' +
             '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>' +
             '</button>' +
             '</div></div></div>' +
+            '<div class="supportAttachSheet" id="supportAttachSheet" hidden>' +
+            '<div class="supportAttachSheetBackdrop" data-close-attach></div>' +
+            '<div class="supportAttachSheetCard" role="menu">' +
+            '<button type="button" class="supportAttachSheetItem" data-attach="gallery" role="menuitem">' +
+            '<span class="supportAttachSheetIcon" aria-hidden="true">🖼</span><span>گالری</span></button>' +
+            '<button type="button" class="supportAttachSheetItem" data-attach="file" role="menuitem">' +
+            '<span class="supportAttachSheetIcon" aria-hidden="true">📁</span><span>فایل</span></button>' +
+            '</div></div>' +
             '<div class="supportCrop" id="supportCropModal" hidden>' +
             '<div class="supportCropCard">' +
             '<div class="supportCropTitle">برش تصویر</div>' +
@@ -180,7 +215,9 @@
         const mediaCaption = document.getElementById('supportMediaCaption');
         const mediaBack = document.getElementById('supportMediaBack');
         const mediaCropBtn = document.getElementById('supportMediaCrop');
+        const mediaRotateBtn = document.getElementById('supportMediaRotate');
         const mediaSend = document.getElementById('supportMediaSend');
+        const attachSheet = document.getElementById('supportAttachSheet');
         const cropModal = document.getElementById('supportCropModal');
         const canvas = document.getElementById('supportCropCanvas');
         if(!mediaComposer || !mediaImg || !cropModal || !canvas){ return; }
@@ -193,7 +230,41 @@
         let pendingName = 'support-image.jpg';
         let pendingUrl = '';
         let submitting = false;
+        let mediaRotation = 0;
+        let attachSource = 'gallery';
         const mainTextarea = form.querySelector('textarea');
+
+        let galleryPicker = form.querySelector('input[data-pnv-gallery-picker]');
+        if(!galleryPicker){
+            galleryPicker = document.createElement('input');
+            galleryPicker.type = 'file';
+            galleryPicker.accept = 'image/*';
+            galleryPicker.className = 'msgFileInput';
+            galleryPicker.setAttribute('data-pnv-gallery-picker', '1');
+            galleryPicker.hidden = true;
+            form.appendChild(galleryPicker);
+        }
+
+        let filePicker = form.querySelector('input[data-pnv-file-picker]');
+        if(!filePicker){
+            filePicker = document.createElement('input');
+            filePicker.type = 'file';
+            filePicker.accept = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
+            filePicker.className = 'msgFileInput';
+            filePicker.setAttribute('data-pnv-file-picker', '1');
+            filePicker.hidden = true;
+            form.appendChild(filePicker);
+        }
+
+        function closeAttachSheet(){
+            if(attachSheet){ attachSheet.hidden = true; }
+        }
+
+        function openAttachSheet(){
+            if(attachSheet){
+                attachSheet.hidden = false;
+            }
+        }
 
         function revokeUrl(){
             if(pendingUrl){
@@ -214,17 +285,53 @@
             try{ input.value = ''; }catch(e){}
         }
 
-        function openMediaComposer(file){
+        function openMediaComposer(file, source){
             revokeUrl();
             pendingBlob = file;
             pendingName = file.name || 'support-image.jpg';
             pendingUrl = URL.createObjectURL(file);
+            mediaRotation = 0;
             mediaImg.src = pendingUrl;
+            attachSource = source || 'gallery';
+            if(mediaCropBtn){
+                mediaCropBtn.hidden = attachSource === 'file';
+            }
+            if(mediaRotateBtn){
+                mediaRotateBtn.hidden = false;
+            }
             if(mediaCaption){
                 mediaCaption.value = (mainTextarea && mainTextarea.value) ? mainTextarea.value : '';
             }
             mediaComposer.hidden = false;
             document.body.classList.add('supportMediaOpen');
+        }
+
+        function rotatePendingImage(){
+            if(!pendingUrl && !pendingBlob){ return; }
+            mediaRotation = (mediaRotation + 90) % 360;
+            const img = new Image();
+            img.onload = function(){
+                const w = img.naturalWidth || img.width;
+                const h = img.naturalHeight || img.height;
+                const canvas = document.createElement('canvas');
+                const swap = mediaRotation % 180 !== 0;
+                canvas.width = swap ? h : w;
+                canvas.height = swap ? w : h;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate((mediaRotation * Math.PI) / 180);
+                ctx.drawImage(img, -w / 2, -h / 2);
+                canvas.toBlob(function(blob){
+                    if(!blob){ return; }
+                    pendingBlob = blob;
+                    pendingName = 'support-rotate.jpg';
+                    assignInputFile(new File([blob], pendingName, {type: 'image/jpeg'}));
+                    revokeUrl();
+                    pendingUrl = URL.createObjectURL(blob);
+                    mediaImg.src = pendingUrl;
+                }, 'image/jpeg', 0.9);
+            };
+            img.src = pendingUrl || '';
         }
 
         function assignInputFile(file){
@@ -399,9 +506,17 @@
             closeMediaComposer();
         });
 
-        mediaCropBtn.addEventListener('click', function(){
-            openCropEditor();
-        });
+        if(mediaCropBtn){
+            mediaCropBtn.addEventListener('click', function(){
+                openCropEditor();
+            });
+        }
+
+        if(mediaRotateBtn){
+            mediaRotateBtn.addEventListener('click', function(){
+                rotatePendingImage();
+            });
+        }
 
         mediaSend.addEventListener('click', function(){
             submitMedia();
@@ -416,25 +531,63 @@
             });
         }
 
+        function handlePickedImage(file, source){
+            if(!file){ return; }
+            if(!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name || '')){
+                alert('فقط JPG، PNG یا WebP مجاز است');
+                return;
+            }
+            assignInputFile(file);
+            openMediaComposer(file, source);
+        }
+
+        if(attachSheet){
+            attachSheet.addEventListener('click', function(e){
+                if(e.target.closest('[data-close-attach]')){
+                    closeAttachSheet();
+                }
+            });
+            attachSheet.querySelectorAll('[data-attach]').forEach(function(btn){
+                btn.addEventListener('click', function(e){
+                    e.preventDefault();
+                    const mode = btn.getAttribute('data-attach');
+                    closeAttachSheet();
+                    if(mode === 'gallery'){
+                        try{ galleryPicker.value = ''; }catch(err){}
+                        galleryPicker.click();
+                        return;
+                    }
+                    if(mode === 'file'){
+                        try{ filePicker.value = ''; }catch(err2){}
+                        filePicker.click();
+                    }
+                });
+            });
+        }
+
+        galleryPicker.addEventListener('change', function(){
+            const file = galleryPicker.files && galleryPicker.files[0];
+            handlePickedImage(file, 'gallery');
+        });
+
+        filePicker.addEventListener('change', function(){
+            const file = filePicker.files && filePicker.files[0];
+            handlePickedImage(file, 'file');
+        });
+
         const attachBtn = (attachBtnId && document.getElementById(attachBtnId))
             || form.querySelector('.msgIconBtn--attach');
         if(attachBtn){
             attachBtn.addEventListener('click', function(e){
                 e.preventDefault();
                 e.stopPropagation();
-                input.click();
+                openAttachSheet();
             });
         }
 
         input.addEventListener('change', function(){
             const file = input.files && input.files[0];
-            if(!file){ return; }
-            if(!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name || '')){
-                alert('فقط JPG، PNG یا WebP مجاز است');
-                try{ input.value = ''; }catch(err){}
-                return;
-            }
-            openMediaComposer(file);
+            handlePickedImage(file, 'gallery');
         });
 
         // Normal text-only submit still works; block if media composer open
@@ -629,11 +782,17 @@
             const menuH = Math.max(menuEl.offsetHeight, menuEl.scrollHeight, 36);
             const pad = 8;
             const gap = 6;
-            let top = bubbleRect.top - menuH - gap;
-            if(top < pad){
-                top = bubbleRect.bottom + gap;
+            const chatRoot = chatEl.closest('.pnv-chat');
+            const headerEl = chatRoot
+                ? chatRoot.querySelector('.msgHeader, .supportChatTop, #supportChatTop')
+                : null;
+            const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : pad;
+            const minTop = Math.max(pad, headerBottom + 4);
+            let top = bubbleRect.bottom + gap;
+            if(top + menuH > window.innerHeight - pad){
+                top = bubbleRect.top - menuH - gap;
             }
-            top = Math.max(pad, Math.min(top, window.innerHeight - menuH - pad));
+            top = Math.max(minTop, Math.min(top, window.innerHeight - menuH - pad));
             const isOwn = bubble.dataset.own === '1';
             let left = isOwn
                 ? bubbleRect.right - menuW
@@ -752,10 +911,27 @@
         let holdTimer = null;
         let holdStart = null;
         let holdBubble = null;
+        let holdSelectBlock = null;
+
+        function clearNativeSelection(){
+            try{
+                const sel = window.getSelection && window.getSelection();
+                if(sel && sel.removeAllRanges){
+                    sel.removeAllRanges();
+                }
+            }catch(err){}
+        }
 
         function clearHold(){
             if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; }
-            if(holdBubble){ holdBubble.classList.remove('is-holding'); }
+            if(holdBubble){
+                holdBubble.classList.remove('is-holding');
+                if(holdSelectBlock){
+                    holdBubble.removeEventListener('selectstart', holdSelectBlock);
+                    holdBubble.removeEventListener('contextmenu', holdSelectBlock);
+                }
+            }
+            holdSelectBlock = null;
             holdStart = null;
             holdBubble = null;
         }
@@ -780,17 +956,26 @@
         chatEl.addEventListener('touchstart', function(e){
             const bubble = e.target.closest('.msgBubble');
             if(!bubble || !chatEl.contains(bubble)){ return; }
-            if(e.target.closest('button,textarea,input')){ return; }
+            if(e.target.closest('button,textarea,input,a')){ return; }
             clearHold();
             const touch = e.touches && e.touches[0];
             holdStart = touch ? {x: touch.clientX, y: touch.clientY} : null;
             holdBubble = bubble;
+            holdSelectBlock = function(ev){
+                ev.preventDefault();
+            };
+            bubble.addEventListener('selectstart', holdSelectBlock);
+            bubble.addEventListener('contextmenu', holdSelectBlock);
             bubble.classList.add('is-holding');
             holdTimer = setTimeout(function(){
                 const target = holdBubble;
+                clearNativeSelection();
+                if(target){
+                    try{ if(navigator.vibrate){ navigator.vibrate(18); } }catch(err){}
+                    openMenu(target);
+                }
                 clearHold();
-                if(target){ openMenu(target); }
-            }, 420);
+            }, 380);
         }, {passive:true});
 
         chatEl.addEventListener('touchmove', function(e){
@@ -817,6 +1002,101 @@
         });
         window.addEventListener('resize', closeMenu);
         window.addEventListener('scroll', closeMenu, true);
+
+        form.addEventListener('support-composer-sent', function(){
+            setReply('', '');
+            clearEditMode();
+        });
+    }
+
+    function bindComposerAjaxSend(options){
+        const form = options.form;
+        const textarea = options.textarea;
+        if(!form || !textarea){ return; }
+
+        textarea.setAttribute('autocomplete', 'off');
+        textarea.setAttribute('autocorrect', 'on');
+        form.setAttribute('autocomplete', 'off');
+
+        form.addEventListener('submit', function(e){
+            if(form.dataset.pnvVoiceMode === 'recording' || form.dataset.pnvVoiceMode === 'preview'){
+                return;
+            }
+            const mediaComposer = document.getElementById('supportMediaComposer');
+            const cropModal = document.getElementById('supportCropModal');
+            if((mediaComposer && !mediaComposer.hidden) || (cropModal && !cropModal.hidden)){
+                return;
+            }
+
+            const imageInput = options.imageInputId
+                ? document.getElementById(options.imageInputId)
+                : form.querySelector('input[type="file"][name="image"]');
+            const audioInput = options.audioInputId
+                ? document.getElementById(options.audioInputId)
+                : form.querySelector('input[type="file"][name="audio"]');
+            const hasImage = imageInput && imageInput.files && imageInput.files.length > 0;
+            const hasAudio = audioInput && audioInput.files && audioInput.files.length > 0;
+            if(hasImage || hasAudio){
+                return;
+            }
+
+            const text = (textarea.value || '').trim();
+            const editIdInput = form.querySelector('input[name="edit_id"]');
+            const isEdit = !!(editIdInput && editIdInput.value);
+            if(!isEdit && text === ''){
+                return;
+            }
+
+            e.preventDefault();
+
+            const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+            if(submitBtn){ submitBtn.disabled = true; }
+
+            const fd = new FormData(form);
+            const action = form.getAttribute('action') || window.location.href;
+
+            fetch(action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                redirect: 'follow'
+            }).then(function(res){
+                if(!res.ok){
+                    throw new Error('send failed');
+                }
+                textarea.value = '';
+                textarea.dispatchEvent(new Event('input', {bubbles: true}));
+                form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
+                try{
+                    window.dispatchEvent(new CustomEvent('support:poll-now'));
+                }catch(err){}
+                focusComposerTextarea(textarea);
+            }).catch(function(){
+                alert('ارسال پیام ناموفق بود');
+                focusComposerTextarea(textarea);
+            }).finally(function(){
+                if(submitBtn){ submitBtn.disabled = false; }
+                focusComposerTextarea(textarea);
+            });
+        });
+    }
+
+    function bindComposerSessionGuard(form, textarea){
+        if(!form){ return; }
+
+        function resetComposerDraft(){
+            if(textarea){
+                textarea.value = '';
+                textarea.dispatchEvent(new Event('input', {bubbles: true}));
+            }
+            form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
+        }
+
+        window.addEventListener('pageshow', function(e){
+            if(e.persisted){
+                resetComposerDraft();
+            }
+        });
     }
 
     function buildMessageChecksHtml(msg, actionMeta){
@@ -1159,6 +1439,9 @@
         }
 
         setInterval(poll, interval);
+        window.addEventListener('support:poll-now', function(){
+            poll();
+        });
         scrollToBottomOnOpen(chatEl);
     }
 
@@ -1171,6 +1454,9 @@
         bindImageAttach: bindImageAttach,
         bindMessageActions: bindMessageActions,
         bindMobileChatLayout: bindMobileChatLayout,
+        bindComposerAjaxSend: bindComposerAjaxSend,
+        bindComposerSessionGuard: bindComposerSessionGuard,
+        focusComposerTextarea: focusComposerTextarea,
         initPolling: initPolling,
         updateMessageStates: updateMessageStates,
         submitComposerForm: submitComposerForm

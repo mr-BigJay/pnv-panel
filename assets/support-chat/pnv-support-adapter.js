@@ -155,6 +155,13 @@
         form: form,
         role: cfg.mode === 'admin' ? 'admin' : 'user'
       });
+      ui.bindComposerAjaxSend({
+        form: form,
+        textarea: textarea,
+        imageInputId: cfg.imageInputId,
+        audioInputId: cfg.audioInputId
+      });
+      ui.bindComposerSessionGuard(form, textarea);
     }
 
     if (cfg.mode === 'admin' && cfg.currentUser) {

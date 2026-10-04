@@ -129,10 +129,10 @@ $formAction = function_exists('supportAdminFormAction')
     : $baseUrl;
 $adminBase = defined('PNV_ADMIN_BASE') ? rtrim(PNV_ADMIN_BASE, '/') : '/bigjay_controller';
 $dashboardUrl = $adminBase . '/index.php';
-$chatAssetVer = '15';
+$chatAssetVer = '16';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
-$legacyJsHref = '/support_ui.js?v=45';
+$legacyJsHref = '/support_ui.js?v=46';
 $shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
 $voiceJsHref = $chatAssetBase . 'pnv-support-voice.js?v=' . $chatAssetVer;
 $adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
@@ -309,7 +309,7 @@ if(!$hasMessages){
 </div>
 
 <footer class="supportSendbox">
-<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner" action="<?php echo htmlspecialchars($formAction, ENT_QUOTES, 'UTF-8'); ?>">
+<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner" action="<?php echo htmlspecialchars($formAction, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off">
 
 <?php echo $csrfField; ?>
 <input type="hidden" name="reply" value="1">
@@ -337,8 +337,8 @@ if(!$hasMessages){
 <textarea name="message" id="supportMessage" placeholder="ارسال پیام . . . ." rows="1"></textarea>
 
 <div class="msgComposerAction">
-<button type="button" class="msgIconBtn msgIconBtn--mic" id="supportMicAdmin" title="پیام صوتی" aria-label="ضبط پیام صوتی">🎤</button>
-<button type="submit" class="msgIconBtn msgIconBtn--send" id="supportSendAdmin" title="ارسال" aria-label="ارسال" hidden>➤</button>
+<button type="button" class="msgIconBtn msgIconBtn--mic" id="supportMicAdmin" title="پیام صوتی" aria-label="ضبط پیام صوتی"><span class="msgIconGlyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg></span></button>
+<button type="submit" class="msgIconBtn msgIconBtn--send" id="supportSendAdmin" title="ارسال" aria-label="ارسال" hidden><span class="msgIconGlyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg></span></button>
 </div>
 </div>
 
