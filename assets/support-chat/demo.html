@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PNV Support Chat Demo</title>
+<link rel="stylesheet" href="pnv-support-shell.css?v=3">
+</head>
+<body style="margin:0">
+<div class="supportPage pnv-chat chat-active" id="supportPage" style="height:100dvh">
+<aside class="msgSidebar">
+<div class="msgSidebarHead">
+<div class="msgSidebarHeadRow"><h2>پیام‌های کاربران</h2></div>
+<div class="pnv-chat-toolbar"><button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle">حالت روشن</button></div>
+<input class="msgSearch" placeholder="جستجو...">
+</div>
+<div class="msgList">
+<a class="msgConv active" href="#"><div class="msgAvatar">ع</div><div class="msgConvBody"><div class="msgConvTop"><span class="msgConvName">user1</span><span class="msgConvTime">۱۰:۲۲</span></div><div class="msgConvPreview unread">سلام</div></div><span class="msgBadge">2</span></a>
+</div>
+</aside>
+<div class="supportChatbox">
+<div class="supportChatTop"><header class="msgHeader"><button type="button" class="supportBackBtn pnv-topbar-back" aria-label="بازگشت">←</button><div class="msgAvatar">ع</div><div class="msgHeaderInfo"><h2>user1</h2><p>0912…</p></div><div class="supportChatHeaderActions"><button type="button" class="pnv-topbar-action" title="اشتراک‌ها">📋</button></div></header></div>
+<div class="supportMessages" id="supportMessages">
+<div class="pnv-date-divider">۱۴۰۴/۰۷/۱۲</div>
+<div class="msgBubble msg usermsg is-user pnv-bubble--first" data-sender="user"><div class="msgText">سلام</div><div class="msgMeta">10:20</div></div>
+<div class="msgBubble msg usermsg is-user pnv-bubble--last" data-sender="user"><div class="msgText">وضعیت اشتراک؟</div><div class="msgMeta">10:21</div></div>
+<div class="msgBubble msg admin is-admin pnv-bubble--single" data-sender="admin"><div class="msgText">بررسی می‌کنیم</div><div class="msgMeta">10:22</div></div>
+</div>
+<footer class="supportSendbox"><form class="msgComposerInner"><div class="msgComposerRow"><button type="button" class="msgIconBtn msgIconBtn--attach">📎</button><textarea rows="1" placeholder="پیام…"></textarea><button type="submit" class="msgIconBtn msgIconBtn--send">➤</button></div></form></footer>
+</div>
+</div>
+<script src="pnv-support-shell.js?v=3"></script>
+<script>PNVSupportShell.mount({ rootEl: document.getElementById('supportPage'), messagesEl: document.getElementById('supportMessages'), mode: 'admin' });</script>
+</body>
+</html>
