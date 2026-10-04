@@ -444,7 +444,59 @@ if(!function_exists('couponLoadCoupons')){
 
     }
 
+    function couponReferralIsSelf($user, $indexes = null){
+
+        $referred = trim($user['username'] ?? '');
+        $refRaw = trim($user['referrer'] ?? '');
+
+        if($referred === '' || $refRaw === ''){
+            return false;
+        }
+
+        if(strcasecmp($refRaw, $referred) === 0){
+            return true;
+        }
+
+        if($indexes === null){
+            $indexes = couponBuildUserReferrerIndexes(couponLoadUsers());
+        }
+
+        $self = $indexes['by_username'][strtolower($referred)] ?? null;
+
+        if(!$self){
+            return false;
+        }
+
+        $refUpper = strtoupper($refRaw);
+        $selfCode = strtoupper(trim($self['referral_code'] ?? ''));
+        $selfMobile = trim($self['mobile'] ?? '');
+
+        if($selfCode !== '' && $refUpper === $selfCode){
+            return true;
+        }
+
+        if($selfMobile !== '' && $refRaw === $selfMobile){
+            return true;
+        }
+
+        return false;
+
+    }
+
     function couponUserWasReferredBy($referredUser, $ownerUser){
+
+        if(couponReferralIsSelf($referredUser)){
+            return false;
+        }
+
+        if(
+            strcasecmp(
+                trim($referredUser['username'] ?? ''),
+                trim($ownerUser['username'] ?? '')
+            ) === 0
+        ){
+            return false;
+        }
 
         $referrer = strtoupper(trim($referredUser['referrer'] ?? ''));
 
@@ -972,6 +1024,102 @@ if(!function_exists('couponLoadCoupons')){
 
     }
 
+    function couponNormalizeDigits($text){
+
+        return str_replace(
+            ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '٬', ','],
+            ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '', ''],
+            (string)$text
+        );
+
+    }
+
+    function couponExtractPlanNameFromText($planText){
+
+        $planText = trim((string)$planText);
+
+        if($planText === ''){
+            return '';
+        }
+
+        $parts = preg_split('/\s*-\s*/u', $planText, 2);
+
+        return trim($parts[0] ?? $planText);
+
+    }
+
+    function couponLoadPlansLookup(){
+
+        static $lookup = null;
+
+        if($lookup !== null){
+            return $lookup;
+        }
+
+        $lookup = [
+            'by_label' => [],
+            'by_name' => [],
+        ];
+
+        $path = __DIR__ . '/db/plans.json';
+
+        if(!file_exists($path)){
+            return $lookup;
+        }
+
+        $plans = json_decode(file_get_contents($path), true);
+
+        if(!is_array($plans)){
+            return $lookup;
+        }
+
+        foreach($plans as $plan){
+            if(!is_array($plan)){
+                continue;
+            }
+
+            $name = trim($plan['name'] ?? '');
+            $price = intval($plan['price'] ?? 0);
+
+            if($name !== ''){
+                $lookup['by_name'][$name] = $price;
+            }
+
+            $label = trim($name . ' - ' . couponFormatPriceThousands($price));
+
+            if($label !== ''){
+                $lookup['by_label'][$label] = $price;
+            }
+        }
+
+        return $lookup;
+
+    }
+
+    function couponPlanBaseThousandsFromPlanText($planText){
+
+        $planText = trim((string)$planText);
+
+        if($planText === ''){
+            return 0;
+        }
+
+        $lookup = couponLoadPlansLookup();
+
+        if(isset($lookup['by_label'][$planText])){
+            return intval($lookup['by_label'][$planText]);
+        }
+
+        $name = couponExtractPlanNameFromText($planText);
+
+        if($name !== '' && isset($lookup['by_name'][$name])){
+            return intval($lookup['by_name'][$name]);
+        }
+
+        return 0;
+
+    }
+
     function couponParsePlanTextPriceThousands($planText){
 
         $planText = trim((string)$planText);
@@ -980,25 +1128,57 @@ if(!function_exists('couponLoadCoupons')){
             return 0;
         }
 
-        $planText = str_replace(
-            ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '٬', ','],
-            ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '', ''],
-            $planText
-        );
+        $normalized = couponNormalizeDigits($planText);
 
-        if(preg_match('/(\d+)\s*هزار\s*توم/u', $planText, $m)){
+        if(preg_match('/(\d+)\s*هزار\s*توم/u', $normalized, $m)){
             return intval($m[1]);
         }
 
-        if(preg_match('/([\d.]+)\s*میلیون/u', $planText, $m)){
+        if(preg_match('/([\d.]+)\s*میلیون\s*توم/u', $normalized, $m)){
             return (int)round(floatval($m[1]) * 1000);
         }
 
-        if(preg_match('/-\s*(\d+)\s*تومان/u', $planText, $m)){
-            return intval($m[1]);
+        if(preg_match('/([\d.]+)\s*میلیون/u', $normalized, $m)){
+            return (int)round(floatval($m[1]) * 1000);
+        }
+
+        if(preg_match('/(\d+)\s*تومان/u', $normalized, $m)){
+            $toman = intval($m[1]);
+
+            if($toman >= 1000){
+                return max(1, (int)round($toman / 1000));
+            }
+
+            return 0;
         }
 
         return 0;
+
+    }
+
+    function couponCsvPaymentAmountRial($row){
+
+        if(!is_array($row)){
+            return 0;
+        }
+
+        if(function_exists('instantPayCsvRowAmountRial')){
+            return intval(instantPayCsvRowAmountRial($row));
+        }
+
+        return intval($row[12] ?? 0);
+
+    }
+
+    function couponRialToThousandsToman($rial){
+
+        $rial = intval($rial);
+
+        if($rial <= 0){
+            return 0;
+        }
+
+        return max(0, (int)round($rial / 10000));
 
     }
 
@@ -1013,49 +1193,52 @@ if(!function_exists('couponLoadCoupons')){
     }
 
     /**
-     * Approved payment amount in thousands of Toman (same unit as plans.json price).
+     * Approved payment amount in thousands of Toman (paid amount after discount when known).
      */
     function couponPaymentApprovedAmountThousands($row){
 
+        $rial = couponCsvPaymentAmountRial($row);
+
+        if($rial > 0){
+            return couponRialToThousandsToman($rial);
+        }
+
         $planText = trim($row[2] ?? '');
-        $amount = couponParsePlanTextPriceThousands($planText);
+        $discountPercent = intval($row[11] ?? 0);
+        $parsedExplicit = couponParsePlanTextPriceThousands($planText);
+        $baseThousands = couponPlanBaseThousandsFromPlanText($planText);
+        $amountBase = $parsedExplicit > 0 ? $parsedExplicit : $baseThousands;
 
-        if($amount > 0){
-            return $amount;
+        if($amountBase > 0 && $discountPercent > 0){
+            return couponCalculateDiscountThousands(
+                $amountBase,
+                $discountPercent,
+                0
+            )['final_amount'];
         }
 
-        static $planLabels = null;
-
-        if($planLabels === null){
-            $planLabels = [];
-            $path = __DIR__ . '/db/plans.json';
-
-            if(file_exists($path)){
-                $plans = json_decode(file_get_contents($path), true);
-
-                if(is_array($plans)){
-                    foreach($plans as $plan){
-                        $label = trim(
-                            ($plan['name'] ?? '')
-                            . ' - '
-                            . couponFormatPriceThousands($plan['price'] ?? 0)
-                        );
-                        $planLabels[$label] = intval($plan['price'] ?? 0);
-                    }
-                }
-            }
+        if($amountBase > 0){
+            return $amountBase;
         }
 
-        return intval($planLabels[$planText] ?? 0);
+        return 0;
 
     }
 
-    function couponBuildPaymentsAnalyticsIndex(){
+    function couponResetPaymentsAnalyticsCache(){
 
-        static $cache = null;
+        $GLOBALS['couponPaymentsAnalyticsCache'] = null;
 
-        if($cache !== null){
-            return $cache;
+    }
+
+    function couponBuildPaymentsAnalyticsIndex($forceRebuild = false){
+
+        if(!$forceRebuild && isset($GLOBALS['couponPaymentsAnalyticsCache'])){
+            $cached = $GLOBALS['couponPaymentsAnalyticsCache'];
+
+            if(is_array($cached)){
+                return $cached;
+            }
         }
 
         $cache = [
@@ -1126,6 +1309,8 @@ if(!function_exists('couponLoadCoupons')){
 
         fclose($handle);
 
+        $GLOBALS['couponPaymentsAnalyticsCache'] = $cache;
+
         return $cache;
 
     }
@@ -1168,7 +1353,7 @@ if(!function_exists('couponLoadCoupons')){
 
     }
 
-    function couponResolveReferrerUsername($referredUser, $indexes){
+    function couponResolveReferrerUsername($referredUser, $indexes, $skipSelfCheck = false){
 
         $ref = strtoupper(trim($referredUser['referrer'] ?? ''));
 
@@ -1176,23 +1361,45 @@ if(!function_exists('couponLoadCoupons')){
             return '';
         }
 
+        $referrer = '';
+
         if(isset($indexes['by_code'][$ref])){
-            return trim($indexes['by_code'][$ref]['username'] ?? '');
+            $referrer = trim($indexes['by_code'][$ref]['username'] ?? '');
         }
 
-        $mobileRef = trim($referredUser['referrer'] ?? '');
+        if($referrer === ''){
+            $mobileRef = trim($referredUser['referrer'] ?? '');
 
-        if(isset($indexes['by_mobile'][$mobileRef])){
-            return trim($indexes['by_mobile'][$mobileRef]['username'] ?? '');
-        }
-
-        foreach($indexes['by_username'] as $unameLower => $user){
-            if(strtoupper($unameLower) === $ref){
-                return trim($user['username'] ?? '');
+            if(isset($indexes['by_mobile'][$mobileRef])){
+                $referrer = trim($indexes['by_mobile'][$mobileRef]['username'] ?? '');
             }
         }
 
-        return '';
+        if($referrer === ''){
+            foreach($indexes['by_username'] as $unameLower => $user){
+                if(strtoupper($unameLower) === $ref){
+                    $referrer = trim($user['username'] ?? '');
+                    break;
+                }
+            }
+        }
+
+        if($referrer === ''){
+            return '';
+        }
+
+        if(!$skipSelfCheck){
+            $referred = trim($referredUser['username'] ?? '');
+
+            if(
+                $referred !== ''
+                && strcasecmp($referrer, $referred) === 0
+            ){
+                return '';
+            }
+        }
+
+        return $referrer;
 
     }
 
@@ -1258,24 +1465,27 @@ if(!function_exists('couponLoadCoupons')){
 
     }
 
-    function couponSyncReferralEvents(){
+    function couponGenerateReferralEventsFromSources(){
 
+        couponResetPaymentsAnalyticsCache();
         $users = couponLoadUsers();
         $indexes = couponBuildUserReferrerIndexes($users);
-        $payments = couponBuildPaymentsAnalyticsIndex();
-        $events = couponLoadReferralEvents();
-        $seen = [];
-        $changed = false;
-
-        foreach($events as $event){
-            $seen[couponReferralEventDedupeKey($event)] = true;
-        }
+        $payments = couponBuildPaymentsAnalyticsIndex(true);
+        $events = [];
 
         foreach($users as $user){
 
             $referred = trim($user['username'] ?? '');
 
             if($referred === ''){
+                continue;
+            }
+
+            if(trim($user['referrer'] ?? '') === ''){
+                continue;
+            }
+
+            if(couponReferralIsSelf($user, $indexes)){
                 continue;
             }
 
@@ -1287,18 +1497,14 @@ if(!function_exists('couponLoadCoupons')){
 
             $signupKey = 'signup:' . strtolower($referred);
 
-            if(!isset($seen[$signupKey])){
-                $events[] = [
-                    'id' => 'refevt_' . substr(hash('sha256', $signupKey), 0, 16),
-                    'event' => 'signup',
-                    'referrer' => $referrer,
-                    'referred' => $referred,
-                    'referral_code' => trim($user['referrer'] ?? ''),
-                    'created_at' => couponUserRegisteredTimestamp($user) ?: time(),
-                ];
-                $seen[$signupKey] = true;
-                $changed = true;
-            }
+            $events[] = [
+                'id' => 'refevt_' . substr(hash('sha256', $signupKey), 0, 16),
+                'event' => 'signup',
+                'referrer' => $referrer,
+                'referred' => $referred,
+                'referral_code' => trim($user['referrer'] ?? ''),
+                'created_at' => couponUserRegisteredTimestamp($user) ?: time(),
+            ];
 
             $referredKey = strtolower($referred);
             $first = $payments['first_approved'][$referredKey] ?? null;
@@ -1309,12 +1515,8 @@ if(!function_exists('couponLoadCoupons')){
 
             $purchaseKey = 'first_purchase:' . $referredKey;
 
-            if(isset($seen[$purchaseKey])){
-                continue;
-            }
-
             $events[] = [
-                'id' => 'refevt_' . substr(hash('sha256', $purchaseKey . '|' . $first['payment_key']), 0, 16),
+                'id' => 'refevt_' . substr(hash('sha256', $purchaseKey), 0, 16),
                 'event' => 'first_approved_purchase',
                 'referrer' => $referrer,
                 'referred' => $referred,
@@ -1322,9 +1524,34 @@ if(!function_exists('couponLoadCoupons')){
                 'payment_amount' => intval($first['amount_thousands']),
                 'created_at' => intval($first['timestamp']),
             ];
-            $seen[$purchaseKey] = true;
-            $changed = true;
 
+        }
+
+        return $events;
+
+    }
+
+    function couponSyncReferralEvents(){
+
+        $generated = couponGenerateReferralEventsFromSources();
+        $events = couponLoadReferralEvents();
+        $seen = [];
+        $changed = false;
+
+        foreach($events as $event){
+            $seen[couponReferralEventDedupeKey($event)] = true;
+        }
+
+        foreach($generated as $event){
+            $key = couponReferralEventDedupeKey($event);
+
+            if(isset($seen[$key])){
+                continue;
+            }
+
+            $events[] = $event;
+            $seen[$key] = true;
+            $changed = true;
         }
 
         if($changed){
@@ -1332,6 +1559,90 @@ if(!function_exists('couponLoadCoupons')){
         }
 
         return $events;
+
+    }
+
+    function couponRebuildReferralEvents(){
+
+        $events = couponGenerateReferralEventsFromSources();
+        couponSaveReferralEvents($events);
+
+        return [
+            'count' => count($events),
+            'events' => $events,
+        ];
+
+    }
+
+    function couponCollectUnresolvedReferrals($users = null, $indexes = null){
+
+        if($users === null){
+            $users = couponLoadUsers();
+        }
+
+        if($indexes === null){
+            $indexes = couponBuildUserReferrerIndexes($users);
+        }
+
+        $rows = [];
+
+        foreach($users as $user){
+
+            $stored = trim($user['referrer'] ?? '');
+
+            if($stored === ''){
+                continue;
+            }
+
+            if(couponReferralIsSelf($user, $indexes)){
+                continue;
+            }
+
+            $referrer = couponResolveReferrerUsername($user, $indexes);
+
+            if($referrer !== ''){
+                continue;
+            }
+
+            $rows[] = [
+                'referred' => trim($user['username'] ?? ''),
+                'referrer_value' => $stored,
+                'reason' => 'owner not found',
+            ];
+
+        }
+
+        return $rows;
+
+    }
+
+    function couponCollectInvalidSelfReferrals($users = null, $indexes = null){
+
+        if($users === null){
+            $users = couponLoadUsers();
+        }
+
+        if($indexes === null){
+            $indexes = couponBuildUserReferrerIndexes($users);
+        }
+
+        $rows = [];
+
+        foreach($users as $user){
+
+            if(!couponReferralIsSelf($user, $indexes)){
+                continue;
+            }
+
+            $rows[] = [
+                'referred' => trim($user['username'] ?? ''),
+                'referrer_value' => trim($user['referrer'] ?? ''),
+                'reason' => 'self_referral',
+            ];
+
+        }
+
+        return $rows;
 
     }
 
@@ -1434,8 +1745,18 @@ if(!function_exists('couponLoadCoupons')){
         $referredByReferrer = [];
         $totalSignups = 0;
         $successfulReferred = [];
+        $unresolvedReferrals = couponCollectUnresolvedReferrals($users, $indexes);
+        $invalidSelfReferrals = couponCollectInvalidSelfReferrals($users, $indexes);
 
         foreach($users as $user){
+
+            if(trim($user['referrer'] ?? '') === ''){
+                continue;
+            }
+
+            if(couponReferralIsSelf($user, $indexes)){
+                continue;
+            }
 
             $referrer = couponResolveReferrerUsername($user, $indexes);
 
@@ -1620,8 +1941,12 @@ if(!function_exists('couponLoadCoupons')){
                 'coupons_used' => $usedTotal,
                 'discount_cost' => null,
                 'discount_cost_note' => 'داده کافی برای محاسبه دقیق موجود نیست',
+                'unresolved_referrals' => count($unresolvedReferrals),
+                'invalid_self_referrals' => count($invalidSelfReferrals),
             ],
             'referrers' => $rows,
+            'unresolved_referrals' => $unresolvedReferrals,
+            'invalid_self_referrals' => $invalidSelfReferrals,
         ];
 
     }

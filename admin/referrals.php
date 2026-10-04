@@ -11,6 +11,19 @@ $flash = '';
 $flashOk = false;
 $csrf = couponAdminCsrfToken();
 
+if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['rebuild_referral_events'])){
+
+    if(!couponAdminCsrfValid($_POST['csrf'] ?? '')){
+        $flash = 'خطای امنیتی (CSRF). دوباره تلاش کنید.';
+    }
+    else{
+        $rebuild = couponRebuildReferralEvents();
+        $flashOk = true;
+        $flash = 'آمار ارجاع بازسازی شد (' . intval($rebuild['count'] ?? 0) . ' رویداد).';
+    }
+
+}
+
 if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_referral_config'])){
 
     if(!couponAdminCsrfValid($_POST['csrf'] ?? '')){
@@ -37,6 +50,8 @@ $report = couponAdminReferralReport($search);
 $config = $report['config'];
 $kpis = $report['kpis'];
 $referrers = $report['referrers'];
+$unresolvedReferrals = $report['unresolved_referrals'] ?? [];
+$invalidSelfReferrals = $report['invalid_self_referrals'] ?? [];
 
 $detailRow = null;
 
@@ -130,8 +145,47 @@ $flagLabels = [
 <div class="refKpi"><div class="refKpiNum"><?php echo number_format($kpis['coupons_issued']); ?></div><div class="refKpiLabel">کوپن صادرشده</div></div>
 <div class="refKpi"><div class="refKpiNum"><?php echo number_format($kpis['coupons_used']); ?></div><div class="refKpiLabel">کوپن مصرف‌شده</div></div>
 <div class="refKpi"><div class="refKpiNum" style="font-size:13px;color:#cbd5e1"><?php echo $h($kpis['discount_cost_note']); ?></div><div class="refKpiLabel">هزینه تخفیف</div></div>
+<div class="refKpi"><div class="refKpiNum"><?php echo number_format($kpis['unresolved_referrals'] ?? 0); ?></div><div class="refKpiLabel">ارجاع قدیمی حل‌نشده</div></div>
+<div class="refKpi"><div class="refKpiNum"><?php echo number_format($kpis['invalid_self_referrals'] ?? 0); ?></div><div class="refKpiLabel">self-referral نامعتبر</div></div>
+</div>
+<form method="post" action="" style="margin:0 0 14px">
+<input type="hidden" name="csrf" value="<?php echo $h($csrf); ?>">
+<button type="submit" name="rebuild_referral_events" value="1" class="campaignFilterBtn" onclick="return confirm('ledger آمار از users/payments بازسازی شود؟');">بازسازی آمار ارجاع</button>
+</form>
+</div>
+
+<?php if(!empty($unresolvedReferrals) || !empty($invalidSelfReferrals)){ ?>
+<div class="campaignCard">
+<h2 class="campaignCardTitle" style="margin:0 0 12px">ارجاع‌های نامعتبر / حل‌نشده</h2>
+<div class="refTableWrap">
+<table class="refTable">
+<thead>
+<tr>
+<th>کاربر</th>
+<th>مقدار referrer ذخیره‌شده</th>
+<th>دلیل</th>
+</tr>
+</thead>
+<tbody>
+<?php foreach($invalidSelfReferrals as $row){ ?>
+<tr>
+<td><?php echo $h($row['referred'] ?? ''); ?></td>
+<td><?php echo $h($row['referrer_value'] ?? ''); ?></td>
+<td>self-referral (نامعتبر)</td>
+</tr>
+<?php } ?>
+<?php foreach($unresolvedReferrals as $row){ ?>
+<tr>
+<td><?php echo $h($row['referred'] ?? ''); ?></td>
+<td><?php echo $h($row['referrer_value'] ?? ''); ?></td>
+<td><?php echo $h($row['reason'] ?? 'owner not found'); ?></td>
+</tr>
+<?php } ?>
+</tbody>
+</table>
 </div>
 </div>
+<?php } ?>
 
 <form class="campaignSearchRow" method="get" action="">
 <div class="campaignSearchWrap">
