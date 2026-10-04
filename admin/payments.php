@@ -213,10 +213,10 @@ if(isset($_POST['approve_payment'])){
         $redirectPer = 20;
     }
 
-    $redirectView = trim((string)($_POST['view'] ?? $_GET['view'] ?? 'pending'));
+    $redirectView = trim((string)($_POST['view'] ?? $_GET['view'] ?? 'confirmed'));
 
     if(!in_array($redirectView, ['pending', 'confirmed', 'expired'], true)){
-        $redirectView = 'pending';
+        $redirectView = 'confirmed';
     }
 
     if($paymentsXuiEnabled && function_exists('xuiApprovePaymentIndex')){
@@ -354,10 +354,10 @@ foreach($payments as $index => $pay){
 
 $buyPayments = array_reverse($buyPayments);
 
-$paymentsListView = trim((string)($_GET['view'] ?? 'pending'));
+$paymentsListView = trim((string)($_GET['view'] ?? 'confirmed'));
 
 if(!in_array($paymentsListView, ['pending', 'confirmed', 'expired'], true)){
-    $paymentsListView = 'pending';
+    $paymentsListView = 'confirmed';
 }
 
 if(function_exists('instantPayAdminRowListBucket')){
@@ -398,9 +398,9 @@ $start = ($currentPage - 1) * $perPage;
 
 $buyPaymentsPage = array_slice($buyPayments, $start, $perPage);
 
-function paymentsListUrl($page, $per, $view = 'pending'){
+function paymentsListUrl($page, $per, $view = 'confirmed'){
 
-    $view = in_array($view, ['pending', 'confirmed', 'expired'], true) ? $view : 'pending';
+    $view = in_array($view, ['pending', 'confirmed', 'expired'], true) ? $view : 'confirmed';
 
     return pnvAdminUrl(
         'index.php?page=payments&view=' . rawurlencode($view) . '&p=' . intval($page) . '&per=' . intval($per)

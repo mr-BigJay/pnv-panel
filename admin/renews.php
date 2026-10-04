@@ -164,10 +164,10 @@ if(isset($_POST['approve_payment'])){
 
 $index=intval($_POST['approve_index']);
 $link=trim($_POST['approve_link'] ?? '');
-$redirectView = trim((string)($_POST['view'] ?? $_GET['view'] ?? 'pending'));
+$redirectView = trim((string)($_POST['view'] ?? $_GET['view'] ?? 'confirmed'));
 
 if(!in_array($redirectView, ['pending', 'confirmed', 'expired'], true)){
-    $redirectView = 'pending';
+    $redirectView = 'confirmed';
 }
 
 $renewsRedirect = pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($redirectView));
@@ -290,10 +290,10 @@ $renews[]=[
 
 $renews=array_reverse($renews);
 
-$renewsListView = trim((string)($_GET['view'] ?? 'pending'));
+$renewsListView = trim((string)($_GET['view'] ?? 'confirmed'));
 
 if(!in_array($renewsListView, ['pending', 'confirmed', 'expired'], true)){
-    $renewsListView = 'pending';
+    $renewsListView = 'confirmed';
 }
 
 if(function_exists('instantPayAdminRowListBucket')){
@@ -324,8 +324,8 @@ $start = ($currentPage - 1) * $perPage;
 $renewsPage = array_slice($renews, $start, $perPage);
 
 if(!function_exists('renewsListUrl')){
-function renewsListUrl($page, $view = 'pending'){
-    $view = in_array($view, ['pending', 'confirmed', 'expired'], true) ? $view : 'pending';
+function renewsListUrl($page, $view = 'confirmed'){
+    $view = in_array($view, ['pending', 'confirmed', 'expired'], true) ? $view : 'confirmed';
 
     return pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($view) . '&p=' . intval($page));
 }
