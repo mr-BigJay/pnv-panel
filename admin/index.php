@@ -412,36 +412,52 @@ $type =
 trim($pay[9] ?? '');
 
 if(
-($type == 'خرید' || $type == '')
+($type === 'خرید' || $type === '')
 &&
-$status != 'تایید شد'
-&&
-$status != 'رد شد'
+(!function_exists('instantPayAdminRowVisible') || instantPayAdminRowVisible($pay))
 ){
 
-if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
-    continue;
-}
+if(function_exists('instantPayAdminRowListBucket')){
 
-$hasNewPayments = true;
-$pendingPaymentsCount++;
+    $bucket = instantPayAdminRowListBucket($pay);
+
+    if($bucket === 'pending'){
+        $hasNewPayments = true;
+        $pendingPaymentsCount++;
+    }
+
+}
+elseif($status !== 'تایید شد' && $status !== 'رد شد'){
+
+    $hasNewPayments = true;
+    $pendingPaymentsCount++;
+
+}
 
 }
 
 if(
-$type == 'تمدید'
+$type === 'تمدید'
 &&
-$status != 'تایید شد'
-&&
-$status != 'رد شد'
+(!function_exists('instantPayAdminRowVisible') || instantPayAdminRowVisible($pay))
 ){
 
-if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
-    continue;
-}
+if(function_exists('instantPayAdminRowListBucket')){
 
-$hasNewRenews = true;
-$pendingRenewsCount++;
+    $bucket = instantPayAdminRowListBucket($pay);
+
+    if($bucket === 'pending'){
+        $hasNewRenews = true;
+        $pendingRenewsCount++;
+    }
+
+}
+elseif($status !== 'تایید شد' && $status !== 'رد شد'){
+
+    $hasNewRenews = true;
+    $pendingRenewsCount++;
+
+}
 
 }
 
