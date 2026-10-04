@@ -105,23 +105,30 @@
 .pnv-chat .msgSidebarHeadRow {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  min-height: 2.75rem;
-  margin-bottom: 0.375rem;
+  gap: 0.5rem;
+  min-height: 3rem;
 }
 
-.pnv-chat .msgSidebarHeadRow h2 {
+.pnv-chat .msgSidebarHeadRow h2,
+.pnv-chat .msgSidebarTitle {
   margin: 0;
   flex: 1;
+  min-width: 0;
   font-size: 1.125rem;
   font-weight: 600;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.pnv-chat .pnv-chat-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 0.375rem;
+.pnv-chat .msgSidebarControls {
+  padding-top: 0.375rem;
+}
+
+.pnv-chat .msgMobileDashBackLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 
 .pnv-chat .pnv-chat-theme-toggle {
@@ -133,11 +140,17 @@
   font-size: 0.8125rem;
   cursor: pointer;
   font-family: inherit;
+  flex-shrink: 0;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  line-height: 1.25;
 }
 
 .pnv-chat .msgSearchWrap {
   position: relative;
-  padding: 0 0.125rem;
+  padding: 0;
+  width: 100%;
 }
 
 .pnv-chat .msgSearch {
@@ -368,22 +381,32 @@
 .pnv-chat .userBack,
 .pnv-chat .msgMobileDashBack {
   border: none;
-  background: transparent;
+  background: var(--pnv-surface-elevated);
   color: var(--pnv-accent);
   font-family: inherit;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
   text-decoration: none;
-  width: 2.5rem;
-  height: 2.5rem;
-  min-width: 2.5rem;
+  width: 2.375rem;
+  height: 2.375rem;
+  min-width: 2.375rem;
+  max-width: 2.375rem;
   padding: 0;
-  border-radius: 50%;
+  border-radius: 0.625rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  flex: 0 0 2.375rem;
+  gap: 0.25rem;
+  box-sizing: border-box;
+}
+
+.pnv-chat .msgMobileDashBackIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .pnv-chat .pnv-topbar-action,
@@ -672,12 +695,13 @@
 }
 
 .pnv-chat .msgComposerInner:not(:has(.supportReplyChip:not([hidden]))):not(
-    :has(.supportAttachPreview:not([hidden]))
-  ) {
+    :has(.supportEditChip:not([hidden]))
+  ):not(:has(.supportAttachPreview:not([hidden]))) {
   gap: 0;
 }
 
 .pnv-chat .supportReplyChip[hidden],
+.pnv-chat .supportEditChip[hidden],
 .pnv-chat .supportAttachPreview[hidden] {
   display: none !important;
   margin: 0 !important;
@@ -686,12 +710,14 @@
 }
 
 .pnv-chat .supportReplyChip,
+.pnv-chat .supportEditChip,
 .pnv-chat .supportAttachPreview {
   width: 100%;
   box-sizing: border-box;
 }
 
-.pnv-chat .supportReplyChip {
+.pnv-chat .supportReplyChip,
+.pnv-chat .supportEditChip {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
@@ -699,22 +725,91 @@
   margin: 0 0 0.25rem;
   border-radius: 0.625rem;
   background: var(--pnv-surface-elevated);
-  border-inline-start: 2px solid var(--pnv-accent);
   position: relative;
   min-height: 2.5rem;
 }
 
-.pnv-chat .supportReplyChip small {
+.pnv-chat .supportReplyChip {
+  border-inline-start: 2px solid var(--pnv-accent);
+}
+
+.pnv-chat .supportEditChip {
+  border-inline-start: 2px solid var(--pnv-warning, #f59e0b);
+}
+
+.pnv-chat .supportReplyChip small,
+.pnv-chat .supportEditChip small {
   display: block;
   font-size: 0.75rem;
-  color: var(--pnv-accent);
   font-weight: 600;
 }
 
-.pnv-chat .supportReplyClear {
+.pnv-chat .supportReplyChip small {
+  color: var(--pnv-accent);
+}
+
+.pnv-chat .supportEditChip small {
+  color: var(--pnv-warning, #f59e0b);
+}
+
+.pnv-chat .supportReplyClear,
+.pnv-chat .supportEditClear {
   position: absolute;
   inset-inline-start: 0.375rem;
   top: 0.375rem;
+  border: none;
+  background: transparent;
+  color: var(--pnv-text-secondary, #708499);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.125rem;
+}
+
+.pnv-chat .msgBubble {
+  position: relative;
+}
+
+.pnv-chat .msgBubbleMenuTrigger {
+  position: absolute;
+  top: 0.25rem;
+  inset-inline-end: 0.25rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--pnv-text-secondary, #708499);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  z-index: 2;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pnv-chat .msgBubble:hover .msgBubbleMenuTrigger,
+  .pnv-chat .msgBubble.is-menu-open .msgBubbleMenuTrigger {
+    opacity: 1;
+  }
+
+  .pnv-chat .msgBubbleMenuTrigger:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--pnv-text, #f5f5f5);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .pnv-chat .msgBubbleMenuTrigger {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
 }
 
 .pnv-chat .msgComposerRow {
@@ -1200,6 +1295,127 @@ body.adminPageSupport .content-support .pnv-chat.supportPage .pnv-topbar-action 
     margin: 0 !important;
     padding: 0 !important;
   }
+
+  .pnv-chat .msgSidebarHead {
+    padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 0.75rem 0.625rem;
+    border-bottom: 1px solid var(--pnv-border);
+  }
+
+  .pnv-chat .msgSidebarHeadRow {
+    gap: 0.5rem;
+    min-height: 2.5rem;
+  }
+
+  .pnv-chat .msgSidebarTitle,
+  .pnv-chat .msgSidebarHeadRow h2 {
+    font-size: 1.0625rem;
+  }
+
+  .pnv-chat .msgMobileDashBack {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    min-width: 2.25rem !important;
+    max-width: 2.25rem !important;
+    flex: 0 0 2.25rem !important;
+    font-size: 1.375rem;
+    border-radius: 0.625rem;
+  }
+
+  .pnv-chat .msgMobileDashBackLabel {
+    display: none;
+  }
+
+  .pnv-chat .msgSidebarControls {
+    padding-top: 0.625rem;
+  }
+
+  .pnv-chat .msgSearchWrap {
+    padding: 0;
+  }
+
+  .pnv-chat .msgSearch {
+    height: 2.625rem;
+    padding: 0 0.875rem;
+    font-size: 0.875rem;
+  }
+
+  .pnv-chat .pnv-chat-theme-toggle {
+    padding: 0.3125rem 0.625rem !important;
+    font-size: 0.75rem !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 7.5rem !important;
+    white-space: nowrap;
+  }
+
+  body.adminPageSupport .content-support .pnv-chat.supportPage .msgSidebarHead .msgMobileDashBack,
+  body.adminPageSupport .content-support .pnv-chat.supportPage .msgSidebarHead .pnv-chat-theme-toggle,
+  .content-support .pnv-chat.supportPage.supportEmbedded .msgSidebarHead .msgMobileDashBack,
+  .content-support .pnv-chat.supportPage.supportEmbedded .msgSidebarHead .pnv-chat-theme-toggle {
+    width: auto !important;
+    margin: 0 !important;
+  }
+
+  body.adminPageSupport .content-support .pnv-chat.supportPage .msgSidebarHead .msgMobileDashBack,
+  .content-support .pnv-chat.supportPage.supportEmbedded .msgSidebarHead .msgMobileDashBack {
+    width: 2.25rem !important;
+    min-width: 2.25rem !important;
+    max-width: 2.25rem !important;
+    padding: 0 !important;
+  }
+
+  body.adminPageSupport .content-support .pnv-chat.supportPage .msgSidebarHead .msgSearch,
+  .content-support .pnv-chat.supportPage.supportEmbedded .msgSidebarHead .msgSearch {
+    width: 100% !important;
+    max-width: none !important;
+    box-sizing: border-box;
+  }
+
+  .pnv-chat .msgList {
+    padding: 0;
+  }
+
+  .pnv-chat .msgList .msgConv {
+    min-height: 0;
+    margin: 0;
+    padding: 0.8125rem 0.875rem;
+    gap: 0.625rem;
+    border-radius: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .pnv-chat[data-pnv-theme="light"] .msgList .msgConv {
+    border-bottom-color: rgba(0, 0, 0, 0.06);
+  }
+
+  .pnv-chat .msgList .msgConv:last-child {
+    border-bottom: none;
+  }
+
+  .pnv-chat .msgList .msgConv:hover,
+  .pnv-chat .msgList .msgConv.active {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .pnv-chat[data-pnv-theme="light"] .msgList .msgConv:hover,
+  .pnv-chat[data-pnv-theme="light"] .msgList .msgConv.active {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .pnv-chat .msgList .msgAvatar {
+    width: 3rem;
+    height: 3rem;
+    font-size: 1rem;
+  }
+
+  .pnv-chat .msgConvPreview {
+    margin-top: 0.0625rem;
+    font-size: 0.8125rem;
+  }
+
+  .pnv-chat .msgConvName {
+    font-size: 0.9375rem;
+  }
 }
 
 @keyframes pnv-chat-slide-in {
@@ -1214,62 +1430,132 @@ body.adminPageSupport .content-support .pnv-chat.supportPage .pnv-topbar-action 
 }
 
 /* ——— Context menu / overlays (support_ui.js) ——— */
-.supportSheet {
+.supportMsgMenuLayer {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 0.5rem;
   z-index: 5000;
   font-family: var(--pnv-font, tahoma, sans-serif);
+  pointer-events: none;
 }
 
-@media (min-width: 769px) {
-  .supportSheet {
-    align-items: center;
-  }
-}
-
-.supportSheet[hidden],
+.supportMsgMenuLayer[hidden],
 .supportMediaComposer[hidden],
-.supportCrop[hidden] {
+.supportCrop[hidden],
+.supportCopyToast[hidden] {
   display: none !important;
 }
 
-.supportSheetCard {
-  width: min(22rem, 100%);
-  background: var(--pnv-surface, #17212b);
-  border-radius: 0.875rem;
-  overflow: hidden;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+.supportMsgMenuBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.22);
+  pointer-events: auto;
 }
 
-.supportSheetCard button {
+.supportContextMenu {
+  position: fixed;
+  min-width: 11.5rem;
+  max-width: min(16rem, calc(100vw - 1rem));
+  padding: 0.3125rem 0;
+  background: var(--pnv-context-menu-bg, #242f3d);
+  border-radius: 0.625rem;
+  box-shadow:
+    0 0.5rem 1.75rem rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  pointer-events: auto;
+  animation: pnvContextMenuIn 0.14s ease;
+}
+
+@keyframes pnvContextMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.supportContextMenuItem {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
   width: 100%;
+  min-height: 2.25rem;
+  padding: 0.4375rem 0.875rem;
   border: none;
   background: transparent;
   color: var(--pnv-text, #f5f5f5);
-  padding: 0.875rem 1rem;
-  font-size: 1rem;
-  cursor: pointer;
+  font-size: 0.9375rem;
   font-family: inherit;
-  border-bottom: 1px solid var(--pnv-border, rgba(255, 255, 255, 0.06));
+  text-align: start;
+  cursor: pointer;
+  transition: background 0.12s ease;
 }
 
-.supportSheetCard button.danger {
-  color: var(--pnv-danger, #e53935);
+.supportContextMenuItem:hover,
+.supportContextMenuItem:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
 }
 
-.supportSheetCard button.ghost {
-  color: var(--pnv-text-secondary, #708499);
+.supportContextMenuItem:active {
+  background: rgba(255, 255, 255, 0.12);
 }
 
-.msgBubble.is-holding {
-  filter: brightness(1.08);
-  transform: scale(0.985);
-  transition: transform 0.1s ease;
+.supportContextMenuItem.is-danger {
+  color: #ff8a80;
+}
+
+.supportContextMenuItem.is-danger:hover,
+.supportContextMenuItem.is-danger:focus-visible {
+  background: rgba(229, 57, 53, 0.14);
+}
+
+.supportContextMenuIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+
+.supportContextMenuLabel {
+  flex: 1;
+  line-height: 1.25;
+}
+
+.supportCopyToast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 5100;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem;
+  background: rgba(20, 28, 36, 0.92);
+  color: var(--pnv-text, #f5f5f5);
+  font-size: 0.875rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: pnvCopyToastIn 0.18s ease;
+}
+
+@keyframes pnvCopyToastIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.msgBubble.is-holding,
+.msgBubble.is-menu-open {
+  filter: brightness(1.06);
+  transition: filter 0.1s ease;
 }
 
 .supportMediaComposer {
