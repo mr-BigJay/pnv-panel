@@ -29,16 +29,30 @@ if(!function_exists('couponLoadCoupons')){
             JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT
         );
 
+        if($json === false){
+            return false;
+        }
+
         $dir = dirname($path);
 
-        if(!is_dir($dir)){
-            mkdir($dir, 0755, true);
+        if(!is_dir($dir) && !mkdir($dir, 0755, true)){
+            return false;
         }
 
         $tmp = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
+        $written = @file_put_contents($tmp, $json, LOCK_EX);
 
-        file_put_contents($tmp, $json, LOCK_EX);
-        rename($tmp, $path);
+        if($written === false){
+            @unlink($tmp);
+            return false;
+        }
+
+        if(!@rename($tmp, $path)){
+            @unlink($tmp);
+            return false;
+        }
+
+        return true;
 
     }
 
@@ -49,19 +63,35 @@ if(!function_exists('couponLoadCoupons')){
             'success_rule' => 'first_approved_purchase',
             'tiers' => [
                 [
-                    'id' => 'tier_1',
-                    'referrals' => 1,
+                    'id' => 'tier_3',
+                    'referrals' => 3,
                     'percent' => 20,
                     'qty' => 1,
                     'max_discount_thousands' => 0,
                     'enabled' => true,
                 ],
                 [
-                    'id' => 'tier_2',
-                    'referrals' => 3,
+                    'id' => 'tier_5',
+                    'referrals' => 5,
+                    'percent' => 40,
+                    'qty' => 1,
+                    'max_discount_thousands' => 0,
+                    'enabled' => true,
+                ],
+                [
+                    'id' => 'tier_10',
+                    'referrals' => 10,
                     'percent' => 100,
                     'qty' => 1,
-                    'max_discount_thousands' => 300,
+                    'max_discount_thousands' => 0,
+                    'enabled' => true,
+                ],
+                [
+                    'id' => 'tier_20',
+                    'referrals' => 20,
+                    'percent' => 100,
+                    'qty' => 3,
+                    'max_discount_thousands' => 0,
                     'enabled' => true,
                 ],
             ],
@@ -150,7 +180,7 @@ if(!function_exists('couponLoadCoupons')){
             : $defaults['new_user_reward'];
 
         $out['new_user_reward'] = [
-            'enabled' => !empty($newUser['enabled']),
+            'enabled' => false,
             'first_purchase_percent' => max(1, min(100, intval($newUser['first_purchase_percent'] ?? 10))),
             'max_discount_thousands' => max(0, intval($newUser['max_discount_thousands'] ?? 0)),
         ];
@@ -194,9 +224,52 @@ if(!function_exists('couponLoadCoupons')){
     function couponSaveReferralConfig($config){
 
         $normalized = couponNormalizeReferralConfig($config);
-        couponWriteJsonAtomic(couponReferralConfigPath(), $normalized);
+
+        if(!couponWriteJsonAtomic(couponReferralConfigPath(), $normalized)){
+            return false;
+        }
 
         return $normalized;
+
+    }
+
+    function couponBuildReferralConfigFromAdminPost($post){
+
+        $tiers = [];
+        $tierRows = is_array($post['tiers'] ?? null) ? $post['tiers'] : [];
+
+        foreach($tierRows as $rowKey => $tier){
+
+            if(!is_array($tier)){
+                continue;
+            }
+
+            $tiers[] = [
+                'id' => trim((string)($tier['id'] ?? $rowKey)),
+                'referrals' => intval($tier['referrals'] ?? 0),
+                'percent' => intval($tier['percent'] ?? 0),
+                'qty' => intval($tier['qty'] ?? 1),
+                'max_discount_thousands' => intval($tier['max_discount_thousands'] ?? 0),
+                'enabled' => !empty($tier['enabled']),
+            ];
+
+        }
+
+        return [
+            'enabled' => !empty($post['referral_enabled']),
+            'success_rule' => 'first_approved_purchase',
+            'tiers' => $tiers,
+            'new_user_reward' => [
+                'enabled' => false,
+                'first_purchase_percent' => intval($post['new_user_reward_percent'] ?? 10),
+                'max_discount_thousands' => intval($post['new_user_reward_max'] ?? 0),
+            ],
+            'referrer_purchase_reward' => [
+                'enabled' => false,
+                'percent' => intval($post['referrer_purchase_percent'] ?? 5),
+                'monthly_cap_thousands' => intval($post['referrer_purchase_cap'] ?? 500),
+            ],
+        ];
 
     }
 
@@ -577,7 +650,10 @@ if(!function_exists('couponLoadCoupons')){
 
         foreach($unused as $coupon){
 
-            if(intval($coupon['percent'] ?? 0) === intval($reward['percent'])){
+            if(
+                intval($coupon['percent'] ?? 0) === intval($reward['percent'])
+                && intval($coupon['max_discount_thousands'] ?? 0) === intval($reward['max_discount_thousands'] ?? 0)
+            ){
                 $matching[] = $coupon;
             }
 
@@ -598,10 +674,12 @@ if(!function_exists('couponLoadCoupons')){
                     'code' => $code,
                     'owner' => $username,
                     'percent' => intval($reward['percent']),
+                    'tier_id' => (string)($reward['tier_id'] ?? ''),
+                    'max_discount_thousands' => intval($reward['max_discount_thousands'] ?? 0),
                     'created_at' => time(),
                     'used' => false,
                     'used_at' => null,
-                    'used_by' => null
+                    'used_by' => null,
                 ];
 
             }
@@ -719,7 +797,9 @@ if(!function_exists('couponLoadCoupons')){
         return [
             'ok' => true,
             'percent' => intval($coupon['percent'] ?? 0),
-            'code' => $coupon['code']
+            'max_discount_thousands' => intval($coupon['max_discount_thousands'] ?? 0),
+            'tier_id' => (string)($coupon['tier_id'] ?? ''),
+            'code' => $coupon['code'],
         ];
 
     }
@@ -757,34 +837,58 @@ if(!function_exists('couponLoadCoupons')){
 
     }
 
-    function couponApplyDiscountThousands($priceThousands, $percent){
+    function couponCalculateDiscountThousands($priceThousands, $percent, $maxDiscountThousands = 0){
 
-        $priceThousands = intval($priceThousands);
+        $priceThousands = max(0, intval($priceThousands));
         $percent = max(0, min(100, intval($percent)));
+        $maxDiscountThousands = max(0, intval($maxDiscountThousands));
 
-        $discounted = (int)round($priceThousands * (100 - $percent) / 100);
+        $percentageDiscount = (int)round($priceThousands * $percent / 100);
 
-        return max(0, $discounted);
+        if($maxDiscountThousands > 0){
+            $actualDiscount = min($percentageDiscount, $maxDiscountThousands);
+        }
+        else{
+            $actualDiscount = $percentageDiscount;
+        }
+
+        return [
+            'discount_amount' => $actualDiscount,
+            'final_amount' => max(0, $priceThousands - $actualDiscount),
+        ];
 
     }
 
-    function couponBuildPlanLabel($plan, $percent){
+    function couponApplyDiscountThousands($priceThousands, $percent){
 
-        $original = couponFormatPriceThousands($plan['price'] ?? 0);
-        $discounted = couponApplyDiscountThousands($plan['price'] ?? 0, $percent);
-        $finalText = couponFormatPriceThousands($discounted);
+        return couponCalculateDiscountThousands($priceThousands, $percent, 0)['final_amount'];
+
+    }
+
+    function couponBuildPlanLabel($plan, $percent, $maxDiscountThousands = 0){
+
+        $originalAmount = intval($plan['price'] ?? 0);
+        $original = couponFormatPriceThousands($originalAmount);
+        $calc = couponCalculateDiscountThousands($originalAmount, $percent, $maxDiscountThousands);
+        $finalText = couponFormatPriceThousands($calc['final_amount']);
 
         if($percent <= 0){
             return ($plan['name'] ?? '') . ' - ' . $original;
         }
 
-        return ($plan['name'] ?? '')
+        $label = ($plan['name'] ?? '')
             . ' - '
             . $original
             . ' | تخفیف '
             . $percent
             . '% → '
             . $finalText;
+
+        if(intval($maxDiscountThousands) > 0){
+            $label .= ' (سقف ' . couponFormatPriceThousands($maxDiscountThousands) . ')';
+        }
+
+        return $label;
 
     }
 
@@ -803,19 +907,26 @@ if(!function_exists('couponLoadCoupons')){
         }
 
         $percent = intval($validation['percent']);
+        $maxDiscount = intval($validation['max_discount_thousands'] ?? 0);
         $original = intval($plan['price']);
-        $final = couponApplyDiscountThousands($original, $percent);
+        $calc = couponCalculateDiscountThousands($original, $percent, $maxDiscount);
+        $final = intval($calc['final_amount']);
 
         return [
             'ok' => true,
+            'source' => 'referral',
             'code' => $validation['code'],
+            'tier_id' => (string)($validation['tier_id'] ?? ''),
             'percent' => $percent,
+            'max_discount_thousands' => $maxDiscount,
             'plan_name' => $plan['name'] ?? '',
             'original_text' => couponFormatPriceThousands($original),
             'final_text' => couponFormatPriceThousands($final),
             'original_amount' => $original,
+            'discount_amount' => intval($calc['discount_amount']),
             'final_amount' => $final,
-            'plan_label' => couponBuildPlanLabel($plan, $percent)
+            'final' => $final,
+            'plan_label' => couponBuildPlanLabel($plan, $percent, $maxDiscount),
         ];
 
     }

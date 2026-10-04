@@ -1025,6 +1025,9 @@ if(!function_exists('instantPayPath')){
         $discountPercent = intval($opts['discount_percent'] ?? 0);
         $discountSource = trim((string)($opts['discount_source'] ?? ''));
         $discountFinalThousands = intval($opts['discount_final_thousands'] ?? 0);
+        $discountFinalApplied = !empty($opts['discount_final_applied']);
+        $discountMaxThousands = intval($opts['discount_max_thousands'] ?? 0);
+        $discountPlanLabel = trim((string)($opts['discount_plan_label'] ?? ''));
 
         if($username === '' || $planValue === '' || $card === ''){
             return ['ok' => false, 'error' => 'اطلاعات سفارش ناقص است'];
@@ -1114,11 +1117,22 @@ if(!function_exists('instantPayPath')){
 
         $priceThousands = intval($plan['price'] ?? 0);
 
-        if($discountFinalThousands > 0 && $discountSource === 'admin_discount'){
+        if($discountFinalApplied && $couponCode !== ''){
             $priceThousands = max(0, $discountFinalThousands);
         }
-        elseif($discountPercent > 0 && $discountPercent <= 100 && function_exists('couponApplyDiscountThousands')){
-            $priceThousands = couponApplyDiscountThousands($priceThousands, $discountPercent);
+        elseif($discountFinalThousands > 0 && $discountSource === 'admin_discount'){
+            $priceThousands = max(0, $discountFinalThousands);
+        }
+        elseif(
+            $discountPercent > 0
+            && $discountPercent <= 100
+            && function_exists('couponCalculateDiscountThousands')
+        ){
+            $priceThousands = couponCalculateDiscountThousands(
+                $priceThousands,
+                $discountPercent,
+                $discountMaxThousands
+            )['final_amount'];
         }
 
         $baseToman = instantPayBaseToman($priceThousands);
@@ -1130,8 +1144,15 @@ if(!function_exists('instantPayPath')){
         $target = ($type === 'تمدید') ? $sub : $subname;
         $planLabel = $planValue;
 
-        if($discountPercent > 0 && function_exists('couponBuildPlanLabel')){
-            $planLabel = couponBuildPlanLabel($plan, $discountPercent);
+        if($discountPlanLabel !== ''){
+            $planLabel = $discountPlanLabel;
+        }
+        elseif($discountPercent > 0 && function_exists('couponBuildPlanLabel')){
+            $planLabel = couponBuildPlanLabel(
+                $plan,
+                $discountPercent,
+                $discountMaxThousands
+            );
         }
 
         // ردیف CSV برای تأیید خودکار بعدی

@@ -3,19 +3,35 @@
     "success_rule": "first_approved_purchase",
     "tiers": [
         {
-            "id": "tier_1",
-            "referrals": 1,
+            "id": "tier_3",
+            "referrals": 3,
             "percent": 20,
             "qty": 1,
             "max_discount_thousands": 0,
             "enabled": true
         },
         {
-            "id": "tier_2",
-            "referrals": 3,
+            "id": "tier_5",
+            "referrals": 5,
+            "percent": 40,
+            "qty": 1,
+            "max_discount_thousands": 0,
+            "enabled": true
+        },
+        {
+            "id": "tier_10",
+            "referrals": 10,
             "percent": 100,
             "qty": 1,
-            "max_discount_thousands": 300,
+            "max_discount_thousands": 0,
+            "enabled": true
+        },
+        {
+            "id": "tier_20",
+            "referrals": 20,
+            "percent": 100,
+            "qty": 3,
+            "max_discount_thousands": 0,
             "enabled": true
         }
     ],

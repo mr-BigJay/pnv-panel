@@ -17,50 +17,16 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_referral_config']
         $flash = 'خطای امنیتی (CSRF). دوباره تلاش کنید.';
     }
     else{
-        $tiers = [];
-        $ids = $_POST['tier_id'] ?? [];
-        $referrals = $_POST['tier_referrals'] ?? [];
-        $percents = $_POST['tier_percent'] ?? [];
-        $qtys = $_POST['tier_qty'] ?? [];
-        $maxes = $_POST['tier_max_discount'] ?? [];
-        $enabledRows = is_array($_POST['tier_enabled'] ?? null)
-            ? $_POST['tier_enabled']
-            : [];
+        $config = couponBuildReferralConfigFromAdminPost($_POST);
+        $saved = couponSaveReferralConfig($config);
 
-        if(!is_array($referrals)){
-            $referrals = [];
+        if($saved === false){
+            $flash = 'ذخیره تنظیمات ناموفق بود. فایل config قبلی حفظ شده است.';
         }
-
-        foreach($referrals as $i => $refCount){
-            $tiers[] = [
-                'id' => trim((string)($ids[$i] ?? ('tier_' . ($i + 1)))),
-                'referrals' => intval($refCount),
-                'percent' => intval($percents[$i] ?? 0),
-                'qty' => intval($qtys[$i] ?? 1),
-                'max_discount_thousands' => intval($maxes[$i] ?? 0),
-                'enabled' => !empty($enabledRows[$i]),
-            ];
+        else{
+            $flashOk = true;
+            $flash = 'تنظیمات ذخیره شد.';
         }
-
-        $config = [
-            'enabled' => !empty($_POST['referral_enabled']),
-            'success_rule' => 'first_approved_purchase',
-            'tiers' => $tiers,
-            'new_user_reward' => [
-                'enabled' => !empty($_POST['new_user_reward_enabled']),
-                'first_purchase_percent' => intval($_POST['new_user_reward_percent'] ?? 10),
-                'max_discount_thousands' => intval($_POST['new_user_reward_max'] ?? 0),
-            ],
-            'referrer_purchase_reward' => [
-                'enabled' => false,
-                'percent' => intval($_POST['referrer_purchase_percent'] ?? 5),
-                'monthly_cap_thousands' => intval($_POST['referrer_purchase_cap'] ?? 500),
-            ],
-        ];
-
-        couponSaveReferralConfig($config);
-        $flashOk = true;
-        $flash = 'تنظیمات ذخیره شد.';
     }
 
 }
@@ -283,14 +249,15 @@ if(empty($tierRows)){
 }
 
 foreach($tierRows as $i => $tier){
+    $rowKey = 'r_' . substr(md5(($tier['id'] ?? '') . $i), 0, 8);
 ?>
-<div class="refTierRow" data-tier-row>
-<input type="hidden" name="tier_id[]" value="<?php echo $h($tier['id'] ?? ('tier_' . ($i + 1))); ?>">
-<div><label class="campaignLabel">تعداد معرفی موفق</label><input class="campaignInput" type="number" min="1" name="tier_referrals[]" value="<?php echo intval($tier['referrals']); ?>"></div>
-<div><label class="campaignLabel">درصد تخفیف</label><input class="campaignInput" type="number" min="1" max="100" name="tier_percent[]" value="<?php echo intval($tier['percent']); ?>"></div>
-<div><label class="campaignLabel">تعداد کد</label><input class="campaignInput" type="number" min="1" name="tier_qty[]" value="<?php echo intval($tier['qty']); ?>"></div>
-<div><label class="campaignLabel">سقف (هزار تومان)</label><input class="campaignInput" type="number" min="0" name="tier_max_discount[]" value="<?php echo intval($tier['max_discount_thousands']); ?>"></div>
-<div><label class="campaignLabel">فعال</label><input type="hidden" name="tier_enabled[<?php echo $i; ?>]" value="0"><label class="campaignToggle" style="margin-top:6px"><input type="checkbox" name="tier_enabled[<?php echo $i; ?>]" value="1"<?php echo !empty($tier['enabled']) ? ' checked' : ''; ?>><span class="campaignToggleTrack"></span></label></div>
+<div class="refTierRow" data-tier-row data-row-key="<?php echo $h($rowKey); ?>">
+<input type="hidden" name="tiers[<?php echo $h($rowKey); ?>][id]" value="<?php echo $h($tier['id'] ?? ('tier_' . ($i + 1))); ?>">
+<div><label class="campaignLabel">تعداد معرفی موفق</label><input class="campaignInput" type="number" min="1" name="tiers[<?php echo $h($rowKey); ?>][referrals]" value="<?php echo intval($tier['referrals']); ?>"></div>
+<div><label class="campaignLabel">درصد تخفیف</label><input class="campaignInput" type="number" min="1" max="100" name="tiers[<?php echo $h($rowKey); ?>][percent]" value="<?php echo intval($tier['percent']); ?>"></div>
+<div><label class="campaignLabel">تعداد کد</label><input class="campaignInput" type="number" min="1" name="tiers[<?php echo $h($rowKey); ?>][qty]" value="<?php echo intval($tier['qty']); ?>"></div>
+<div><label class="campaignLabel">سقف (هزار تومان)</label><input class="campaignInput" type="number" min="0" name="tiers[<?php echo $h($rowKey); ?>][max_discount_thousands]" value="<?php echo intval($tier['max_discount_thousands']); ?>"></div>
+<div><label class="campaignLabel">فعال</label><label class="campaignToggle" style="margin-top:6px"><input type="checkbox" name="tiers[<?php echo $h($rowKey); ?>][enabled]" value="1"<?php echo !empty($tier['enabled']) ? ' checked' : ''; ?>><span class="campaignToggleTrack"></span></label></div>
 <button type="button" class="campaignFilterBtn" data-remove-tier>حذف</button>
 </div>
 <?php } ?>
@@ -299,11 +266,11 @@ foreach($tierRows as $i => $tier){
 </div>
 
 <div class="campaignSection">
-<div class="campaignSectionTitle">پاداش کاربر جدید (فاز بعد — فعلاً فقط ذخیره)</div>
+<div class="campaignSectionTitle">پاداش کاربر جدید</div>
 <div class="campaignGrid2">
 <div class="campaignToggleRow">
-<div class="campaignToggleText">فعال</div>
-<label class="campaignToggle"><input type="checkbox" name="new_user_reward_enabled" value="1"<?php echo !empty($config['new_user_reward']['enabled']) ? ' checked' : ''; ?>><span class="campaignToggleTrack"></span></label>
+<div class="campaignToggleText">فعال — فاز بعد — هنوز روی خرید اعمال نمی‌شود</div>
+<label class="campaignToggle"><input type="checkbox" disabled><span class="campaignToggleTrack"></span></label>
 </div>
 <div class="campaignField"><label class="campaignLabel">درصد خرید اول</label><input class="campaignInput" type="number" min="1" max="100" name="new_user_reward_percent" value="<?php echo intval($config['new_user_reward']['first_purchase_percent'] ?? 10); ?>"></div>
 <div class="campaignField"><label class="campaignLabel">سقف (هزار تومان)</label><input class="campaignInput" type="number" min="0" name="new_user_reward_max" value="<?php echo intval($config['new_user_reward']['max_discount_thousands'] ?? 0); ?>"></div>
@@ -335,7 +302,9 @@ foreach($tierRows as $i => $tier){
 (function(){
     var editor = document.getElementById('tierEditor');
     var addBtn = document.getElementById('addTierRow');
-    var tierIndex = editor ? editor.querySelectorAll('[data-tier-row]').length : 0;
+    function newRowKey(){
+        return 'r_' + Math.random().toString(16).slice(2, 10);
+    }
 
     function bindRemove(row){
         var btn = row.querySelector('[data-remove-tier]');
@@ -354,16 +323,19 @@ foreach($tierRows as $i => $tier){
 
     if(addBtn && editor){
         addBtn.addEventListener('click', function(){
+            var rowKey = newRowKey();
             var row = document.createElement('div');
             row.className = 'refTierRow';
             row.setAttribute('data-tier-row', '');
+            row.setAttribute('data-row-key', rowKey);
+            var p = 'tiers[' + rowKey + ']';
             row.innerHTML =
-                '<input type="hidden" name="tier_id[]" value="tier_' + (++tierIndex) + '">' +
-                '<div><label class="campaignLabel">تعداد معرفی موفق</label><input class="campaignInput" type="number" min="1" name="tier_referrals[]" value="1"></div>' +
-                '<div><label class="campaignLabel">درصد تخفیف</label><input class="campaignInput" type="number" min="1" max="100" name="tier_percent[]" value="20"></div>' +
-                '<div><label class="campaignLabel">تعداد کد</label><input class="campaignInput" type="number" min="1" name="tier_qty[]" value="1"></div>' +
-                '<div><label class="campaignLabel">سقف (هزار تومان)</label><input class="campaignInput" type="number" min="0" name="tier_max_discount[]" value="0"></div>' +
-                '<div><label class="campaignLabel">فعال</label><input type="hidden" name="tier_enabled[' + tierIndex + ']" value="0"><label class="campaignToggle" style="margin-top:6px"><input type="checkbox" name="tier_enabled[' + tierIndex + ']" value="1" checked><span class="campaignToggleTrack"></span></label></div>' +
+                '<input type="hidden" name="' + p + '[id]" value="' + rowKey + '">' +
+                '<div><label class="campaignLabel">تعداد معرفی موفق</label><input class="campaignInput" type="number" min="1" name="' + p + '[referrals]" value="1"></div>' +
+                '<div><label class="campaignLabel">درصد تخفیف</label><input class="campaignInput" type="number" min="1" max="100" name="' + p + '[percent]" value="20"></div>' +
+                '<div><label class="campaignLabel">تعداد کد</label><input class="campaignInput" type="number" min="1" name="' + p + '[qty]" value="1"></div>' +
+                '<div><label class="campaignLabel">سقف (هزار تومان)</label><input class="campaignInput" type="number" min="0" name="' + p + '[max_discount_thousands]" value="0"></div>' +
+                '<div><label class="campaignLabel">فعال</label><label class="campaignToggle" style="margin-top:6px"><input type="checkbox" name="' + p + '[enabled]" value="1" checked><span class="campaignToggleTrack"></span></label></div>' +
                 '<button type="button" class="campaignFilterBtn" data-remove-tier>حذف</button>';
             editor.appendChild(row);
             bindRemove(row);

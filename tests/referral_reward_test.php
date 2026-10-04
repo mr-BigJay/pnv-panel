@@ -2,6 +2,13 @@
 
 require_once __DIR__ . '/../coupon_lib.php';
 
+$configPath = couponReferralConfigPath();
+$configBackup = $configPath . '.reward_test_bak';
+
+if(is_file($configPath)){
+    copy($configPath, $configBackup);
+}
+
 $config = couponReferralDefaultConfig();
 $config['tiers'] = [
     [
@@ -14,6 +21,13 @@ $config['tiers'] = [
     ],
 ];
 couponSaveReferralConfig($config);
+
+register_shutdown_function(static function() use ($configBackup, $configPath){
+    if(is_file($configBackup)){
+        copy($configBackup, $configPath);
+        @unlink($configBackup);
+    }
+});
 
 $reward = couponRewardForCount(3);
 
