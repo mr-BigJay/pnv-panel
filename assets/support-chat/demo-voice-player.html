@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice player demo</title>
+<link rel="stylesheet" href="pnv-support-shell.css?v=14">
+<style>
+body{margin:0;background:#0e1621;padding:24px;font-family:sans-serif}
+.pnv-chat{color:#fff}
+.msgBubble{display:inline-block;padding:8px 10px;background:#2b5278;border-radius:12px}
+</style>
+</head>
+<body>
+<div class="pnv-chat">
+<div class="msgBubble pnv-out">
+<div class="pnv-voice-player" dir="ltr">
+<button type="button" class="pnv-voice-play"><span class="pnv-voice-play-icon">▶</span></button>
+<div class="pnv-voice-track"><span class="pnv-voice-bars"></span></div>
+<span class="pnv-voice-duration">0:00</span>
+<audio class="pnv-voice-audio" preload="metadata" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="></audio>
+</div>
+</div>
+</div>
+<script src="pnv-support-voice.js?v=14"></script>
+<script>PNVSupportVoice.bindPlayers(document);</script>
+</body>
+</html>
