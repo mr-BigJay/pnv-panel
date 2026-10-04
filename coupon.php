@@ -29,43 +29,22 @@ if($rewardLabel === ''){
     $rewardLabel = 'هنوز پاداشی فعال نشده';
 }
 
-$tiers = [
-    [
-        'need' => 3,
-        'title' => '۳ دعوت موفق',
-        'desc' => 'یک کد تخفیف ۲۰٪',
-        'chip' => '۲۰٪',
-    ],
-    [
-        'need' => 5,
-        'title' => '۵ دعوت موفق',
-        'desc' => 'یک کد تخفیف ۴۰٪',
-        'chip' => '۴۰٪',
-    ],
-    [
-        'need' => 10,
-        'title' => '۱۰ دعوت موفق',
-        'desc' => 'یک کد تخفیف ۱۰۰٪',
-        'chip' => '۱۰۰٪',
-    ],
-    [
-        'need' => 20,
-        'title' => '۲۰ دعوت موفق',
-        'desc' => '۳ کد ۱۰۰٪ (هر کد یک‌بار مصرف)',
-        'chip' => '۳×۱۰۰٪',
-    ],
-];
+$tiers = couponReferralTiers(true);
 
 $nextNeed = null;
+$maxTierNeed = 0;
+
 foreach($tiers as $tier){
-    if($inviteCount < intval($tier['need'])){
-        $nextNeed = intval($tier['need']);
-        break;
+    $need = intval($tier['need']);
+    $maxTierNeed = max($maxTierNeed, $need);
+
+    if($inviteCount < $need && $nextNeed === null){
+        $nextNeed = $need;
     }
 }
 
 $progressPct = 100;
-$progressDenom = $nextNeed ?? 20;
+$progressDenom = $nextNeed ?? ($maxTierNeed > 0 ? $maxTierNeed : 1);
 if($nextNeed !== null && $nextNeed > 0){
     $progressPct = max(0, min(100, round(($inviteCount / $nextNeed) * 100)));
 }
@@ -211,7 +190,7 @@ $iconBulb = '<svg class="couponIcon" viewBox="0 0 24 24" aria-hidden="true"><pat
 <div class="<?php echo $rowClass; ?>">
 <div class="couponTierBadge"><?php echo $fa($need); ?></div>
 <div class="couponTierBody">
-<div class="couponTierTitle"><?php echo $h($tier['title']); ?></div>
+<div class="couponTierTitle"><?php echo $fa($need); ?> دعوت موفق</div>
 <div class="couponTierDesc"><?php echo $h($tier['desc']); ?></div>
 </div>
 <div class="couponTierChip"><?php echo $h($tier['chip']); ?></div>

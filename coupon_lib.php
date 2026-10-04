@@ -14,6 +14,269 @@ if(!function_exists('couponLoadCoupons')){
         return __DIR__ . '/invoices/payments.csv';
     }
 
+    function couponReferralConfigPath(){
+        return __DIR__ . '/db/referral_config.json';
+    }
+
+    function couponReferralEventsPath(){
+        return __DIR__ . '/db/referral_events.json';
+    }
+
+    function couponWriteJsonAtomic($path, $data){
+
+        $json = json_encode(
+            $data,
+            JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT
+        );
+
+        $dir = dirname($path);
+
+        if(!is_dir($dir)){
+            mkdir($dir, 0755, true);
+        }
+
+        $tmp = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
+
+        file_put_contents($tmp, $json, LOCK_EX);
+        rename($tmp, $path);
+
+    }
+
+    function couponReferralDefaultConfig(){
+
+        return [
+            'enabled' => true,
+            'success_rule' => 'first_approved_purchase',
+            'tiers' => [
+                [
+                    'id' => 'tier_1',
+                    'referrals' => 1,
+                    'percent' => 20,
+                    'qty' => 1,
+                    'max_discount_thousands' => 0,
+                    'enabled' => true,
+                ],
+                [
+                    'id' => 'tier_2',
+                    'referrals' => 3,
+                    'percent' => 100,
+                    'qty' => 1,
+                    'max_discount_thousands' => 300,
+                    'enabled' => true,
+                ],
+            ],
+            'new_user_reward' => [
+                'enabled' => false,
+                'first_purchase_percent' => 10,
+                'max_discount_thousands' => 0,
+            ],
+            'referrer_purchase_reward' => [
+                'enabled' => false,
+                'percent' => 5,
+                'monthly_cap_thousands' => 500,
+            ],
+        ];
+
+    }
+
+    function couponNormalizeReferralConfig($config){
+
+        $defaults = couponReferralDefaultConfig();
+        $config = is_array($config) ? $config : [];
+
+        $out = [
+            'enabled' => !empty($config['enabled']),
+            'success_rule' => trim((string)($config['success_rule'] ?? $defaults['success_rule'])),
+            'tiers' => [],
+            'new_user_reward' => [],
+            'referrer_purchase_reward' => [],
+        ];
+
+        if($out['success_rule'] === ''){
+            $out['success_rule'] = 'first_approved_purchase';
+        }
+
+        $rawTiers = is_array($config['tiers'] ?? null) ? $config['tiers'] : $defaults['tiers'];
+        $seenReferrals = [];
+
+        foreach($rawTiers as $i => $tier){
+
+            if(!is_array($tier)){
+                continue;
+            }
+
+            $referrals = intval($tier['referrals'] ?? 0);
+            $percent = intval($tier['percent'] ?? 0);
+            $qty = intval($tier['qty'] ?? 1);
+            $maxDiscount = intval($tier['max_discount_thousands'] ?? 0);
+
+            if($referrals < 1 || $percent < 1 || $percent > 100 || $qty < 1 || $maxDiscount < 0){
+                continue;
+            }
+
+            if(isset($seenReferrals[$referrals])){
+                continue;
+            }
+
+            $seenReferrals[$referrals] = true;
+
+            $id = trim((string)($tier['id'] ?? ''));
+
+            if($id === ''){
+                $id = 'tier_' . ($i + 1);
+            }
+
+            $out['tiers'][] = [
+                'id' => $id,
+                'referrals' => $referrals,
+                'percent' => $percent,
+                'qty' => max(1, $qty),
+                'max_discount_thousands' => max(0, $maxDiscount),
+                'enabled' => !isset($tier['enabled']) || !empty($tier['enabled']),
+            ];
+
+        }
+
+        usort($out['tiers'], static function($a, $b){
+            return intval($a['referrals']) <=> intval($b['referrals']);
+        });
+
+        if(empty($out['tiers'])){
+            $out['tiers'] = $defaults['tiers'];
+        }
+
+        $newUser = is_array($config['new_user_reward'] ?? null)
+            ? $config['new_user_reward']
+            : $defaults['new_user_reward'];
+
+        $out['new_user_reward'] = [
+            'enabled' => !empty($newUser['enabled']),
+            'first_purchase_percent' => max(1, min(100, intval($newUser['first_purchase_percent'] ?? 10))),
+            'max_discount_thousands' => max(0, intval($newUser['max_discount_thousands'] ?? 0)),
+        ];
+
+        $referrerPurchase = is_array($config['referrer_purchase_reward'] ?? null)
+            ? $config['referrer_purchase_reward']
+            : $defaults['referrer_purchase_reward'];
+
+        $out['referrer_purchase_reward'] = [
+            'enabled' => false,
+            'percent' => max(1, min(100, intval($referrerPurchase['percent'] ?? 5))),
+            'monthly_cap_thousands' => max(0, intval($referrerPurchase['monthly_cap_thousands'] ?? 500)),
+        ];
+
+        return $out;
+
+    }
+
+    function couponLoadReferralConfig(){
+
+        $path = couponReferralConfigPath();
+
+        if(!file_exists($path)){
+            $config = couponReferralDefaultConfig();
+            couponSaveReferralConfig($config);
+            return $config;
+        }
+
+        $data = json_decode(file_get_contents($path), true);
+
+        if(!is_array($data)){
+            $config = couponReferralDefaultConfig();
+            couponSaveReferralConfig($config);
+            return $config;
+        }
+
+        return couponNormalizeReferralConfig($data);
+
+    }
+
+    function couponSaveReferralConfig($config){
+
+        $normalized = couponNormalizeReferralConfig($config);
+        couponWriteJsonAtomic(couponReferralConfigPath(), $normalized);
+
+        return $normalized;
+
+    }
+
+    function couponReferralTiers($forUi = false){
+
+        $config = couponLoadReferralConfig();
+        $tiers = [];
+
+        foreach($config['tiers'] as $tier){
+
+            if(empty($tier['enabled'])){
+                continue;
+            }
+
+            $need = intval($tier['referrals']);
+            $percent = intval($tier['percent']);
+            $qty = intval($tier['qty']);
+            $maxDiscount = intval($tier['max_discount_thousands'] ?? 0);
+
+            $desc = $qty > 1
+                ? $qty . ' کد تخفیف ' . $percent . '٪'
+                : 'یک کد تخفیف ' . $percent . '٪';
+
+            if($maxDiscount > 0){
+                $desc .= ' (حداکثر ' . couponFormatPriceThousands($maxDiscount) . ')';
+            }
+
+            $chip = $qty > 1 ? ($qty . '×' . $percent . '٪') : ($percent . '٪');
+
+            $row = [
+                'id' => $tier['id'],
+                'need' => $need,
+                'referrals' => $need,
+                'percent' => $percent,
+                'qty' => $qty,
+                'max_discount_thousands' => $maxDiscount,
+            ];
+
+            if($forUi){
+                $row['title'] = $need . ' دعوت موفق';
+                $row['desc'] = $desc;
+                $row['chip'] = $chip;
+            }
+
+            $tiers[] = $row;
+
+        }
+
+        return $tiers;
+
+    }
+
+    function couponRewardLabelForTier($tier){
+
+        $percent = intval($tier['percent'] ?? 0);
+        $qty = intval($tier['qty'] ?? 1);
+        $maxDiscount = intval($tier['max_discount_thousands'] ?? 0);
+
+        if($percent <= 0){
+            return 'هنوز پاداشی فعال نشده';
+        }
+
+        if($qty > 1){
+            $label = $qty . ' عدد کد تخفیف ' . $percent . ' درصدی';
+        }
+        elseif($percent === 100){
+            $label = 'کد تخفیف 100 درصدی';
+        }
+        else{
+            $label = 'تخفیف ' . $percent . ' درصدی';
+        }
+
+        if($maxDiscount > 0){
+            $label .= ' (سقف ' . couponFormatPriceThousands($maxDiscount) . ')';
+        }
+
+        return $label;
+
+    }
+
     function couponLoadCoupons(){
 
         $path = couponCouponsPath();
@@ -197,28 +460,43 @@ if(!function_exists('couponLoadCoupons')){
 
     }
 
+    function couponCountSuccessfulReferralsLifetime($ownerUser, $users){
+
+        return couponCountSuccessfulReferrals($ownerUser, $users, 0);
+
+    }
+
     function couponRewardForCount($count){
 
-        if($count >= 20){
-            return ['percent' => 100, 'qty' => 3, 'label' => '3 عدد کد تخفیف 100 درصدی'];
+        $count = max(0, intval($count));
+        $matched = null;
+
+        foreach(couponReferralTiers() as $tier){
+
+            if($count >= intval($tier['need'])){
+                $matched = $tier;
+            }
+
         }
 
-        if($count >= 10){
-            return ['percent' => 100, 'qty' => 1, 'label' => 'کد تخفیف 100 درصدی'];
-        }
-
-        if($count >= 5){
-            return ['percent' => 40, 'qty' => 1, 'label' => 'تخفیف 40 درصدی'];
-        }
-
-        if($count >= 3){
-            return ['percent' => 20, 'qty' => 1, 'label' => 'تخفیف 20 درصدی'];
+        if(!$matched){
+            return [
+                'percent' => 0,
+                'qty' => 0,
+                'label' => 'هنوز پاداشی فعال نشده',
+                'tier_id' => '',
+                'need' => 0,
+                'max_discount_thousands' => 0,
+            ];
         }
 
         return [
-            'percent' => 0,
-            'qty' => 0,
-            'label' => 'هنوز پاداشی فعال نشده'
+            'percent' => intval($matched['percent']),
+            'qty' => intval($matched['qty']),
+            'label' => couponRewardLabelForTier($matched),
+            'tier_id' => (string)($matched['id'] ?? ''),
+            'need' => intval($matched['need']),
+            'max_discount_thousands' => intval($matched['max_discount_thousands'] ?? 0),
         ];
 
     }
@@ -288,8 +566,9 @@ if(!function_exists('couponLoadCoupons')){
         $count = couponCountSuccessfulReferrals($owner, $users, $resetAt);
         $reward = couponRewardForCount($count);
         $coupons = couponLoadCoupons();
+        $referralConfig = couponLoadReferralConfig();
 
-        if(($reward['percent'] ?? 0) <= 0){
+        if(empty($referralConfig['enabled']) || ($reward['percent'] ?? 0) <= 0){
             return couponGetOwnerUnusedCoupons($coupons, $username);
         }
 
@@ -579,6 +858,688 @@ if(!function_exists('couponLoadCoupons')){
         if($changed){
             couponSaveCoupons($coupons);
         }
+
+    }
+
+    function couponParsePlanTextPriceThousands($planText){
+
+        $planText = trim((string)$planText);
+
+        if($planText === ''){
+            return 0;
+        }
+
+        $planText = str_replace(
+            ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '٬', ','],
+            ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '', ''],
+            $planText
+        );
+
+        if(preg_match('/(\d+)\s*هزار\s*توم/u', $planText, $m)){
+            return intval($m[1]);
+        }
+
+        if(preg_match('/([\d.]+)\s*میلیون/u', $planText, $m)){
+            return (int)round(floatval($m[1]) * 1000);
+        }
+
+        if(preg_match('/-\s*(\d+)\s*تومان/u', $planText, $m)){
+            return intval($m[1]);
+        }
+
+        return 0;
+
+    }
+
+    function couponPaymentStableKey($row, $lineNo = 0){
+
+        $username = strtolower(trim($row[0] ?? ''));
+        $ts = intval($row[8] ?? 0);
+        $type = trim($row[9] ?? '');
+
+        return $username . '|' . $ts . '|' . $type . '|' . intval($lineNo);
+
+    }
+
+    /**
+     * Approved payment amount in thousands of Toman (same unit as plans.json price).
+     */
+    function couponPaymentApprovedAmountThousands($row){
+
+        $planText = trim($row[2] ?? '');
+        $amount = couponParsePlanTextPriceThousands($planText);
+
+        if($amount > 0){
+            return $amount;
+        }
+
+        static $planLabels = null;
+
+        if($planLabels === null){
+            $planLabels = [];
+            $path = __DIR__ . '/db/plans.json';
+
+            if(file_exists($path)){
+                $plans = json_decode(file_get_contents($path), true);
+
+                if(is_array($plans)){
+                    foreach($plans as $plan){
+                        $label = trim(
+                            ($plan['name'] ?? '')
+                            . ' - '
+                            . couponFormatPriceThousands($plan['price'] ?? 0)
+                        );
+                        $planLabels[$label] = intval($plan['price'] ?? 0);
+                    }
+                }
+            }
+        }
+
+        return intval($planLabels[$planText] ?? 0);
+
+    }
+
+    function couponBuildPaymentsAnalyticsIndex(){
+
+        static $cache = null;
+
+        if($cache !== null){
+            return $cache;
+        }
+
+        $cache = [
+            'first_approved' => [],
+            'all_approved' => [],
+            'revenue_thousands' => [],
+        ];
+
+        $path = couponPaymentsPath();
+
+        if(!file_exists($path)){
+            return $cache;
+        }
+
+        $handle = fopen($path, 'r');
+
+        if(!$handle){
+            return $cache;
+        }
+
+        $lineNo = 0;
+
+        while(($row = fgetcsv($handle)) !== false){
+
+            $lineNo++;
+            $username = trim($row[0] ?? '');
+            $status = trim($row[6] ?? '');
+
+            if($username === '' || $status !== 'تایید شد'){
+                continue;
+            }
+
+            $key = strtolower($username);
+            $ts = intval($row[8] ?? 0);
+
+            if($ts <= 0){
+                $ts = time();
+            }
+
+            $amount = couponPaymentApprovedAmountThousands($row);
+            $paymentKey = couponPaymentStableKey($row, $lineNo);
+
+            if(!isset($cache['all_approved'][$key])){
+                $cache['all_approved'][$key] = [];
+                $cache['revenue_thousands'][$key] = 0;
+            }
+
+            $cache['revenue_thousands'][$key] += $amount;
+            $cache['all_approved'][$key][] = [
+                'timestamp' => $ts,
+                'amount_thousands' => $amount,
+                'payment_key' => $paymentKey,
+                'type' => trim($row[9] ?? ''),
+            ];
+
+            if(
+                !isset($cache['first_approved'][$key])
+                || $ts < $cache['first_approved'][$key]['timestamp']
+            ){
+                $cache['first_approved'][$key] = [
+                    'timestamp' => $ts,
+                    'amount_thousands' => $amount,
+                    'payment_key' => $paymentKey,
+                ];
+            }
+
+        }
+
+        fclose($handle);
+
+        return $cache;
+
+    }
+
+    function couponBuildUserReferrerIndexes($users){
+
+        $byCode = [];
+        $byMobile = [];
+        $byUsername = [];
+
+        foreach($users as $user){
+
+            $username = trim($user['username'] ?? '');
+
+            if($username === ''){
+                continue;
+            }
+
+            $byUsername[strtolower($username)] = $user;
+
+            $code = strtoupper(trim($user['referral_code'] ?? ''));
+
+            if($code !== ''){
+                $byCode[$code] = $user;
+            }
+
+            $mobile = trim($user['mobile'] ?? '');
+
+            if($mobile !== ''){
+                $byMobile[$mobile] = $user;
+            }
+
+        }
+
+        return [
+            'by_code' => $byCode,
+            'by_mobile' => $byMobile,
+            'by_username' => $byUsername,
+        ];
+
+    }
+
+    function couponResolveReferrerUsername($referredUser, $indexes){
+
+        $ref = strtoupper(trim($referredUser['referrer'] ?? ''));
+
+        if($ref === ''){
+            return '';
+        }
+
+        if(isset($indexes['by_code'][$ref])){
+            return trim($indexes['by_code'][$ref]['username'] ?? '');
+        }
+
+        $mobileRef = trim($referredUser['referrer'] ?? '');
+
+        if(isset($indexes['by_mobile'][$mobileRef])){
+            return trim($indexes['by_mobile'][$mobileRef]['username'] ?? '');
+        }
+
+        foreach($indexes['by_username'] as $unameLower => $user){
+            if(strtoupper($unameLower) === $ref){
+                return trim($user['username'] ?? '');
+            }
+        }
+
+        return '';
+
+    }
+
+    function couponUserRegisteredTimestamp($user){
+
+        $created = trim($user['created_at'] ?? '');
+
+        if($created === ''){
+            return 0;
+        }
+
+        if(function_exists('pnvTehranStrToUnix')){
+            $ts = pnvTehranStrToUnix($created);
+
+            if($ts > 0){
+                return $ts;
+            }
+        }
+
+        $ts = strtotime($created);
+
+        return $ts > 0 ? $ts : 0;
+
+    }
+
+    function couponLoadReferralEvents(){
+
+        $path = couponReferralEventsPath();
+
+        if(!file_exists($path)){
+            return [];
+        }
+
+        $data = json_decode(file_get_contents($path), true);
+
+        return is_array($data) ? $data : [];
+
+    }
+
+    function couponSaveReferralEvents($events){
+
+        couponWriteJsonAtomic(
+            couponReferralEventsPath(),
+            array_values($events)
+        );
+
+    }
+
+    function couponReferralEventDedupeKey($event){
+
+        $type = (string)($event['event'] ?? '');
+        $referred = strtolower(trim($event['referred'] ?? ''));
+
+        if($type === 'signup'){
+            return 'signup:' . $referred;
+        }
+
+        if($type === 'first_approved_purchase'){
+            return 'first_purchase:' . $referred;
+        }
+
+        return ($event['id'] ?? uniqid('refevt_', true));
+
+    }
+
+    function couponSyncReferralEvents(){
+
+        $users = couponLoadUsers();
+        $indexes = couponBuildUserReferrerIndexes($users);
+        $payments = couponBuildPaymentsAnalyticsIndex();
+        $events = couponLoadReferralEvents();
+        $seen = [];
+        $changed = false;
+
+        foreach($events as $event){
+            $seen[couponReferralEventDedupeKey($event)] = true;
+        }
+
+        foreach($users as $user){
+
+            $referred = trim($user['username'] ?? '');
+
+            if($referred === ''){
+                continue;
+            }
+
+            $referrer = couponResolveReferrerUsername($user, $indexes);
+
+            if($referrer === ''){
+                continue;
+            }
+
+            $signupKey = 'signup:' . strtolower($referred);
+
+            if(!isset($seen[$signupKey])){
+                $events[] = [
+                    'id' => 'refevt_' . substr(hash('sha256', $signupKey), 0, 16),
+                    'event' => 'signup',
+                    'referrer' => $referrer,
+                    'referred' => $referred,
+                    'referral_code' => trim($user['referrer'] ?? ''),
+                    'created_at' => couponUserRegisteredTimestamp($user) ?: time(),
+                ];
+                $seen[$signupKey] = true;
+                $changed = true;
+            }
+
+            $referredKey = strtolower($referred);
+            $first = $payments['first_approved'][$referredKey] ?? null;
+
+            if(!$first){
+                continue;
+            }
+
+            $purchaseKey = 'first_purchase:' . $referredKey;
+
+            if(isset($seen[$purchaseKey])){
+                continue;
+            }
+
+            $events[] = [
+                'id' => 'refevt_' . substr(hash('sha256', $purchaseKey . '|' . $first['payment_key']), 0, 16),
+                'event' => 'first_approved_purchase',
+                'referrer' => $referrer,
+                'referred' => $referred,
+                'payment_key' => $first['payment_key'],
+                'payment_amount' => intval($first['amount_thousands']),
+                'created_at' => intval($first['timestamp']),
+            ];
+            $seen[$purchaseKey] = true;
+            $changed = true;
+
+        }
+
+        if($changed){
+            couponSaveReferralEvents($events);
+        }
+
+        return $events;
+
+    }
+
+    function couponBuildCouponOwnerIndex($coupons){
+
+        $index = [];
+
+        foreach($coupons as $coupon){
+
+            $owner = trim($coupon['owner'] ?? '');
+
+            if($owner === ''){
+                continue;
+            }
+
+            $key = strtolower($owner);
+
+            if(!isset($index[$key])){
+                $index[$key] = [
+                    'issued' => 0,
+                    'used' => 0,
+                    'active' => 0,
+                ];
+            }
+
+            $index[$key]['issued']++;
+
+            if(!empty($coupon['used'])){
+                $usedBy = (string)($coupon['used_by'] ?? '');
+
+                if($usedBy !== '_reset' && $usedBy !== '_expired_tier'){
+                    $index[$key]['used']++;
+                }
+            }
+            else{
+                $index[$key]['active']++;
+            }
+
+        }
+
+        return $index;
+
+    }
+
+    function couponReferralAbuseFlags($referrerUser, $referredUsers, $paymentsIndex){
+
+        $flags = [];
+        $referrerMobile = trim($referrerUser['mobile'] ?? '');
+        $referrerName = trim($referrerUser['username'] ?? '');
+        $signupCount = count($referredUsers);
+
+        if($signupCount >= 15){
+            $flags[] = 'signup_spike';
+        }
+
+        foreach($referredUsers as $referred){
+
+            $referredName = trim($referred['username'] ?? '');
+
+            if(
+                $referredName !== ''
+                && strcasecmp($referredName, $referrerName) === 0
+            ){
+                $flags[] = 'self_referral';
+            }
+
+            $referredMobile = trim($referred['mobile'] ?? '');
+
+            if(
+                $referrerMobile !== ''
+                && $referredMobile !== ''
+                && $referrerMobile === $referredMobile
+            ){
+                $flags[] = 'same_mobile';
+            }
+
+            $key = strtolower($referredName);
+
+            if($key !== '' && !isset($paymentsIndex['first_approved'][$key])){
+                $flags[] = 'no_purchase';
+            }
+
+        }
+
+        return array_values(array_unique($flags));
+
+    }
+
+    function couponAdminReferralReport($search = ''){
+
+        couponSyncReferralEvents();
+
+        $users = couponLoadUsers();
+        $indexes = couponBuildUserReferrerIndexes($users);
+        $payments = couponBuildPaymentsAnalyticsIndex();
+        $coupons = couponLoadCoupons();
+        $couponIndex = couponBuildCouponOwnerIndex($coupons);
+        $config = couponLoadReferralConfig();
+
+        $referredByReferrer = [];
+        $totalSignups = 0;
+        $successfulReferred = [];
+
+        foreach($users as $user){
+
+            $referrer = couponResolveReferrerUsername($user, $indexes);
+
+            if($referrer === ''){
+                continue;
+            }
+
+            $totalSignups++;
+
+            if(!isset($referredByReferrer[$referrer])){
+                $referredByReferrer[$referrer] = [];
+            }
+
+            $referredByReferrer[$referrer][] = $user;
+
+            $referredKey = strtolower(trim($user['username'] ?? ''));
+
+            if($referredKey !== '' && isset($payments['first_approved'][$referredKey])){
+                $successfulReferred[$referredKey] = true;
+            }
+
+        }
+
+        $successfulCount = count($successfulReferred);
+        $activeReferrers = count($referredByReferrer);
+        $convertingReferrers = 0;
+        $referralRevenue = 0;
+        $rows = [];
+
+        foreach($referredByReferrer as $referrerUsername => $referredList){
+
+            $referrerUser = $indexes['by_username'][strtolower($referrerUsername)] ?? null;
+
+            if(!$referrerUser){
+                continue;
+            }
+
+            $lifetimeSuccess = couponCountSuccessfulReferralsLifetime($referrerUser, $users);
+            $cycleSuccess = couponCountSuccessfulReferrals(
+                $referrerUser,
+                $users,
+                couponGetResetAt($referrerUser)
+            );
+
+            $signupCount = count($referredList);
+            $successCount = 0;
+            $revenue = 0;
+            $lastActivity = 0;
+            $referredDetails = [];
+
+            foreach($referredList as $referred){
+
+                $referredKey = strtolower(trim($referred['username'] ?? ''));
+                $first = $payments['first_approved'][$referredKey] ?? null;
+                $isSuccess = $first !== null;
+
+                if($isSuccess){
+                    $successCount++;
+                }
+
+                $userRevenue = intval($payments['revenue_thousands'][$referredKey] ?? 0);
+                $revenue += $userRevenue;
+
+                $registeredTs = couponUserRegisteredTimestamp($referred);
+
+                if($first){
+                    $lastActivity = max($lastActivity, intval($first['timestamp']));
+                }
+
+                if($registeredTs > 0){
+                    $lastActivity = max($lastActivity, $registeredTs);
+                }
+
+                $purchaseCount = isset($payments['all_approved'][$referredKey])
+                    ? count($payments['all_approved'][$referredKey])
+                    : 0;
+
+                $referredDetails[] = [
+                    'username' => trim($referred['username'] ?? ''),
+                    'registered_at' => $registeredTs,
+                    'successful' => $isSuccess,
+                    'first_purchase_at' => $first ? intval($first['timestamp']) : 0,
+                    'purchase_count' => $purchaseCount,
+                    'revenue_thousands' => $userRevenue,
+                    'status_label' => $isSuccess ? 'خرید موفق' : 'فقط ثبت‌نام',
+                ];
+
+            }
+
+            if($successCount > 0){
+                $convertingReferrers++;
+            }
+
+            $referralRevenue += $revenue;
+
+            $ownerKey = strtolower($referrerUsername);
+            $couponStats = $couponIndex[$ownerKey] ?? [
+                'issued' => 0,
+                'used' => 0,
+                'active' => 0,
+            ];
+
+            $conversionPct = $signupCount > 0
+                ? round(($successCount / $signupCount) * 100, 1)
+                : 0;
+
+            $rows[] = [
+                'username' => $referrerUsername,
+                'referral_code' => trim($referrerUser['referral_code'] ?? ''),
+                'mobile' => trim($referrerUser['mobile'] ?? ''),
+                'signups' => $signupCount,
+                'successful' => $successCount,
+                'lifetime_successful' => $lifetimeSuccess,
+                'cycle_successful' => $cycleSuccess,
+                'conversion_pct' => $conversionPct,
+                'revenue_thousands' => $revenue,
+                'coupons_active' => intval($couponStats['active']),
+                'coupons_used' => intval($couponStats['used']),
+                'last_activity' => $lastActivity,
+                'flags' => couponReferralAbuseFlags($referrerUser, $referredList, $payments),
+                'referred' => $referredDetails,
+            ];
+
+        }
+
+        usort($rows, static function($a, $b){
+            return intval($b['successful']) <=> intval($a['successful']);
+        });
+
+        $search = trim($search);
+
+        if($search !== ''){
+            $q = mb_strtolower($search, 'UTF-8');
+
+            $rows = array_values(array_filter($rows, static function($row) use ($q){
+                $hay = mb_strtolower(
+                    ($row['username'] ?? '')
+                    . ' '
+                    . ($row['referral_code'] ?? '')
+                    . ' '
+                    . ($row['mobile'] ?? ''),
+                    'UTF-8'
+                );
+
+                return mb_strpos($hay, $q, 0, 'UTF-8') !== false;
+            }));
+        }
+
+        $issuedTotal = 0;
+        $usedTotal = 0;
+
+        foreach($coupons as $coupon){
+            if(trim($coupon['owner'] ?? '') === ''){
+                continue;
+            }
+
+            $issuedTotal++;
+
+            if(!empty($coupon['used'])){
+                $usedBy = (string)($coupon['used_by'] ?? '');
+
+                if($usedBy !== '_reset' && $usedBy !== '_expired_tier'){
+                    $usedTotal++;
+                }
+            }
+        }
+
+        $conversionRate = $totalSignups > 0
+            ? round(($successfulCount / $totalSignups) * 100, 1)
+            : 0;
+
+        return [
+            'config' => $config,
+            'kpis' => [
+                'total_signups' => $totalSignups,
+                'successful_referrals' => $successfulCount,
+                'active_referrers' => $activeReferrers,
+                'converting_referrers' => $convertingReferrers,
+                'conversion_rate' => $conversionRate,
+                'referral_revenue_thousands' => $referralRevenue,
+                'coupons_issued' => $issuedTotal,
+                'coupons_used' => $usedTotal,
+                'discount_cost' => null,
+                'discount_cost_note' => 'داده کافی برای محاسبه دقیق موجود نیست',
+            ],
+            'referrers' => $rows,
+        ];
+
+    }
+
+    function couponAdminCsrfToken(){
+
+        if(session_status() === PHP_SESSION_NONE){
+            session_start();
+        }
+
+        if(empty($_SESSION['coupon_admin_csrf'])){
+            $_SESSION['coupon_admin_csrf'] = bin2hex(random_bytes(16));
+        }
+
+        return $_SESSION['coupon_admin_csrf'];
+
+    }
+
+    function couponAdminCsrfValid($token){
+
+        if(session_status() === PHP_SESSION_NONE){
+            session_start();
+        }
+
+        $expected = $_SESSION['coupon_admin_csrf'] ?? '';
+
+        return is_string($token)
+            && $expected !== ''
+            && hash_equals($expected, $token);
 
     }
 
