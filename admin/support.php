@@ -44,7 +44,10 @@ $currentUser = $_GET['user'] ?? '';
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
+$adminBase = defined('PNV_ADMIN_BASE') ? rtrim(PNV_ADMIN_BASE, '/') : '/bigjay_controller';
+$dashboardUrl = $adminBase . '/index.php';
 $cssHref = '../support_ui.css?v=41';
+$supportListShellCss = '/assets/support-chat/pnv-support-shell.css?v=13';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
 $jsHref = '../support_ui.js?v=41';
@@ -58,22 +61,27 @@ if(!$supportEmbedded){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام‌های کاربران</title>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($supportListShellCss, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } else { ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($supportListShellCss, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
 
-<div class="supportPage <?php echo $supportEmbedded ? 'supportEmbedded' : ''; ?> <?php echo $currentUser !== '' ? 'chat-active' : ''; ?>" id="supportPage">
+<div class="supportPage pnv-chat <?php echo $supportEmbedded ? 'supportEmbedded' : ''; ?> <?php echo $currentUser !== '' ? 'chat-active' : ''; ?>" id="supportPage">
 
 <aside class="msgSidebar" id="supportSidebar">
 
 <div class="msgSidebarHead">
 <div class="msgSidebarHeadRow">
-<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
-<h2>پیام‌های کاربران</h2>
+<a href="<?php echo htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack" aria-label="بازگشت به داشبورد"><span class="msgMobileDashBackIcon" aria-hidden="true">←</span><span class="msgMobileDashBackLabel">داشبورد</span></a>
+<h2 class="msgSidebarTitle">پیام‌های کاربران</h2>
+<button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle" aria-label="تغییر تم"><span class="pnv-chat-theme-toggleLabel">حالت روشن</span></button>
 </div>
+<div class="msgSidebarControls">
 <div class="msgSearchWrap">
 <input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
 <div class="msgUserSearchResults" id="supportUserResults"></div>
+</div>
 </div>
 </div>
 
@@ -125,7 +133,7 @@ if(!$supportEmbedded){
 </div>
 
 <?php if(!$supportEmbedded){ ?>
-<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgBack" style="margin:12px;text-align:center;display:block;">بازگشت به داشبورد</a>
+<a href="<?php echo htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="msgBack" style="margin:12px;text-align:center;display:block;">بازگشت به داشبورد</a>
 <?php } ?>
 
 </aside>
