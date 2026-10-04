@@ -18,7 +18,6 @@ SNIPPET = f"""
         return 301 /bigjay_controller/;
     }}
     location = /bigjay_controller/ {{
-        include snippets/fastcgi-php.conf;
         fastcgi_pass unix:{PHP_SOCK};
         fastcgi_param SCRIPT_FILENAME $document_root/bigjay_controller/index.php;
         include fastcgi_params;
@@ -26,7 +25,6 @@ SNIPPET = f"""
     location ^~ /bigjay_controller/ {{
         try_files $uri $uri/ /bigjay_controller/index.php?$query_string;
         location ~ \\.php$ {{
-            try_files $uri =404;
             include snippets/fastcgi-php.conf;
             fastcgi_pass unix:{PHP_SOCK};
             include fastcgi_params;
@@ -93,7 +91,9 @@ def insert_after_location(text: str, pattern: str) -> str | None:
 
 
 def insert_snippet(text: str) -> str:
-    if MARKER in text and re.search(r"location\s+\^~\s+/bigjay_controller/", text):
+    if re.search(r"location\s+=\s+/bigjay_controller/\s*\{", text) and re.search(
+        r"location\s+\^~\s+/bigjay_controller/", text
+    ):
         return text
 
     for pat in (
