@@ -167,9 +167,14 @@ if(!function_exists('supportLoad')){
 
         $display = supportMessageDisplayTime($message);
         $image = $message['image'] ?? '';
+        $audio = $message['audio'] ?? '';
 
         if($image !== ''){
             $image = '/' . ltrim($image, '/');
+        }
+
+        if($audio !== ''){
+            $audio = '/' . ltrim($audio, '/');
         }
 
         return [
@@ -177,12 +182,125 @@ if(!function_exists('supportLoad')){
             'sender' => $message['sender'] ?? '',
             'text' => $message['text'] ?? '',
             'image' => $image,
+            'audio' => $audio,
             'date' => $display['date'],
             'time' => $display['time'],
             'timestamp' => intval($message['timestamp'] ?? 0),
             'edited' => !empty($message['edited']),
-            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null
+            'reply_to' => is_array($message['reply_to'] ?? null) ? $message['reply_to'] : null,
+            'seen_by_admin' => !empty($message['seen_by_admin']),
+            'seen_by_user' => !empty($message['seen_by_user'])
         ];
+
+    }
+
+    function supportMessageChecksForView($message, $options){
+
+        $sender = $message['sender'] ?? 'user';
+        $isAdmin = !empty($options['isAdmin']);
+
+        if($isAdmin){
+            if($sender !== 'admin'){
+                return null;
+            }
+
+            return !empty($message['seen_by_user']) ? 'seen' : 'sent';
+        }
+
+        if($sender !== 'user'){
+            return null;
+        }
+
+        return !empty($message['seen_by_admin']) ? 'seen' : 'sent';
+
+    }
+
+    function supportRenderMessageMetaHtml($message, $options){
+
+        $display = supportMessageDisplayTime($message);
+        $checks = supportMessageChecksForView($message, $options);
+
+        ob_start();
+        ?>
+        <div class="msgMeta">
+            <span class="msgTime"><?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?></span>
+            <?php if($checks !== null){ ?>
+            <span class="msgChecks <?php echo $checks === 'seen' ? 'is-seen' : 'is-sent'; ?>" aria-label="<?php echo $checks === 'seen' ? 'دیده شده' : 'ارسال شده'; ?>"><?php echo $checks === 'seen' ? '✓✓' : '✓'; ?></span>
+            <?php } ?>
+        </div>
+        <?php
+        return ob_get_clean();
+
+    }
+
+    function supportTicketMessageStates($ticket){
+
+        $states = [];
+
+        foreach(($ticket['messages'] ?? []) as $msg){
+
+            $id = trim((string)($msg['id'] ?? ''));
+
+            if($id === ''){
+                continue;
+            }
+
+            $states[$id] = [
+                'seen_by_admin' => !empty($msg['seen_by_admin']),
+                'seen_by_user' => !empty($msg['seen_by_user']),
+                'sender' => $msg['sender'] ?? ''
+            ];
+
+        }
+
+        return $states;
+
+    }
+
+    function supportMessagePreviewText($message){
+
+        $text = trim((string)($message['text'] ?? ''));
+
+        if($text !== ''){
+            return $text;
+        }
+
+        if(!empty($message['audio'])){
+            return '🎤 پیام صوتی';
+        }
+
+        if(!empty($message['image'])){
+            return '📷 تصویر';
+        }
+
+        return 'پیام';
+
+    }
+
+    function supportRenderVoicePlayerHtml($audioUrl){
+
+        $audioUrl = trim((string)$audioUrl);
+
+        if($audioUrl === ''){
+            return '';
+        }
+
+        $audioUrl = htmlspecialchars($audioUrl, ENT_QUOTES, 'UTF-8');
+
+        ob_start();
+        ?>
+        <div class="pnv-voice-player" dir="ltr">
+            <button type="button" class="pnv-voice-play" aria-label="پخش پیام صوتی">
+                <span class="pnv-voice-play-icon" aria-hidden="true">▶</span>
+            </button>
+            <div class="pnv-voice-track" aria-hidden="true">
+                <span class="pnv-voice-bars"></span>
+            </div>
+            <span class="pnv-voice-duration">0:00</span>
+            <audio class="pnv-voice-audio" preload="metadata" src="<?php echo $audioUrl; ?>"></audio>
+        </div>
+        <?php
+        return ob_get_clean();
 
     }
 
@@ -204,14 +322,10 @@ if(!function_exists('supportLoad')){
             return 'بدون پیام';
         }
 
-        $text = trim($last['text'] ?? '');
+        $text = supportMessagePreviewText($last);
 
-        if($text === '' && !empty($last['image'])){
-            return '📷 تصویر';
-        }
-
-        if($text === ''){
-            return 'پیام';
+        if($text === 'پیام'){
+            return 'بدون متن';
         }
 
         if(function_exists('mb_strlen') && mb_strlen($text) > 48){
@@ -552,6 +666,124 @@ if(!function_exists('supportLoad')){
 
     }
 
+    function supportHandleAudioUpload($fileInput, $uploadDir, $urlPrefix){
+
+        if(!is_array($fileInput) || !isset($fileInput['error'])){
+            return ['ok' => false, 'path' => '', 'error' => ''];
+        }
+
+        if(intval($fileInput['error']) === UPLOAD_ERR_NO_FILE || intval($fileInput['size'] ?? 0) <= 0){
+            return ['ok' => false, 'path' => '', 'error' => ''];
+        }
+
+        if(intval($fileInput['error']) !== UPLOAD_ERR_OK){
+            return ['ok' => false, 'path' => '', 'error' => 'آپلود صدا ناموفق بود (خطای سرور)'];
+        }
+
+        $maxBytes = 10 * 1024 * 1024;
+        $phpMax = supportParseIniBytes(ini_get('upload_max_filesize'));
+
+        if($phpMax > 0 && $phpMax < $maxBytes){
+            $maxBytes = $phpMax;
+        }
+
+        if(intval($fileInput['size']) > $maxBytes){
+            return [
+                'ok' => false,
+                'path' => '',
+                'error' => 'حجم فایل صوتی نباید بیشتر از ' . round($maxBytes / 1024 / 1024, 1) . 'MB باشد'
+            ];
+        }
+
+        $tmp = (string)($fileInput['tmp_name'] ?? '');
+
+        if($tmp === '' || !is_uploaded_file($tmp)){
+            return ['ok' => false, 'path' => '', 'error' => 'فایل صوتی معتبر نیست'];
+        }
+
+        $ext = strtolower(pathinfo((string)($fileInput['name'] ?? ''), PATHINFO_EXTENSION));
+        $allowedExt = ['webm', 'ogg', 'opus'];
+
+        $mime = '';
+
+        if(function_exists('finfo_open')){
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if($finfo){
+                $mime = strtolower((string)finfo_file($finfo, $tmp));
+                finfo_close($finfo);
+            }
+        }
+
+        if($mime === '' && function_exists('mime_content_type')){
+            $mime = strtolower((string)mime_content_type($tmp));
+        }
+
+        $allowedMimes = [
+            'audio/webm',
+            'video/webm',
+            'audio/ogg',
+            'application/ogg',
+            'audio/opus'
+        ];
+
+        if($mime !== '' && !in_array($mime, $allowedMimes, true)){
+            return ['ok' => false, 'path' => '', 'error' => 'فقط WebM یا OGG مجاز است'];
+        }
+
+        $extFromMime = [
+            'audio/webm' => 'webm',
+            'video/webm' => 'webm',
+            'audio/ogg' => 'ogg',
+            'application/ogg' => 'ogg',
+            'audio/opus' => 'ogg'
+        ];
+        $detectedExt = $extFromMime[$mime] ?? '';
+
+        if($detectedExt === ''){
+            if(!in_array($ext, $allowedExt, true)){
+                return ['ok' => false, 'path' => '', 'error' => 'فقط WebM یا OGG مجاز است'];
+            }
+            $detectedExt = ($ext === 'opus') ? 'ogg' : $ext;
+        }
+        elseif(!in_array($ext, $allowedExt, true)){
+            $ext = $detectedExt;
+        }
+        elseif($ext === 'opus'){
+            $ext = 'ogg';
+        }
+
+        if(!is_dir($uploadDir)){
+            if(!@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)){
+                return ['ok' => false, 'path' => '', 'error' => 'پوشه آپلود قابل ایجاد نیست'];
+            }
+        }
+
+        if(!is_writable($uploadDir)){
+            @chmod($uploadDir, 0755);
+            if(!is_writable($uploadDir)){
+                return ['ok' => false, 'path' => '', 'error' => 'پوشه آپلود قابل نوشتن نیست'];
+            }
+        }
+
+        $filename = 'voice_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $savePath = rtrim($uploadDir, '/') . '/' . $filename;
+
+        if(strpos($filename, '..') !== false || strpos($filename, '/') !== false){
+            return ['ok' => false, 'path' => '', 'error' => 'نام فایل نامعتبر است'];
+        }
+
+        if(!move_uploaded_file($tmp, $savePath)){
+            return ['ok' => false, 'path' => '', 'error' => 'ذخیره فایل صوتی روی سرور ناموفق بود'];
+        }
+
+        return [
+            'ok' => true,
+            'path' => rtrim($urlPrefix, '/') . '/' . $filename,
+            'error' => ''
+        ];
+
+    }
+
     function supportParseIniBytes($value){
 
         $value = trim((string)$value);
@@ -600,11 +832,7 @@ if(!function_exists('supportLoad')){
         foreach((array)$data as $ticket){
             foreach(($ticket['messages'] ?? []) as $msg){
                 if(($msg['id'] ?? '') === $replyId){
-                    $text = trim((string)($msg['text'] ?? ''));
-
-                    if($text === '' && !empty($msg['image'])){
-                        $text = '📷 تصویر';
-                    }
+                    $text = supportMessagePreviewText($msg);
 
                     if(function_exists('mb_substr')){
                         $text = mb_substr($text, 0, 80, 'UTF-8');
@@ -946,9 +1174,14 @@ if(!function_exists('supportLoad')){
         }
 
         $image = $m['image'] ?? '';
+        $audio = $m['audio'] ?? '';
 
         if($image !== ''){
             $image = '/' . ltrim($image, '/');
+        }
+
+        if($audio !== ''){
+            $audio = '/' . ltrim($audio, '/');
         }
 
         $display = supportMessageDisplayTime($m);
@@ -962,6 +1195,7 @@ if(!function_exists('supportLoad')){
             class="msgBubble msg <?php echo $class; ?>"
             data-msg-id="<?php echo htmlspecialchars($m['id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
             data-timestamp="<?php echo intval($m['timestamp'] ?? 0); ?>"
+            data-jalali-date="<?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>"
             data-sender="<?php echo htmlspecialchars($sender, ENT_QUOTES, 'UTF-8'); ?>"
             data-own="<?php echo $isOwn ? '1' : '0'; ?>"
             data-can-edit="<?php echo $canEdit ? '1' : '0'; ?>"
@@ -991,11 +1225,11 @@ if(!function_exists('supportLoad')){
             </a>
             <?php } ?>
 
-            <div class="msgMeta">
-                <?php echo htmlspecialchars($display['time'], ENT_QUOTES, 'UTF-8'); ?>
-                -
-                <?php echo htmlspecialchars($display['date'], ENT_QUOTES, 'UTF-8'); ?>
-            </div>
+            <?php if($audio !== ''){
+                echo supportRenderVoicePlayerHtml($audio);
+            } ?>
+
+            <?php echo supportRenderMessageMetaHtml($m, $options); ?>
 
             <?php if(
                 $editId !== ''
@@ -1144,12 +1378,19 @@ if(!function_exists('supportLoad')){
             else{
                 $user = supportResolveTicketUsername($data, $_POST['user'] ?? '');
                 $text = trim($_POST['message'] ?? '');
+                $uploadDir = dirname($file) . '/../uploads/support';
                 $upload = supportHandleUpload(
                     $_FILES['image'] ?? [],
-                    dirname($file) . '/../uploads/support',
+                    $uploadDir,
+                    '/uploads/support'
+                );
+                $audioUpload = supportHandleAudioUpload(
+                    $_FILES['audio'] ?? [],
+                    $uploadDir,
                     '/uploads/support'
                 );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
+                $audio = !empty($audioUpload['ok']) ? ($audioUpload['path'] ?? '') : '';
 
                 if($user === ''){
                     $error = 'کاربر مقصد مشخص نیست';
@@ -1157,8 +1398,11 @@ if(!function_exists('supportLoad')){
                 elseif($image === '' && !empty($upload['error'])){
                     $error = $upload['error'];
                 }
-                elseif($text === '' && $image === ''){
-                    $error = 'متن یا تصویر وارد کنید';
+                elseif($audio === '' && !empty($audioUpload['error'])){
+                    $error = $audioUpload['error'];
+                }
+                elseif($text === '' && $image === '' && $audio === ''){
+                    $error = 'متن، تصویر یا پیام صوتی وارد کنید';
                 }
                 else{
                     $ticketIndex = supportEnsureTicket($data, $user);
@@ -1182,6 +1426,10 @@ if(!function_exists('supportLoad')){
                             'timestamp' => $meta['timestamp'],
                             'seen_by_user' => false
                         ];
+
+                        if($audio !== ''){
+                            $row['audio'] = $audio;
+                        }
 
                         if($replyTo){
                             $row['reply_to'] = $replyTo;
@@ -1328,18 +1576,28 @@ if(!function_exists('supportLoad')){
             }
             else{
                 $text = trim($_POST['message'] ?? '');
+                $uploadDir = __DIR__ . '/uploads/support';
                 $upload = supportHandleUpload(
                     $_FILES['image'] ?? [],
-                    __DIR__ . '/uploads/support',
+                    $uploadDir,
+                    '/uploads/support'
+                );
+                $audioUpload = supportHandleAudioUpload(
+                    $_FILES['audio'] ?? [],
+                    $uploadDir,
                     '/uploads/support'
                 );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
+                $audio = !empty($audioUpload['ok']) ? ($audioUpload['path'] ?? '') : '';
 
                 if($image === '' && !empty($upload['error'])){
                     $error = $upload['error'];
                 }
-                elseif($text === '' && $image === ''){
-                    $error = 'متن یا تصویر وارد کنید';
+                elseif($audio === '' && !empty($audioUpload['error'])){
+                    $error = $audioUpload['error'];
+                }
+                elseif($text === '' && $image === '' && $audio === ''){
+                    $error = 'متن، تصویر یا پیام صوتی وارد کنید';
                 }
                 else{
                     $meta = supportMessageMeta();
@@ -1355,6 +1613,10 @@ if(!function_exists('supportLoad')){
                         'timestamp' => $meta['timestamp'],
                         'seen_by_admin' => false
                     ];
+
+                    if($audio !== ''){
+                        $newmsg['audio'] = $audio;
+                    }
 
                     if($replyTo){
                         $newmsg['reply_to'] = $replyTo;

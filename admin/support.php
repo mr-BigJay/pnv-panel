@@ -127,12 +127,14 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '3';
+$chatAssetVer = '10';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
-$legacyJsHref = '/support_ui.js?v=42';
+$legacyJsHref = '/support_ui.js?v=43';
 $shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
+$voiceJsHref = $chatAssetBase . 'pnv-support-voice.js?v=' . $chatAssetVer;
 $adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
+$profileCssHref = $chatAssetBase . 'pnv-support-profile.css?v=' . $chatAssetVer;
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
 
@@ -145,8 +147,10 @@ if(!$supportEmbedded){
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>پیام‌های کاربران</title>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($shellCssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($profileCssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } else { ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($shellCssHref, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($profileCssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
 
 <div class="supportPage pnv-chat <?php echo $supportEmbedded ? 'supportEmbedded' : ''; ?> <?php echo $currentUser !== '' ? 'chat-active' : ''; ?>" id="supportPage">
@@ -309,13 +313,31 @@ if(!$hasMessages){
 <input type="hidden" name="reply" value="1">
 <input type="hidden" name="user" value="<?php echo htmlspecialchars($currentUser, ENT_QUOTES, 'UTF-8'); ?>">
 
+<div class="pnv-voice-recording" hidden>
+<span class="pnv-voice-recording-dot" aria-hidden="true"></span>
+<span class="pnv-voice-recording-time">0:00</span>
+<span class="pnv-voice-recording-label">در حال ضبط…</span>
+<button type="button" class="pnv-voice-recording-cancel" aria-label="لغو ضبط">لغو</button>
+<button type="button" class="pnv-voice-recording-stop" aria-label="توقف ضبط">توقف</button>
+</div>
+<div class="pnv-voice-preview" hidden>
+<button type="button" class="pnv-voice-preview-play" aria-label="پخش پیش‌نمایش">▶</button>
+<audio preload="metadata"></audio>
+<span class="pnv-voice-preview-duration">0:00</span>
+<button type="button" class="pnv-voice-preview-send">ارسال</button>
+<button type="button" class="pnv-voice-preview-cancel">لغو</button>
+</div>
 <div class="msgComposerRow">
 <button type="button" class="msgIconBtn msgIconBtn--attach" id="attachBtnAdmin" title="تصویر" aria-label="پیوست تصویر">📎</button>
 <input type="file" name="image" id="supportImage" class="msgFileInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+<input type="file" name="audio" id="supportAudio" class="msgFileInput" accept="audio/webm,audio/ogg,video/webm">
 
 <textarea name="message" id="supportMessage" placeholder="ارسال پیام . . . ." rows="1"></textarea>
 
-<button type="submit" class="msgIconBtn msgIconBtn--send" title="ارسال" aria-label="ارسال">➤</button>
+<div class="msgComposerAction">
+<button type="button" class="msgIconBtn msgIconBtn--mic" id="supportMicAdmin" title="پیام صوتی" aria-label="ضبط پیام صوتی">🎤</button>
+<button type="submit" class="msgIconBtn msgIconBtn--send" id="supportSendAdmin" title="ارسال" aria-label="ارسال" hidden>➤</button>
+</div>
 </div>
 
 </form>
@@ -331,6 +353,7 @@ if(!$hasMessages){
 
 <script src="<?php echo htmlspecialchars($legacyJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($shellJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($voiceJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($adapterJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
 (function(){
@@ -352,18 +375,30 @@ if(!$hasMessages){
         loadProfile(currentUser);
     };
 
-    window.loadProfile = function(user){
-        fetch(
-            profileApiUrl + '?user=' + encodeURIComponent(user) + '&all=1',
-            {credentials:'same-origin'}
-        )
-        .then(function(r){ return r.text(); })
+    window.loadProfile = function(user, page){
+        page = parseInt(page, 10) || 1;
+        var url = profileApiUrl + '?user=' + encodeURIComponent(user) + '&p=' + page;
+        fetch(url, {credentials:'same-origin'})
+        .then(function(r){
+            if(!r.ok){
+                throw new Error('HTTP ' + r.status);
+            }
+            return r.text();
+        })
         .then(function(html){
-            document.getElementById('profileHost').innerHTML = html;
-            document.getElementById('profileHost').style.display = 'block';
+            if(!html || !String(html).trim()){
+                throw new Error('empty response');
+            }
+            var host = document.getElementById('profileHost');
+            if(!host){
+                throw new Error('profileHost missing');
+            }
+            host.innerHTML = html;
+            host.style.display = 'block';
             document.body.style.overflow = 'hidden';
         })
-        .catch(function(){
+        .catch(function(err){
+            console.error('support subscriptions:', err);
             alert('خطا در بارگذاری اشتراک‌ها');
         });
     };
@@ -419,7 +454,7 @@ if(!$hasMessages){
             if(!data || !data.ok){
                 alert((data && data.error) ? data.error : 'حذف لینک ناموفق بود');
                 button.disabled = false;
-                button.textContent = 'حذف لینک';
+                button.textContent = 'حذف';
                 return;
             }
             alert(data.message || 'لینک حذف شد');
@@ -428,9 +463,70 @@ if(!$hasMessages){
         .catch(function(){
             alert('خطا در ارتباط با سرور');
             button.disabled = false;
-            button.textContent = 'حذف لینک';
+            button.textContent = 'حذف';
         });
     };
+
+    (function bindProfileModalUi(){
+        if(window.__pnvProfileModalUiBound){
+            return;
+        }
+        window.__pnvProfileModalUiBound = true;
+
+        document.addEventListener('click', function(e){
+            var menuBtn = e.target.closest('.subCardMenuBtn');
+            if(menuBtn){
+                e.preventDefault();
+                e.stopPropagation();
+                var wrap = menuBtn.closest('.subCardMenuWrap');
+                document.querySelectorAll('.subCardMenuWrap.is-open').forEach(function(openWrap){
+                    if(openWrap !== wrap){
+                        openWrap.classList.remove('is-open');
+                    }
+                });
+                if(wrap){
+                    wrap.classList.toggle('is-open');
+                }
+                return;
+            }
+
+            if(!e.target.closest('.subCardMenuWrap')){
+                document.querySelectorAll('.subCardMenuWrap.is-open').forEach(function(openWrap){
+                    openWrap.classList.remove('is-open');
+                });
+            }
+
+            var copyBtn = e.target.closest('.subLinkCopyBtn');
+            if(!copyBtn){
+                return;
+            }
+            e.preventDefault();
+            var field = copyBtn.closest('.subLinkField');
+            var input = field ? field.querySelector('.subLinkInput') : null;
+            var tip = field ? field.querySelector('.subLinkCopyTip') : null;
+            if(!input || !input.value){
+                return;
+            }
+            var text = input.value;
+            var done = function(){
+                if(tip){
+                    tip.hidden = false;
+                    setTimeout(function(){ tip.hidden = true; }, 1600);
+                }
+                copyBtn.classList.add('is-copied');
+                setTimeout(function(){ copyBtn.classList.remove('is-copied'); }, 1600);
+            };
+            if(navigator.clipboard && navigator.clipboard.writeText){
+                navigator.clipboard.writeText(text).then(done).catch(function(){
+                    input.select();
+                    try{ document.execCommand('copy'); done(); }catch(err){}
+                });
+            }else{
+                input.select();
+                try{ document.execCommand('copy'); done(); }catch(err){}
+            }
+        });
+    })();
 
     document.addEventListener('keydown', function(e){
         if(e.key === 'Escape'){
@@ -451,6 +547,9 @@ if(!$hasMessages){
         backBtnEl: document.getElementById('supportBackBtn'),
         imageInputId: 'supportImage',
         attachBtnId: 'attachBtnAdmin',
+        audioInputId: 'supportAudio',
+        micBtnEl: document.getElementById('supportMicAdmin'),
+        sendBtnEl: document.getElementById('supportSendAdmin'),
         currentUser: currentUser,
         pollUrl: pollUrl,
         usersApiUrl: usersApiUrl,

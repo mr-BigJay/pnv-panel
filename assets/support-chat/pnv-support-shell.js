@@ -3,15 +3,6 @@
 
   var STORAGE_KEY = 'pnv-chat-theme';
 
-  function dayKeyFromTs(ts) {
-    var n = parseInt(ts, 10) || 0;
-    if (!n) {
-      return '';
-    }
-    var d = new Date(n * 1000);
-    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
-  }
-
   function chatModeFromRoot(root) {
     if (!root) {
       return 'admin';
@@ -108,23 +99,15 @@
     var bubbles = container.querySelectorAll('.msgBubble');
     var lastDay = null;
     bubbles.forEach(function (bubble) {
-      var day = dayKeyFromTs(bubble.dataset.timestamp);
-      if (!day || day === lastDay) {
+      var day = (bubble.dataset.jalaliDate || '').trim();
+      if (!day || day === '-' || day === lastDay) {
         return;
       }
       lastDay = day;
-      var meta = bubble.querySelector('.msgMeta');
-      var label = day;
-      if (meta && meta.textContent) {
-        var parts = meta.textContent.split('-');
-        if (parts.length > 1) {
-          label = parts.slice(1).join('-').trim() || day;
-        }
-      }
       var divider = document.createElement('div');
       divider.className = 'pnv-date-divider';
       divider.setAttribute('data-day', day);
-      divider.textContent = label;
+      divider.textContent = day;
       container.insertBefore(divider, bubble);
     });
   }
@@ -134,6 +117,12 @@
     layoutBubbleMeta(container);
     applyBubbleGrouping(container, root);
     applyDateDividers(container);
+    if (
+      global.PNVSupportVoice &&
+      typeof global.PNVSupportVoice.bindPlayers === 'function'
+    ) {
+      global.PNVSupportVoice.bindPlayers(container);
+    }
   }
 
   function observeMessages(container, root) {
