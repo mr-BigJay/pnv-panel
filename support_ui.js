@@ -68,6 +68,50 @@
         return e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13;
     }
 
+    function supportAjaxPost(action, formData){
+        return fetch(action, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: { 'X-Support-Ajax': '1' }
+        }).then(function(res){
+            return res.json().catch(function(){
+                return { ok: false, error: 'پاسخ سرور نامعتبر است' };
+            }).then(function(body){
+                if(!res.ok || !body || !body.ok){
+                    const msg = (body && body.error) ? body.error : 'ارسال ناموفق بود';
+                    const err = new Error(msg);
+                    err.status = res.status;
+                    throw err;
+                }
+                return body;
+            });
+        });
+    }
+
+    function focusComposerTextarea(textarea){
+        if(!textarea){ return; }
+        try{
+            textarea.focus({preventScroll: true});
+        }catch(err){
+            textarea.focus();
+        }
+        requestAnimationFrame(function(){
+            try{
+                textarea.focus({preventScroll: true});
+            }catch(e){
+                textarea.focus();
+            }
+        });
+        setTimeout(function(){
+            try{
+                textarea.focus({preventScroll: true});
+            }catch(e2){
+                textarea.focus();
+            }
+        }, 0);
+    }
+
     function submitComposerForm(form){
         if(!form){ return; }
         const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
@@ -132,6 +176,10 @@
 
     function ensureOverlay(){
         let root = document.getElementById('supportUiOverlay');
+        if(root && !document.getElementById('supportFileComposerMeta')){
+            root.remove();
+            root = null;
+        }
         if(root){ return root; }
         root = document.createElement('div');
         root.id = 'supportUiOverlay';
@@ -141,30 +189,67 @@
             '<div class="supportContextMenu" id="supportContextMenu" role="menu"></div>' +
             '</div>' +
             '<div class="supportCopyToast" id="supportCopyToast" hidden aria-live="polite"></div>' +
-            '<div class="supportMediaComposer" id="supportMediaComposer" hidden>' +
-            '<div class="supportMediaStage"><img id="supportMediaImg" alt=""></div>' +
-            '<div class="supportMediaFooter">' +
-            '<input type="text" class="supportMediaCaption" id="supportMediaCaption" placeholder="نوشتن کپشن..." maxlength="2000" enterkeyhint="send">' +
-            '<div class="supportMediaActions">' +
-            '<button type="button" class="supportMediaBtn" id="supportMediaBack" aria-label="بازگشت">' +
-            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>' +
-            '</button>' +
-            '<button type="button" class="supportMediaBtn" id="supportMediaCrop" aria-label="برش">' +
-            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">' +
-            '<path d="M6 2v4H2"/><path d="M18 22v-4h4"/><path d="M6 6h12v12H6z"/><path d="M2 6h4"/><path d="M18 18h4"/></svg>' +
-            '</button>' +
-            '<button type="button" class="supportMediaBtn supportMediaBtn--send" id="supportMediaSend" aria-label="ارسال">' +
-            '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>' +
-            '</button>' +
+            '<div class="tgMediaEditor supportMediaComposer" id="supportMediaComposer" hidden>' +
+            '<header class="tgMediaEditorTop">' +
+            '<button type="button" class="tgIconCircle" id="supportMediaBack" aria-label="بازگشت">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>' +
+            '<div class="tgMediaEditorTools">' +
+            '<button type="button" class="tgIconCircle" id="supportMediaCrop" aria-label="برش">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">' +
+            '<path d="M6 2v4H2"/><path d="M18 22v-4h4"/><path d="M6 6h12v12H6z"/></svg></button>' +
+            '<button type="button" class="tgIconCircle" id="supportMediaRotate" aria-label="چرخش">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">' +
+            '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>' +
+            '</div></header>' +
+            '<div class="tgMediaEditorStage supportMediaStage"><img id="supportMediaImg" alt=""></div>' +
+            '<footer class="tgMediaEditorFooter supportMediaFooter">' +
+            '<div class="tgMediaEditorCaptionRow">' +
+            '<input type="text" class="tgMediaEditorCaption supportMediaCaption" id="supportMediaCaption" dir="rtl" placeholder="افزودن کپشن..." maxlength="2000" enterkeyhint="send">' +
+            '<button type="button" class="tgMediaEditorSend supportMediaBtn supportMediaBtn--send" id="supportMediaSend" aria-label="ارسال">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>' +
+            '</div></footer></div>' +
+            '<div class="tgAttachSheet supportAttachSheet" id="supportAttachSheet" hidden>' +
+            '<div class="tgAttachSheetBackdrop supportAttachSheetBackdrop" data-close-attach></div>' +
+            '<div class="tgAttachSheetPanel supportAttachSheetCard" role="menu">' +
+            '<div class="tgAttachSheetHandle" aria-hidden="true"></div>' +
+            '<div class="tgAttachSheetGrid">' +
+            '<button type="button" class="tgAttachSheetOption supportAttachSheetItem" data-attach="gallery" role="menuitem">' +
+            '<span class="tgAttachSheetOptionIcon supportAttachSheetIcon tgAttachSheetOptionIcon--gallery" aria-hidden="true">' +
+            '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">' +
+            '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.6"/><path d="M21 17l-5.5-5.5L9 18"/></svg></span>' +
+            '<span class="tgAttachSheetOptionLabel">گالری</span></button>' +
+            '<button type="button" class="tgAttachSheetOption supportAttachSheetItem" data-attach="file" role="menuitem">' +
+            '<span class="tgAttachSheetOptionIcon supportAttachSheetIcon tgAttachSheetOptionIcon--file" aria-hidden="true">' +
+            '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">' +
+            '<path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>' +
+            '<span class="tgAttachSheetOptionLabel">فایل</span></button>' +
             '</div></div></div>' +
-            '<div class="supportCrop" id="supportCropModal" hidden>' +
-            '<div class="supportCropCard">' +
-            '<div class="supportCropTitle">برش تصویر</div>' +
-            '<div class="supportCropStage"><canvas id="supportCropCanvas"></canvas></div>' +
-            '<div class="supportCropActions">' +
-            '<button type="button" class="supportCropBtn ghost" id="supportCropCancel">انصراف</button>' +
-            '<button type="button" class="supportCropBtn" id="supportCropOk">تایید برش</button>' +
-            '</div></div></div>';
+            '<div class="tgFileSend supportFileComposer" id="supportFileComposer" hidden>' +
+            '<header class="tgMediaEditorTop">' +
+            '<button type="button" class="tgIconCircle" id="supportFileComposerCancel" aria-label="بازگشت">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>' +
+            '</header>' +
+            '<div class="tgFileSendBody">' +
+            '<div class="tgFileSendIconWrap" aria-hidden="true">' +
+            '<svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6">' +
+            '<path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>' +
+            '<div class="tgFileSendName supportFileComposerName" id="supportFileComposerName"></div>' +
+            '<div class="tgFileSendMeta" id="supportFileComposerMeta"></div>' +
+            '</div>' +
+            '<footer class="tgMediaEditorFooter">' +
+            '<div class="tgMediaEditorCaptionRow">' +
+            '<input type="text" class="tgMediaEditorCaption supportFileComposerCaption" id="supportFileComposerCaption" dir="rtl" placeholder="افزودن کپشن..." maxlength="2000" enterkeyhint="send">' +
+            '<button type="button" class="tgMediaEditorSend supportFileComposerBtn send" id="supportFileComposerSend" aria-label="ارسال">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>' +
+            '</div></footer></div>' +
+            '<div class="tgCropScreen supportCrop" id="supportCropModal" hidden>' +
+            '<header class="tgCropTop">' +
+            '<button type="button" class="tgCropTopBtn supportCropBtn ghost" id="supportCropCancel">انصراف</button>' +
+            '<span class="tgCropTopTitle">برش</span>' +
+            '<button type="button" class="tgCropTopBtn supportCropBtn" id="supportCropOk">تمام</button>' +
+            '</header>' +
+            '<div class="tgCropStage supportCropStage"><canvas id="supportCropCanvas"></canvas></div>' +
+            '</div>';
         document.body.appendChild(root);
         return root;
     }
@@ -180,7 +265,9 @@
         const mediaCaption = document.getElementById('supportMediaCaption');
         const mediaBack = document.getElementById('supportMediaBack');
         const mediaCropBtn = document.getElementById('supportMediaCrop');
+        const mediaRotateBtn = document.getElementById('supportMediaRotate');
         const mediaSend = document.getElementById('supportMediaSend');
+        const attachSheet = document.getElementById('supportAttachSheet');
         const cropModal = document.getElementById('supportCropModal');
         const canvas = document.getElementById('supportCropCanvas');
         if(!mediaComposer || !mediaImg || !cropModal || !canvas){ return; }
@@ -189,11 +276,63 @@
         let sourceImg = null;
         let crop = {x:0,y:0,w:0,h:0};
         let drag = null;
+        let cropDisplayScale = 1;
         let pendingBlob = null;
         let pendingName = 'support-image.jpg';
         let pendingUrl = '';
         let submitting = false;
+        let originalBlob = null;
+        let originalObjectUrl = '';
+        let rotationDegrees = 0;
+        let attachSource = 'gallery';
+        let pendingAttachmentFile = null;
         const mainTextarea = form.querySelector('textarea');
+        const fileComposer = document.getElementById('supportFileComposer');
+        const fileComposerName = document.getElementById('supportFileComposerName');
+        const fileComposerCaption = document.getElementById('supportFileComposerCaption');
+        const fileComposerCancel = document.getElementById('supportFileComposerCancel');
+        const fileComposerSend = document.getElementById('supportFileComposerSend');
+        const fileComposerMeta = document.getElementById('supportFileComposerMeta');
+
+        function formatFileSize(bytes){
+            const n = Number(bytes) || 0;
+            if(n < 1024){ return n + ' B'; }
+            if(n < 1024 * 1024){ return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB'; }
+            return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        let galleryPicker = form.querySelector('input[data-pnv-gallery-picker]');
+        if(!galleryPicker){
+            galleryPicker = document.createElement('input');
+            galleryPicker.type = 'file';
+            galleryPicker.accept = 'image/*';
+            galleryPicker.className = 'msgFileInput';
+            galleryPicker.setAttribute('data-pnv-gallery-picker', '1');
+            galleryPicker.hidden = true;
+            form.appendChild(galleryPicker);
+        }
+
+        let filePicker = form.querySelector('input[data-pnv-file-picker]');
+        if(!filePicker){
+            filePicker = document.createElement('input');
+            filePicker.type = 'file';
+            filePicker.accept = '.pdf,.zip,.txt,.doc,.docx,.xls,.xlsx,application/pdf,application/zip,text/plain';
+            filePicker.name = 'file';
+            filePicker.className = 'msgFileInput';
+            filePicker.setAttribute('data-pnv-file-picker', '1');
+            filePicker.hidden = true;
+            form.appendChild(filePicker);
+        }
+
+        function closeAttachSheet(){
+            if(attachSheet){ attachSheet.hidden = true; }
+        }
+
+        function openAttachSheet(){
+            if(attachSheet){
+                attachSheet.hidden = false;
+            }
+        }
 
         function revokeUrl(){
             if(pendingUrl){
@@ -202,11 +341,21 @@
             }
         }
 
+        function revokeOriginalUrl(){
+            if(originalObjectUrl){
+                try{ URL.revokeObjectURL(originalObjectUrl); }catch(e){}
+                originalObjectUrl = '';
+            }
+        }
+
         function closeMediaComposer(){
             mediaComposer.hidden = true;
             document.body.classList.remove('supportMediaOpen');
             revokeUrl();
+            revokeOriginalUrl();
             pendingBlob = null;
+            originalBlob = null;
+            rotationDegrees = 0;
             pendingName = 'support-image.jpg';
             sourceImg = null;
             if(mediaCaption){ mediaCaption.value = ''; }
@@ -214,17 +363,111 @@
             try{ input.value = ''; }catch(e){}
         }
 
-        function openMediaComposer(file){
-            revokeUrl();
-            pendingBlob = file;
+        function closeFileComposer(){
+            if(fileComposer){ fileComposer.hidden = true; }
+            pendingAttachmentFile = null;
+            if(fileComposerCaption){ fileComposerCaption.value = ''; }
+            if(fileComposerName){ fileComposerName.textContent = ''; }
+            if(fileComposerMeta){ fileComposerMeta.textContent = ''; }
+            try{ filePicker.value = ''; }catch(err){}
+            if(mediaComposer && mediaComposer.hidden && (cropModal && cropModal.hidden)){
+                document.body.classList.remove('supportMediaOpen');
+            }
+        }
+
+        function openFileComposer(file){
+            pendingAttachmentFile = file;
+            if(fileComposerName){ fileComposerName.textContent = file.name || 'فایل'; }
+            if(fileComposerMeta){
+                const ext = (file.name || '').split('.').pop();
+                const typeLabel = ext ? ext.toUpperCase() : 'FILE';
+                fileComposerMeta.textContent = typeLabel + ' · ' + formatFileSize(file.size);
+            }
+            if(fileComposerCaption){
+                fileComposerCaption.value = (mainTextarea && mainTextarea.value) ? mainTextarea.value : '';
+            }
+            if(fileComposer){ fileComposer.hidden = false; }
+            document.body.classList.add('supportMediaOpen');
+        }
+
+        function setOriginalSource(file){
+            revokeOriginalUrl();
+            originalBlob = file;
             pendingName = file.name || 'support-image.jpg';
-            pendingUrl = URL.createObjectURL(file);
-            mediaImg.src = pendingUrl;
+            originalObjectUrl = URL.createObjectURL(file);
+            rotationDegrees = 0;
+            renderRotatedPreview();
+        }
+
+        function renderRotatedPreview(){
+            if(!originalBlob || !originalObjectUrl){ return; }
+            const img = new Image();
+            img.onload = function(){
+                const w = img.naturalWidth || img.width;
+                const h = img.naturalHeight || img.height;
+                const swap = rotationDegrees % 180 !== 0;
+                const canvas = document.createElement('canvas');
+                canvas.width = swap ? h : w;
+                canvas.height = swap ? w : h;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate((rotationDegrees * Math.PI) / 180);
+                ctx.drawImage(img, -w / 2, -h / 2);
+                canvas.toBlob(function(blob){
+                    if(!blob){ return; }
+                    pendingBlob = blob;
+                    assignInputFile(new File([blob], pendingName, {type: 'image/jpeg'}));
+                    revokeUrl();
+                    pendingUrl = URL.createObjectURL(blob);
+                    mediaImg.src = pendingUrl;
+                }, 'image/jpeg', 0.92);
+            };
+            img.src = originalObjectUrl;
+        }
+
+        function openMediaComposer(file){
+            attachSource = 'gallery';
+            if(mediaCropBtn){ mediaCropBtn.hidden = false; }
+            if(mediaRotateBtn){ mediaRotateBtn.hidden = false; }
             if(mediaCaption){
                 mediaCaption.value = (mainTextarea && mainTextarea.value) ? mainTextarea.value : '';
             }
             mediaComposer.hidden = false;
             document.body.classList.add('supportMediaOpen');
+            setOriginalSource(file);
+        }
+
+        function rotatePendingImage(){
+            if(!originalBlob){ return; }
+            rotationDegrees = (rotationDegrees + 90) % 360;
+            renderRotatedPreview();
+        }
+
+        function submitFileAttachment(){
+            if(submitting || !pendingAttachmentFile){ return; }
+            submitting = true;
+            if(fileComposerSend){ fileComposerSend.disabled = true; }
+            const caption = (fileComposerCaption ? fileComposerCaption.value : '').trim();
+            const fd = new FormData(form);
+            fd.set('file', pendingAttachmentFile, pendingAttachmentFile.name || 'file');
+            fd.set('message', caption);
+            const action = form.getAttribute('action') || window.location.href;
+            supportAjaxPost(action, fd).then(function(){
+                closeFileComposer();
+                if(mainTextarea){
+                    mainTextarea.value = '';
+                    mainTextarea.dispatchEvent(new Event('input', {bubbles: true}));
+                }
+                form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
+                window.dispatchEvent(new CustomEvent('support:poll-now'));
+                focusComposerTextarea(mainTextarea);
+            }).catch(function(err){
+                alert(err.message || 'ارسال فایل ناموفق بود');
+                focusComposerTextarea(mainTextarea);
+            }).finally(function(){
+                submitting = false;
+                if(fileComposerSend){ fileComposerSend.disabled = false; }
+            });
         }
 
         function assignInputFile(file){
@@ -238,15 +481,28 @@
             }
         }
 
+        function drawCropHandles(){
+            const s = 8;
+            const corners = [
+                [crop.x, crop.y],
+                [crop.x + crop.w - s, crop.y],
+                [crop.x, crop.y + crop.h - s],
+                [crop.x + crop.w - s, crop.y + crop.h - s]
+            ];
+            ctx.fillStyle = '#ffffff';
+            corners.forEach(function(pt){
+                ctx.fillRect(pt[0], pt[1], s, s);
+            });
+        }
+
         function draw(){
             if(!sourceImg){ return; }
-            const maxW = Math.min(360, window.innerWidth - 32);
-            const scale = Math.min(1, maxW / sourceImg.width);
+            const scale = cropDisplayScale;
             canvas.width = Math.round(sourceImg.width * scale);
             canvas.height = Math.round(sourceImg.height * scale);
             ctx.clearRect(0,0,canvas.width,canvas.height);
             ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(0,0,0,.45)';
+            ctx.fillStyle = 'rgba(0,0,0,.62)';
             ctx.fillRect(0,0,canvas.width,canvas.height);
             ctx.clearRect(crop.x, crop.y, crop.w, crop.h);
             ctx.drawImage(
@@ -254,9 +510,10 @@
                 crop.x / scale, crop.y / scale, crop.w / scale, crop.h / scale,
                 crop.x, crop.y, crop.w, crop.h
             );
-            ctx.strokeStyle = '#22c55e';
+            ctx.strokeStyle = '#3390ec';
             ctx.lineWidth = 2;
-            ctx.strokeRect(crop.x, crop.y, crop.w, crop.h);
+            ctx.strokeRect(crop.x + 0.5, crop.y + 0.5, crop.w - 1, crop.h - 1);
+            drawCropHandles();
         }
 
         function openCropEditor(){
@@ -267,8 +524,10 @@
                 img.onload = function(){
                     sourceImg = img;
                     const side = Math.min(img.width, img.height);
-                    const maxW = Math.min(360, window.innerWidth - 32);
-                    const scale = Math.min(1, maxW / img.width);
+                    const maxW = window.innerWidth - 24;
+                    const maxH = window.innerHeight - 120;
+                    const scale = Math.min(1, maxW / img.width, maxH / img.height);
+                    cropDisplayScale = scale;
                     const cw = Math.round(img.width * scale);
                     const ch = Math.round(img.height * scale);
                     const sw = Math.round(side * scale);
@@ -324,8 +583,7 @@
 
         document.getElementById('supportCropOk').onclick = function(){
             if(!sourceImg){ return; }
-            const maxW = Math.min(360, window.innerWidth - 32);
-            const scale = Math.min(1, maxW / sourceImg.width);
+            const scale = cropDisplayScale || 1;
             const out = document.createElement('canvas');
             const size = Math.max(32, Math.round(crop.w / scale));
             out.width = size;
@@ -341,12 +599,8 @@
                     return;
                 }
                 const file = new File([blob], 'support-crop.jpg', {type: 'image/jpeg'});
-                pendingBlob = file;
-                pendingName = 'support-crop.jpg';
                 assignInputFile(file);
-                revokeUrl();
-                pendingUrl = URL.createObjectURL(file);
-                mediaImg.src = pendingUrl;
+                setOriginalSource(file);
                 cropModal.hidden = true;
                 sourceImg = null;
             }, 'image/jpeg', 0.88);
@@ -358,10 +612,6 @@
             mediaSend.disabled = true;
 
             const caption = (mediaCaption ? mediaCaption.value : '').trim();
-            if(mainTextarea){
-                mainTextarea.value = caption;
-            }
-
             const file = (pendingBlob instanceof File)
                 ? pendingBlob
                 : new File([pendingBlob], pendingName, {type: pendingBlob.type || 'image/jpeg'});
@@ -372,21 +622,21 @@
             fd.set('message', caption);
 
             const action = form.getAttribute('action') || window.location.href;
-            fetch(action, {
-                method: 'POST',
-                body: fd,
-                credentials: 'same-origin',
-                redirect: 'follow'
-            }).then(function(res){
-                if(res.redirected && res.url){
-                    window.location.href = res.url;
-                    return;
+            supportAjaxPost(action, fd).then(function(){
+                closeMediaComposer();
+                if(mainTextarea){
+                    mainTextarea.value = '';
+                    mainTextarea.dispatchEvent(new Event('input', {bubbles: true}));
                 }
-                window.location.reload();
-            }).catch(function(){
+                form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
+                window.dispatchEvent(new CustomEvent('support:poll-now'));
+                focusComposerTextarea(mainTextarea);
+            }).catch(function(err){
+                alert(err.message || 'ارسال تصویر ناموفق بود');
+                focusComposerTextarea(mainTextarea);
+            }).finally(function(){
                 submitting = false;
                 mediaSend.disabled = false;
-                alert('ارسال تصویر ناموفق بود');
             });
         }
 
@@ -399,9 +649,17 @@
             closeMediaComposer();
         });
 
-        mediaCropBtn.addEventListener('click', function(){
-            openCropEditor();
-        });
+        if(mediaCropBtn){
+            mediaCropBtn.addEventListener('click', function(){
+                openCropEditor();
+            });
+        }
+
+        if(mediaRotateBtn){
+            mediaRotateBtn.addEventListener('click', function(){
+                rotatePendingImage();
+            });
+        }
 
         mediaSend.addEventListener('click', function(){
             submitMedia();
@@ -416,25 +674,95 @@
             });
         }
 
+        function handlePickedGalleryImage(file){
+            if(!file){ return; }
+            if(!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name || '')){
+                alert('فقط JPG، PNG یا WebP مجاز است');
+                return;
+            }
+            assignInputFile(file);
+            openMediaComposer(file);
+        }
+
+        function handlePickedAttachment(file){
+            if(!file){ return; }
+            const name = file.name || '';
+            const ext = name.indexOf('.') >= 0 ? name.split('.').pop().toLowerCase() : '';
+            const allowedExt = ['pdf', 'zip', 'txt', 'doc', 'docx', 'xls', 'xlsx'];
+            if(allowedExt.indexOf(ext) < 0){
+                alert('فقط PDF، ZIP، TXT، DOC، DOCX، XLS، XLSX مجاز است');
+                try{ filePicker.value = ''; }catch(err){}
+                return;
+            }
+            openFileComposer(file);
+        }
+
+        if(attachSheet){
+            attachSheet.addEventListener('click', function(e){
+                if(e.target.closest('[data-close-attach]')){
+                    closeAttachSheet();
+                }
+            });
+            attachSheet.querySelectorAll('[data-attach]').forEach(function(btn){
+                btn.addEventListener('click', function(e){
+                    e.preventDefault();
+                    const mode = btn.getAttribute('data-attach');
+                    closeAttachSheet();
+                    if(mode === 'gallery'){
+                        try{ galleryPicker.value = ''; }catch(err){}
+                        galleryPicker.click();
+                        return;
+                    }
+                    if(mode === 'file'){
+                        try{ filePicker.value = ''; }catch(err2){}
+                        filePicker.click();
+                    }
+                });
+            });
+        }
+
+        galleryPicker.addEventListener('change', function(){
+            const file = galleryPicker.files && galleryPicker.files[0];
+            handlePickedGalleryImage(file);
+        });
+
+        filePicker.addEventListener('change', function(){
+            const file = filePicker.files && filePicker.files[0];
+            handlePickedAttachment(file);
+        });
+
+        if(fileComposerCancel){
+            fileComposerCancel.addEventListener('click', function(){
+                closeFileComposer();
+            });
+        }
+        if(fileComposerSend){
+            fileComposerSend.addEventListener('click', function(){
+                submitFileAttachment();
+            });
+        }
+        if(fileComposerCaption){
+            fileComposerCaption.addEventListener('keydown', function(e){
+                if(e.key === 'Enter'){
+                    e.preventDefault();
+                    submitFileAttachment();
+                }
+            });
+        }
+
         const attachBtn = (attachBtnId && document.getElementById(attachBtnId))
             || form.querySelector('.msgIconBtn--attach');
         if(attachBtn){
             attachBtn.addEventListener('click', function(e){
                 e.preventDefault();
                 e.stopPropagation();
-                input.click();
+                openAttachSheet();
             });
         }
 
         input.addEventListener('change', function(){
             const file = input.files && input.files[0];
-            if(!file){ return; }
-            if(!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name || '')){
-                alert('فقط JPG، PNG یا WebP مجاز است');
-                try{ input.value = ''; }catch(err){}
-                return;
-            }
-            openMediaComposer(file);
+            handlePickedGalleryImage(file);
         });
 
         // Normal text-only submit still works; block if media composer open
@@ -629,11 +957,17 @@
             const menuH = Math.max(menuEl.offsetHeight, menuEl.scrollHeight, 36);
             const pad = 8;
             const gap = 6;
-            let top = bubbleRect.top - menuH - gap;
-            if(top < pad){
-                top = bubbleRect.bottom + gap;
+            const chatRoot = chatEl.closest('.pnv-chat');
+            const headerEl = chatRoot
+                ? chatRoot.querySelector('.msgHeader, .supportChatTop, #supportChatTop')
+                : null;
+            const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : pad;
+            const minTop = Math.max(pad, headerBottom + 4);
+            let top = bubbleRect.bottom + gap;
+            if(top + menuH > window.innerHeight - pad){
+                top = bubbleRect.top - menuH - gap;
             }
-            top = Math.max(pad, Math.min(top, window.innerHeight - menuH - pad));
+            top = Math.max(minTop, Math.min(top, window.innerHeight - menuH - pad));
             const isOwn = bubble.dataset.own === '1';
             let left = isOwn
                 ? bubbleRect.right - menuW
@@ -752,10 +1086,27 @@
         let holdTimer = null;
         let holdStart = null;
         let holdBubble = null;
+        let holdSelectBlock = null;
+
+        function clearNativeSelection(){
+            try{
+                const sel = window.getSelection && window.getSelection();
+                if(sel && sel.removeAllRanges){
+                    sel.removeAllRanges();
+                }
+            }catch(err){}
+        }
 
         function clearHold(){
             if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; }
-            if(holdBubble){ holdBubble.classList.remove('is-holding'); }
+            if(holdBubble){
+                holdBubble.classList.remove('is-holding');
+                if(holdSelectBlock){
+                    holdBubble.removeEventListener('selectstart', holdSelectBlock);
+                    holdBubble.removeEventListener('contextmenu', holdSelectBlock);
+                }
+            }
+            holdSelectBlock = null;
             holdStart = null;
             holdBubble = null;
         }
@@ -780,17 +1131,26 @@
         chatEl.addEventListener('touchstart', function(e){
             const bubble = e.target.closest('.msgBubble');
             if(!bubble || !chatEl.contains(bubble)){ return; }
-            if(e.target.closest('button,textarea,input')){ return; }
+            if(e.target.closest('button,textarea,input,a')){ return; }
             clearHold();
             const touch = e.touches && e.touches[0];
             holdStart = touch ? {x: touch.clientX, y: touch.clientY} : null;
             holdBubble = bubble;
+            holdSelectBlock = function(ev){
+                ev.preventDefault();
+            };
+            bubble.addEventListener('selectstart', holdSelectBlock);
+            bubble.addEventListener('contextmenu', holdSelectBlock);
             bubble.classList.add('is-holding');
             holdTimer = setTimeout(function(){
                 const target = holdBubble;
+                clearNativeSelection();
+                if(target){
+                    try{ if(navigator.vibrate){ navigator.vibrate(18); } }catch(err){}
+                    openMenu(target);
+                }
                 clearHold();
-                if(target){ openMenu(target); }
-            }, 420);
+            }, 380);
         }, {passive:true});
 
         chatEl.addEventListener('touchmove', function(e){
@@ -817,6 +1177,96 @@
         });
         window.addEventListener('resize', closeMenu);
         window.addEventListener('scroll', closeMenu, true);
+
+        form.addEventListener('support-composer-sent', function(){
+            setReply('', '');
+            clearEditMode();
+        });
+    }
+
+    function bindComposerAjaxSend(options){
+        const form = options.form;
+        const textarea = options.textarea;
+        if(!form || !textarea){ return; }
+
+        textarea.setAttribute('autocomplete', 'off');
+        textarea.setAttribute('autocorrect', 'on');
+        form.setAttribute('autocomplete', 'off');
+
+        form.addEventListener('submit', function(e){
+            if(form.dataset.pnvVoiceMode === 'recording' || form.dataset.pnvVoiceMode === 'preview'){
+                return;
+            }
+            const mediaComposer = document.getElementById('supportMediaComposer');
+            const cropModal = document.getElementById('supportCropModal');
+            if((mediaComposer && !mediaComposer.hidden) || (cropModal && !cropModal.hidden)){
+                return;
+            }
+
+            const imageInput = options.imageInputId
+                ? document.getElementById(options.imageInputId)
+                : form.querySelector('input[type="file"][name="image"]');
+            const audioInput = options.audioInputId
+                ? document.getElementById(options.audioInputId)
+                : form.querySelector('input[type="file"][name="audio"]');
+            const hasImage = imageInput && imageInput.files && imageInput.files.length > 0;
+            const hasAudio = audioInput && audioInput.files && audioInput.files.length > 0;
+            if(hasImage || hasAudio){
+                return;
+            }
+
+            const text = (textarea.value || '').trim();
+            const editIdInput = form.querySelector('input[name="edit_id"]');
+            const isEdit = !!(editIdInput && editIdInput.value);
+            if(!isEdit && text === ''){
+                return;
+            }
+
+            e.preventDefault();
+
+            const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+            if(submitBtn){ submitBtn.disabled = true; }
+
+            const fd = new FormData(form);
+            const action = form.getAttribute('action') || window.location.href;
+
+            supportAjaxPost(action, fd).then(function(){
+                textarea.value = '';
+                textarea.dispatchEvent(new Event('input', {bubbles: true}));
+                form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
+                try{
+                    window.dispatchEvent(new CustomEvent('support:poll-now'));
+                }catch(err){}
+                focusComposerTextarea(textarea);
+            }).catch(function(err){
+                const msg = err && err.message ? err.message : 'ارسال پیام ناموفق بود';
+                alert(msg);
+                focusComposerTextarea(textarea);
+            }).finally(function(){
+                if(submitBtn){ submitBtn.disabled = false; }
+                focusComposerTextarea(textarea);
+            });
+        });
+    }
+
+    function bindComposerSessionGuard(form, textarea){
+        if(!form){ return; }
+
+        function resetComposerDraft(){
+            if(textarea){
+                textarea.value = '';
+                textarea.dispatchEvent(new Event('input', {bubbles: true}));
+            }
+            form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
+        }
+
+        // No pushState/popstate for reply/edit/menu — browser Back stays real navigation.
+        // pageshow+persisted clears bfcache-restored drafts only (secondary guard).
+        window.addEventListener('pageshow', function(e){
+            if(e.persisted){
+                resetComposerDraft();
+            }
+        });
     }
 
     function buildMessageChecksHtml(msg, actionMeta){
@@ -927,6 +1377,12 @@
         }
         if(msg.image){
             html += '<a class="msgImageLink" href="'+escapeHtml(msg.image)+'" target="_blank" rel="noopener"><img src="'+escapeHtml(msg.image)+'" alt=""></a>';
+        }
+        if(msg.file){
+            const fileLabel = escapeHtml(msg.file_name || 'دانلود فایل');
+            html += '<a class="msgFileLink" href="'+escapeHtml(msg.file)+'" download="'+fileLabel+'" target="_blank" rel="noopener">'
+                + '<span class="msgFileLinkIcon" aria-hidden="true">📎</span>'
+                + '<span class="msgFileLinkName">'+fileLabel+'</span></a>';
         }
         if(msg.audio){
             html += '<div class="pnv-voice-player" dir="ltr">'+
@@ -1159,6 +1615,9 @@
         }
 
         setInterval(poll, interval);
+        window.addEventListener('support:poll-now', function(){
+            poll();
+        });
         scrollToBottomOnOpen(chatEl);
     }
 
@@ -1171,6 +1630,9 @@
         bindImageAttach: bindImageAttach,
         bindMessageActions: bindMessageActions,
         bindMobileChatLayout: bindMobileChatLayout,
+        bindComposerAjaxSend: bindComposerAjaxSend,
+        bindComposerSessionGuard: bindComposerSessionGuard,
+        focusComposerTextarea: focusComposerTextarea,
         initPolling: initPolling,
         updateMessageStates: updateMessageStates,
         submitComposerForm: submitComposerForm

@@ -38,9 +38,10 @@ foreach($data as $ticket){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-store, max-age=0">
 <title>پیام به پشتیبانی</title>
 <link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=15">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=18">
 <link rel="stylesheet" href="fonts.css">
 <style>
 html,body{margin:0;padding:0;height:100%;overflow:hidden;}
@@ -86,7 +87,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 </div>
 
 <footer class="msgComposer">
-<form method="POST" enctype="multipart/form-data" id="userSupportForm" class="msgComposerInner" action="support.php">
+<form method="POST" enctype="multipart/form-data" id="userSupportForm" class="msgComposerInner" action="support.php" autocomplete="off">
 
 <?php echo $csrfField; ?>
 <input type="hidden" name="send" value="1">
@@ -117,8 +118,8 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
     rows="1"></textarea>
 
 <div class="msgComposerAction">
-<button type="button" class="msgIconBtn msgIconBtn--mic" id="userMic" title="پیام صوتی" aria-label="ضبط پیام صوتی">🎤</button>
-<button type="submit" class="msgIconBtn msgIconBtn--send" id="userSend" title="ارسال" aria-label="ارسال" hidden>➤</button>
+<button type="button" class="msgIconBtn msgIconBtn--mic" id="userMic" title="پیام صوتی" aria-label="ضبط پیام صوتی"><span class="msgIconGlyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg></span></button>
+<button type="submit" class="msgIconBtn msgIconBtn--send" id="userSend" title="ارسال" aria-label="ارسال" hidden><span class="msgIconGlyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg></span></button>
 </div>
 </div>
 
@@ -127,10 +128,10 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;}
 
 </div>
 
-<script src="/support_ui.js?v=45"></script>
-<script src="/assets/support-chat/pnv-support-shell.js?v=15"></script>
-<script src="/assets/support-chat/pnv-support-voice.js?v=15"></script>
-<script src="/assets/support-chat/pnv-support-adapter.js?v=15"></script>
+<script src="/support_ui.js?v=48"></script>
+<script src="/assets/support-chat/pnv-support-shell.js?v=18"></script>
+<script src="/assets/support-chat/pnv-support-voice.js?v=18"></script>
+<script src="/assets/support-chat/pnv-support-adapter.js?v=18"></script>
 <script>
 (function(){
     PNVSupportChat.init({
