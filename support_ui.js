@@ -136,7 +136,11 @@
         root = document.createElement('div');
         root.id = 'supportUiOverlay';
         root.innerHTML =
-            '<div class="supportSheet" id="supportActionSheet" hidden></div>' +
+            '<div class="supportMsgMenuLayer" id="supportActionSheet" hidden>' +
+            '<div class="supportMsgMenuBackdrop" data-close-menu></div>' +
+            '<div class="supportContextMenu" id="supportContextMenu" role="menu"></div>' +
+            '</div>' +
+            '<div class="supportCopyToast" id="supportCopyToast" hidden aria-live="polite"></div>' +
             '<div class="supportMediaComposer" id="supportMediaComposer" hidden>' +
             '<div class="supportMediaStage"><img id="supportMediaImg" alt=""></div>' +
             '<div class="supportMediaFooter">' +
@@ -446,6 +450,13 @@
         return el ? el.value : '';
     }
 
+    const MSG_MENU_ICONS = {
+        reply: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 17l-5-5 5-5"/><path d="M4 12h12a4 4 0 0 1 4 4v1"/></svg>',
+        edit: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>',
+        copy: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+        delete: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>'
+    };
+
     function bindMessageActions(options){
         const chatEl = options.chatEl;
         const form = options.form;
@@ -453,13 +464,26 @@
         if(!chatEl || !form){ return; }
 
         ensureOverlay();
-        const sheet = document.getElementById('supportActionSheet');
+        const layer = document.getElementById('supportActionSheet');
+        const menuEl = document.getElementById('supportContextMenu');
+        const copyToast = document.getElementById('supportCopyToast');
+        let activeBubble = null;
+        let copyToastTimer = null;
+
         let replyInput = form.querySelector('input[name="reply_to"]');
         if(!replyInput){
             replyInput = document.createElement('input');
             replyInput.type = 'hidden';
             replyInput.name = 'reply_to';
             form.appendChild(replyInput);
+        }
+
+        let editIdInput = form.querySelector('input[name="edit_id"]');
+        if(!editIdInput){
+            editIdInput = document.createElement('input');
+            editIdInput.type = 'hidden';
+            editIdInput.name = 'edit_id';
+            form.appendChild(editIdInput);
         }
 
         let replyChip = form.querySelector('.supportReplyChip');
@@ -470,12 +494,92 @@
             form.insertBefore(replyChip, form.firstChild);
         }
 
-        function closeSheet(){
-            sheet.hidden = true;
-            sheet.innerHTML = '';
+        let editChip = form.querySelector('.supportEditChip');
+        if(!editChip){
+            editChip = document.createElement('div');
+            editChip.className = 'supportEditChip';
+            editChip.hidden = true;
+            form.insertBefore(editChip, replyChip);
+        }
+
+        const composerTextarea = form.querySelector('textarea');
+
+        function closeMenu(){
+            if(layer){ layer.hidden = true; }
+            if(menuEl){ menuEl.innerHTML = ''; }
+            if(activeBubble){
+                activeBubble.classList.remove('is-menu-open');
+                activeBubble = null;
+            }
+        }
+
+        function showCopyToast(){
+            if(!copyToast){ return; }
+            copyToast.textContent = 'کپی شد';
+            copyToast.hidden = false;
+            if(copyToastTimer){ clearTimeout(copyToastTimer); }
+            copyToastTimer = setTimeout(function(){
+                copyToast.hidden = true;
+            }, 1600);
+        }
+
+        function copyMessageText(text){
+            const value = String(text || '');
+            if(!value.trim()){ return; }
+            function done(ok){
+                if(ok){ showCopyToast(); }
+            }
+            if(navigator.clipboard && navigator.clipboard.writeText){
+                navigator.clipboard.writeText(value).then(function(){ done(true); }).catch(fallback);
+                return;
+            }
+            fallback();
+            function fallback(){
+                try{
+                    const ta = document.createElement('textarea');
+                    ta.value = value;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    done(ok);
+                }catch(err){
+                    done(false);
+                }
+            }
+        }
+
+        function clearEditMode(){
+            editIdInput.value = '';
+            editChip.hidden = true;
+            editChip.innerHTML = '';
+        }
+
+        function setEditMode(msgId, text){
+            clearEditMode();
+            setReply('', '');
+            if(!msgId){ return; }
+            editIdInput.value = msgId;
+            editChip.hidden = false;
+            editChip.innerHTML =
+                '<div><small>ویرایش پیام</small><div>'+escapeHtml(text || '')+'</div></div>' +
+                '<button type="button" class="supportEditClear" aria-label="لغو ویرایش">×</button>';
+            editChip.querySelector('.supportEditClear').onclick = function(){
+                clearEditMode();
+                if(composerTextarea){ composerTextarea.value = ''; }
+            };
+            if(composerTextarea){
+                composerTextarea.value = text || '';
+                composerTextarea.focus();
+                composerTextarea.dispatchEvent(new Event('input', {bubbles: true}));
+            }
         }
 
         function setReply(msgId, preview){
+            clearEditMode();
             replyInput.value = msgId || '';
             if(!msgId){
                 replyChip.hidden = true;
@@ -485,61 +589,102 @@
             replyChip.hidden = false;
             replyChip.innerHTML =
                 '<div><small>در پاسخ به</small><div>'+escapeHtml(preview || '')+'</div></div>' +
-                '<button type="button" class="supportReplyClear">×</button>';
+                '<button type="button" class="supportReplyClear" aria-label="لغو پاسخ">×</button>';
             replyChip.querySelector('.supportReplyClear').onclick = function(){
                 setReply('', '');
             };
         }
 
-        function openSheet(bubble){
+        form.addEventListener('submit', function(){
+            if(!editIdInput.value){ return; }
+            let editTextInput = form.querySelector('input[name="edit_text"]');
+            if(!editTextInput){
+                editTextInput = document.createElement('input');
+                editTextInput.type = 'hidden';
+                editTextInput.name = 'edit_text';
+                form.appendChild(editTextInput);
+            }
+            editTextInput.value = composerTextarea ? composerTextarea.value.trim() : '';
+            if(composerTextarea && composerTextarea.getAttribute('name')){
+                composerTextarea.dataset.pnvComposerName = composerTextarea.getAttribute('name');
+                composerTextarea.removeAttribute('name');
+            }
+        }, true);
+
+        function positionMenu(bubble){
+            if(!menuEl || !layer){ return; }
+            const bubbleRect = bubble.getBoundingClientRect();
+            const menuW = Math.max(menuEl.offsetWidth, menuEl.scrollWidth, 184);
+            const menuH = Math.max(menuEl.offsetHeight, menuEl.scrollHeight, 36);
+            const pad = 8;
+            const gap = 6;
+            let top = bubbleRect.top - menuH - gap;
+            if(top < pad){
+                top = bubbleRect.bottom + gap;
+            }
+            top = Math.max(pad, Math.min(top, window.innerHeight - menuH - pad));
+            const isOwn = bubble.dataset.own === '1';
+            let left = isOwn
+                ? bubbleRect.right - menuW
+                : bubbleRect.left;
+            left = Math.max(pad, Math.min(left, window.innerWidth - menuW - pad));
+            menuEl.style.top = top + 'px';
+            menuEl.style.left = left + 'px';
+        }
+
+        function openMenu(bubble){
             const canEdit = bubble.dataset.canEdit === '1';
             const canDelete = bubble.dataset.canDelete === '1';
             const canReply = bubble.dataset.canReply === '1';
-            const isOwn = bubble.dataset.own === '1';
             const msgId = bubble.dataset.msgId || '';
             const text = bubble.dataset.text || '';
-            const actions = [];
-
-            if(canReply){ actions.push({key:'reply', label:'پاسخ'}); }
-            if(canEdit){ actions.push({key:'edit', label:'ویرایش'}); }
-            if(canDelete){ actions.push({key:'delete', label:'حذف', danger:true}); }
-
-            if(!actions.length){
-                if(isOwn && role !== 'admin'){
-                    actions.push({
-                        key:'info',
-                        label:'امکان حذف و ویرایش پیام های قدیمی وجود ندارد',
-                        disabled:true
-                    });
-                }else{
-                    return;
-                }
-            }
+            const hasText = !!String(text).trim();
+            const state = {canEdit: canEdit, canDelete: canDelete, canReply: canReply, hasText: hasText};
+            const defs = [
+                {key:'reply', label:'پاسخ', icon:'reply', show:function(s){ return s.canReply; }},
+                {key:'edit', label:'ویرایش', icon:'edit', show:function(s){ return s.canEdit; }},
+                {key:'copy', label:'کپی', icon:'copy', show:function(s){ return s.hasText; }},
+                {key:'delete', label:'حذف', icon:'delete', danger:true, show:function(s){ return s.canDelete; }}
+            ];
+            const actions = defs.filter(function(d){ return d.show(state); });
+            if(!actions.length){ return; }
 
             try{ if(navigator.vibrate){ navigator.vibrate(18); } }catch(err){}
 
-            sheet.innerHTML =
-                '<div class="supportSheetCard">' +
-                actions.map(function(a){
-                    const cls = [
-                        a.danger ? 'danger' : '',
-                        a.disabled ? 'is-disabled' : ''
-                    ].filter(Boolean).join(' ');
-                    return '<button type="button" data-act="'+a.key+'" class="'+cls+'"'+(a.disabled?' disabled':'')+'>'+a.label+'</button>';
-                }).join('') +
-                '<button type="button" data-act="cancel" class="ghost">انصراف</button>' +
-                '</div>';
-            sheet.hidden = false;
+            closeMenu();
+            activeBubble = bubble;
+            bubble.classList.add('is-menu-open');
 
-            sheet.querySelectorAll('button[data-act]').forEach(function(btn){
-                btn.onclick = function(){
+            menuEl.innerHTML = actions.map(function(a){
+                const cls = a.danger ? 'supportContextMenuItem is-danger' : 'supportContextMenuItem';
+                const icon = MSG_MENU_ICONS[a.icon] || '';
+                return '<button type="button" role="menuitem" data-act="'+a.key+'" class="'+cls+'">' +
+                    '<span class="supportContextMenuIcon">'+icon+'</span>' +
+                    '<span class="supportContextMenuLabel">'+a.label+'</span></button>';
+            }).join('');
+
+            layer.hidden = false;
+            menuEl.style.top = '-9999px';
+            menuEl.style.left = '-9999px';
+            requestAnimationFrame(function(){
+                positionMenu(bubble);
+                requestAnimationFrame(function(){
+                    positionMenu(bubble);
+                });
+            });
+
+            menuEl.querySelectorAll('button[data-act]').forEach(function(btn){
+                btn.onclick = function(e){
+                    e.stopPropagation();
                     const act = btn.getAttribute('data-act');
-                    closeSheet();
-                    if(act === 'cancel' || act === 'info'){ return; }
+                    closeMenu();
                     if(act === 'reply'){
                         setReply(msgId, text || 'پیام');
-                        const ta = form.querySelector('textarea');
-                        if(ta){ ta.focus(); }
+                        if(composerTextarea){ composerTextarea.focus(); }
+                        return;
+                    }
+                    if(act === 'copy'){
+                        copyMessageText(text);
                         return;
                     }
                     if(act === 'delete'){
@@ -556,21 +701,41 @@
                         return;
                     }
                     if(act === 'edit'){
-                        const next = window.prompt('متن جدید پیام:', text);
-                        if(next === null){ return; }
-                        const f = document.createElement('form');
-                        f.method = 'POST';
-                        f.innerHTML =
-                            '<input type="hidden" name="csrf" value="'+escapeHtml(getCsrf(form))+'">' +
-                            '<input type="hidden" name="edit_id" value="'+escapeHtml(msgId)+'">' +
-                            '<input type="hidden" name="user" value="'+escapeHtml((form.querySelector('input[name="user"]')||{}).value || '')+'">' +
-                            '<input type="hidden" name="edit_text" value="">';
-                        f.querySelector('input[name="edit_text"]').value = next;
-                        document.body.appendChild(f);
-                        f.submit();
+                        setEditMode(msgId, text);
                     }
                 };
             });
+        }
+
+        function ensureMenuTrigger(bubble){
+            if(!bubble || bubble.querySelector('.msgBubbleMenuTrigger')){ return; }
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'msgBubbleMenuTrigger';
+            btn.setAttribute('aria-label', 'عملیات پیام');
+            btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+            bubble.appendChild(btn);
+        }
+
+        function decorateBubbles(root){
+            (root || chatEl).querySelectorAll('.msgBubble').forEach(ensureMenuTrigger);
+        }
+        decorateBubbles(chatEl);
+        if(typeof MutationObserver === 'function'){
+            const observer = new MutationObserver(function(mutations){
+                mutations.forEach(function(m){
+                    m.addedNodes.forEach(function(node){
+                        if(node.nodeType !== 1){ return; }
+                        if(node.classList && node.classList.contains('msgBubble')){
+                            ensureMenuTrigger(node);
+                        }
+                        else if(node.querySelectorAll){
+                            decorateBubbles(node);
+                        }
+                    });
+                });
+            });
+            observer.observe(chatEl, {childList: true, subtree: true});
         }
 
         let holdTimer = null;
@@ -584,12 +749,21 @@
             holdBubble = null;
         }
 
+        chatEl.addEventListener('click', function(e){
+            const trigger = e.target.closest('.msgBubbleMenuTrigger');
+            if(!trigger || !chatEl.contains(trigger)){ return; }
+            e.preventDefault();
+            e.stopPropagation();
+            const bubble = trigger.closest('.msgBubble');
+            if(bubble){ openMenu(bubble); }
+        });
+
         chatEl.addEventListener('contextmenu', function(e){
             const bubble = e.target.closest('.msgBubble');
             if(!bubble || !chatEl.contains(bubble)){ return; }
-            if(e.target.closest('button,textarea,input')){ return; }
+            if(e.target.closest('button:not(.msgBubbleMenuTrigger),textarea,input,a')){ return; }
             e.preventDefault();
-            openSheet(bubble);
+            openMenu(bubble);
         });
 
         chatEl.addEventListener('touchstart', function(e){
@@ -604,7 +778,7 @@
             holdTimer = setTimeout(function(){
                 const target = holdBubble;
                 clearHold();
-                if(target){ openSheet(target); }
+                if(target){ openMenu(target); }
             }, 420);
         }, {passive:true});
 
@@ -619,9 +793,19 @@
 
         chatEl.addEventListener('touchend', clearHold);
         chatEl.addEventListener('touchcancel', clearHold);
-        sheet.addEventListener('click', function(e){
-            if(e.target === sheet){ closeSheet(); }
+
+        if(layer){
+            layer.addEventListener('click', function(e){
+                if(e.target.closest('[data-close-menu]') || e.target === layer){
+                    closeMenu();
+                }
+            });
+        }
+        document.addEventListener('keydown', function(e){
+            if(e.key === 'Escape'){ closeMenu(); }
         });
+        window.addEventListener('resize', closeMenu);
+        window.addEventListener('scroll', closeMenu, true);
     }
 
     function buildMessageChecksHtml(msg, actionMeta){
@@ -743,6 +927,12 @@
         }
         html += buildMessageMetaHtml(msg, actionMeta);
         wrap.innerHTML = html;
+        const menuBtn = document.createElement('button');
+        menuBtn.type = 'button';
+        menuBtn.className = 'msgBubbleMenuTrigger';
+        menuBtn.setAttribute('aria-label', 'عملیات پیام');
+        menuBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+        wrap.appendChild(menuBtn);
         return wrap;
     }
 

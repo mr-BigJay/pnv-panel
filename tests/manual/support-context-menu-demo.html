@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support context menu demo</title>
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=11">
+<link rel="stylesheet" href="/support_ui.css">
+<style>
+body { margin: 0; background: #0e1621; font-family: tahoma, sans-serif; }
+.demoChat { max-width: 420px; margin: 2rem auto; padding: 1rem; }
+.demoChat .msgBubble { max-width: 85%; margin: 0.5rem 0; padding: 0.5rem 0.75rem; background: #2b5278; border-radius: 0.75rem; color: #fff; }
+.demoChat .msgBubble.is-user { margin-inline-start: auto; background: #182533; }
+</style>
+</head>
+<body>
+<div class="pnv-chat demoChat">
+<div id="demoChat" class="msgBody" style="min-height:320px">
+<div class="msgBubble is-admin admin" data-msg-id="1" data-own="0" data-can-edit="0" data-can-delete="0" data-can-reply="1" data-text="سلام، چطور می‌تونم کمکتون کنم؟">
+<div class="msgText">سلام، چطور می‌تونم کمکتون کنم؟</div>
+</div>
+<div class="msgBubble is-user usermsg" data-msg-id="2" data-own="1" data-can-edit="1" data-can-delete="1" data-can-reply="0" data-text="مشکل VPN دارم">
+<div class="msgText">مشکل VPN دارم</div>
+</div>
+</div>
+<form id="demoForm" style="display:none"><input type="hidden" name="csrf" value="demo"><input type="hidden" name="user" value="demo"></form>
+</div>
+<script src="/support_ui.js?v=44"></script>
+<script>
+SupportUI.bindMessageActions({ chatEl: document.getElementById('demoChat'), form: document.getElementById('demoForm'), role: 'admin' });
+setTimeout(function(){
+  var b = document.querySelector('[data-msg-id="2"]');
+  if (b) b.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 280, clientY: 180 }));
+}, 400);
+</script>
+</body>
+</html>
