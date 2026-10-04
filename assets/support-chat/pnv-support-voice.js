@@ -4,9 +4,21 @@
   var MAX_RECORD_MS = 5 * 60 * 1000;
   var MAX_BYTES = 10 * 1024 * 1024;
   var activeAudio = null;
+  var activePlayer = null;
+
+  function safeDuration(audio) {
+    if (!audio) {
+      return 0;
+    }
+    var d = Number(audio.duration);
+    return Number.isFinite(d) && d > 0 ? d : 0;
+  }
 
   function formatDuration(seconds) {
-    var sec = Math.max(0, Math.floor(seconds || 0));
+    var sec = Math.max(0, Math.floor(Number(seconds) || 0));
+    if (!Number.isFinite(sec)) {
+      sec = 0;
+    }
     var m = Math.floor(sec / 60);
     var s = sec % 60;
     return m + ':' + (s < 10 ? '0' : '') + s;
@@ -46,6 +58,36 @@
     sendBtn.hidden = !hasText;
   }
 
+  function pauseOtherPlayers(currentPlayer, currentAudio) {
+    document.querySelectorAll('.pnv-voice-player.is-playing').forEach(function (p) {
+      if (p === currentPlayer) {
+        return;
+      }
+      p.classList.remove('is-playing');
+      var ic = p.querySelector('.pnv-voice-play-icon');
+      if (ic) {
+        ic.textContent = '▶';
+      }
+      var a = p.querySelector('.pnv-voice-audio');
+      var bars = p.querySelector('.pnv-voice-bars');
+      var dur = p.querySelector('.pnv-voice-duration');
+      if (a) {
+        a.pause();
+        a.currentTime = 0;
+      }
+      if (bars) {
+        bars.style.setProperty('--voice-progress', '0%');
+      }
+      if (dur && a) {
+        dur.textContent = formatDuration(safeDuration(a));
+      }
+    });
+    if (activeAudio && activeAudio !== currentAudio) {
+      activeAudio.pause();
+      activeAudio.currentTime = 0;
+    }
+  }
+
   function bindVoicePlayers(root) {
     var scope = root || document;
     scope.querySelectorAll('.pnv-voice-player').forEach(function (player) {
@@ -57,48 +99,90 @@
       var btn = player.querySelector('.pnv-voice-play');
       var icon = player.querySelector('.pnv-voice-play-icon');
       var durationEl = player.querySelector('.pnv-voice-duration');
+      var bars = player.querySelector('.pnv-voice-bars');
       if (!audio || !btn) {
         return;
       }
 
-      function setDurationLabel() {
+      if (bars) {
+        bars.style.setProperty('--voice-progress', '0%');
+      }
+
+      function showTotalOnly() {
         if (!durationEl) {
           return;
         }
-        var d = audio.duration;
-        if (isFinite(d) && d > 0) {
-          durationEl.textContent = formatDuration(d);
-        }
+        durationEl.textContent = formatDuration(safeDuration(audio));
       }
 
-      audio.addEventListener('loadedmetadata', setDurationLabel);
-      audio.addEventListener('durationchange', setDurationLabel);
+      function showProgressTime() {
+        if (!durationEl) {
+          return;
+        }
+        var total = safeDuration(audio);
+        if (total <= 0) {
+          showTotalOnly();
+          return;
+        }
+        durationEl.textContent =
+          formatDuration(audio.currentTime) + ' / ' + formatDuration(total);
+      }
+
+      function syncProgressBar() {
+        if (!bars) {
+          return;
+        }
+        var total = safeDuration(audio);
+        if (total <= 0) {
+          bars.style.setProperty('--voice-progress', '0%');
+          return;
+        }
+        var pct = Math.max(
+          0,
+          Math.min(100, (audio.currentTime / total) * 100)
+        );
+        bars.style.setProperty('--voice-progress', pct + '%');
+      }
+
+      function refreshDurationLabel() {
+        if (player.classList.contains('is-playing')) {
+          showProgressTime();
+        } else {
+          showTotalOnly();
+        }
+        syncProgressBar();
+      }
+
+      audio.addEventListener('loadedmetadata', refreshDurationLabel);
+      audio.addEventListener('durationchange', refreshDurationLabel);
+      audio.addEventListener('canplay', refreshDurationLabel);
+
+      audio.addEventListener('timeupdate', function () {
+        if (audio.paused) {
+          return;
+        }
+        showProgressTime();
+        syncProgressBar();
+      });
 
       btn.addEventListener('click', function () {
         if (audio.paused) {
-          if (activeAudio && activeAudio !== audio) {
-            activeAudio.pause();
-            activeAudio.currentTime = 0;
-            document.querySelectorAll('.pnv-voice-player.is-playing').forEach(function (p) {
-              p.classList.remove('is-playing');
-              var ic = p.querySelector('.pnv-voice-play-icon');
-              if (ic) {
-                ic.textContent = '▶';
-              }
-            });
-          }
+          pauseOtherPlayers(player, audio);
           activeAudio = audio;
+          activePlayer = player;
           audio.play().catch(function () {});
           player.classList.add('is-playing');
           if (icon) {
             icon.textContent = '❚❚';
           }
+          showProgressTime();
         } else {
           audio.pause();
           player.classList.remove('is-playing');
           if (icon) {
             icon.textContent = '▶';
           }
+          showTotalOnly();
         }
       });
 
@@ -107,16 +191,29 @@
         if (icon) {
           icon.textContent = '▶';
         }
+        audio.currentTime = 0;
+        if (bars) {
+          bars.style.setProperty('--voice-progress', '0%');
+        }
+        showTotalOnly();
+        if (activeAudio === audio) {
+          activeAudio = null;
+          activePlayer = null;
+        }
       });
 
       audio.addEventListener('pause', function () {
-        if (audio.currentTime === 0 || audio.ended) {
+        if (!audio.ended && audio.currentTime > 0) {
           player.classList.remove('is-playing');
           if (icon) {
             icon.textContent = '▶';
           }
+          syncProgressBar();
+          showTotalOnly();
         }
       });
+
+      showTotalOnly();
     });
   }
 
@@ -151,12 +248,17 @@
     var pendingBlob = null;
     var pendingUrl = '';
     var discardRecording = false;
+    var sendAfterStop = false;
+    var voiceUploading = false;
     var previewAudio = previewEl ? previewEl.querySelector('audio') : null;
     var previewDuration = previewEl
       ? previewEl.querySelector('.pnv-voice-preview-duration')
       : null;
     var recordTimeEl = recordingEl
       ? recordingEl.querySelector('.pnv-voice-recording-time')
+      : null;
+    var recordingSendBtn = recordingEl
+      ? recordingEl.querySelector('.pnv-voice-recording-stop')
       : null;
 
     syncMicSend(textarea, micBtn, sendBtn);
@@ -225,30 +327,35 @@
       if (!recordTimeEl) {
         return;
       }
-      var elapsed = Math.min(
-        MAX_RECORD_MS,
-        Date.now() - recordStart
-      );
+      var elapsed = Math.min(MAX_RECORD_MS, Date.now() - recordStart);
       recordTimeEl.textContent = formatDuration(elapsed / 1000);
       if (elapsed >= MAX_RECORD_MS) {
-        stopRecording();
+        sendRecording();
       }
     }
 
-    function stopRecording() {
-      stopTimer();
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      } else {
-        cleanupStream();
-        setComposerMode('idle');
-        syncMicSend(textarea, micBtn, sendBtn);
+    function sendRecording() {
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        return;
       }
+      if (voiceUploading) {
+        return;
+      }
+      sendAfterStop = true;
+      if (recordingSendBtn) {
+        recordingSendBtn.disabled = true;
+      }
+      stopTimer();
+      mediaRecorder.stop();
     }
 
     function cancelRecording() {
       stopTimer();
       discardRecording = true;
+      sendAfterStop = false;
+      if (recordingSendBtn) {
+        recordingSendBtn.disabled = false;
+      }
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
       } else {
@@ -268,11 +375,15 @@
       if (previewAudio) {
         previewAudio.src = pendingUrl;
         previewAudio.load();
-        previewAudio.onloadedmetadata = function () {
+        var onMeta = function () {
           if (previewDuration) {
-            previewDuration.textContent = formatDuration(previewAudio.duration);
+            previewDuration.textContent = formatDuration(
+              safeDuration(previewAudio)
+            );
           }
         };
+        previewAudio.onloadedmetadata = onMeta;
+        previewAudio.ondurationchange = onMeta;
       }
       setComposerMode('preview');
     }
@@ -288,15 +399,17 @@
       audioInput.files = dt.files;
     }
 
-    function submitVoice() {
-      if (!pendingBlob) {
+    function submitVoiceBlob(blob) {
+      if (!blob || voiceUploading) {
         return;
       }
-      if (pendingBlob.size > MAX_BYTES) {
+      if (blob.size > MAX_BYTES) {
         alert('حجم پیام صوتی بیش از حد مجاز است');
         return;
       }
-      assignInputFile(pendingBlob);
+      voiceUploading = true;
+      pendingBlob = blob;
+      assignInputFile(blob);
       var fd = new FormData(form);
       fd.set('message', (textarea.value || '').trim());
       fd.delete('image');
@@ -312,6 +425,11 @@
         redirect: 'follow'
       })
         .then(function (res) {
+          voiceUploading = false;
+          if (recordingSendBtn) {
+            recordingSendBtn.disabled = false;
+          }
+          pendingBlob = null;
           if (res.redirected && res.url) {
             window.location.href = res.url;
             return;
@@ -319,8 +437,19 @@
           window.location.reload();
         })
         .catch(function () {
+          voiceUploading = false;
+          if (recordingSendBtn) {
+            recordingSendBtn.disabled = false;
+          }
           alert('ارسال پیام صوتی ناموفق بود');
+          showPreview(blob);
         });
+    }
+
+    function submitVoice() {
+      if (pendingBlob) {
+        submitVoiceBlob(pendingBlob);
+      }
     }
 
     micBtn.addEventListener('click', function (e) {
@@ -334,6 +463,11 @@
         .then(function (stream) {
           mediaStream = stream;
           chunks = [];
+          sendAfterStop = false;
+          discardRecording = false;
+          if (recordingSendBtn) {
+            recordingSendBtn.disabled = false;
+          }
           mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
           mediaRecorder.ondataavailable = function (ev) {
             if (ev.data && ev.data.size > 0) {
@@ -347,12 +481,17 @@
 
             if (discardRecording) {
               discardRecording = false;
+              sendAfterStop = false;
               setComposerMode('idle');
               syncMicSend(textarea, micBtn, sendBtn);
               return;
             }
 
             if (!recordedChunks.length) {
+              sendAfterStop = false;
+              if (recordingSendBtn) {
+                recordingSendBtn.disabled = false;
+              }
               setComposerMode('idle');
               syncMicSend(textarea, micBtn, sendBtn);
               return;
@@ -363,12 +502,25 @@
             });
 
             if (blob.size <= 0) {
+              sendAfterStop = false;
+              if (recordingSendBtn) {
+                recordingSendBtn.disabled = false;
+              }
               setComposerMode('idle');
               syncMicSend(textarea, micBtn, sendBtn);
               return;
             }
 
-            showPreview(blob);
+            if (sendAfterStop) {
+              sendAfterStop = false;
+              setComposerMode('idle');
+              syncMicSend(textarea, micBtn, sendBtn);
+              submitVoiceBlob(blob);
+              return;
+            }
+
+            setComposerMode('idle');
+            syncMicSend(textarea, micBtn, sendBtn);
           };
           recordStart = Date.now();
           setComposerMode('recording');
@@ -383,12 +535,11 @@
     });
 
     if (recordingEl) {
-      var stopBtn = recordingEl.querySelector('.pnv-voice-recording-stop');
       var cancelBtn = recordingEl.querySelector('.pnv-voice-recording-cancel');
-      if (stopBtn) {
-        stopBtn.addEventListener('click', function (e) {
+      if (recordingSendBtn) {
+        recordingSendBtn.addEventListener('click', function (e) {
           e.preventDefault();
-          stopRecording();
+          sendRecording();
         });
       }
       if (cancelBtn) {
@@ -437,6 +588,7 @@
   global.PNVSupportVoice = {
     bindComposer: bindVoiceComposer,
     bindPlayers: bindVoicePlayers,
-    formatDuration: formatDuration
+    formatDuration: formatDuration,
+    safeDuration: safeDuration
   };
 })(window);

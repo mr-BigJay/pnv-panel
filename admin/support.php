@@ -127,7 +127,7 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '10';
+$chatAssetVer = '14';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=43';
@@ -318,7 +318,7 @@ if(!$hasMessages){
 <span class="pnv-voice-recording-time">0:00</span>
 <span class="pnv-voice-recording-label">در حال ضبط…</span>
 <button type="button" class="pnv-voice-recording-cancel" aria-label="لغو ضبط">لغو</button>
-<button type="button" class="pnv-voice-recording-stop" aria-label="توقف ضبط">توقف</button>
+<button type="button" class="pnv-voice-recording-stop" aria-label="ارسال پیام صوتی">ارسال</button>
 </div>
 <div class="pnv-voice-preview" hidden>
 <button type="button" class="pnv-voice-preview-play" aria-label="پخش پیش‌نمایش">▶</button>
