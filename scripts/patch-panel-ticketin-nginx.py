@@ -17,9 +17,16 @@ SNIPPET = f"""
     location = /bigjay_controller {{
         return 301 /bigjay_controller/;
     }}
+    location = /bigjay_controller/ {{
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:{PHP_SOCK};
+        fastcgi_param SCRIPT_FILENAME $document_root/bigjay_controller/index.php;
+        include fastcgi_params;
+    }}
     location ^~ /bigjay_controller/ {{
         try_files $uri $uri/ /bigjay_controller/index.php?$query_string;
         location ~ \\.php$ {{
+            try_files $uri =404;
             include snippets/fastcgi-php.conf;
             fastcgi_pass unix:{PHP_SOCK};
             include fastcgi_params;
