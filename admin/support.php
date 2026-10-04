@@ -127,7 +127,7 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '10';
+$chatAssetVer = '12';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=43';
@@ -159,15 +159,15 @@ if(!$supportEmbedded){
 
 <div class="msgSidebarHead">
 <div class="msgSidebarHeadRow">
-<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
-<h2>پیام‌های کاربران</h2>
+<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack" aria-label="بازگشت به داشبورد"><span class="msgMobileDashBackIcon" aria-hidden="true">←</span><span class="msgMobileDashBackLabel">داشبورد</span></a>
+<h2 class="msgSidebarTitle">پیام‌های کاربران</h2>
+<button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle" aria-label="تغییر تم"><span class="pnv-chat-theme-toggleLabel">حالت روشن</span></button>
 </div>
-<div class="pnv-chat-toolbar">
-<button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle" aria-label="تغییر تم">حالت روشن</button>
-</div>
+<div class="msgSidebarControls">
 <div class="msgSearchWrap">
 <input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
 <div class="msgUserSearchResults" id="supportUserResults"></div>
+</div>
 </div>
 </div>
 
