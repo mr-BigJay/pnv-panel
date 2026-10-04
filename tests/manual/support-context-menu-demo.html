@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support context menu demo</title>
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=15">
+<link rel="stylesheet" href="/support_ui.css">
+<style>
+body { margin: 0; background: #0e1621; font-family: tahoma, sans-serif; }
+.demoChat { max-width: 420px; margin: 2rem auto; padding: 1rem; }
+.demoChat .msgBubble { max-width: 85%; margin: 0.5rem 0; padding: 0.5rem 0.75rem; background: #2b5278; border-radius: 0.75rem; color: #fff; }
+.demoChat .msgBubble.is-user { margin-inline-start: auto; background: #182533; }
+#submitLog { color: #8bc; font-size: 12px; margin-top: 8px; min-height: 2em; }
+</style>
+</head>
+<body>
+<div class="pnv-chat demoChat">
+<div id="demoChat" class="msgBody" style="min-height:280px">
+<div class="msgBubble is-user usermsg" data-msg-id="2" data-own="1" data-can-edit="1" data-can-delete="1" data-can-reply="0" data-text="مشکل VPN دارم">
+<div class="msgText">مشکل VPN دارم</div>
+</div>
+</div>
+<form id="demoForm" class="msgComposerInner">
+<input type="hidden" name="csrf" value="demo">
+<input type="hidden" name="user" value="demo">
+<textarea name="message" rows="2" placeholder="composer"></textarea>
+<button type="submit">ارسال</button>
+</form>
+<div id="submitLog"></div>
+</div>
+<script src="/support_ui.js?v=45"></script>
+<script>
+var logEl = document.getElementById('submitLog');
+var form = document.getElementById('demoForm');
+form.addEventListener('submit', function(e){
+  e.preventDefault();
+  var fd = new FormData(form);
+  var parts = [];
+  fd.forEach(function(v,k){ parts.push(k + '=' + v); });
+  logEl.textContent = parts.join(' | ');
+});
+SupportUI.bindMessageActions({ chatEl: document.getElementById('demoChat'), form: form, role: 'user' });
+</script>
+</body>
+</html>

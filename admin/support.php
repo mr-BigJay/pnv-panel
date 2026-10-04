@@ -127,10 +127,12 @@ $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
 $formAction = function_exists('supportAdminFormAction')
     ? supportAdminFormAction($currentUser, $supportEmbedded)
     : $baseUrl;
-$chatAssetVer = '14';
+$adminBase = defined('PNV_ADMIN_BASE') ? rtrim(PNV_ADMIN_BASE, '/') : '/bigjay_controller';
+$dashboardUrl = $adminBase . '/index.php';
+$chatAssetVer = '15';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
-$legacyJsHref = '/support_ui.js?v=43';
+$legacyJsHref = '/support_ui.js?v=45';
 $shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
 $voiceJsHref = $chatAssetBase . 'pnv-support-voice.js?v=' . $chatAssetVer;
 $adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
@@ -159,15 +161,15 @@ if(!$supportEmbedded){
 
 <div class="msgSidebarHead">
 <div class="msgSidebarHeadRow">
-<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack">← داشبورد</a>
-<h2>پیام‌های کاربران</h2>
+<a href="<?php echo htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="msgMobileDashBack" aria-label="بازگشت به داشبورد"><span class="msgMobileDashBackIcon" aria-hidden="true">←</span><span class="msgMobileDashBackLabel">داشبورد</span></a>
+<h2 class="msgSidebarTitle">پیام‌های کاربران</h2>
+<button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle" aria-label="تغییر تم"><span class="pnv-chat-theme-toggleLabel">حالت روشن</span></button>
 </div>
-<div class="pnv-chat-toolbar">
-<button type="button" class="pnv-chat-theme-toggle" id="pnvChatThemeToggle" aria-label="تغییر تم">حالت روشن</button>
-</div>
+<div class="msgSidebarControls">
 <div class="msgSearchWrap">
 <input type="text" class="msgSearch" id="supportSearch" placeholder="جستجو با نام کاربری یا شماره موبایل..." autocomplete="off">
 <div class="msgUserSearchResults" id="supportUserResults"></div>
+</div>
 </div>
 </div>
 
@@ -221,7 +223,7 @@ if(!$supportEmbedded){
 </div>
 
 <?php if(!$supportEmbedded){ ?>
-<a href="<?php echo htmlspecialchars(function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php', ENT_QUOTES, 'UTF-8'); ?>" class="msgBack" style="margin:12px;text-align:center;display:block;">بازگشت به داشبورد</a>
+<a href="<?php echo htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="msgBack" style="margin:12px;text-align:center;display:block;">بازگشت به داشبورد</a>
 <?php } ?>
 
 </aside>
