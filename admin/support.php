@@ -129,10 +129,10 @@ $formAction = function_exists('supportAdminFormAction')
     : $baseUrl;
 $adminBase = defined('PNV_ADMIN_BASE') ? rtrim(PNV_ADMIN_BASE, '/') : '/bigjay_controller';
 $dashboardUrl = $adminBase . '/index.php';
-$chatAssetVer = '16';
+$chatAssetVer = '17';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
-$legacyJsHref = '/support_ui.js?v=46';
+$legacyJsHref = '/support_ui.js?v=47';
 $shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
 $voiceJsHref = $chatAssetBase . 'pnv-support-voice.js?v=' . $chatAssetVer;
 $adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
@@ -147,6 +147,7 @@ if(!$supportEmbedded){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<meta http-equiv="Cache-Control" content="no-store, max-age=0">
 <title>پیام‌های کاربران</title>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($shellCssHref, ENT_QUOTES, 'UTF-8'); ?>">
 <link rel="stylesheet" href="<?php echo htmlspecialchars($profileCssHref, ENT_QUOTES, 'UTF-8'); ?>">

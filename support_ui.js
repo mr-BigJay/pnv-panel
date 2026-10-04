@@ -68,6 +68,27 @@
         return e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13;
     }
 
+    function supportAjaxPost(action, formData){
+        return fetch(action, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: { 'X-Support-Ajax': '1' }
+        }).then(function(res){
+            return res.json().catch(function(){
+                return { ok: false, error: 'پاسخ سرور نامعتبر است' };
+            }).then(function(body){
+                if(!res.ok || !body || !body.ok){
+                    const msg = (body && body.error) ? body.error : 'ارسال ناموفق بود';
+                    const err = new Error(msg);
+                    err.status = res.status;
+                    throw err;
+                }
+                return body;
+            });
+        });
+    }
+
     function focusComposerTextarea(textarea){
         if(!textarea){ return; }
         try{
@@ -192,6 +213,15 @@
             '<button type="button" class="supportAttachSheetItem" data-attach="file" role="menuitem">' +
             '<span class="supportAttachSheetIcon" aria-hidden="true">📁</span><span>فایل</span></button>' +
             '</div></div>' +
+            '<div class="supportFileComposer" id="supportFileComposer" hidden>' +
+            '<div class="supportFileComposerCard">' +
+            '<div class="supportFileComposerTitle">ارسال فایل</div>' +
+            '<div class="supportFileComposerName" id="supportFileComposerName"></div>' +
+            '<input type="text" class="supportFileComposerCaption" id="supportFileComposerCaption" placeholder="نوشتن کپشن..." maxlength="2000">' +
+            '<div class="supportFileComposerActions">' +
+            '<button type="button" class="supportFileComposerBtn ghost" id="supportFileComposerCancel">انصراف</button>' +
+            '<button type="button" class="supportFileComposerBtn send" id="supportFileComposerSend">ارسال</button>' +
+            '</div></div></div>' +
             '<div class="supportCrop" id="supportCropModal" hidden>' +
             '<div class="supportCropCard">' +
             '<div class="supportCropTitle">برش تصویر</div>' +
@@ -230,9 +260,17 @@
         let pendingName = 'support-image.jpg';
         let pendingUrl = '';
         let submitting = false;
-        let mediaRotation = 0;
+        let originalBlob = null;
+        let originalObjectUrl = '';
+        let rotationDegrees = 0;
         let attachSource = 'gallery';
+        let pendingAttachmentFile = null;
         const mainTextarea = form.querySelector('textarea');
+        const fileComposer = document.getElementById('supportFileComposer');
+        const fileComposerName = document.getElementById('supportFileComposerName');
+        const fileComposerCaption = document.getElementById('supportFileComposerCaption');
+        const fileComposerCancel = document.getElementById('supportFileComposerCancel');
+        const fileComposerSend = document.getElementById('supportFileComposerSend');
 
         let galleryPicker = form.querySelector('input[data-pnv-gallery-picker]');
         if(!galleryPicker){
@@ -249,7 +287,8 @@
         if(!filePicker){
             filePicker = document.createElement('input');
             filePicker.type = 'file';
-            filePicker.accept = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
+            filePicker.accept = '.pdf,.zip,.txt,.doc,.docx,.xls,.xlsx,application/pdf,application/zip,text/plain';
+            filePicker.name = 'file';
             filePicker.className = 'msgFileInput';
             filePicker.setAttribute('data-pnv-file-picker', '1');
             filePicker.hidden = true;
@@ -273,11 +312,21 @@
             }
         }
 
+        function revokeOriginalUrl(){
+            if(originalObjectUrl){
+                try{ URL.revokeObjectURL(originalObjectUrl); }catch(e){}
+                originalObjectUrl = '';
+            }
+        }
+
         function closeMediaComposer(){
             mediaComposer.hidden = true;
             document.body.classList.remove('supportMediaOpen');
             revokeUrl();
+            revokeOriginalUrl();
             pendingBlob = null;
+            originalBlob = null;
+            rotationDegrees = 0;
             pendingName = 'support-image.jpg';
             sourceImg = null;
             if(mediaCaption){ mediaCaption.value = ''; }
@@ -285,53 +334,101 @@
             try{ input.value = ''; }catch(e){}
         }
 
-        function openMediaComposer(file, source){
-            revokeUrl();
-            pendingBlob = file;
+        function closeFileComposer(){
+            if(fileComposer){ fileComposer.hidden = true; }
+            pendingAttachmentFile = null;
+            if(fileComposerCaption){ fileComposerCaption.value = ''; }
+            if(fileComposerName){ fileComposerName.textContent = ''; }
+            try{ filePicker.value = ''; }catch(err){}
+        }
+
+        function openFileComposer(file){
+            pendingAttachmentFile = file;
+            if(fileComposerName){ fileComposerName.textContent = file.name || 'فایل'; }
+            if(fileComposerCaption){
+                fileComposerCaption.value = (mainTextarea && mainTextarea.value) ? mainTextarea.value : '';
+            }
+            if(fileComposer){ fileComposer.hidden = false; }
+        }
+
+        function setOriginalSource(file){
+            revokeOriginalUrl();
+            originalBlob = file;
             pendingName = file.name || 'support-image.jpg';
-            pendingUrl = URL.createObjectURL(file);
-            mediaRotation = 0;
-            mediaImg.src = pendingUrl;
-            attachSource = source || 'gallery';
-            if(mediaCropBtn){
-                mediaCropBtn.hidden = attachSource === 'file';
-            }
-            if(mediaRotateBtn){
-                mediaRotateBtn.hidden = false;
-            }
+            originalObjectUrl = URL.createObjectURL(file);
+            rotationDegrees = 0;
+            renderRotatedPreview();
+        }
+
+        function renderRotatedPreview(){
+            if(!originalBlob || !originalObjectUrl){ return; }
+            const img = new Image();
+            img.onload = function(){
+                const w = img.naturalWidth || img.width;
+                const h = img.naturalHeight || img.height;
+                const swap = rotationDegrees % 180 !== 0;
+                const canvas = document.createElement('canvas');
+                canvas.width = swap ? h : w;
+                canvas.height = swap ? w : h;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate((rotationDegrees * Math.PI) / 180);
+                ctx.drawImage(img, -w / 2, -h / 2);
+                canvas.toBlob(function(blob){
+                    if(!blob){ return; }
+                    pendingBlob = blob;
+                    assignInputFile(new File([blob], pendingName, {type: 'image/jpeg'}));
+                    revokeUrl();
+                    pendingUrl = URL.createObjectURL(blob);
+                    mediaImg.src = pendingUrl;
+                }, 'image/jpeg', 0.92);
+            };
+            img.src = originalObjectUrl;
+        }
+
+        function openMediaComposer(file){
+            attachSource = 'gallery';
+            if(mediaCropBtn){ mediaCropBtn.hidden = false; }
+            if(mediaRotateBtn){ mediaRotateBtn.hidden = false; }
             if(mediaCaption){
                 mediaCaption.value = (mainTextarea && mainTextarea.value) ? mainTextarea.value : '';
             }
             mediaComposer.hidden = false;
             document.body.classList.add('supportMediaOpen');
+            setOriginalSource(file);
         }
 
         function rotatePendingImage(){
-            if(!pendingUrl && !pendingBlob){ return; }
-            mediaRotation = (mediaRotation + 90) % 360;
-            const img = new Image();
-            img.onload = function(){
-                const w = img.naturalWidth || img.width;
-                const h = img.naturalHeight || img.height;
-                const canvas = document.createElement('canvas');
-                const swap = mediaRotation % 180 !== 0;
-                canvas.width = swap ? h : w;
-                canvas.height = swap ? w : h;
-                const ctx = canvas.getContext('2d');
-                ctx.translate(canvas.width / 2, canvas.height / 2);
-                ctx.rotate((mediaRotation * Math.PI) / 180);
-                ctx.drawImage(img, -w / 2, -h / 2);
-                canvas.toBlob(function(blob){
-                    if(!blob){ return; }
-                    pendingBlob = blob;
-                    pendingName = 'support-rotate.jpg';
-                    assignInputFile(new File([blob], pendingName, {type: 'image/jpeg'}));
-                    revokeUrl();
-                    pendingUrl = URL.createObjectURL(blob);
-                    mediaImg.src = pendingUrl;
-                }, 'image/jpeg', 0.9);
-            };
-            img.src = pendingUrl || '';
+            if(!originalBlob){ return; }
+            rotationDegrees = (rotationDegrees + 90) % 360;
+            renderRotatedPreview();
+        }
+
+        function submitFileAttachment(){
+            if(submitting || !pendingAttachmentFile){ return; }
+            submitting = true;
+            if(fileComposerSend){ fileComposerSend.disabled = true; }
+            const caption = (fileComposerCaption ? fileComposerCaption.value : '').trim();
+            const fd = new FormData(form);
+            fd.set('file', pendingAttachmentFile, pendingAttachmentFile.name || 'file');
+            fd.set('message', caption);
+            const action = form.getAttribute('action') || window.location.href;
+            supportAjaxPost(action, fd).then(function(){
+                closeFileComposer();
+                if(mainTextarea){
+                    mainTextarea.value = '';
+                    mainTextarea.dispatchEvent(new Event('input', {bubbles: true}));
+                }
+                form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
+                window.dispatchEvent(new CustomEvent('support:poll-now'));
+                focusComposerTextarea(mainTextarea);
+            }).catch(function(err){
+                alert(err.message || 'ارسال فایل ناموفق بود');
+                focusComposerTextarea(mainTextarea);
+            }).finally(function(){
+                submitting = false;
+                if(fileComposerSend){ fileComposerSend.disabled = false; }
+            });
         }
 
         function assignInputFile(file){
@@ -448,12 +545,8 @@
                     return;
                 }
                 const file = new File([blob], 'support-crop.jpg', {type: 'image/jpeg'});
-                pendingBlob = file;
-                pendingName = 'support-crop.jpg';
                 assignInputFile(file);
-                revokeUrl();
-                pendingUrl = URL.createObjectURL(file);
-                mediaImg.src = pendingUrl;
+                setOriginalSource(file);
                 cropModal.hidden = true;
                 sourceImg = null;
             }, 'image/jpeg', 0.88);
@@ -465,10 +558,6 @@
             mediaSend.disabled = true;
 
             const caption = (mediaCaption ? mediaCaption.value : '').trim();
-            if(mainTextarea){
-                mainTextarea.value = caption;
-            }
-
             const file = (pendingBlob instanceof File)
                 ? pendingBlob
                 : new File([pendingBlob], pendingName, {type: pendingBlob.type || 'image/jpeg'});
@@ -479,21 +568,21 @@
             fd.set('message', caption);
 
             const action = form.getAttribute('action') || window.location.href;
-            fetch(action, {
-                method: 'POST',
-                body: fd,
-                credentials: 'same-origin',
-                redirect: 'follow'
-            }).then(function(res){
-                if(res.redirected && res.url){
-                    window.location.href = res.url;
-                    return;
+            supportAjaxPost(action, fd).then(function(){
+                closeMediaComposer();
+                if(mainTextarea){
+                    mainTextarea.value = '';
+                    mainTextarea.dispatchEvent(new Event('input', {bubbles: true}));
                 }
-                window.location.reload();
-            }).catch(function(){
+                form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
+                window.dispatchEvent(new CustomEvent('support:poll-now'));
+                focusComposerTextarea(mainTextarea);
+            }).catch(function(err){
+                alert(err.message || 'ارسال تصویر ناموفق بود');
+                focusComposerTextarea(mainTextarea);
+            }).finally(function(){
                 submitting = false;
                 mediaSend.disabled = false;
-                alert('ارسال تصویر ناموفق بود');
             });
         }
 
@@ -531,14 +620,27 @@
             });
         }
 
-        function handlePickedImage(file, source){
+        function handlePickedGalleryImage(file){
             if(!file){ return; }
             if(!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name || '')){
                 alert('فقط JPG، PNG یا WebP مجاز است');
                 return;
             }
             assignInputFile(file);
-            openMediaComposer(file, source);
+            openMediaComposer(file);
+        }
+
+        function handlePickedAttachment(file){
+            if(!file){ return; }
+            const name = file.name || '';
+            const ext = name.indexOf('.') >= 0 ? name.split('.').pop().toLowerCase() : '';
+            const allowedExt = ['pdf', 'zip', 'txt', 'doc', 'docx', 'xls', 'xlsx'];
+            if(allowedExt.indexOf(ext) < 0){
+                alert('فقط PDF، ZIP، TXT، DOC، DOCX، XLS، XLSX مجاز است');
+                try{ filePicker.value = ''; }catch(err){}
+                return;
+            }
+            openFileComposer(file);
         }
 
         if(attachSheet){
@@ -567,13 +669,32 @@
 
         galleryPicker.addEventListener('change', function(){
             const file = galleryPicker.files && galleryPicker.files[0];
-            handlePickedImage(file, 'gallery');
+            handlePickedGalleryImage(file);
         });
 
         filePicker.addEventListener('change', function(){
             const file = filePicker.files && filePicker.files[0];
-            handlePickedImage(file, 'file');
+            handlePickedAttachment(file);
         });
+
+        if(fileComposerCancel){
+            fileComposerCancel.addEventListener('click', function(){
+                closeFileComposer();
+            });
+        }
+        if(fileComposerSend){
+            fileComposerSend.addEventListener('click', function(){
+                submitFileAttachment();
+            });
+        }
+        if(fileComposerCaption){
+            fileComposerCaption.addEventListener('keydown', function(e){
+                if(e.key === 'Enter'){
+                    e.preventDefault();
+                    submitFileAttachment();
+                }
+            });
+        }
 
         const attachBtn = (attachBtnId && document.getElementById(attachBtnId))
             || form.querySelector('.msgIconBtn--attach');
@@ -587,7 +708,7 @@
 
         input.addEventListener('change', function(){
             const file = input.files && input.files[0];
-            handlePickedImage(file, 'gallery');
+            handlePickedGalleryImage(file);
         });
 
         // Normal text-only submit still works; block if media composer open
@@ -1055,15 +1176,7 @@
             const fd = new FormData(form);
             const action = form.getAttribute('action') || window.location.href;
 
-            fetch(action, {
-                method: 'POST',
-                body: fd,
-                credentials: 'same-origin',
-                redirect: 'follow'
-            }).then(function(res){
-                if(!res.ok){
-                    throw new Error('send failed');
-                }
+            supportAjaxPost(action, fd).then(function(){
                 textarea.value = '';
                 textarea.dispatchEvent(new Event('input', {bubbles: true}));
                 form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
@@ -1071,8 +1184,9 @@
                     window.dispatchEvent(new CustomEvent('support:poll-now'));
                 }catch(err){}
                 focusComposerTextarea(textarea);
-            }).catch(function(){
-                alert('ارسال پیام ناموفق بود');
+            }).catch(function(err){
+                const msg = err && err.message ? err.message : 'ارسال پیام ناموفق بود';
+                alert(msg);
                 focusComposerTextarea(textarea);
             }).finally(function(){
                 if(submitBtn){ submitBtn.disabled = false; }
@@ -1092,6 +1206,8 @@
             form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
         }
 
+        // No pushState/popstate for reply/edit/menu — browser Back stays real navigation.
+        // pageshow+persisted clears bfcache-restored drafts only (secondary guard).
         window.addEventListener('pageshow', function(e){
             if(e.persisted){
                 resetComposerDraft();
@@ -1207,6 +1323,12 @@
         }
         if(msg.image){
             html += '<a class="msgImageLink" href="'+escapeHtml(msg.image)+'" target="_blank" rel="noopener"><img src="'+escapeHtml(msg.image)+'" alt=""></a>';
+        }
+        if(msg.file){
+            const fileLabel = escapeHtml(msg.file_name || 'دانلود فایل');
+            html += '<a class="msgFileLink" href="'+escapeHtml(msg.file)+'" download="'+fileLabel+'" target="_blank" rel="noopener">'
+                + '<span class="msgFileLinkIcon" aria-hidden="true">📎</span>'
+                + '<span class="msgFileLinkName">'+fileLabel+'</span></a>';
         }
         if(msg.audio){
             html += '<div class="pnv-voice-player" dir="ltr">'+

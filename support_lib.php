@@ -177,12 +177,22 @@ if(!function_exists('supportLoad')){
             $audio = '/' . ltrim($audio, '/');
         }
 
+        $filePath = $message['file'] ?? '';
+        $fileName = $message['file_name'] ?? '';
+
+        if($filePath !== ''){
+            $filePath = '/' . ltrim($filePath, '/');
+        }
+
         return [
             'id' => $message['id'] ?? '',
             'sender' => $message['sender'] ?? '',
             'text' => $message['text'] ?? '',
             'image' => $image,
             'audio' => $audio,
+            'file' => $filePath,
+            'file_name' => $fileName,
+            'file_mime' => $message['file_mime'] ?? '',
             'date' => $display['date'],
             'time' => $display['time'],
             'timestamp' => intval($message['timestamp'] ?? 0),
@@ -271,6 +281,11 @@ if(!function_exists('supportLoad')){
 
         if(!empty($message['image'])){
             return '📷 تصویر';
+        }
+
+        if(!empty($message['file'])){
+            $name = trim((string)($message['file_name'] ?? ''));
+            return $name !== '' ? ('📎 ' . $name) : '📎 فایل';
         }
 
         return 'پیام';
@@ -663,6 +678,166 @@ if(!function_exists('supportLoad')){
             'path' => rtrim($urlPrefix, '/') . '/' . $filename,
             'error' => ''
         ];
+
+    }
+
+    function supportIsAjaxRequest(){
+
+        return isset($_SERVER['HTTP_X_SUPPORT_AJAX'])
+            && $_SERVER['HTTP_X_SUPPORT_AJAX'] === '1';
+
+    }
+
+    function supportAjaxFinish($ok, $errorMsg = ''){
+
+        if(!supportIsAjaxRequest()){
+            return false;
+        }
+
+        header('Content-Type: application/json; charset=UTF-8');
+        http_response_code($ok ? 200 : 400);
+        echo json_encode([
+            'ok' => (bool)$ok,
+            'error' => (string)$errorMsg
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+
+    }
+
+    function supportSanitizeOriginalFilename($name){
+
+        $name = basename((string)$name);
+        $name = preg_replace('/[^\p{L}\p{N}\.\-_\s]/u', '', $name) ?? '';
+        $name = trim(preg_replace('/\s+/u', ' ', $name) ?? '');
+
+        if($name === '' || $name === '.' || $name === '..'){
+            return 'file';
+        }
+
+        return mb_substr($name, 0, 180);
+
+    }
+
+    function supportHandleFileUpload($fileInput, $uploadDir, $urlPrefix){
+
+        if(!is_array($fileInput) || !isset($fileInput['error'])){
+            return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => ''];
+        }
+
+        if(intval($fileInput['error']) === UPLOAD_ERR_NO_FILE || intval($fileInput['size'] ?? 0) <= 0){
+            return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => ''];
+        }
+
+        if(intval($fileInput['error']) !== UPLOAD_ERR_OK){
+            return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => 'آپلود فایل ناموفق بود (خطای سرور)'];
+        }
+
+        $maxBytes = 15 * 1024 * 1024;
+        $phpMax = supportParseIniBytes(ini_get('upload_max_filesize'));
+
+        if($phpMax > 0 && $phpMax < $maxBytes){
+            $maxBytes = $phpMax;
+        }
+
+        if(intval($fileInput['size']) > $maxBytes){
+            return [
+                'ok' => false,
+                'path' => '',
+                'name' => '',
+                'mime' => '',
+                'error' => 'حجم فایل نباید بیشتر از ' . round($maxBytes / 1024 / 1024, 1) . 'MB باشد'
+            ];
+        }
+
+        $tmp = (string)($fileInput['tmp_name'] ?? '');
+
+        if($tmp === '' || !is_uploaded_file($tmp)){
+            return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => 'فایل معتبر نیست'];
+        }
+
+        $originalName = supportSanitizeOriginalFilename($fileInput['name'] ?? 'file');
+        $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+
+        $allowed = [
+            'pdf' => ['application/pdf'],
+            'zip' => ['application/zip', 'application/x-zip-compressed', 'multipart/x-zip'],
+            'txt' => ['text/plain'],
+            'doc' => ['application/msword'],
+            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+            'xls' => ['application/vnd.ms-excel'],
+            'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        ];
+
+        if($ext === '' || !isset($allowed[$ext])){
+            return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => 'نوع فایل مجاز نیست'];
+        }
+
+        $mime = '';
+
+        if(function_exists('finfo_open')){
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if($finfo){
+                $mime = strtolower((string)finfo_file($finfo, $tmp));
+                finfo_close($finfo);
+            }
+        }
+
+        if($mime === '' && function_exists('mime_content_type')){
+            $mime = strtolower((string)mime_content_type($tmp));
+        }
+
+        $allowedMimes = $allowed[$ext];
+        $mimeOk = ($mime === '') || in_array($mime, $allowedMimes, true);
+
+        if(!$mimeOk){
+            return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => 'نوع MIME فایل با پسوند هم‌خوانی ندارد'];
+        }
+
+        if(!is_dir($uploadDir)){
+            if(!@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)){
+                return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => 'پوشه آپلود قابل ایجاد نیست'];
+            }
+        }
+
+        if(!is_writable($uploadDir)){
+            @chmod($uploadDir, 0755);
+            if(!is_writable($uploadDir)){
+                return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => 'پوشه آپلود قابل نوشتن نیست'];
+            }
+        }
+
+        $stored = time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $savePath = rtrim($uploadDir, '/') . '/' . $stored;
+
+        if(!move_uploaded_file($tmp, $savePath)){
+            return ['ok' => false, 'path' => '', 'name' => '', 'mime' => '', 'error' => 'ذخیره فایل روی سرور ناموفق بود'];
+        }
+
+        return [
+            'ok' => true,
+            'path' => rtrim($urlPrefix, '/') . '/' . $stored,
+            'name' => $originalName,
+            'mime' => $mime !== '' ? $mime : $allowedMimes[0],
+            'error' => ''
+        ];
+
+    }
+
+    function supportRenderFileAttachmentHtml($filePath, $fileName){
+
+        $filePath = trim((string)$filePath);
+        $fileName = trim((string)$fileName);
+
+        if($filePath === ''){
+            return '';
+        }
+
+        $href = htmlspecialchars('/' . ltrim($filePath, '/'), ENT_QUOTES, 'UTF-8');
+        $label = htmlspecialchars($fileName !== '' ? $fileName : 'دانلود فایل', ENT_QUOTES, 'UTF-8');
+
+        return '<a class="msgFileLink" href="' . $href . '" download="' . $label . '" target="_blank" rel="noopener">'
+            . '<span class="msgFileLinkIcon" aria-hidden="true">📎</span>'
+            . '<span class="msgFileLinkName">' . $label . '</span></a>';
 
     }
 
@@ -1175,6 +1350,8 @@ if(!function_exists('supportLoad')){
 
         $image = $m['image'] ?? '';
         $audio = $m['audio'] ?? '';
+        $filePath = $m['file'] ?? '';
+        $fileName = $m['file_name'] ?? '';
 
         if($image !== ''){
             $image = '/' . ltrim($image, '/');
@@ -1182,6 +1359,10 @@ if(!function_exists('supportLoad')){
 
         if($audio !== ''){
             $audio = '/' . ltrim($audio, '/');
+        }
+
+        if($filePath !== ''){
+            $filePath = '/' . ltrim($filePath, '/');
         }
 
         $display = supportMessageDisplayTime($m);
@@ -1227,6 +1408,10 @@ if(!function_exists('supportLoad')){
 
             <?php if($audio !== ''){
                 echo supportRenderVoicePlayerHtml($audio);
+            } ?>
+
+            <?php if($filePath !== ''){
+                echo supportRenderFileAttachmentHtml($filePath, $fileName);
             } ?>
 
             <?php echo supportRenderMessageMetaHtml($m, $options); ?>
@@ -1331,6 +1516,7 @@ if(!function_exists('supportLoad')){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';
+                supportAjaxFinish(false, $error);
             }
             else{
                 $id = $_POST['edit_id'] ?? '';
@@ -1355,7 +1541,12 @@ if(!function_exists('supportLoad')){
                 }
 
                 supportSave($file, $data);
+                supportAjaxFinish(true);
                 $redirect = supportAdminUrl($user, $embedded);
+            }
+
+            if($error !== null){
+                supportAjaxFinish(false, $error);
             }
 
         }
@@ -1374,6 +1565,7 @@ if(!function_exists('supportLoad')){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';
+                supportAjaxFinish(false, $error);
             }
             else{
                 $user = supportResolveTicketUsername($data, $_POST['user'] ?? '');
@@ -1389,8 +1581,14 @@ if(!function_exists('supportLoad')){
                     $uploadDir,
                     '/uploads/support'
                 );
+                $fileUpload = supportHandleFileUpload(
+                    $_FILES['file'] ?? [],
+                    $uploadDir,
+                    '/uploads/support'
+                );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
                 $audio = !empty($audioUpload['ok']) ? ($audioUpload['path'] ?? '') : '';
+                $filePath = !empty($fileUpload['ok']) ? ($fileUpload['path'] ?? '') : '';
 
                 if($user === ''){
                     $error = 'کاربر مقصد مشخص نیست';
@@ -1401,8 +1599,11 @@ if(!function_exists('supportLoad')){
                 elseif($audio === '' && !empty($audioUpload['error'])){
                     $error = $audioUpload['error'];
                 }
-                elseif($text === '' && $image === '' && $audio === ''){
-                    $error = 'متن، تصویر یا پیام صوتی وارد کنید';
+                elseif($filePath === '' && !empty($fileUpload['error'])){
+                    $error = $fileUpload['error'];
+                }
+                elseif($text === '' && $image === '' && $audio === '' && $filePath === ''){
+                    $error = 'متن، تصویر، فایل یا پیام صوتی وارد کنید';
                 }
                 else{
                     $ticketIndex = supportEnsureTicket($data, $user);
@@ -1431,6 +1632,12 @@ if(!function_exists('supportLoad')){
                             $row['audio'] = $audio;
                         }
 
+                        if($filePath !== ''){
+                            $row['file'] = $filePath;
+                            $row['file_name'] = $fileUpload['name'] ?? '';
+                            $row['file_mime'] = $fileUpload['mime'] ?? '';
+                        }
+
                         if($replyTo){
                             $row['reply_to'] = $replyTo;
                         }
@@ -1448,7 +1655,12 @@ if(!function_exists('supportLoad')){
                         $error = 'گفتگوی کاربر پیدا نشد';
                     }
 
+                    if($error !== null){
+                        supportAjaxFinish(false, $error);
+                    }
+
                     if($error === null){
+                        supportAjaxFinish(true);
                         $redirect = supportAdminUrl($user, $embedded);
                     }
                 }
@@ -1555,9 +1767,14 @@ if(!function_exists('supportLoad')){
 
                 }
 
+                supportAjaxFinish(true);
                 header('Location: support.php');
                 exit;
 
+            }
+
+            if($error !== null){
+                supportAjaxFinish(false, $error);
             }
 
         }
@@ -1573,6 +1790,7 @@ if(!function_exists('supportLoad')){
 
             if(!supportCsrfVerify($_POST['csrf'] ?? '')){
                 $error = 'درخواست نامعتبر است';
+                supportAjaxFinish(false, $error);
             }
             else{
                 $text = trim($_POST['message'] ?? '');
@@ -1587,8 +1805,14 @@ if(!function_exists('supportLoad')){
                     $uploadDir,
                     '/uploads/support'
                 );
+                $fileUpload = supportHandleFileUpload(
+                    $_FILES['file'] ?? [],
+                    $uploadDir,
+                    '/uploads/support'
+                );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
                 $audio = !empty($audioUpload['ok']) ? ($audioUpload['path'] ?? '') : '';
+                $filePath = !empty($fileUpload['ok']) ? ($fileUpload['path'] ?? '') : '';
 
                 if($image === '' && !empty($upload['error'])){
                     $error = $upload['error'];
@@ -1596,8 +1820,11 @@ if(!function_exists('supportLoad')){
                 elseif($audio === '' && !empty($audioUpload['error'])){
                     $error = $audioUpload['error'];
                 }
-                elseif($text === '' && $image === '' && $audio === ''){
-                    $error = 'متن، تصویر یا پیام صوتی وارد کنید';
+                elseif($filePath === '' && !empty($fileUpload['error'])){
+                    $error = $fileUpload['error'];
+                }
+                elseif($text === '' && $image === '' && $audio === '' && $filePath === ''){
+                    $error = 'متن، تصویر، فایل یا پیام صوتی وارد کنید';
                 }
                 else{
                     $meta = supportMessageMeta();
@@ -1616,6 +1843,12 @@ if(!function_exists('supportLoad')){
 
                     if($audio !== ''){
                         $newmsg['audio'] = $audio;
+                    }
+
+                    if($filePath !== ''){
+                        $newmsg['file'] = $filePath;
+                        $newmsg['file_name'] = $fileUpload['name'] ?? '';
+                        $newmsg['file_mime'] = $fileUpload['mime'] ?? '';
                     }
 
                     if($replyTo){
@@ -1639,8 +1872,13 @@ if(!function_exists('supportLoad')){
 
                     supportSave($file, $data);
                     supportNotifyTelegramAdmins($username, $newmsg);
+                    supportAjaxFinish(true);
                     header('Location: support.php');
                     exit;
+                }
+
+                if($error !== null){
+                    supportAjaxFinish(false, $error);
                 }
 
             }
