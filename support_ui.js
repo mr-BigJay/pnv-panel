@@ -176,6 +176,10 @@
 
     function ensureOverlay(){
         let root = document.getElementById('supportUiOverlay');
+        if(root && !document.getElementById('supportFileComposerMeta')){
+            root.remove();
+            root = null;
+        }
         if(root){ return root; }
         root = document.createElement('div');
         root.id = 'supportUiOverlay';
@@ -185,51 +189,67 @@
             '<div class="supportContextMenu" id="supportContextMenu" role="menu"></div>' +
             '</div>' +
             '<div class="supportCopyToast" id="supportCopyToast" hidden aria-live="polite"></div>' +
-            '<div class="supportMediaComposer" id="supportMediaComposer" hidden>' +
-            '<div class="supportMediaStage"><img id="supportMediaImg" alt=""></div>' +
-            '<div class="supportMediaFooter">' +
-            '<input type="text" class="supportMediaCaption" id="supportMediaCaption" placeholder="نوشتن کپشن..." maxlength="2000" enterkeyhint="send">' +
-            '<div class="supportMediaActions">' +
-            '<button type="button" class="supportMediaBtn" id="supportMediaBack" aria-label="بازگشت">' +
-            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>' +
-            '</button>' +
-            '<button type="button" class="supportMediaBtn" id="supportMediaCrop" aria-label="برش">' +
-            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">' +
-            '<path d="M6 2v4H2"/><path d="M18 22v-4h4"/><path d="M6 6h12v12H6z"/><path d="M2 6h4"/><path d="M18 18h4"/></svg>' +
-            '</button>' +
-            '<button type="button" class="supportMediaBtn" id="supportMediaRotate" aria-label="چرخش">' +
-            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">' +
-            '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>' +
-            '</button>' +
-            '<button type="button" class="supportMediaBtn supportMediaBtn--send" id="supportMediaSend" aria-label="ارسال">' +
-            '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>' +
-            '</button>' +
+            '<div class="tgMediaEditor supportMediaComposer" id="supportMediaComposer" hidden>' +
+            '<header class="tgMediaEditorTop">' +
+            '<button type="button" class="tgIconCircle" id="supportMediaBack" aria-label="بازگشت">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>' +
+            '<div class="tgMediaEditorTools">' +
+            '<button type="button" class="tgIconCircle" id="supportMediaCrop" aria-label="برش">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">' +
+            '<path d="M6 2v4H2"/><path d="M18 22v-4h4"/><path d="M6 6h12v12H6z"/></svg></button>' +
+            '<button type="button" class="tgIconCircle" id="supportMediaRotate" aria-label="چرخش">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">' +
+            '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>' +
+            '</div></header>' +
+            '<div class="tgMediaEditorStage supportMediaStage"><img id="supportMediaImg" alt=""></div>' +
+            '<footer class="tgMediaEditorFooter supportMediaFooter">' +
+            '<div class="tgMediaEditorCaptionRow">' +
+            '<input type="text" class="tgMediaEditorCaption supportMediaCaption" id="supportMediaCaption" dir="rtl" placeholder="افزودن کپشن..." maxlength="2000" enterkeyhint="send">' +
+            '<button type="button" class="tgMediaEditorSend supportMediaBtn supportMediaBtn--send" id="supportMediaSend" aria-label="ارسال">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>' +
+            '</div></footer></div>' +
+            '<div class="tgAttachSheet supportAttachSheet" id="supportAttachSheet" hidden>' +
+            '<div class="tgAttachSheetBackdrop supportAttachSheetBackdrop" data-close-attach></div>' +
+            '<div class="tgAttachSheetPanel supportAttachSheetCard" role="menu">' +
+            '<div class="tgAttachSheetHandle" aria-hidden="true"></div>' +
+            '<div class="tgAttachSheetGrid">' +
+            '<button type="button" class="tgAttachSheetOption supportAttachSheetItem" data-attach="gallery" role="menuitem">' +
+            '<span class="tgAttachSheetOptionIcon supportAttachSheetIcon tgAttachSheetOptionIcon--gallery" aria-hidden="true">' +
+            '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">' +
+            '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.6"/><path d="M21 17l-5.5-5.5L9 18"/></svg></span>' +
+            '<span class="tgAttachSheetOptionLabel">گالری</span></button>' +
+            '<button type="button" class="tgAttachSheetOption supportAttachSheetItem" data-attach="file" role="menuitem">' +
+            '<span class="tgAttachSheetOptionIcon supportAttachSheetIcon tgAttachSheetOptionIcon--file" aria-hidden="true">' +
+            '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">' +
+            '<path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>' +
+            '<span class="tgAttachSheetOptionLabel">فایل</span></button>' +
             '</div></div></div>' +
-            '<div class="supportAttachSheet" id="supportAttachSheet" hidden>' +
-            '<div class="supportAttachSheetBackdrop" data-close-attach></div>' +
-            '<div class="supportAttachSheetCard" role="menu">' +
-            '<button type="button" class="supportAttachSheetItem" data-attach="gallery" role="menuitem">' +
-            '<span class="supportAttachSheetIcon" aria-hidden="true">🖼</span><span>گالری</span></button>' +
-            '<button type="button" class="supportAttachSheetItem" data-attach="file" role="menuitem">' +
-            '<span class="supportAttachSheetIcon" aria-hidden="true">📁</span><span>فایل</span></button>' +
-            '</div></div>' +
-            '<div class="supportFileComposer" id="supportFileComposer" hidden>' +
-            '<div class="supportFileComposerCard">' +
-            '<div class="supportFileComposerTitle">ارسال فایل</div>' +
-            '<div class="supportFileComposerName" id="supportFileComposerName"></div>' +
-            '<input type="text" class="supportFileComposerCaption" id="supportFileComposerCaption" placeholder="نوشتن کپشن..." maxlength="2000">' +
-            '<div class="supportFileComposerActions">' +
-            '<button type="button" class="supportFileComposerBtn ghost" id="supportFileComposerCancel">انصراف</button>' +
-            '<button type="button" class="supportFileComposerBtn send" id="supportFileComposerSend">ارسال</button>' +
-            '</div></div></div>' +
-            '<div class="supportCrop" id="supportCropModal" hidden>' +
-            '<div class="supportCropCard">' +
-            '<div class="supportCropTitle">برش تصویر</div>' +
-            '<div class="supportCropStage"><canvas id="supportCropCanvas"></canvas></div>' +
-            '<div class="supportCropActions">' +
-            '<button type="button" class="supportCropBtn ghost" id="supportCropCancel">انصراف</button>' +
-            '<button type="button" class="supportCropBtn" id="supportCropOk">تایید برش</button>' +
-            '</div></div></div>';
+            '<div class="tgFileSend supportFileComposer" id="supportFileComposer" hidden>' +
+            '<header class="tgMediaEditorTop">' +
+            '<button type="button" class="tgIconCircle" id="supportFileComposerCancel" aria-label="بازگشت">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>' +
+            '</header>' +
+            '<div class="tgFileSendBody">' +
+            '<div class="tgFileSendIconWrap" aria-hidden="true">' +
+            '<svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6">' +
+            '<path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>' +
+            '<div class="tgFileSendName supportFileComposerName" id="supportFileComposerName"></div>' +
+            '<div class="tgFileSendMeta" id="supportFileComposerMeta"></div>' +
+            '</div>' +
+            '<footer class="tgMediaEditorFooter">' +
+            '<div class="tgMediaEditorCaptionRow">' +
+            '<input type="text" class="tgMediaEditorCaption supportFileComposerCaption" id="supportFileComposerCaption" dir="rtl" placeholder="افزودن کپشن..." maxlength="2000" enterkeyhint="send">' +
+            '<button type="button" class="tgMediaEditorSend supportFileComposerBtn send" id="supportFileComposerSend" aria-label="ارسال">' +
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>' +
+            '</div></footer></div>' +
+            '<div class="tgCropScreen supportCrop" id="supportCropModal" hidden>' +
+            '<header class="tgCropTop">' +
+            '<button type="button" class="tgCropTopBtn supportCropBtn ghost" id="supportCropCancel">انصراف</button>' +
+            '<span class="tgCropTopTitle">برش</span>' +
+            '<button type="button" class="tgCropTopBtn supportCropBtn" id="supportCropOk">تمام</button>' +
+            '</header>' +
+            '<div class="tgCropStage supportCropStage"><canvas id="supportCropCanvas"></canvas></div>' +
+            '</div>';
         document.body.appendChild(root);
         return root;
     }
@@ -256,6 +276,7 @@
         let sourceImg = null;
         let crop = {x:0,y:0,w:0,h:0};
         let drag = null;
+        let cropDisplayScale = 1;
         let pendingBlob = null;
         let pendingName = 'support-image.jpg';
         let pendingUrl = '';
@@ -271,6 +292,14 @@
         const fileComposerCaption = document.getElementById('supportFileComposerCaption');
         const fileComposerCancel = document.getElementById('supportFileComposerCancel');
         const fileComposerSend = document.getElementById('supportFileComposerSend');
+        const fileComposerMeta = document.getElementById('supportFileComposerMeta');
+
+        function formatFileSize(bytes){
+            const n = Number(bytes) || 0;
+            if(n < 1024){ return n + ' B'; }
+            if(n < 1024 * 1024){ return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB'; }
+            return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        }
 
         let galleryPicker = form.querySelector('input[data-pnv-gallery-picker]');
         if(!galleryPicker){
@@ -339,16 +368,26 @@
             pendingAttachmentFile = null;
             if(fileComposerCaption){ fileComposerCaption.value = ''; }
             if(fileComposerName){ fileComposerName.textContent = ''; }
+            if(fileComposerMeta){ fileComposerMeta.textContent = ''; }
             try{ filePicker.value = ''; }catch(err){}
+            if(mediaComposer && mediaComposer.hidden && (cropModal && cropModal.hidden)){
+                document.body.classList.remove('supportMediaOpen');
+            }
         }
 
         function openFileComposer(file){
             pendingAttachmentFile = file;
             if(fileComposerName){ fileComposerName.textContent = file.name || 'فایل'; }
+            if(fileComposerMeta){
+                const ext = (file.name || '').split('.').pop();
+                const typeLabel = ext ? ext.toUpperCase() : 'FILE';
+                fileComposerMeta.textContent = typeLabel + ' · ' + formatFileSize(file.size);
+            }
             if(fileComposerCaption){
                 fileComposerCaption.value = (mainTextarea && mainTextarea.value) ? mainTextarea.value : '';
             }
             if(fileComposer){ fileComposer.hidden = false; }
+            document.body.classList.add('supportMediaOpen');
         }
 
         function setOriginalSource(file){
@@ -442,15 +481,28 @@
             }
         }
 
+        function drawCropHandles(){
+            const s = 8;
+            const corners = [
+                [crop.x, crop.y],
+                [crop.x + crop.w - s, crop.y],
+                [crop.x, crop.y + crop.h - s],
+                [crop.x + crop.w - s, crop.y + crop.h - s]
+            ];
+            ctx.fillStyle = '#ffffff';
+            corners.forEach(function(pt){
+                ctx.fillRect(pt[0], pt[1], s, s);
+            });
+        }
+
         function draw(){
             if(!sourceImg){ return; }
-            const maxW = Math.min(360, window.innerWidth - 32);
-            const scale = Math.min(1, maxW / sourceImg.width);
+            const scale = cropDisplayScale;
             canvas.width = Math.round(sourceImg.width * scale);
             canvas.height = Math.round(sourceImg.height * scale);
             ctx.clearRect(0,0,canvas.width,canvas.height);
             ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(0,0,0,.45)';
+            ctx.fillStyle = 'rgba(0,0,0,.62)';
             ctx.fillRect(0,0,canvas.width,canvas.height);
             ctx.clearRect(crop.x, crop.y, crop.w, crop.h);
             ctx.drawImage(
@@ -458,9 +510,10 @@
                 crop.x / scale, crop.y / scale, crop.w / scale, crop.h / scale,
                 crop.x, crop.y, crop.w, crop.h
             );
-            ctx.strokeStyle = '#22c55e';
+            ctx.strokeStyle = '#3390ec';
             ctx.lineWidth = 2;
-            ctx.strokeRect(crop.x, crop.y, crop.w, crop.h);
+            ctx.strokeRect(crop.x + 0.5, crop.y + 0.5, crop.w - 1, crop.h - 1);
+            drawCropHandles();
         }
 
         function openCropEditor(){
@@ -471,8 +524,10 @@
                 img.onload = function(){
                     sourceImg = img;
                     const side = Math.min(img.width, img.height);
-                    const maxW = Math.min(360, window.innerWidth - 32);
-                    const scale = Math.min(1, maxW / img.width);
+                    const maxW = window.innerWidth - 24;
+                    const maxH = window.innerHeight - 120;
+                    const scale = Math.min(1, maxW / img.width, maxH / img.height);
+                    cropDisplayScale = scale;
                     const cw = Math.round(img.width * scale);
                     const ch = Math.round(img.height * scale);
                     const sw = Math.round(side * scale);
@@ -528,8 +583,7 @@
 
         document.getElementById('supportCropOk').onclick = function(){
             if(!sourceImg){ return; }
-            const maxW = Math.min(360, window.innerWidth - 32);
-            const scale = Math.min(1, maxW / sourceImg.width);
+            const scale = cropDisplayScale || 1;
             const out = document.createElement('canvas');
             const size = Math.max(32, Math.round(crop.w / scale));
             out.width = size;
