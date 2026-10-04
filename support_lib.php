@@ -762,10 +762,26 @@ if(!function_exists('supportLoad')){
             'pdf' => ['application/pdf'],
             'zip' => ['application/zip', 'application/x-zip-compressed', 'multipart/x-zip'],
             'txt' => ['text/plain'],
-            'doc' => ['application/msword'],
-            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-            'xls' => ['application/vnd.ms-excel'],
-            'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+            'doc' => [
+                'application/msword',
+                'application/x-ole-storage',
+                'application/vnd.ms-office',
+            ],
+            'docx' => [
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/zip',
+                'application/x-zip-compressed',
+            ],
+            'xls' => [
+                'application/vnd.ms-excel',
+                'application/x-ole-storage',
+                'application/vnd.ms-office',
+            ],
+            'xlsx' => [
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/zip',
+                'application/x-zip-compressed',
+            ],
         ];
 
         if($ext === '' || !isset($allowed[$ext])){
