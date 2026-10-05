@@ -189,25 +189,6 @@
             '<div class="supportContextMenu" id="supportContextMenu" role="menu"></div>' +
             '</div>' +
             '<div class="supportCopyToast" id="supportCopyToast" hidden aria-live="polite"></div>' +
-            '<div class="tgMediaEditor supportMediaComposer" id="supportMediaComposer" hidden>' +
-            '<header class="tgMediaEditorTop">' +
-            '<button type="button" class="tgIconCircle" id="supportMediaBack" aria-label="بازگشت">' +
-            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>' +
-            '<div class="tgMediaEditorTools">' +
-            '<button type="button" class="tgIconCircle" id="supportMediaCrop" aria-label="برش">' +
-            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">' +
-            '<path d="M6 2v4H2"/><path d="M18 22v-4h4"/><path d="M6 6h12v12H6z"/></svg></button>' +
-            '<button type="button" class="tgIconCircle" id="supportMediaRotate" aria-label="چرخش">' +
-            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">' +
-            '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>' +
-            '</div></header>' +
-            '<div class="tgMediaEditorStage supportMediaStage"><img id="supportMediaImg" alt=""></div>' +
-            '<footer class="tgMediaEditorFooter supportMediaFooter">' +
-            '<div class="tgMediaEditorCaptionRow">' +
-            '<input type="text" class="tgMediaEditorCaption supportMediaCaption" id="supportMediaCaption" dir="rtl" placeholder="افزودن کپشن..." maxlength="2000" enterkeyhint="send">' +
-            '<button type="button" class="tgMediaEditorSend supportMediaBtn supportMediaBtn--send" id="supportMediaSend" aria-label="ارسال">' +
-            '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>' +
-            '</div></footer></div>' +
             '<div class="tgAttachSheet supportAttachSheet" id="supportAttachSheet" hidden>' +
             '<div class="tgAttachSheetBackdrop supportAttachSheetBackdrop" data-close-attach></div>' +
             '<div class="tgAttachSheetPanel supportAttachSheetCard" role="menu">' +
@@ -241,75 +222,48 @@
             '<input type="text" class="tgMediaEditorCaption supportFileComposerCaption" id="supportFileComposerCaption" dir="rtl" placeholder="افزودن کپشن..." maxlength="2000" enterkeyhint="send">' +
             '<button type="button" class="tgMediaEditorSend supportFileComposerBtn send" id="supportFileComposerSend" aria-label="ارسال">' +
             '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>' +
-            '</div></footer></div>' +
-            '<div class="tgCropScreen supportCrop" id="supportCropModal" hidden>' +
-            '<header class="tgCropTop">' +
-            '<button type="button" class="tgCropTopBtn supportCropBtn ghost" id="supportCropCancel">انصراف</button>' +
-            '<span class="tgCropTopTitle">برش</span>' +
-            '<button type="button" class="tgCropTopBtn supportCropBtn" id="supportCropOk">تمام</button>' +
-            '</header>' +
-            '<div class="tgCropStage supportCropStage"><canvas id="supportCropCanvas"></canvas></div>' +
-            '</div>';
+            '</div></footer></div>';
         document.body.appendChild(root);
         return root;
     }
 
-    function bindImageAttach(form, imageId, attachBtnId){
+    function bindImageAttach(form, imageId, attachBtnId, options){
+        options = options || {};
         if(!form){ return; }
         const input = document.getElementById(imageId);
         if(!input){ return; }
 
         ensureOverlay();
-        const mediaComposer = document.getElementById('supportMediaComposer');
-        const mediaImg = document.getElementById('supportMediaImg');
-        const mediaCaption = document.getElementById('supportMediaCaption');
-        const mediaBack = document.getElementById('supportMediaBack');
-        const mediaCropBtn = document.getElementById('supportMediaCrop');
-        const mediaRotateBtn = document.getElementById('supportMediaRotate');
-        const mediaSend = document.getElementById('supportMediaSend');
         const attachSheet = document.getElementById('supportAttachSheet');
-        const cropModal = document.getElementById('supportCropModal');
-        const canvas = document.getElementById('supportCropCanvas');
-        if(!mediaComposer || !mediaImg || !cropModal || !canvas){ return; }
-
-        const ctx = canvas.getContext('2d');
-        let sourceImg = null;
-        let crop = {x:0,y:0,w:0,h:0};
-        let drag = null;
-        let cropDisplayScale = 1;
-        let pendingBlob = null;
-        let pendingName = 'support-image.jpg';
-        let pendingUrl = '';
-        let submitting = false;
-        let originalBlob = null;
-        let originalObjectUrl = '';
-        let rotationDegrees = 0;
-        let attachSource = 'gallery';
-        let pendingAttachmentFile = null;
-        const mainTextarea = form.querySelector('textarea');
         const fileComposer = document.getElementById('supportFileComposer');
         const fileComposerName = document.getElementById('supportFileComposerName');
         const fileComposerCaption = document.getElementById('supportFileComposerCaption');
         const fileComposerCancel = document.getElementById('supportFileComposerCancel');
         const fileComposerSend = document.getElementById('supportFileComposerSend');
         const fileComposerMeta = document.getElementById('supportFileComposerMeta');
+        const mainTextarea = options.textarea || form.querySelector('textarea');
+
+        let mediaFlow = null;
+        if(global.PNVSupportMedia && typeof global.PNVSupportMedia.bindTelegramMediaComposer === 'function'){
+            mediaFlow = global.PNVSupportMedia.bindTelegramMediaComposer({
+                form: form,
+                imageInputId: imageId,
+                attachBtnId: attachBtnId,
+                textarea: mainTextarea,
+                previewTitle: options.previewTitle || 'پشتیبانی',
+                ajaxPost: supportAjaxPost,
+                focusComposer: focusComposerTextarea
+            });
+        }
+
+        let submitting = false;
+        let pendingAttachmentFile = null;
 
         function formatFileSize(bytes){
             const n = Number(bytes) || 0;
             if(n < 1024){ return n + ' B'; }
             if(n < 1024 * 1024){ return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB'; }
             return (n / (1024 * 1024)).toFixed(1) + ' MB';
-        }
-
-        let galleryPicker = form.querySelector('input[data-pnv-gallery-picker]');
-        if(!galleryPicker){
-            galleryPicker = document.createElement('input');
-            galleryPicker.type = 'file';
-            galleryPicker.accept = 'image/*';
-            galleryPicker.className = 'msgFileInput';
-            galleryPicker.setAttribute('data-pnv-gallery-picker', '1');
-            galleryPicker.hidden = true;
-            form.appendChild(galleryPicker);
         }
 
         let filePicker = form.querySelector('input[data-pnv-file-picker]');
@@ -334,35 +288,6 @@
             }
         }
 
-        function revokeUrl(){
-            if(pendingUrl){
-                try{ URL.revokeObjectURL(pendingUrl); }catch(e){}
-                pendingUrl = '';
-            }
-        }
-
-        function revokeOriginalUrl(){
-            if(originalObjectUrl){
-                try{ URL.revokeObjectURL(originalObjectUrl); }catch(e){}
-                originalObjectUrl = '';
-            }
-        }
-
-        function closeMediaComposer(){
-            mediaComposer.hidden = true;
-            document.body.classList.remove('supportMediaOpen');
-            revokeUrl();
-            revokeOriginalUrl();
-            pendingBlob = null;
-            originalBlob = null;
-            rotationDegrees = 0;
-            pendingName = 'support-image.jpg';
-            sourceImg = null;
-            if(mediaCaption){ mediaCaption.value = ''; }
-            mediaImg.removeAttribute('src');
-            try{ input.value = ''; }catch(e){}
-        }
-
         function closeFileComposer(){
             if(fileComposer){ fileComposer.hidden = true; }
             pendingAttachmentFile = null;
@@ -370,8 +295,9 @@
             if(fileComposerName){ fileComposerName.textContent = ''; }
             if(fileComposerMeta){ fileComposerMeta.textContent = ''; }
             try{ filePicker.value = ''; }catch(err){}
-            if(mediaComposer && mediaComposer.hidden && (cropModal && cropModal.hidden)){
+            if(!mediaFlow || !mediaFlow.isOpen()){
                 document.body.classList.remove('supportMediaOpen');
+                document.body.classList.remove('pnv-media-open');
             }
         }
 
@@ -388,59 +314,6 @@
             }
             if(fileComposer){ fileComposer.hidden = false; }
             document.body.classList.add('supportMediaOpen');
-        }
-
-        function setOriginalSource(file){
-            revokeOriginalUrl();
-            originalBlob = file;
-            pendingName = file.name || 'support-image.jpg';
-            originalObjectUrl = URL.createObjectURL(file);
-            rotationDegrees = 0;
-            renderRotatedPreview();
-        }
-
-        function renderRotatedPreview(){
-            if(!originalBlob || !originalObjectUrl){ return; }
-            const img = new Image();
-            img.onload = function(){
-                const w = img.naturalWidth || img.width;
-                const h = img.naturalHeight || img.height;
-                const swap = rotationDegrees % 180 !== 0;
-                const canvas = document.createElement('canvas');
-                canvas.width = swap ? h : w;
-                canvas.height = swap ? w : h;
-                const ctx = canvas.getContext('2d');
-                ctx.translate(canvas.width / 2, canvas.height / 2);
-                ctx.rotate((rotationDegrees * Math.PI) / 180);
-                ctx.drawImage(img, -w / 2, -h / 2);
-                canvas.toBlob(function(blob){
-                    if(!blob){ return; }
-                    pendingBlob = blob;
-                    assignInputFile(new File([blob], pendingName, {type: 'image/jpeg'}));
-                    revokeUrl();
-                    pendingUrl = URL.createObjectURL(blob);
-                    mediaImg.src = pendingUrl;
-                }, 'image/jpeg', 0.92);
-            };
-            img.src = originalObjectUrl;
-        }
-
-        function openMediaComposer(file){
-            attachSource = 'gallery';
-            if(mediaCropBtn){ mediaCropBtn.hidden = false; }
-            if(mediaRotateBtn){ mediaRotateBtn.hidden = false; }
-            if(mediaCaption){
-                mediaCaption.value = (mainTextarea && mainTextarea.value) ? mainTextarea.value : '';
-            }
-            mediaComposer.hidden = false;
-            document.body.classList.add('supportMediaOpen');
-            setOriginalSource(file);
-        }
-
-        function rotatePendingImage(){
-            if(!originalBlob){ return; }
-            rotationDegrees = (rotationDegrees + 90) % 360;
-            renderRotatedPreview();
         }
 
         function submitFileAttachment(){
@@ -470,220 +343,6 @@
             });
         }
 
-        function assignInputFile(file){
-            try{
-                const dt = new DataTransfer();
-                dt.items.add(file);
-                input.files = dt.files;
-                return !!(input.files && input.files.length);
-            }catch(err){
-                return false;
-            }
-        }
-
-        function drawCropHandles(){
-            const s = 8;
-            const corners = [
-                [crop.x, crop.y],
-                [crop.x + crop.w - s, crop.y],
-                [crop.x, crop.y + crop.h - s],
-                [crop.x + crop.w - s, crop.y + crop.h - s]
-            ];
-            ctx.fillStyle = '#ffffff';
-            corners.forEach(function(pt){
-                ctx.fillRect(pt[0], pt[1], s, s);
-            });
-        }
-
-        function draw(){
-            if(!sourceImg){ return; }
-            const scale = cropDisplayScale;
-            canvas.width = Math.round(sourceImg.width * scale);
-            canvas.height = Math.round(sourceImg.height * scale);
-            ctx.clearRect(0,0,canvas.width,canvas.height);
-            ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(0,0,0,.62)';
-            ctx.fillRect(0,0,canvas.width,canvas.height);
-            ctx.clearRect(crop.x, crop.y, crop.w, crop.h);
-            ctx.drawImage(
-                sourceImg,
-                crop.x / scale, crop.y / scale, crop.w / scale, crop.h / scale,
-                crop.x, crop.y, crop.w, crop.h
-            );
-            ctx.strokeStyle = '#3390ec';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(crop.x + 0.5, crop.y + 0.5, crop.w - 1, crop.h - 1);
-            drawCropHandles();
-        }
-
-        function openCropEditor(){
-            if(!pendingBlob){ return; }
-            const reader = new FileReader();
-            reader.onload = function(){
-                const img = new Image();
-                img.onload = function(){
-                    sourceImg = img;
-                    const side = Math.min(img.width, img.height);
-                    const maxW = window.innerWidth - 24;
-                    const maxH = window.innerHeight - 120;
-                    const scale = Math.min(1, maxW / img.width, maxH / img.height);
-                    cropDisplayScale = scale;
-                    const cw = Math.round(img.width * scale);
-                    const ch = Math.round(img.height * scale);
-                    const sw = Math.round(side * scale);
-                    crop = {
-                        x: Math.round((cw - sw) / 2),
-                        y: Math.round((ch - sw) / 2),
-                        w: sw,
-                        h: sw
-                    };
-                    cropModal.hidden = false;
-                    draw();
-                };
-                img.onerror = function(){
-                    alert('این تصویر قابل برش نیست.');
-                };
-                img.src = reader.result;
-            };
-            reader.readAsDataURL(pendingBlob);
-        }
-
-        function pointerPos(e){
-            const rect = canvas.getBoundingClientRect();
-            const pt = e.touches ? e.touches[0] : e;
-            return {x: pt.clientX - rect.left, y: pt.clientY - rect.top};
-        }
-
-        function onDown(e){
-            e.preventDefault();
-            const p = pointerPos(e);
-            drag = {x: p.x, y: p.y, cx: crop.x, cy: crop.y};
-        }
-        function onMove(e){
-            if(!drag){ return; }
-            e.preventDefault();
-            const p = pointerPos(e);
-            crop.x = Math.max(0, Math.min(canvas.width - crop.w, drag.cx + (p.x - drag.x)));
-            crop.y = Math.max(0, Math.min(canvas.height - crop.h, drag.cy + (p.y - drag.y)));
-            draw();
-        }
-        function onUp(){ drag = null; }
-
-        canvas.addEventListener('mousedown', onDown);
-        canvas.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-        canvas.addEventListener('touchstart', onDown, {passive:false});
-        canvas.addEventListener('touchmove', onMove, {passive:false});
-        canvas.addEventListener('touchend', onUp);
-
-        document.getElementById('supportCropCancel').onclick = function(){
-            cropModal.hidden = true;
-            sourceImg = null;
-        };
-
-        document.getElementById('supportCropOk').onclick = function(){
-            if(!sourceImg){ return; }
-            const scale = cropDisplayScale || 1;
-            const out = document.createElement('canvas');
-            const size = Math.max(32, Math.round(crop.w / scale));
-            out.width = size;
-            out.height = size;
-            out.getContext('2d').drawImage(
-                sourceImg,
-                crop.x / scale, crop.y / scale, crop.w / scale, crop.h / scale,
-                0, 0, size, size
-            );
-            out.toBlob(function(blob){
-                if(!blob){
-                    alert('برش تصویر ناموفق بود');
-                    return;
-                }
-                const file = new File([blob], 'support-crop.jpg', {type: 'image/jpeg'});
-                assignInputFile(file);
-                setOriginalSource(file);
-                cropModal.hidden = true;
-                sourceImg = null;
-            }, 'image/jpeg', 0.88);
-        };
-
-        function submitMedia(){
-            if(submitting || !pendingBlob){ return; }
-            submitting = true;
-            mediaSend.disabled = true;
-
-            const caption = (mediaCaption ? mediaCaption.value : '').trim();
-            const file = (pendingBlob instanceof File)
-                ? pendingBlob
-                : new File([pendingBlob], pendingName, {type: pendingBlob.type || 'image/jpeg'});
-            assignInputFile(file);
-
-            const fd = new FormData(form);
-            fd.set('image', file, pendingName);
-            fd.set('message', caption);
-
-            const action = form.getAttribute('action') || window.location.href;
-            supportAjaxPost(action, fd).then(function(){
-                closeMediaComposer();
-                if(mainTextarea){
-                    mainTextarea.value = '';
-                    mainTextarea.dispatchEvent(new Event('input', {bubbles: true}));
-                }
-                form.dispatchEvent(new CustomEvent('support-composer-sent', {bubbles: true}));
-                window.dispatchEvent(new CustomEvent('support:poll-now'));
-                focusComposerTextarea(mainTextarea);
-            }).catch(function(err){
-                alert(err.message || 'ارسال تصویر ناموفق بود');
-                focusComposerTextarea(mainTextarea);
-            }).finally(function(){
-                submitting = false;
-                mediaSend.disabled = false;
-            });
-        }
-
-        mediaBack.addEventListener('click', function(){
-            if(!cropModal.hidden){
-                cropModal.hidden = true;
-                sourceImg = null;
-                return;
-            }
-            closeMediaComposer();
-        });
-
-        if(mediaCropBtn){
-            mediaCropBtn.addEventListener('click', function(){
-                openCropEditor();
-            });
-        }
-
-        if(mediaRotateBtn){
-            mediaRotateBtn.addEventListener('click', function(){
-                rotatePendingImage();
-            });
-        }
-
-        mediaSend.addEventListener('click', function(){
-            submitMedia();
-        });
-
-        if(mediaCaption){
-            mediaCaption.addEventListener('keydown', function(e){
-                if(e.key === 'Enter'){
-                    e.preventDefault();
-                    submitMedia();
-                }
-            });
-        }
-
-        function handlePickedGalleryImage(file){
-            if(!file){ return; }
-            if(!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name || '')){
-                alert('فقط JPG، PNG یا WebP مجاز است');
-                return;
-            }
-            assignInputFile(file);
-            openMediaComposer(file);
-        }
-
         function handlePickedAttachment(file){
             if(!file){ return; }
             const name = file.name || '';
@@ -709,8 +368,12 @@
                     const mode = btn.getAttribute('data-attach');
                     closeAttachSheet();
                     if(mode === 'gallery'){
-                        try{ galleryPicker.value = ''; }catch(err){}
-                        galleryPicker.click();
+                        if(mediaFlow && typeof mediaFlow.openGallery === 'function'){
+                            mediaFlow.openGallery(true);
+                        }else{
+                            try{ input.value = ''; }catch(err){}
+                            input.click();
+                        }
                         return;
                     }
                     if(mode === 'file'){
@@ -720,11 +383,6 @@
                 });
             });
         }
-
-        galleryPicker.addEventListener('change', function(){
-            const file = galleryPicker.files && galleryPicker.files[0];
-            handlePickedGalleryImage(file);
-        });
 
         filePicker.addEventListener('change', function(){
             const file = filePicker.files && filePicker.files[0];
@@ -760,17 +418,15 @@
             });
         }
 
-        input.addEventListener('change', function(){
-            const file = input.files && input.files[0];
-            handlePickedGalleryImage(file);
-        });
-
-        // Normal text-only submit still works; block if media composer open
         form.addEventListener('submit', function(e){
-            if(!mediaComposer.hidden || (cropModal && !cropModal.hidden)){
+            const mediaOpen = mediaFlow && mediaFlow.isOpen && mediaFlow.isOpen();
+            const fileOpen = fileComposer && !fileComposer.hidden;
+            if(mediaOpen || fileOpen){
                 e.preventDefault();
             }
         });
+
+        return mediaFlow;
     }
 
     function getCsrf(form){
@@ -1197,9 +853,9 @@
             if(form.dataset.pnvVoiceMode === 'recording' || form.dataset.pnvVoiceMode === 'preview'){
                 return;
             }
-            const mediaComposer = document.getElementById('supportMediaComposer');
-            const cropModal = document.getElementById('supportCropModal');
-            if((mediaComposer && !mediaComposer.hidden) || (cropModal && !cropModal.hidden)){
+            const fileComposerEl = document.getElementById('supportFileComposer');
+            if(document.body.classList.contains('pnv-media-open')
+                || (fileComposerEl && !fileComposerEl.hidden)){
                 return;
             }
 

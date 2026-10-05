@@ -149,7 +149,15 @@
     }
 
     if (form) {
-      ui.bindImageAttach(form, cfg.imageInputId, cfg.attachBtnId);
+      var previewTitle =
+        cfg.mediaPreviewTitle ||
+        (cfg.mode === 'admin' && cfg.currentUser
+          ? cfg.currentUser
+          : 'پشتیبانی');
+      ui.bindImageAttach(form, cfg.imageInputId, cfg.attachBtnId, {
+        textarea: textarea,
+        previewTitle: previewTitle
+      });
       ui.bindMessageActions({
         chatEl: messagesEl,
         form: form,

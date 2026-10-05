@@ -129,10 +129,11 @@ $formAction = function_exists('supportAdminFormAction')
     : $baseUrl;
 $adminBase = defined('PNV_ADMIN_BASE') ? rtrim(PNV_ADMIN_BASE, '/') : '/bigjay_controller';
 $dashboardUrl = $adminBase . '/index.php';
-$chatAssetVer = '18';
+$chatAssetVer = '19';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
-$legacyJsHref = '/support_ui.js?v=48';
+$legacyJsHref = '/support_ui.js?v=49';
+$mediaJsHref = $chatAssetBase . 'pnv-support-media.js?v=' . $chatAssetVer;
 $shellJsHref = $chatAssetBase . 'pnv-support-shell.js?v=' . $chatAssetVer;
 $voiceJsHref = $chatAssetBase . 'pnv-support-voice.js?v=' . $chatAssetVer;
 $adapterJsHref = $chatAssetBase . 'pnv-support-adapter.js?v=' . $chatAssetVer;
@@ -355,6 +356,7 @@ if(!$hasMessages){
 <div id="profileHost"></div>
 
 <script src="<?php echo htmlspecialchars($legacyJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($mediaJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($shellJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($voiceJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($adapterJsHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
