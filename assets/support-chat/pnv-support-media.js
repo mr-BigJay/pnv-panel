@@ -1,8 +1,20 @@
 (function (global) {
   'use strict';
 
-  var HISTORY_TOKEN = 'pnvSupportMedia';
   var MIN_CROP = 48;
+
+  function createMediaSessionId() {
+    return String(Date.now()) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function isMediaHistoryState(state, sessionId) {
+    return (
+      !!state &&
+      state.pnvSupportMedia === true &&
+      !!sessionId &&
+      state.session === sessionId
+    );
+  }
 
   function ensureMediaRoot() {
     var root = document.getElementById('pnvSupportMediaRoot');
@@ -103,8 +115,10 @@
 
     var ctx = cropCanvas.getContext('2d');
     var view = null;
-    var historyActive = false;
-    var suppressHistory = false;
+    var mediaOpen = false;
+    var mediaSessionId = null;
+    var sessionHistoryDepth = 0;
+    var finishingSession = false;
     var submitting = false;
 
     var originalBlob = null;
@@ -121,6 +135,7 @@
     var pendingName = 'image.jpg';
 
     var galleryItems = [];
+    var galleryPickerOpenedAt = 0;
 
     var galleryPicker = form.querySelector('input[data-pnv-gallery-picker]');
     if (!galleryPicker) {
@@ -148,22 +163,41 @@
       document.body.classList.toggle('supportMediaOpen', !!open);
     }
 
-    function pushHistory(step) {
-      if (suppressHistory) {
+    function pushMediaHistory(step) {
+      if (!mediaSessionId || finishingSession) {
         return;
       }
-      history.pushState({ pnvSupportMedia: step }, '', window.location.href);
-      historyActive = true;
+      sessionHistoryDepth += 1;
+      history.pushState(
+        {
+          pnvSupportMedia: true,
+          session: mediaSessionId,
+          step: step
+        },
+        '',
+        window.location.href
+      );
     }
 
-    function clearHistoryGuard() {
-      if (!historyActive) {
+    function beginMediaSession() {
+      mediaSessionId = createMediaSessionId();
+      sessionHistoryDepth = 0;
+      mediaOpen = true;
+    }
+
+    function renderMediaStep(step) {
+      if (step === 'gallery') {
+        showView('gallery');
         return;
       }
-      suppressHistory = true;
-      history.back();
-      suppressHistory = false;
-      historyActive = false;
+      if (step === 'edit') {
+        showView('edit');
+        drawEditCanvas();
+        return;
+      }
+      if (step === 'preview') {
+        showView('preview');
+      }
     }
 
     function hideError() {
@@ -213,13 +247,8 @@
       }
     }
 
-    function resetAll() {
-      view = null;
+    function resetMediaData() {
       hideError();
-      galleryEl.hidden = true;
-      editorEl.hidden = true;
-      previewEl.hidden = true;
-      setBodyOpen(false);
       clearGalleryItems();
       revokeOriginalUrl();
       revokeFinalUrl();
@@ -229,6 +258,7 @@
       editSourceImage = null;
       drag = null;
       resizeMode = null;
+      cropRect = { x: 0, y: 0, w: 0, h: 0 };
       if (captionEl) {
         captionEl.value = '';
       }
@@ -241,11 +271,49 @@
       try {
         galleryPicker.value = '';
       } catch (e2) {}
-      clearHistoryGuard();
+    }
+
+    function closeMediaUi() {
+      view = null;
+      galleryEl.hidden = true;
+      editorEl.hidden = true;
+      previewEl.hidden = true;
+      setBodyOpen(false);
+    }
+
+    function closeMediaWithoutHistoryMutation() {
+      resetMediaData();
+      closeMediaUi();
+      mediaOpen = false;
+      mediaSessionId = null;
+      sessionHistoryDepth = 0;
+      finishingSession = false;
+    }
+
+    function finishMediaSession() {
+      var depth = sessionHistoryDepth;
+      resetMediaData();
+      closeMediaUi();
+      mediaOpen = false;
+      var endedSession = mediaSessionId;
+      mediaSessionId = null;
+      sessionHistoryDepth = 0;
+      if (depth > 0) {
+        finishingSession = true;
+        history.go(-depth);
+      }
+      if (typeof global.__pnvMediaHistoryDebug === 'function') {
+        global.__pnvMediaHistoryDebug('finish', { depth: depth, session: endedSession });
+      }
+    }
+
+    function resetAll() {
+      finishMediaSession();
     }
 
     function showView(next) {
       view = next;
+      mediaOpen = !!next;
       galleryEl.hidden = next !== 'gallery';
       editorEl.hidden = next !== 'edit';
       previewEl.hidden = next !== 'preview';
@@ -533,29 +601,34 @@
       rotationDegrees = 0;
       finalBlob = null;
       showView('edit');
-      pushHistory('edit');
+      pushMediaHistory('edit');
       refreshEditSource();
     }
 
     function openGallery(fromAttach) {
       hideError();
+      beginMediaSession();
       showView('gallery');
-      if (fromAttach !== false) {
-        pushHistory('gallery');
-      }
+      pushMediaHistory('gallery');
       if (galleryItems.length === 0) {
         try {
           galleryPicker.value = '';
         } catch (e) {}
-        try {
-          if (typeof galleryPicker.showPicker === 'function') {
-            galleryPicker.showPicker();
-          } else {
+        setTimeout(function () {
+          if (view !== 'gallery' || galleryItems.length > 0) {
+            return;
+          }
+          galleryPickerOpenedAt = Date.now();
+          try {
+            if (typeof galleryPicker.showPicker === 'function') {
+              galleryPicker.showPicker();
+            } else {
+              galleryPicker.click();
+            }
+          } catch (e2) {
             galleryPicker.click();
           }
-        } catch (e2) {
-          galleryPicker.click();
-        }
+        }, 0);
       }
     }
 
@@ -614,79 +687,51 @@
             captionEl.value = mainTextarea.value || '';
           }
           showView('preview');
-          pushHistory('preview');
+          pushMediaHistory('preview');
         })
         .catch(function () {
           alert('پردازش تصویر ناموفق بود');
         });
     }
 
-    function goEditFromPreview() {
-      hideError();
-      showView('edit');
-      drawEditCanvas();
-    }
-
-    function historyBackStep() {
-      if (view === 'preview') {
-        suppressHistory = true;
-        goEditFromPreview();
-        suppressHistory = false;
-        return;
-      }
-      if (view === 'edit') {
-        suppressHistory = true;
-        showView('gallery');
-        suppressHistory = false;
-        return;
-      }
-      if (view === 'gallery') {
-        resetAll();
-      }
-    }
-
     window.addEventListener('popstate', function (e) {
-      if (suppressHistory) {
+      if (finishingSession) {
+        finishingSession = false;
+        sessionHistoryDepth = 0;
+        if (typeof global.__pnvMediaHistoryDebug === 'function') {
+          global.__pnvMediaHistoryDebug('popstate-finish', { state: e.state });
+        }
         return;
       }
-      if (!view) {
+
+      var state = e.state;
+      if (isMediaHistoryState(state, mediaSessionId)) {
+        sessionHistoryDepth = Math.max(0, sessionHistoryDepth - 1);
+        mediaOpen = true;
+        renderMediaStep(state.step);
+        if (typeof global.__pnvMediaHistoryDebug === 'function') {
+          global.__pnvMediaHistoryDebug('popstate-step', {
+            step: state.step,
+            depth: sessionHistoryDepth
+          });
+        }
         return;
       }
-      if (e.state && e.state.pnvSupportMedia) {
-        var step = e.state.pnvSupportMedia;
-        if (step === 'gallery') {
-          showView('gallery');
-          return;
+
+      if (mediaOpen) {
+        closeMediaWithoutHistoryMutation();
+        if (typeof global.__pnvMediaHistoryDebug === 'function') {
+          global.__pnvMediaHistoryDebug('popstate-chat', { state: state });
         }
-        if (step === 'edit') {
-          goEditFromPreview();
-          return;
-        }
-        if (step === 'preview') {
-          showView('preview');
-          return;
-        }
-      }
-      historyBackStep();
-      if (!e.state || !e.state.pnvSupportMedia) {
-        historyActive = false;
       }
     });
 
     galleryBack.addEventListener('click', function () {
-      if (historyActive) {
-        suppressHistory = false;
-        history.back();
-      } else {
-        resetAll();
-      }
+      history.back();
     });
 
     editCancel.addEventListener('click', function () {
-      resetAll();
-      try {
-        history.replaceState(null, '', window.location.href);
-      } catch (e) {}
+      finishMediaSession();
     });
 
     editRotate.addEventListener('click', function () {
@@ -703,11 +748,7 @@
     });
 
     previewEdit.addEventListener('click', function () {
-      if (historyActive) {
-        history.back();
-      } else {
-        goEditFromPreview();
-      }
+      history.back();
     });
 
     function submitMedia() {
@@ -728,7 +769,7 @@
       var action = form.getAttribute('action') || window.location.href;
       ajaxPost(action, fd)
         .then(function () {
-          resetAll();
+          finishMediaSession();
           if (mainTextarea) {
             mainTextarea.value = '';
             mainTextarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -761,12 +802,28 @@
       });
     }
 
+    function onGalleryPickerDismissedWithoutSelection() {
+      if (view !== 'gallery' || galleryItems.length > 0) {
+        return;
+      }
+      if (galleryPickerOpenedAt && Date.now() - galleryPickerOpenedAt < 450) {
+        return;
+      }
+      finishMediaSession();
+    }
+
     galleryPicker.addEventListener('change', function () {
       var files = galleryPicker.files;
       if (!files || !files.length) {
+        onGalleryPickerDismissedWithoutSelection();
         return;
       }
+      galleryPickerOpenedAt = 0;
       addGalleryFiles(files);
+    });
+
+    galleryPicker.addEventListener('cancel', function () {
+      onGalleryPickerDismissedWithoutSelection();
     });
 
     form.addEventListener('submit', function (e) {
@@ -777,10 +834,14 @@
 
     input.addEventListener('change', function () {
       var file = input.files && input.files[0];
-      if (file) {
-        clearGalleryItems();
-        addGalleryFiles([file]);
+      if (!file) {
+        return;
       }
+      beginMediaSession();
+      showView('gallery');
+      pushMediaHistory('gallery');
+      clearGalleryItems();
+      addGalleryFiles([file]);
     });
 
     return {
@@ -788,7 +849,18 @@
       isOpen: function () {
         return !!view;
       },
-      reset: resetAll
+      reset: finishMediaSession,
+      _test: {
+        getView: function () {
+          return view;
+        },
+        getSessionHistoryDepth: function () {
+          return sessionHistoryDepth;
+        },
+        getMediaSessionId: function () {
+          return mediaSessionId;
+        }
+      }
     };
   }
 

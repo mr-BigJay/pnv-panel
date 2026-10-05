@@ -129,7 +129,7 @@ $formAction = function_exists('supportAdminFormAction')
     : $baseUrl;
 $adminBase = defined('PNV_ADMIN_BASE') ? rtrim(PNV_ADMIN_BASE, '/') : '/bigjay_controller';
 $dashboardUrl = $adminBase . '/index.php';
-$chatAssetVer = '19';
+$chatAssetVer = '20';
 $chatAssetBase = '/assets/support-chat/';
 $shellCssHref = $chatAssetBase . 'pnv-support-shell.css?v=' . $chatAssetVer;
 $legacyJsHref = '/support_ui.js?v=49';
