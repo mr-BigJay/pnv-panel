@@ -1005,6 +1005,12 @@ id="adminSupportMenu">
 
 </a>
 
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('referrals.php'), ENT_QUOTES, 'UTF-8'); ?>">
+
+ارجاع و جوایز
+
+</a>
+
 <a
 href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=payments'), ENT_QUOTES, 'UTF-8'); ?>"
 class="supportMenu">
