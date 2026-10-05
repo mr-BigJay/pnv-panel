@@ -186,7 +186,12 @@
       if (e.target.closest('.pnv-image-viewer-image')) {
         return;
       }
-      if (e.target.closest('[data-viewer-close]')) {
+
+      var onStage =
+        stageEl &&
+        (e.target === stageEl || (stageEl.contains(e.target) && !e.target.closest('.pnv-image-viewer-image')));
+
+      if (onStage || e.target.closest('[data-viewer-close]')) {
         e.preventDefault();
         requestCloseViewer();
       }

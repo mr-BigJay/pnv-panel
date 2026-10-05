@@ -12,6 +12,27 @@ async function viewerHidden() {
   });
 }
 
+async function viewerOpen() {
+  return page.evaluate(function () {
+    var el = document.getElementById('pnvSupportImageViewer');
+    return el && !el.hidden;
+  });
+}
+
+async function waitViewerOpen() {
+  await page.waitForFunction(function () {
+    var el = document.getElementById('pnvSupportImageViewer');
+    return el && !el.hidden;
+  });
+}
+
+async function waitViewerClosed() {
+  await page.waitForFunction(function () {
+    var el = document.getElementById('pnvSupportImageViewer');
+    return el && el.hidden;
+  });
+}
+
 await page.goto(`${base}/tests/manual/support-image-viewer-demo.html`, { waitUntil: 'networkidle' });
 
 const urlBefore = page.url();
@@ -23,63 +44,79 @@ await page.evaluate(function () {
   c.appendChild(spacer);
   c.scrollTop = 120;
 });
+
 await page.click('.msgImageLink');
-await page.waitForFunction(function () {
-  var el = document.getElementById('pnvSupportImageViewer');
-  return el && !el.hidden;
-});
+await waitViewerOpen();
 const urlOpen = page.url();
 
-await page.click('.pnv-image-viewer-close');
-await page.waitForFunction(function () {
-  var el = document.getElementById('pnvSupportImageViewer');
-  return el && el.hidden;
+await page.click('.pnv-image-viewer-image');
+await page.waitForTimeout(80);
+const imageClickKeepsOpen = await viewerOpen();
+
+await page.evaluate(function () {
+  var stage = document.getElementById('pnvImageViewerStage');
+  var rect = stage.getBoundingClientRect();
+  stage.dispatchEvent(
+    new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left + 8,
+      clientY: rect.top + 8
+    })
+  );
 });
+await waitViewerClosed();
 await page.waitForTimeout(50);
-const scrollAfterClose = await page.evaluate(function () {
+const scrollAfterStageClose = await page.evaluate(function () {
   return document.getElementById('demoChat').scrollTop;
 });
+const stageOutsideClose = await viewerHidden();
+
+await page.click('.msgImageLink');
+await waitViewerOpen();
+await page.keyboard.press('Escape');
+await waitViewerClosed();
+const escapeClose = await viewerHidden();
+
+await page.click('.msgImageLink');
+await waitViewerOpen();
+await page.goBack();
+await waitViewerClosed();
+const historyBackClose = await viewerHidden();
 
 await page.click('#addPollMsg');
 await page.locator('.msgImageLink').last().click();
-await page.waitForFunction(function () {
-  var el = document.getElementById('pnvSupportImageViewer');
-  return el && !el.hidden;
-});
+await waitViewerOpen();
 await page.keyboard.press('Escape');
-await page.waitForFunction(function () {
-  var el = document.getElementById('pnvSupportImageViewer');
-  return el && el.hidden;
-});
-
-await page.evaluate(function () {
-  document.getElementById('demoChat').scrollTop = 80;
-});
-await page.click('.msgImageLink');
-await page.waitForFunction(function () {
-  var el = document.getElementById('pnvSupportImageViewer');
-  return el && !el.hidden;
-});
-await page.goBack();
-await page.waitForFunction(function () {
-  var el = document.getElementById('pnvSupportImageViewer');
-  return el && el.hidden;
-});
+await waitViewerClosed();
 
 const results = {
   urlUnchanged: urlBefore === urlOpen,
-  scrollPreserved: scrollAfterClose === 120,
-  dynamicAndEscape: true,
-  historyBackClose: await viewerHidden()
+  imageClickKeepsOpen: imageClickKeepsOpen,
+  stageOutsideClose: stageOutsideClose,
+  scrollPreservedAfterStageClose: scrollAfterStageClose === 120,
+  escapeClose: escapeClose,
+  historyBackClose: historyBackClose,
+  dynamicAndEscape: true
 };
 
 console.log(JSON.stringify(results, null, 2));
-await page.screenshot({
-  path: path.join('/opt/cursor/artifacts', 'support-image-viewer-open-mobile.webp'),
-  type: 'webp'
-});
 
 await browser.close();
-if (!results.urlUnchanged || !results.scrollPreserved || !results.historyBackClose) {
+
+const expect = {
+  urlUnchanged: true,
+  imageClickKeepsOpen: true,
+  stageOutsideClose: true,
+  scrollPreservedAfterStageClose: true,
+  escapeClose: true,
+  historyBackClose: true
+};
+
+const failed = Object.keys(expect).filter(function (k) {
+  return results[k] !== expect[k];
+});
+if (failed.length) {
+  console.error('FAILED', failed);
   process.exit(1);
 }
