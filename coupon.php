@@ -29,70 +29,35 @@ if($rewardLabel === ''){
     $rewardLabel = 'هنوز پاداشی فعال نشده است';
 }
 
-function couponFaNum($value){
-    return strtr((string)$value, [
-        '0' => '۰', '1' => '۱', '2' => '۲', '3' => '۳', '4' => '۴',
-        '5' => '۵', '6' => '۶', '7' => '۷', '8' => '۸', '9' => '۹',
-    ]);
-}
-
-/* Tier thresholds mirror couponRewardForCount() — presentation only */
-$tierDefs = [
-    ['need' => 3, 'percent' => 20, 'qty' => 1],
-    ['need' => 5, 'percent' => 40, 'qty' => 1],
-    ['need' => 10, 'percent' => 100, 'qty' => 1],
-    ['need' => 20, 'percent' => 100, 'qty' => 3],
-];
-
-$tiers = [];
-foreach($tierDefs as $i => $def){
-    $need = intval($def['need']);
-    $percent = intval($def['percent']);
-    $qty = intval($def['qty']);
-    if($qty > 1){
-        $chip = couponFaNum($qty) . '×' . couponFaNum($percent) . '٪';
-        $desc = couponFaNum($qty) . ' کد ' . couponFaNum($percent) . '٪ (هر کد یک‌بار مصرف)';
-    } else {
-        $chip = couponFaNum($percent) . '٪';
-        $desc = 'یک کد تخفیف ' . couponFaNum($percent) . '٪';
-    }
-    $tiers[] = [
-        'need' => $need,
-        'percent' => $percent,
-        'qty' => $qty,
-        'title' => couponFaNum($need) . ' دعوت موفق',
-        'desc' => $desc,
-        'chip' => $chip,
-    ];
-}
+$tiers = couponReferralTiers(true);
 
 $nextNeed = null;
 $nextTier = null;
+$maxTierNeed = 0;
+
 foreach($tiers as $tier){
-    if($inviteCount < intval($tier['need'])){
-        $nextNeed = intval($tier['need']);
+    $need = intval($tier['need']);
+    $maxTierNeed = max($maxTierNeed, $need);
+
+    if($inviteCount < $need && $nextNeed === null){
+        $nextNeed = $need;
         $nextTier = $tier;
-        break;
     }
 }
 
 $progressPct = 100;
-$progressDenom = $nextNeed ?? intval($tiers[count($tiers) - 1]['need']);
+$progressDenom = $nextNeed ?? ($maxTierNeed > 0 ? $maxTierNeed : 1);
 if($nextNeed !== null && $nextNeed > 0){
     $progressPct = max(0, min(100, round(($inviteCount / $nextNeed) * 100)));
 }
 
-$heroTier = $nextTier ?? $tiers[count($tiers) - 1];
-$heroNeed = intval($heroTier['need']);
-$heroPercent = intval($heroTier['percent']);
-$heroQty = intval($heroTier['qty']);
-if($heroQty > 1){
-    $heroDiscountMain = couponFaNum($heroQty) . '×' . couponFaNum($heroPercent) . '٪';
-    $heroDiscountSub = 'تخفیف';
-} else {
-    $heroDiscountMain = couponFaNum($heroPercent) . '٪';
-    $heroDiscountSub = 'تخفیف';
+$heroTier = $nextTier;
+if($heroTier === null && !empty($tiers)){
+    $heroTier = $tiers[count($tiers) - 1];
 }
+$heroNeed = intval($heroTier['need'] ?? 0);
+$heroPercent = intval($heroTier['percent'] ?? 0);
+$heroQty = intval($heroTier['qty'] ?? 1);
 
 $codeDisplay = trim(implode(' ', preg_split('//u', strtoupper($myCode), -1, PREG_SPLIT_NO_EMPTY)));
 
@@ -101,8 +66,24 @@ $h = static function($value){
 };
 
 $fa = static function($value){
-    return couponFaNum($value);
+    return strtr((string)$value, [
+        '0' => '۰', '1' => '۱', '2' => '۲', '3' => '۳', '4' => '۴',
+        '5' => '۵', '6' => '۶', '7' => '۷', '8' => '۸', '9' => '۹',
+    ]);
 };
+
+$faDigits = static function($text) use ($fa){
+    return preg_replace_callback('/[0-9]+/', static function($matches) use ($fa){
+        return $fa($matches[0]);
+    }, (string)$text);
+};
+
+if($heroQty > 1){
+    $heroDiscountMain = $fa($heroQty) . '×' . $fa($heroPercent) . '٪';
+} else {
+    $heroDiscountMain = $fa($heroPercent) . '٪';
+}
+$heroDiscountSub = 'تخفیف';
 
 $iconCopy = '<svg class="couponIcon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
 $iconLink = '<svg class="couponIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5.93" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 11a5 5 0 0 0-7.07 0L5.52 12.4a5 5 0 0 0 7.07 7.07L14 18.07" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
@@ -120,9 +101,9 @@ $showStepper = $progressDenom > 0 && $progressDenom <= 10;
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>باشگاه معرفی</title>
-<link rel="stylesheet" href="fonts.css">
-<link rel="stylesheet" href="user_nav.css?v=1">
-<link rel="stylesheet" href="coupon_ui.css?v=4">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/user_nav.css?v=1">
+<link rel="stylesheet" href="/coupon_ui.css?v=5">
 </head>
 <body class="couponPage">
 
@@ -317,10 +298,10 @@ $showStepper = $progressDenom > 0 && $progressDenom <= 10;
 <div class="<?php echo $rowClass; ?>">
 <div class="couponTierBadge"><?php echo $fa($need); ?></div>
 <div class="couponTierBody">
-<div class="couponTierTitle"><?php echo $h($tier['title']); ?></div>
-<div class="couponTierDesc"><?php echo $h($tier['desc']); ?></div>
+<div class="couponTierTitle"><?php echo $h($faDigits($tier['title'] ?? ($need . ' دعوت موفق'))); ?></div>
+<div class="couponTierDesc"><?php echo $h($faDigits($tier['desc'] ?? '')); ?></div>
 </div>
-<div class="<?php echo $chipClass; ?>"><?php echo $h($tier['chip']); ?></div>
+<div class="<?php echo $chipClass; ?>"><?php echo $h($faDigits($tier['chip'] ?? '')); ?></div>
 </div>
 <?php } ?>
 </div>
