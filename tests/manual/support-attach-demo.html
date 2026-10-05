@@ -2,9 +2,9 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Support attach demo</title>
-<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=18">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=19">
 <style>
 body { margin: 0; background: #0e1621; font-family: tahoma, sans-serif; color: #fff; }
 .demoBar { padding: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -14,29 +14,24 @@ body { margin: 0; background: #0e1621; font-family: tahoma, sans-serif; color: #
 <body>
 <div class="demoBar">
 <button type="button" id="openAttach">Attach sheet</button>
-<button type="button" id="openGallery">Gallery editor</button>
-<button type="button" id="openCrop">Crop</button>
+<button type="button" id="openGallery">Gallery overlay</button>
 <button type="button" id="openFile">File composer</button>
 </div>
 <form id="demoForm" style="display:none">
 <input type="hidden" name="csrf" value="demo">
 <input type="file" id="demoImageInput" accept="image/*" style="display:none">
 </form>
-<script src="/support_ui.js?v=48"></script>
+<script src="/support_ui.js?v=49"></script>
+<script src="/assets/support-chat/pnv-support-media.js?v=21"></script>
 <script>
-SupportUI.bindImageAttach(document.getElementById('demoForm'), 'demoImageInput', null);
+window.mediaDemo = SupportUI.bindImageAttach(document.getElementById('demoForm'), 'demoImageInput', null, { previewTitle: 'پشتیبانی' });
 document.getElementById('openAttach').onclick = function(){
   document.getElementById('supportAttachSheet').hidden = false;
 };
 document.getElementById('openGallery').onclick = function(){
-  fetch('/tests/fixtures/sample.pdf').catch(function(){});
-  var img = document.getElementById('supportMediaImg');
-  img.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><rect fill="#3390ec" width="800" height="500"/><text x="50%" y="50%" fill="white" font-size="48" text-anchor="middle" dominant-baseline="middle">Preview</text></svg>');
-  document.getElementById('supportMediaComposer').hidden = false;
-  document.body.classList.add('supportMediaOpen');
-};
-document.getElementById('openCrop').onclick = function(){
-  document.getElementById('supportCropModal').hidden = false;
+  var sheet = document.getElementById('supportAttachSheet');
+  sheet.hidden = false;
+  sheet.querySelector('[data-attach=gallery]').click();
 };
 document.getElementById('openFile').onclick = function(){
   var fc = document.getElementById('supportFileComposer');

@@ -1932,3 +1932,343 @@ body.adminPageSupport .content-support .pnv-chat.supportPage .pnv-topbar-action 
   max-height: 100%;
   touch-action: none;
 }
+
+/* Telegram-style 3-stage image attach (Gallery → Edit → Preview) */
+:root {
+  --pnv-media-bottom-h: 4.5rem;
+}
+
+body.pnv-media-open {
+  overflow: hidden;
+}
+
+#pnvSupportMediaRoot .pnv-media-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5300;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color: #fff;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+#pnvSupportMediaRoot .pnv-media-overlay[hidden] {
+  display: none !important;
+}
+
+.pnv-media-gallery {
+  background: #0b0f14;
+}
+
+.pnv-media-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3rem;
+  padding: 0.5rem 0.75rem;
+  padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+  background: #0b0f14;
+}
+
+.pnv-media-top--preview {
+  justify-content: center;
+  background: transparent;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pnv-media-top--preview .pnv-media-title {
+  pointer-events: auto;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.pnv-media-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.pnv-media-top-spacer {
+  width: 2.75rem;
+}
+
+.pnv-media-gallery-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 2px;
+  align-content: start;
+}
+
+.pnv-media-gallery-cell {
+  position: relative;
+  aspect-ratio: 1;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: #111820;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.pnv-media-gallery-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pnv-media-gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pnv-media-gallery-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-sizing: border-box;
+}
+
+.pnv-media-gallery-hint {
+  margin: 0;
+  padding: 1rem 1.25rem 2rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.875rem;
+}
+
+.pnv-media-gallery-hint[hidden] {
+  display: none !important;
+}
+
+.pnv-media-editor {
+  background: #000;
+}
+
+.pnv-media-crop-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.pnv-media-crop-stage canvas {
+  max-width: 100%;
+  max-height: 100%;
+  touch-action: none;
+}
+
+.pnv-media-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--pnv-media-bottom-h);
+  padding: 0.625rem 1.75rem;
+  padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
+  background: #000;
+  flex-shrink: 0;
+}
+
+.pnv-media-bottom--preview {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.pnv-media-action {
+  width: 3rem;
+  height: 3rem;
+  min-width: 3rem;
+  border: none;
+  background: transparent;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.pnv-media-action--send {
+  width: 3.25rem;
+  height: 3.25rem;
+  min-width: 3.25rem;
+}
+
+.pnv-media-preview {
+  background: #000;
+}
+
+.pnv-media-preview-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0;
+}
+
+.pnv-media-preview-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.pnv-media-preview-bottom {
+  flex-shrink: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+}
+
+.pnv-media-caption-wrap {
+  padding: 0.375rem 1rem 0.25rem;
+}
+
+.pnv-media-caption {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.35;
+  padding: 0.625rem 0.75rem;
+  resize: none;
+  outline: none;
+  max-height: 6rem;
+  direction: rtl;
+}
+
+.pnv-media-caption::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.pnv-media-error {
+  margin: 0;
+  padding: 0 1rem 0.375rem;
+  font-size: 0.8125rem;
+  color: #ff8a80;
+}
+
+.pnv-media-error[hidden] {
+  display: none !important;
+}
+
+/* Fullscreen message image viewer (Telegram-like) */
+body.pnv-image-viewer-open {
+  overflow: hidden;
+}
+
+.pnv-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  height: 100dvh;
+  max-height: 100dvh;
+  background: rgba(0, 0, 0, 0.94);
+  color: #fff;
+}
+
+.pnv-image-viewer[hidden] {
+  display: none !important;
+}
+
+.pnv-image-viewer-backdrop {
+  position: absolute;
+  inset: 0;
+}
+
+.pnv-image-viewer-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 0.75rem 0.5rem;
+  pointer-events: none;
+}
+
+.pnv-image-viewer-close {
+  pointer-events: auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: none;
+  background: transparent;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.pnv-image-viewer-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(56px + env(safe-area-inset-top, 0px)) 0.75rem env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+}
+
+.pnv-image-viewer-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+
+.pnv-image-viewer-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: pnv-image-viewer-spin 0.8s linear infinite;
+}
+
+.pnv-image-viewer-spinner[hidden],
+.pnv-image-viewer-error[hidden],
+.pnv-image-viewer-image[hidden] {
+  display: none !important;
+}
+
+.pnv-image-viewer-error {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.75);
+  text-align: center;
+  padding: 0 1rem;
+}
+
+@keyframes pnv-image-viewer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

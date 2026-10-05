@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/assets/support-chat/pnv-support-shell.css?v=22">
+<style>
+body { margin: 0; background: #0e1621; color: #fff; font-family: tahoma, sans-serif; }
+.msgBody { height: 70vh; overflow: auto; padding: 1rem; }
+.msgBubble { max-width: 280px; margin: 1rem 0; }
+</style>
+</head>
+<body>
+<div class="msgBody" id="demoChat">
+<div class="msgBubble usermsg">
+<a class="msgImageLink" href="/tests/fixtures/support-test-image.jpg">
+<img src="/tests/fixtures/support-test-image.jpg" alt="" style="max-width:100%">
+</a>
+</div>
+</div>
+<button type="button" id="addPollMsg" style="margin:1rem">Add polled image</button>
+<script src="/assets/support-chat/pnv-support-viewer.js?v=22"></script>
+<script>
+PNVSupportImageViewer.bind({ chatEl: document.getElementById('demoChat') });
+document.getElementById('addPollMsg').onclick = function(){
+  var a = document.createElement('a');
+  a.className = 'msgImageLink';
+  a.href = '/tests/fixtures/support-test-image.jpg';
+  var img = document.createElement('img');
+  img.src = a.href;
+  img.alt = '';
+  a.appendChild(img);
+  var b = document.createElement('div');
+  b.className = 'msgBubble admin';
+  b.appendChild(a);
+  document.getElementById('demoChat').appendChild(b);
+};
+</script>
+</body>
+</html>
