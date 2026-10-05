@@ -1032,7 +1032,7 @@
             html += '<small class="msgEdited">(ویرایش شد)</small>';
         }
         if(msg.image){
-            html += '<a class="msgImageLink" href="'+escapeHtml(msg.image)+'" target="_blank" rel="noopener"><img src="'+escapeHtml(msg.image)+'" alt=""></a>';
+            html += '<a class="msgImageLink" href="'+escapeHtml(msg.image)+'"><img src="'+escapeHtml(msg.image)+'" alt=""></a>';
         }
         if(msg.file){
             const fileLabel = escapeHtml(msg.file_name || 'دانلود فایل');

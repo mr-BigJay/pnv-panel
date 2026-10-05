@@ -1417,7 +1417,7 @@ if(!function_exists('supportLoad')){
             <?php } ?>
 
             <?php if($image !== ''){ ?>
-            <a class="msgImageLink" href="<?php echo htmlspecialchars($image, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">
+            <a class="msgImageLink" href="<?php echo htmlspecialchars($image, ENT_QUOTES, 'UTF-8'); ?>">
                 <img src="<?php echo htmlspecialchars($image, ENT_QUOTES, 'UTF-8'); ?>" alt="">
             </a>
             <?php } ?>

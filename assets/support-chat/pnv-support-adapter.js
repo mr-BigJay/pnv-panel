@@ -215,6 +215,10 @@
     if (messagesEl) {
       ui.scrollToBottomOnOpen(messagesEl);
     }
+
+    if (global.PNVSupportImageViewer && typeof global.PNVSupportImageViewer.bind === 'function') {
+      global.PNVSupportImageViewer.bind({ chatEl: messagesEl });
+    }
   }
 
   function init(cfg) {
