@@ -1,7 +1,9 @@
 (function (global) {
   'use strict';
 
-  var MIN_CROP = 48;
+  var MIN_CROP = 56;
+  var HANDLE_HIT = 40;
+  var CORNER_VIS = 22;
 
   function createMediaSessionId() {
     return String(Date.now()) + '-' + Math.random().toString(36).slice(2, 10);
@@ -374,12 +376,12 @@
     }
 
     function defaultCropRect(cw, ch) {
-      var side = Math.min(cw, ch);
+      var pad = Math.max(8, Math.round(Math.min(cw, ch) * 0.03));
       return {
-        x: Math.round((cw - side) / 2),
-        y: Math.round((ch - side) / 2),
-        w: side,
-        h: side
+        x: pad,
+        y: pad,
+        w: Math.max(MIN_CROP, cw - pad * 2),
+        h: Math.max(MIN_CROP, ch - pad * 2)
       };
     }
 
@@ -390,18 +392,28 @@
       cropRect.y = Math.max(0, Math.min(cropRect.y, cropCanvas.height - cropRect.h));
     }
 
+    function drawCropCorner(x, y, dirX, dirY) {
+      var len = CORNER_VIS;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + dirX * len, y);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + dirY * len);
+      ctx.stroke();
+    }
+
     function drawCropHandles() {
-      var s = 10;
-      var corners = [
-        [cropRect.x, cropRect.y, 'tl'],
-        [cropRect.x + cropRect.w - s, cropRect.y, 'tr'],
-        [cropRect.x, cropRect.y + cropRect.h - s, 'bl'],
-        [cropRect.x + cropRect.w - s, cropRect.y + cropRect.h - s, 'br']
-      ];
-      ctx.fillStyle = '#ffffff';
-      corners.forEach(function (pt) {
-        ctx.fillRect(pt[0], pt[1], s, s);
-      });
+      var x = cropRect.x + 0.5;
+      var y = cropRect.y + 0.5;
+      var w = cropRect.w - 1;
+      var h = cropRect.h - 1;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'square';
+      drawCropCorner(x, y, 1, 1);
+      drawCropCorner(x + w, y, -1, 1);
+      drawCropCorner(x, y + h, 1, -1);
+      drawCropCorner(x + w, y + h, -1, -1);
     }
 
     function drawEditCanvas() {
@@ -465,25 +477,36 @@
       return { x: pt.clientX - rect.left, y: pt.clientY - rect.top };
     }
 
+    function pointInHitBox(px, py, cx, cy) {
+      var half = HANDLE_HIT / 2;
+      return px >= cx - half && px <= cx + half && py >= cy - half && py <= cy + half;
+    }
+
     function hitTestHandle(p) {
-      var s = 14;
-      var handles = [
-        { id: 'tl', x: cropRect.x, y: cropRect.y },
-        { id: 'tr', x: cropRect.x + cropRect.w - s, y: cropRect.y },
-        { id: 'bl', x: cropRect.x, y: cropRect.y + cropRect.h - s },
-        { id: 'br', x: cropRect.x + cropRect.w - s, y: cropRect.y + cropRect.h - s }
+      var cr = cropRect;
+      var cx = cr.x + cr.w / 2;
+      var cy = cr.y + cr.h / 2;
+      var targets = [
+        { id: 'tl', x: cr.x, y: cr.y },
+        { id: 'tr', x: cr.x + cr.w, y: cr.y },
+        { id: 'bl', x: cr.x, y: cr.y + cr.h },
+        { id: 'br', x: cr.x + cr.w, y: cr.y + cr.h },
+        { id: 't', x: cx, y: cr.y },
+        { id: 'b', x: cx, y: cr.y + cr.h },
+        { id: 'l', x: cr.x, y: cy },
+        { id: 'r', x: cr.x + cr.w, y: cy }
       ];
-      for (var i = 0; i < handles.length; i++) {
-        var h = handles[i];
-        if (p.x >= h.x && p.x <= h.x + s && p.y >= h.y && p.y <= h.y + s) {
-          return h.id;
+      for (var i = 0; i < targets.length; i++) {
+        var t = targets[i];
+        if (pointInHitBox(p.x, p.y, t.x, t.y)) {
+          return t.id;
         }
       }
       if (
-        p.x >= cropRect.x &&
-        p.x <= cropRect.x + cropRect.w &&
-        p.y >= cropRect.y &&
-        p.y <= cropRect.y + cropRect.h
+        p.x >= cr.x &&
+        p.x <= cr.x + cr.w &&
+        p.y >= cr.y &&
+        p.y <= cr.y + cr.h
       ) {
         return 'move';
       }
@@ -523,6 +546,16 @@
         cropRect.w = Math.max(MIN_CROP, drag.cw - dx);
         cropRect.h = Math.max(MIN_CROP, drag.ch - dy);
         cropRect.x = drag.cx + (drag.cw - cropRect.w);
+        cropRect.y = drag.cy + (drag.ch - cropRect.h);
+      } else if (resizeMode === 'r') {
+        cropRect.w = Math.max(MIN_CROP, drag.cw + dx);
+      } else if (resizeMode === 'l') {
+        cropRect.w = Math.max(MIN_CROP, drag.cw - dx);
+        cropRect.x = drag.cx + (drag.cw - cropRect.w);
+      } else if (resizeMode === 'b') {
+        cropRect.h = Math.max(MIN_CROP, drag.ch + dy);
+      } else if (resizeMode === 't') {
+        cropRect.h = Math.max(MIN_CROP, drag.ch - dy);
         cropRect.y = drag.cy + (drag.ch - cropRect.h);
       }
       clampCrop();
@@ -572,16 +605,38 @@
       });
     }
 
-    function addGalleryFiles(fileList) {
+    function collectValidImageFiles(fileList) {
       var files = fileList ? Array.prototype.slice.call(fileList) : [];
+      var picked = [];
       files.forEach(function (file) {
-        if (!validImageFile(file)) {
-          return;
+        if (validImageFile(file)) {
+          picked.push(file);
         }
-        var url = URL.createObjectURL(file);
-        galleryItems.push({ file: file, url: url });
       });
+      return picked;
+    }
+
+    function showGalleryGridForFiles(files) {
+      clearGalleryItems();
+      files.forEach(function (file) {
+        galleryItems.push({ file: file, url: URL.createObjectURL(file) });
+      });
+      showView('gallery');
+      pushMediaHistory('gallery');
       renderGalleryGrid();
+    }
+
+    function handlePickerSelection(fileList) {
+      var picked = collectValidImageFiles(fileList);
+      if (!picked.length) {
+        onGalleryPickerDismissedWithoutSelection();
+        return;
+      }
+      if (picked.length === 1) {
+        openEditWithFile(picked[0]);
+        return;
+      }
+      showGalleryGridForFiles(picked);
     }
 
     function openEditWithFile(file) {
@@ -605,31 +660,32 @@
       refreshEditSource();
     }
 
+    function openGalleryPickerOnly() {
+      try {
+        galleryPicker.value = '';
+      } catch (e) {}
+      galleryPickerOpenedAt = Date.now();
+      setTimeout(function () {
+        if (!mediaSessionId || view === 'edit' || view === 'preview') {
+          return;
+        }
+        try {
+          if (typeof galleryPicker.showPicker === 'function') {
+            galleryPicker.showPicker();
+          } else {
+            galleryPicker.click();
+          }
+        } catch (e2) {
+          galleryPicker.click();
+        }
+      }, 0);
+    }
+
     function openGallery(fromAttach) {
       hideError();
       beginMediaSession();
-      showView('gallery');
-      pushMediaHistory('gallery');
-      if (galleryItems.length === 0) {
-        try {
-          galleryPicker.value = '';
-        } catch (e) {}
-        setTimeout(function () {
-          if (view !== 'gallery' || galleryItems.length > 0) {
-            return;
-          }
-          galleryPickerOpenedAt = Date.now();
-          try {
-            if (typeof galleryPicker.showPicker === 'function') {
-              galleryPicker.showPicker();
-            } else {
-              galleryPicker.click();
-            }
-          } catch (e2) {
-            galleryPicker.click();
-          }
-        }, 0);
-      }
+      clearGalleryItems();
+      openGalleryPickerOnly();
     }
 
     function applyEditToFinalBlob() {
@@ -803,7 +859,10 @@
     }
 
     function onGalleryPickerDismissedWithoutSelection() {
-      if (view !== 'gallery' || galleryItems.length > 0) {
+      if (galleryItems.length > 0) {
+        return;
+      }
+      if (view === 'edit' || view === 'preview') {
         return;
       }
       if (galleryPickerOpenedAt && Date.now() - galleryPickerOpenedAt < 450) {
@@ -819,7 +878,7 @@
         return;
       }
       galleryPickerOpenedAt = 0;
-      addGalleryFiles(files);
+      handlePickerSelection(files);
     });
 
     galleryPicker.addEventListener('cancel', function () {
@@ -838,10 +897,8 @@
         return;
       }
       beginMediaSession();
-      showView('gallery');
-      pushMediaHistory('gallery');
       clearGalleryItems();
-      addGalleryFiles([file]);
+      openEditWithFile(file);
     });
 
     return {
