@@ -829,35 +829,6 @@ margin-bottom:14px;
 line-height:1.8;
 }
 
-@media(max-width:560px){
-.content > .box.paymentsPage{
-padding:16px 12px 14px;
-border-radius:22px;
-}
-.payCard{
-grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr) max-content;
-gap:10px;
-padding:14px 12px;
-}
-.payUserName{font-size:13px}
-.payUserMobile{font-size:11px}
-.payConfigName{font-size:11.5px}
-.payPlanLine{font-size:11px}
-.menuBtn{
-width:28px !important;
-height:28px;
-min-width:28px;
-flex:0 0 28px;
-}
-.statusIcon{
-width:20px !important;
-height:20px;
-min-width:20px;
-flex:0 0 20px;
-}
-.statusIcon svg{width:11px;height:11px}
-}
-
 .payViewTabs{
 display:flex;
 flex-wrap:wrap;
@@ -889,6 +860,65 @@ opacity:.85;
 background:#2563eb;
 border-color:#2563eb;
 color:#fff;
+}
+
+@media(max-width:560px){
+.content > .box.paymentsPage{
+padding:16px 12px 14px;
+border-radius:22px;
+}
+.payCard{
+grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr) max-content;
+gap:10px;
+padding:14px 12px;
+}
+.payUserName{font-size:13px}
+.payUserMobile{font-size:11px}
+.payConfigName{font-size:11.5px}
+.payPlanLine{font-size:11px}
+.menuBtn{
+width:28px !important;
+height:28px;
+min-width:28px;
+flex:0 0 28px;
+}
+.statusIcon{
+width:20px !important;
+height:20px;
+min-width:20px;
+flex:0 0 20px;
+}
+.statusIcon svg{width:11px;height:11px}
+.payViewTabs{
+display:grid;
+grid-template-columns:repeat(4,minmax(0,1fr));
+gap:6px;
+width:100%;
+margin:0 0 14px;
+flex-wrap:nowrap;
+}
+.payViewTab{
+min-width:0;
+width:100%;
+padding:8px 3px;
+font-size:11px;
+justify-content:center;
+white-space:nowrap;
+box-sizing:border-box;
+}
+.payViewTabCount{
+font-size:10px;
+}
+}
+
+@media(max-width:360px){
+.paymentsPage .payViewTab{
+padding:7px 2px;
+font-size:10px;
+}
+.paymentsPage .payViewTabCount{
+font-size:9px;
+}
 }
 
 </style>
