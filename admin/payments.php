@@ -193,6 +193,24 @@ if(isset($_SESSION['payment_error'])){
 }
 
 $allowedPerPage = [20, 50, 100];
+$paymentsStatusOptions = ['approved', 'pending', 'expired', 'rejected'];
+$paymentsStatusLabels = [
+    'approved' => 'تایید شده',
+    'pending' => 'درحال انتظار',
+    'expired' => 'منقضی',
+    'rejected' => 'رد شده',
+];
+
+function paymentsNormalizeStatusFilter($status){
+    $status = trim((string)$status);
+    $allowed = ['approved', 'pending', 'expired', 'rejected'];
+
+    return in_array($status, $allowed, true) ? $status : 'approved';
+}
+
+function paymentsRedirectStatus(){
+    return paymentsNormalizeStatusFilter($_POST['status'] ?? $_GET['status'] ?? 'approved');
+}
 
 // ==================== عملیات POST ====================
 
@@ -202,6 +220,7 @@ if(isset($_POST['approve_payment'])){
 
     $link = trim($_POST['approve_link'] ?? '');
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
+    $redirectStatus = paymentsRedirectStatus();
 
     if(!in_array($redirectPer, $allowedPerPage, true)){
         $redirectPer = 20;
@@ -215,19 +234,19 @@ if(isset($_POST['approve_payment'])){
 
         if(empty($result['ok'])){
             $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-            header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+            header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
             exit;
         }
 
         $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
         exit;
 
     }
 
     if(!isValidSubscriptionLink($link)){
         $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
         exit;
     }
 
@@ -250,7 +269,7 @@ if(isset($_POST['approve_payment'])){
     fclose($fp);
 
     $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
 
     exit;
 
@@ -262,6 +281,7 @@ if(isset($_POST['reject_payment'])){
 
     $reason = trim($_POST['reject_reason']);
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
+    $redirectStatus = paymentsRedirectStatus();
 
     if(!in_array($redirectPer, $allowedPerPage, true)){
         $redirectPer = 20;
@@ -285,7 +305,7 @@ if(isset($_POST['reject_payment'])){
 
     fclose($fp);
 
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
 
     exit;
 
@@ -313,7 +333,9 @@ if(isset($_GET['deletepayment'])){
 
     fclose($fp);
 
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . intval($_GET['per'] ?? 20)));
+    $deleteStatus = paymentsNormalizeStatusFilter($_GET['status'] ?? 'approved');
+
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($deleteStatus) . '&per=' . intval($_GET['per'] ?? 20)));
 
     exit;
 
@@ -347,6 +369,36 @@ foreach($payments as $index => $pay){
 
 $buyPayments = array_reverse($buyPayments);
 
+$statusFilter = paymentsNormalizeStatusFilter($_GET['status'] ?? 'approved');
+
+$paymentsStatusCounts = array_fill_keys($paymentsStatusOptions, 0);
+
+if(function_exists('instantPayAdminRowListBucket')){
+    foreach($buyPayments as $row){
+        $pay = $row['data'] ?? [];
+
+        if(!is_array($pay)){
+            continue;
+        }
+
+        $bucket = instantPayAdminRowListBucket($pay);
+
+        if(isset($paymentsStatusCounts[$bucket])){
+            $paymentsStatusCounts[$bucket]++;
+        }
+    }
+
+    $buyPayments = array_values(array_filter($buyPayments, static function($row) use ($statusFilter){
+        $pay = $row['data'] ?? [];
+
+        if(!is_array($pay)){
+            return false;
+        }
+
+        return instantPayAdminRowListBucket($pay) === $statusFilter;
+    }));
+}
+
 $currentPage = intval($_GET['p'] ?? 1);
 
 if($currentPage < 1){
@@ -371,10 +423,12 @@ $start = ($currentPage - 1) * $perPage;
 
 $buyPaymentsPage = array_slice($buyPayments, $start, $perPage);
 
-function paymentsListUrl($page, $per){
+function paymentsListUrl($page, $per, $status = 'approved'){
+
+    $status = paymentsNormalizeStatusFilter($status);
 
     return pnvAdminUrl(
-        'index.php?page=payments&p=' . intval($page) . '&per=' . intval($per)
+        'index.php?page=payments&status=' . rawurlencode($status) . '&p=' . intval($page) . '&per=' . intval($per)
     );
 
 }
@@ -804,6 +858,39 @@ flex:0 0 20px;
 .statusIcon svg{width:11px;height:11px}
 }
 
+.payViewTabs{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+justify-content:flex-end;
+margin:-6px 0 16px;
+}
+
+.payViewTab{
+display:inline-flex;
+align-items:center;
+gap:6px;
+padding:8px 14px;
+border-radius:999px;
+border:1px solid rgba(148,163,184,.22);
+background:#1e293b;
+color:#cbd5e1;
+font-size:13px;
+text-decoration:none;
+transition:background .15s,border-color .15s,color .15s;
+}
+
+.payViewTabCount{
+font-size:11px;
+opacity:.85;
+}
+
+.payViewTab.is-active{
+background:#2563eb;
+border-color:#2563eb;
+color:#fff;
+}
+
 </style>
 
 <div class="box paymentsPage" data-payments-ui="cards">
@@ -816,6 +903,19 @@ flex:0 0 20px;
 <?php if($paymentError !== ''){ ?>
 <div class="payAlertErr"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
 <?php } ?>
+
+<div class="payViewTabs" role="tablist" aria-label="فیلتر وضعیت خرید">
+<?php foreach($paymentsStatusLabels as $statusKey => $statusLabel){
+    $active = $statusFilter === $statusKey ? ' is-active' : '';
+    $href = paymentsListUrl(1, $perPage, $statusKey);
+    $count = intval($paymentsStatusCounts[$statusKey] ?? 0);
+    ?>
+<a class="payViewTab<?php echo $active; ?>" role="tab" aria-selected="<?php echo $statusFilter === $statusKey ? 'true' : 'false'; ?>" href="<?php echo htmlspecialchars($href, ENT_QUOTES, 'UTF-8'); ?>">
+<span><?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+<span class="payViewTabCount">(<?php echo $count; ?>)</span>
+</a>
+<?php } ?>
+</div>
 
 <div class="payList">
 
@@ -958,7 +1058,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 <div class="pagination">
 <?php for($x = 1; $x <= $totalPages; $x++){ ?>
 <a
-href="<?php echo htmlspecialchars(paymentsListUrl($x, $perPage), ENT_QUOTES, 'UTF-8'); ?>"
+href="<?php echo htmlspecialchars(paymentsListUrl($x, $perPage, $statusFilter), ENT_QUOTES, 'UTF-8'); ?>"
 class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 <?php echo $x; ?>
 </a>
@@ -974,8 +1074,9 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 
 <script>
 
-const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments'), JSON_UNESCAPED_UNICODE); ?>;
+const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($statusFilter)), JSON_UNESCAPED_UNICODE); ?>;
 const paymentsPerPage = <?php echo (int)$perPage; ?>;
+const paymentsListStatus = <?php echo json_encode($statusFilter, JSON_UNESCAPED_UNICODE); ?>;
 
 function closeMenus(){
 document.querySelectorAll('.dropdown.active').forEach(function(el){
@@ -1094,6 +1195,7 @@ else{
 content=
 '<form method="POST">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="status" value="'+paymentsListStatus+'">'+
 '<input type="hidden" name="approve_index" value="'+id+'">'+
 '<input type="text" name="approve_link" id="approveLink" placeholder="لینک اشتراک">'+
 '<div class="modalBtns">'+
@@ -1103,6 +1205,7 @@ content=
 '<hr style="margin:20px 0;border-color:#334155;">'+
 '<form method="POST">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="status" value="'+paymentsListStatus+'">'+
 '<input type="hidden" name="reject_index" value="'+id+'">'+
 '<select name="reject_reason">'+
 '<option value="اطلاعات پرداخت اشتباه است">اطلاعات پرداخت اشتباه است</option>'+
