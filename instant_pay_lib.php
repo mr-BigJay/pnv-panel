@@ -698,6 +698,71 @@ if(!function_exists('instantPayPath')){
         return true;
     }
 
+    /**
+     * Admin list tab bucket for payments/renews filters.
+     * Priority: approved CSV → rejected → AUTO expired → pending.
+     */
+    function instantPayAdminRowListBucket($row){
+        if(!is_array($row)){
+            return 'pending';
+        }
+
+        $status = trim((string)($row[6] ?? ''));
+
+        if($status === 'تایید شد'){
+            return 'approved';
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+        $isAuto = strpos($tracking, 'AUTO-') === 0;
+        $item = null;
+
+        if($isAuto){
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+        }
+
+        $jsonStatus = is_array($item) ? strtolower(trim((string)($item['status'] ?? ''))) : '';
+
+        if($status === 'رد شد'){
+            return 'rejected';
+        }
+
+        if(in_array($jsonStatus, ['cancelled', 'failed'], true)){
+            return 'rejected';
+        }
+
+        if($isAuto){
+            $now = time();
+            $expiresAt = is_array($item) ? intval($item['expires_at'] ?? 0) : 0;
+
+            if($jsonStatus === 'expired'){
+                return 'expired';
+            }
+
+            if($expiresAt > 0 && $expiresAt < $now){
+                return 'expired';
+            }
+
+            if(in_array($jsonStatus, ['waiting', 'processing'], true) && $expiresAt > $now){
+                return 'pending';
+            }
+
+            if(instantPayCsvRowPending($row) && instantPayAdminRowIsInProgress($row)){
+                return 'pending';
+            }
+
+            if(!instantPayAdminRowIsInProgress($row)){
+                return 'expired';
+            }
+        }
+
+        if(in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true)){
+            return 'pending';
+        }
+
+        return 'pending';
+    }
+
     function instantPayOptsSignature($opts){
         return implode('|', [
             trim((string)($opts['type'] ?? 'خرید')),
