@@ -864,11 +864,11 @@ font-size:10px;
 }
 
 @media(max-width:360px){
-.renewsPage .payViewTab{
+.payViewTab{
 padding:7px 2px;
 font-size:10px;
 }
-.renewsPage .payViewTabCount{
+.payViewTabCount{
 font-size:9px;
 }
 }

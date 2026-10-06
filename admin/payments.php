@@ -912,11 +912,11 @@ font-size:10px;
 }
 
 @media(max-width:360px){
-.paymentsPage .payViewTab{
+.payViewTab{
 padding:7px 2px;
 font-size:10px;
 }
-.paymentsPage .payViewTabCount{
+.payViewTabCount{
 font-size:9px;
 }
 }
