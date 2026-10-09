@@ -165,6 +165,14 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
+            // نگه‌داشتن history در CSV نباید باعث شود cancelled/expired قدیمی
+            // دوباره برای auto-match کاندید شوند. JSON source-of-truth را رعایت کن.
+            $jsonItem = instantPayFindJsonByTracking($row[0] ?? '', $row[3] ?? '');
+
+            if(is_array($jsonItem) && !instantPayItemMatchable($jsonItem, $now)){
+                continue;
+            }
+
             $matches[] = [
                 'csv_index' => $i,
                 'row' => $row,
@@ -481,120 +489,16 @@ if(!function_exists('instantPayPath')){
      * ردیف‌های پرداخت آنیِ رها‌شده را از CSV حذف و لیست ادمین را تمیز می‌کند.
      */
     function instantPayPurgeStaleAdminRows($items = null){
+        // فقط state سفارش‌ها را منقضی و indexها را همگام کن.
+        // تاریخچه CSV نباید به‌دلیل expired/failed/cancelled بودن حذف شود.
         if($items === null){
             $items = instantPayExpireDue();
         }
-
-        $now = time();
-        $grace = instantPayMatchGraceSeconds();
-        $changed = false;
-
-        foreach($items as $i => $item){
-            $status = (string)($item['status'] ?? '');
-            $expires = intval($item['expires_at'] ?? 0);
-            $shouldDelete = false;
-
-            if(in_array($status, ['cancelled', 'failed'], true)){
-                if($status === 'failed' && instantPayWithinMatchGrace($item, $now)){
-                    $shouldDelete = false;
-                }
-                elseif($status === 'cancelled' && instantPayWithinMatchGrace($item, $now)){
-                    $shouldDelete = false;
-                }
-                else{
-                    $shouldDelete = true;
-                }
-            }
-
-            if($status === 'expired' && $expires > 0 && !instantPayWithinMatchGrace($item, $now)){
-                $shouldDelete = true;
-            }
-
-            if($status === 'waiting' && $expires > 0 && $expires < $now){
-                $items[$i]['status'] = 'expired';
-                $changed = true;
-
-                if(!instantPayWithinMatchGrace($items[$i], $now)){
-                    $shouldDelete = true;
-                }
-            }
-
-            if($shouldDelete && empty($items[$i]['csv_purged'])){
-                instantPayDeleteAbandonedCsv($items[$i]);
-                $items[$i]['csv_purged'] = true;
-                $items[$i]['csv_index'] = -1;
-                $changed = true;
-            }
+        else{
+            $items = instantPayExpireDue($items);
         }
 
-        if($changed){
-            instantPaySave($items);
-            $items = instantPayRebuildCsvIndexes(instantPayLoad());
-        }
-
-        if(!function_exists('xuiLoadPayments') || !function_exists('xuiDeletePaymentIndexes')){
-            return $items;
-        }
-
-        $payments = xuiLoadPayments();
-        $activeKeys = [];
-
-        foreach($items as $item){
-            $st = (string)($item['status'] ?? '');
-
-            if(!in_array($st, ['waiting', 'processing', 'paid', 'expired', 'failed'], true)){
-                continue;
-            }
-
-            if(empty($item['csv_purged']) && in_array($st, ['expired', 'failed'], true) && !instantPayWithinMatchGrace($item, $now)){
-                continue;
-            }
-
-            if(empty($item['csv_purged'])){
-                $activeKeys[strtolower(trim((string)($item['user'] ?? ''))) . '|' . instantPayTrackingCode($item)] = true;
-            }
-        }
-
-        $orphanDelete = [];
-        $window = instantPayMaxOrderAgeSeconds();
-
-        foreach($payments as $pi => $row){
-            if(!is_array($row)){
-                continue;
-            }
-
-            $tracking = trim((string)($row[3] ?? ''));
-
-            if(strpos($tracking, 'AUTO-') !== 0){
-                continue;
-            }
-
-            $st = trim((string)($row[6] ?? ''));
-
-            if(!in_array($st, ['', 'درحال بررسی', 'در حال بررسی', 'رد شد'], true)){
-                continue;
-            }
-
-            $created = intval($row[8] ?? 0);
-            $key = strtolower(trim((string)($row[0] ?? ''))) . '|' . instantPayNormalizeTracking($tracking);
-
-            if(function_exists('instantPayAdminRowIsInProgress') && instantPayAdminRowIsInProgress($row)){
-                continue;
-            }
-
-            if($created > 0 && ($now - $created) < $window && isset($activeKeys[$key])){
-                continue;
-            }
-
-            $orphanDelete[] = $pi;
-        }
-
-        if($orphanDelete){
-            xuiDeletePaymentIndexes($orphanDelete);
-            instantPayRebuildCsvIndexes();
-        }
-
-        return $items;
+        return instantPayRebuildCsvIndexes($items);
     }
 
     function instantPayNormalizeType($type){
@@ -663,39 +567,13 @@ if(!function_exists('instantPayPath')){
     }
 
     /**
-     * آیا این ردیف CSV در لیست ادمین نمایش داده شود؟
-     * سفارش AUTOِ درحال‌انجام تا پایان مهلت پرداخت + ۱۰ دقیقه دیده می‌شود.
+     * آیا این ردیف CSV در تاریخچه ادمین نمایش داده شود؟
+     *
+     * Visibility با matchability فرق دارد: رکوردهای قدیمی/منقضی/لغوشده
+     * باید در تاریخچه باقی بمانند، حتی وقتی دیگر قابل مچ یا پردازش نیستند.
      */
     function instantPayAdminRowVisible($row){
-        if(!is_array($row)){
-            return false;
-        }
-
-        $tracking = trim((string)($row[3] ?? ''));
-
-        if(strpos($tracking, 'AUTO-') !== 0){
-            return true;
-        }
-
-        $status = trim((string)($row[6] ?? ''));
-
-        if($status === 'تایید شد'){
-            return true;
-        }
-
-        if(in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true)){
-            return instantPayAdminRowIsInProgress($row);
-        }
-
-        if($status === 'رد شد'){
-            $reason = trim((string)($row[7] ?? ''));
-
-            if(in_array($reason, ['لغو شد', 'منقضی شد', 'لغو به‌خاطر مبلغ جدید', 'لغو به‌خاطر درخواست جدید'], true)){
-                return false;
-            }
-        }
-
-        return true;
+        return is_array($row);
     }
 
     /**
@@ -865,9 +743,8 @@ if(!function_exists('instantPayPath')){
             $changed = true;
 
             checkoutReleaseDiscountOrder($items[$i]['id'] ?? '');
-            instantPayDeleteAbandonedCsv($items[$i]);
-            $items[$i]['csv_purged'] = true;
-            $items[$i]['csv_index'] = -1;
+            // CSV row را برای تاریخچه ادمین نگه دار؛ JSON status=cancelled
+            // آن را از مسیر matchable خارج می‌کند.
         }
 
         if($changed){
@@ -990,9 +867,8 @@ if(!function_exists('instantPayPath')){
 
             checkoutReleaseDiscountOrder($items[$i]['id'] ?? '');
 
-            instantPayDeleteAbandonedCsv($items[$i]);
-            $items[$i]['csv_purged'] = true;
-            $items[$i]['csv_index'] = -1;
+            // درخواست لغوشده هم بخشی از history است؛ CSV را حذف نکن.
+            // instantPayItemMatchable() مانع match مجدد cancelled می‌شود.
         }
 
         if($changed){
