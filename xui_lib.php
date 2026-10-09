@@ -1053,6 +1053,173 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
+    function xuiRenewTargetUserError($reason){
+        $reason = trim((string)$reason);
+
+        if(in_array($reason, ['not_found', 'server_not_found'], true)){
+            return 'این اشتراک دیگر روی سرور وجود ندارد و قابل تمدید نیست. لطفاً اشتراک جدید تهیه کنید.';
+        }
+
+        if($reason === 'invalid_link'){
+            return 'لینک اشتراک برای تمدید معتبر نیست.';
+        }
+
+        if($reason === 'api_error'){
+            return 'اتصال به سرور VPN موقتاً برقرار نیست. لطفاً چند دقیقه دیگر دوباره تلاش کنید.';
+        }
+
+        return 'امکان تمدید این اشتراک وجود ندارد.';
+    }
+
+    /**
+     * Validate renew target by exact Sub ID on the server resolved from the link host.
+     * Does not search by panel username/email.
+     *
+     * @return array{ok:bool,reason?:string,error?:string,server?:array,client?:array,parsed?:array,sub_link?:string}
+     */
+    function xuiValidateRenewTarget($subLink, $config = null){
+        if($config === null){
+            $config = xuiLoadConfig();
+        }
+
+        $raw = trim((string)$subLink);
+
+        if($raw === ''){
+            return [
+                'ok' => false,
+                'reason' => 'invalid_link',
+                'error' => xuiRenewTargetUserError('invalid_link'),
+            ];
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        $subLink = $raw;
+
+        if(function_exists('pnvNormalizeSubLinkValue')){
+            $clean = trim((string)pnvNormalizeSubLinkValue($raw));
+
+            if($clean !== ''){
+                if(preg_match('#^https?://#i', $clean)){
+                    $subLink = $clean;
+                }
+                elseif(xuiLooksLikeBareSubId($clean)){
+                    $subLink = $clean;
+                }
+            }
+        }
+
+        $parsed = xuiParseSubLink($subLink);
+        $server = null;
+        $client = null;
+        $subId = '';
+
+        if(is_array($parsed)){
+            $subId = trim((string)($parsed['sub_id'] ?? ''));
+            $server = xuiFindServerByHost($parsed['host'], $config);
+
+            if(!$server){
+                return [
+                    'ok' => false,
+                    'reason' => 'server_not_found',
+                    'error' => xuiRenewTargetUserError('server_not_found'),
+                    'parsed' => $parsed,
+                ];
+            }
+
+            $subLink = xuiBuildSubLink($parsed['host'], $subId, $config);
+        }
+        elseif(xuiLooksLikeBareSubId($subLink)){
+            $found = xuiFindRenewServerBySubId($subLink, $config);
+
+            if(!$found){
+                return [
+                    'ok' => false,
+                    'reason' => 'not_found',
+                    'error' => xuiRenewTargetUserError('not_found'),
+                ];
+            }
+
+            $server = $found['server'];
+            $client = $found['client'] ?? null;
+            $subId = trim((string)($found['sub_id'] ?? $subLink));
+            $parsed = [
+                'host' => strtolower((string)($server['host'] ?? '')),
+                'port' => intval($config['sub_port'] ?? 2096),
+                'sub_id' => $subId,
+            ];
+            $subLink = xuiBuildSubLink($parsed['host'], $subId, $config);
+        }
+        else{
+            return [
+                'ok' => false,
+                'reason' => 'invalid_link',
+                'error' => xuiRenewTargetUserError('invalid_link'),
+            ];
+        }
+
+        if($subId === ''){
+            return [
+                'ok' => false,
+                'reason' => 'invalid_link',
+                'error' => xuiRenewTargetUserError('invalid_link'),
+                'parsed' => $parsed,
+            ];
+        }
+
+        $allowed = xuiRenewAllowedServerIds($config);
+
+        if(count($allowed) > 0 && !in_array((string)($server['id'] ?? ''), $allowed, true)){
+            return [
+                'ok' => false,
+                'reason' => 'server_not_found',
+                'error' => xuiRenewTargetUserError('server_not_found'),
+                'parsed' => $parsed,
+                'server' => $server,
+            ];
+        }
+
+        $probe = xuiApiRequest($server, 'GET', '/panel/api/inbounds/options');
+
+        if(empty($probe['success'])){
+            return [
+                'ok' => false,
+                'reason' => 'api_error',
+                'error' => xuiRenewTargetUserError('api_error'),
+                'parsed' => $parsed,
+                'server' => $server,
+            ];
+        }
+
+        if(!is_array($client)){
+            $client = xuiFindClientBySubId($server, $subId, $subLink);
+        }
+        elseif(!xuiClientMatchesSubId($client, $subId)){
+            $client = xuiFindClientBySubId($server, $subId, $subLink);
+        }
+
+        if(!$client){
+            return [
+                'ok' => false,
+                'reason' => 'not_found',
+                'error' => xuiRenewTargetUserError('not_found'),
+                'parsed' => $parsed,
+                'server' => $server,
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'reason' => 'ok',
+            'server' => $server,
+            'client' => $client,
+            'parsed' => $parsed,
+            'sub_link' => $subLink,
+        ];
+    }
+
     function xuiEnsureClientUuidForLegacy($server, $client){
         if(!is_array($client) || !is_array($server)){
             return $client;
