@@ -592,14 +592,14 @@ line-height:1;
 
 .dropdown{
 display:none;
-position:absolute;
+position:fixed;
 left:0;
-top:48px;
+top:0;
 background:#0f172a;
 border-radius:12px;
 padding:10px;
 width:220px;
-z-index:100;
+z-index:10050;
 box-shadow:0 10px 25px rgba(0,0,0,0.4);
 }
 
@@ -1220,13 +1220,13 @@ id="modalContent"></div>
 const usersPageUrl = <?php echo json_encode(pnvAdminUrl('users.php'), JSON_UNESCAPED_UNICODE); ?>;
 const profileApiUrl = <?php echo json_encode(pnvAdminUrl('user-profile.php'), JSON_UNESCAPED_UNICODE); ?>;
 
-function toggleMenu(id){
+function closeUserMenus(exceptId){
 
 document
 .querySelectorAll('.dropdown')
 .forEach(function(el){
 
-if(el.id != id){
+if(!exceptId || el.id !== exceptId){
 
 el.classList.remove('active');
 
@@ -1234,26 +1234,87 @@ el.classList.remove('active');
 
 });
 
-document
-.getElementById(id)
-.classList.toggle('active');
+}
+
+function positionUserMenu(menu, button){
+
+if(!menu || !button){
+return;
+}
+
+const rect = button.getBoundingClientRect();
+const gap = 8;
+const viewportW = window.innerWidth || document.documentElement.clientWidth;
+const viewportH = window.innerHeight || document.documentElement.clientHeight;
+const menuWidth = menu.offsetWidth || 220;
+const menuHeight = menu.offsetHeight || 220;
+
+let left = rect.left;
+let top = rect.bottom + gap;
+
+if(left + menuWidth > viewportW - 8){
+left = Math.max(8, viewportW - menuWidth - 8);
+}
+
+if(top + menuHeight > viewportH - 8){
+top = Math.max(8, rect.top - menuHeight - gap);
+}
+
+menu.style.left = Math.round(left) + 'px';
+menu.style.top = Math.round(top) + 'px';
+
+}
+
+function toggleMenu(id){
+
+const menu = document.getElementById(id);
+const button = event && event.currentTarget ? event.currentTarget : null;
+
+if(!menu){
+return;
+}
+
+const willOpen = !menu.classList.contains('active');
+closeUserMenus(id);
+
+if(!willOpen){
+menu.classList.remove('active');
+return;
+}
+
+if(menu.parentElement !== document.body){
+document.body.appendChild(menu);
+}
+
+menu.classList.add('active');
+positionUserMenu(menu, button);
 
 }
 
 document.addEventListener('click',function(e){
 
-if(!e.target.closest('.menuWrap')){
+if(!e.target.closest('.menuWrap') && !e.target.closest('.dropdown')){
 
-document
-.querySelectorAll('.dropdown')
-.forEach(function(el){
-
-el.classList.remove('active');
-
-});
+closeUserMenus();
 
 }
 
+});
+
+document.addEventListener('keydown',function(e){
+
+if(e.key === 'Escape'){
+closeUserMenus();
+}
+
+});
+
+window.addEventListener('scroll',function(){
+closeUserMenus();
+},{passive:true});
+
+window.addEventListener('resize',function(){
+closeUserMenus();
 });
 
 function closeModal(){
