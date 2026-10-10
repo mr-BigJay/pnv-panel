@@ -1077,7 +1077,7 @@ $avatarInitial = pnvUsersAvatarInitial($username);
 class="menuBtn"
 type="button"
 aria-label="منو"
-onclick="toggleMenu('menu<?php echo $i; ?>')">
+onclick="toggleMenu('menu<?php echo $i; ?>', this)">
 
 ⋮
 
@@ -1265,10 +1265,9 @@ menu.style.top = Math.round(top) + 'px';
 
 }
 
-function toggleMenu(id){
+function toggleMenu(id, button){
 
 const menu = document.getElementById(id);
-const button = event && event.currentTarget ? event.currentTarget : null;
 
 if(!menu){
 return;
