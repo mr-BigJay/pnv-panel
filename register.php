@@ -350,7 +350,7 @@ $registerCaptchaRefreshUrl .= '&ref=' . rawurlencode($refFromLink);
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ثبت نام</title>
 <link rel="stylesheet" href="/fonts.css">
-<link rel="stylesheet" href="/assets/css/auth.css?v=3">
+<link rel="stylesheet" href="/assets/css/auth.css?v=4">
 </head>
 <body class="auth-page">
 
@@ -439,14 +439,43 @@ p.type='password';
 }
 }
 
-document.querySelectorAll('.auth-hint-trigger').forEach(function(btn){
+(function(){
+function hintIsVisible(field){
+if(!field) return false;
+if(field.classList.contains('is-hint-pinned')) return true;
+var active = document.activeElement;
+if(!active || !field.contains(active)) return false;
+if(active.classList && active.classList.contains('auth-hint-trigger')) return false;
+return active.matches('input, textarea, select');
+}
+
+function syncHintState(field){
+var btn = field.querySelector('.auth-hint-trigger');
+if(!btn) return;
+var visible = hintIsVisible(field);
+btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+}
+
+document.querySelectorAll('.auth-field').forEach(function(field){
+var btn = field.querySelector('.auth-hint-trigger');
+if(!btn) return;
+
+field.addEventListener('focusin', function(){
+syncHintState(field);
+});
+
+field.addEventListener('focusout', function(){
+window.setTimeout(function(){
+syncHintState(field);
+}, 0);
+});
+
 btn.addEventListener('click', function(){
-var field = btn.closest('.auth-field');
-if(!field) return;
-var open = field.classList.toggle('is-hint-open');
-btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+field.classList.toggle('is-hint-pinned');
+syncHintState(field);
 });
 });
+})();
 </script>
 
 </body>
