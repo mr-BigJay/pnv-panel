@@ -54,10 +54,17 @@ async function checkNoHorizontalScroll(page, label) {
   }
 }
 
-/** Chromium page scale factor (closer to browser zoom than deviceScaleFactor alone). */
-async function setBrowserZoom(page, scaleFactor) {
+/** CDP scale smoke (not equivalent to browser zoom — kept separately). */
+async function setCdpPageScaleFactor(page, scaleFactor) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: scaleFactor });
+}
+
+/** Chromium layout reflow similar to browser zoom via CSS zoom (not CDP). */
+async function applyCssBrowserZoom(page, percent) {
+  await page.evaluate((pct) => {
+    document.documentElement.style.zoom = String(pct);
+  }, percent);
 }
 
 const context = await browser.newContext({ locale: 'fa-IR' });
@@ -142,15 +149,79 @@ else {
 
 await page.locator('#username').click();
 await page.waitForTimeout(200);
-const hintVisible = await page.evaluate(() => {
+const focusHintState = await page.evaluate(() => {
   const hint = document.getElementById('username-hint');
-  if (!hint) return false;
+  const btn = document.querySelector('.auth-hint-trigger[aria-controls="username-hint"]');
+  if (!hint || !btn) return null;
   const style = getComputedStyle(hint);
-  return parseFloat(style.opacity) > 0.5 || style.maxHeight !== '0px';
+  const visible = parseFloat(style.opacity) > 0.5 || style.maxHeight !== '0px';
+  return { visible, expanded: btn.getAttribute('aria-expanded') };
 });
-if (hintVisible) console.log('OK  username hint visible on focus');
+if (focusHintState?.visible && focusHintState.expanded === 'true') {
+  console.log('OK  username hint + aria-expanded on focus');
+} else {
+  console.error('FAIL username hint/aria on focus', focusHintState);
+  failed++;
+}
+
+await page.locator('#mobile').click();
+await page.waitForTimeout(350);
+const blurHintState = await page.evaluate(() => {
+  const btn = document.querySelector('.auth-hint-trigger[aria-controls="username-hint"]');
+  const hint = document.getElementById('username-hint');
+  const style = hint ? getComputedStyle(hint) : null;
+  const visible = style && (parseFloat(style.opacity) > 0.5 || style.maxHeight !== '0px');
+  return { visible: !!visible, expanded: btn ? btn.getAttribute('aria-expanded') : null };
+});
+if (!blurHintState.visible && blurHintState.expanded === 'false') {
+  console.log('OK  username hint + aria-expanded after blur (unpinned)');
+} else {
+  console.error('FAIL username hint/aria after blur', blurHintState);
+  failed++;
+}
+
+const infoBtn = page.locator('.auth-hint-trigger[aria-controls="username-hint"]');
+const hitBox = await infoBtn.evaluate((el) => {
+  const rect = el.getBoundingClientRect();
+  return { w: rect.width, h: rect.height };
+});
+if (hitBox.w >= 44 && hitBox.h >= 44) console.log('OK  info button 44px touch target');
 else {
-  console.error('FAIL username hint on focus');
+  console.error('FAIL info touch target', hitBox);
+  failed++;
+}
+
+await infoBtn.click();
+await page.waitForTimeout(150);
+const pinnedState = await page.evaluate(() => {
+  const field = document.getElementById('username')?.closest('.auth-field');
+  const btn = document.querySelector('.auth-hint-trigger[aria-controls="username-hint"]');
+  return {
+    pinned: field?.classList.contains('is-hint-pinned'),
+    expanded: btn?.getAttribute('aria-expanded'),
+  };
+});
+if (pinnedState.pinned && pinnedState.expanded === 'true') {
+  console.log('OK  info click pins hint + aria-expanded true');
+} else {
+  console.error('FAIL info pin state', pinnedState);
+  failed++;
+}
+
+await infoBtn.click();
+await page.waitForTimeout(150);
+const unpinnedState = await page.evaluate(() => {
+  const field = document.getElementById('username')?.closest('.auth-field');
+  const btn = document.querySelector('.auth-hint-trigger[aria-controls="username-hint"]');
+  return {
+    pinned: field?.classList.contains('is-hint-pinned'),
+    expanded: btn?.getAttribute('aria-expanded'),
+  };
+});
+if (!unpinnedState.pinned && unpinnedState.expanded === 'false') {
+  console.log('OK  info click unpins + aria-expanded false when unfocused');
+} else {
+  console.error('FAIL info unpin state', unpinnedState);
   failed++;
 }
 
@@ -160,9 +231,19 @@ const zoomContext = await browser.newContext({ locale: 'fa-IR' });
 const zoomPage = await zoomContext.newPage();
 await zoomPage.setViewportSize({ width: 375, height: 700 });
 await zoomPage.goto(`${BASE}/register.php`, { waitUntil: 'domcontentloaded' });
-await setBrowserZoom(zoomPage, 2);
-await checkNoHorizontalScroll(zoomPage, 'register 375px @200% page zoom (CDP)');
-await zoomPage.screenshot({ path: path.join(OUT, 'register-375-zoom200.png'), fullPage: true });
+await setCdpPageScaleFactor(zoomPage, 2);
+await checkNoHorizontalScroll(zoomPage, 'register 375px @CDP setPageScaleFactor(2) smoke');
+await zoomPage.screenshot({ path: path.join(OUT, 'register-375-zoom200-cdp.png'), fullPage: true });
+
+const reflowPage = await zoomContext.newPage();
+await reflowPage.setViewportSize({ width: 375, height: 700 });
+await reflowPage.goto(`${BASE}/register.php`, { waitUntil: 'domcontentloaded' });
+await applyCssBrowserZoom(reflowPage, '200%');
+await checkNoHorizontalScroll(reflowPage, 'register 375px @200% CSS browser-like zoom reflow');
+await reflowPage.screenshot({
+  path: path.join(OUT, 'register-375-zoom200-browser-reflow.png'),
+  fullPage: true,
+});
 await zoomContext.close();
 
 await browser.close();
