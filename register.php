@@ -68,7 +68,14 @@ $chars[rand(0,strlen($chars)-1)];
 
 $_SESSION['register_captcha'] = $captcha;
 
-header("Location: register.php");
+$refreshTarget = 'register.php';
+$refForRefresh = trim($_GET['ref'] ?? '');
+
+if($refForRefresh !== ''){
+$refreshTarget .= '?ref=' . rawurlencode($refForRefresh);
+}
+
+header("Location: " . $refreshTarget);
 exit;
 }
 
@@ -320,397 +327,156 @@ unset($_SESSION['register_captcha']);
 
 }
 
+$h = static function($v){
+return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+};
+
+$registerCaptchaDisplay = (string)($_SESSION['register_captcha'] ?? '');
+$registerCaptchaSpaced = $registerCaptchaDisplay !== ''
+? implode(' ', str_split($registerCaptchaDisplay))
+: '';
+
+$registerCaptchaRefreshUrl = 'register.php?refreshcaptcha=1';
+
+if($refFromLink !== ''){
+$registerCaptchaRefreshUrl .= '&ref=' . rawurlencode($refFromLink);
+}
+
 ?>
-
 <!DOCTYPE html>
-
-<html lang="fa">
-
+<html lang="fa" dir="rtl">
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
-
-<title>
-
-ثبت نام
-
-</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ثبت نام</title>
 <link rel="stylesheet" href="/fonts.css">
-
-<style>
-
-*{
-box-sizing:border-box;
-}
-
-body{
-margin:0;
-padding:16px;
-background:#0f172a;
-font-family:tahoma;
-direction:rtl;
-color:white;
-min-height:100vh;
-display:flex;
-justify-content:center;
-align-items:center;
-}
-
-.box{
-width:100%;
-max-width:720px;
-background:#1e293b;
-padding:44px 28px;
-border-radius:28px;
-}
-
-h2{
-font-size:32px;
-margin-top:0;
-margin-bottom:30px;
-text-align:center;
-}
-
-input{
-width:100%;
-padding:16px;
-margin-top:10px;
-margin-bottom:18px;
-border:none;
-border-radius:14px;
-box-sizing:border-box;
-font-size:18px;
-background:#0f172a;
-color:white;
-}
-
-.passwordWrap{
-position:relative;
-}
-
-.passwordWrap input{
-padding-left:55px;
-}
-
-.eye{
-position:absolute;
-left:18px;
-top:25px;
-font-size:22px;
-cursor:pointer;
-user-select:none;
-color:#94a3b8;
-}
-
-button{
-width:100%;
-padding:16px;
-background:#22c55e;
-border:none;
-border-radius:14px;
-color:white;
-font-size:22px;
-cursor:pointer;
-}
-
-.back{
-display:block;
-margin-top:18px;
-text-align:center;
-background:#334155;
-padding:16px;
-border-radius:14px;
-color:white;
-text-decoration:none;
-font-size:20px;
-}
-
-.error{
-background:#dc2626;
-padding:16px;
-border-radius:14px;
-margin-bottom:18px;
-line-height:32px;
-font-size:18px;
-}
-
-.success{
-background:#16a34a;
-padding:16px;
-border-radius:14px;
-margin-bottom:18px;
-line-height:32px;
-font-size:18px;
-}
-
-.captchaBox{
-background:#0f172a;
-padding:20px;
-border-radius:14px;
-margin-bottom:18px;
-text-align:center;
-font-size:34px;
-font-weight:bold;
-letter-spacing:6px;
-color:#facc15;
-user-select:none;
-}
-
-.refresh{
-display:block;
-margin-top:-4px;
-margin-bottom:18px;
-text-align:center;
-color:#38bdf8;
-text-decoration:none;
-font-size:18px;
-}
-
-.helper{
-font-size:15px;
-color:#94a3b8;
-margin-top:-8px;
-margin-bottom:18px;
-line-height:28px;
-}
-
-.refbox{
-background:#0f172a;
-padding:14px;
-border-radius:12px;
-margin-bottom:18px;
-font-size:15px;
-line-height:28px;
-color:#cbd5e1;
-}
-
-@media(max-width:768px){
-
-body{
-padding:10px;
-align-items:flex-start;
-}
-
-.box{
-max-width:100%;
-padding:30px 20px;
-border-radius:24px;
-margin-top:12px;
-}
-
-h2{
-font-size:28px;
-margin-bottom:24px;
-}
-
-input{
-font-size:16px;
-padding:14px;
-}
-
-button{
-font-size:20px;
-padding:14px;
-}
-
-.back{
-font-size:18px;
-padding:14px;
-}
-
-.error,
-.success{
-font-size:16px;
-line-height:28px;
-}
-
-.captchaBox{
-font-size:28px;
-padding:18px;
-}
-
-.refresh{
-font-size:16px;
-}
-
-.helper{
-font-size:14px;
-line-height:24px;
-}
-
-.refbox{
-font-size:14px;
-line-height:24px;
-}
-
-.eye{
-top:22px;
-font-size:20px;
-}
-
-}
-
-</style>
-
+<link rel="stylesheet" href="/assets/css/auth.css?v=4">
 </head>
+<body class="auth-page">
 
-<body>
+<div class="auth-shell">
+<div class="auth-card auth-card--register">
 
-<div class="box">
-
-<h2>
-
-ثبت نام
-
-</h2>
+<h1 class="auth-title">ثبت نام</h1>
 
 <?php if($error!=""){ ?>
-
-<div class="error">
-
-<?php echo $error; ?>
-
-</div>
-
+<div class="auth-alert auth-alert--error" role="alert"><?php echo $h($error); ?></div>
 <?php } ?>
 
 <?php if($success!=""){ ?>
-
-<div class="success">
-
-<?php echo $success; ?>
-
-</div>
-
+<div class="auth-alert auth-alert--success" role="status"><?php echo $h($success); ?></div>
 <?php } ?>
 
 <?php if($refFromLink!=""){ ?>
-
-<div class="refbox">
-
-ثبت نام از طریق لینک دعوت انجام شده است
-
-</div>
-
+<div class="auth-refbox">ثبت نام از طریق لینک دعوت انجام شده است</div>
 <?php } ?>
 
-<form method="POST">
+<form method="POST" class="auth-form-stack">
 
-<input
-type="text"
-name="username"
-placeholder="نام کاربری"
-required>
-
-<div class="helper">
-
-نام کاربری باید بین 6 تا 20 کارکتر باشد
-
+<div class="auth-field">
+<div class="auth-label-row">
+<label class="auth-label" for="username">نام کاربری</label>
+<button type="button" class="auth-hint-trigger" aria-expanded="false" aria-controls="username-hint" aria-label="راهنمای نام کاربری"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg></button>
+</div>
+<p id="username-hint" class="auth-hint">نام کاربری بین ۶ تا ۲۰ کاراکتر؛ حروف لاتین، عدد و . _ -</p>
+<input class="auth-input" type="text" name="username" id="username" required autocomplete="username" aria-describedby="username-hint">
 </div>
 
-<div class="passwordWrap">
-
-<input
-type="password"
-name="password"
-id="password"
-placeholder="رمز عبور"
-required>
-
-<span
-class="eye"
-onclick="togglePassword()">
-
-👁
-
-</span>
-
+<div class="auth-field">
+<div class="auth-label-row">
+<label class="auth-label" for="password">رمز عبور</label>
+<button type="button" class="auth-hint-trigger" aria-expanded="false" aria-controls="password-hint" aria-label="راهنمای رمز عبور"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg></button>
+</div>
+<p id="password-hint" class="auth-hint">حداقل ۸ کاراکتر؛ شامل حروف انگلیسی و عدد</p>
+<div class="auth-password">
+<input class="auth-input" type="password" name="password" id="password" required autocomplete="new-password" aria-describedby="password-hint">
+<span class="auth-eye" onclick="togglePassword()" role="button" tabindex="0" aria-label="نمایش رمز عبور" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePassword();}">👁</span>
+</div>
 </div>
 
-<div class="helper">
-
-رمز عبور باید شامل حروف انگلیسی و عدد باشد
-
+<div class="auth-field">
+<label class="auth-label" for="mobile">شماره موبایل</label>
+<input class="auth-input" type="text" name="mobile" id="mobile" required autocomplete="tel" inputmode="numeric">
 </div>
-
-<input
-type="text"
-name="mobile"
-placeholder="شماره موبایل"
-required>
 
 <?php if($refFromLink==""){ ?>
-
-<input
-type="text"
-name="referrer"
-placeholder="کد یا شماره معرف (اختیاری)">
-
+<div class="auth-field">
+<label class="auth-label" for="referrer">کد یا شماره معرف (اختیاری)</label>
+<input class="auth-input" type="text" name="referrer" id="referrer">
+</div>
 <?php } ?>
 
-<div class="captchaBox">
-
-<?php echo $_SESSION['register_captcha']; ?>
-
+<div class="auth-field auth-field--captcha">
+<label class="auth-label" for="captcha">کد امنیتی</label>
+<div class="auth-captcha-row">
+<div class="auth-captcha" id="register-captcha-display" role="group" aria-labelledby="register-captcha-desc">
+<p id="register-captcha-desc" class="auth-sr-only">کد امنیتی نمایشی: <?php echo $h($registerCaptchaSpaced); ?></p>
+<span class="auth-captcha-visual" aria-hidden="true"><?php echo $h($registerCaptchaDisplay); ?></span>
+</div>
+<a href="<?php echo $h($registerCaptchaRefreshUrl); ?>" class="auth-captcha-refresh" aria-label="تغییر کد امنیتی" title="تغییر کد امنیتی"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></a>
+</div>
+<input class="auth-input" type="text" name="captcha" id="captcha" required autocomplete="off" aria-describedby="register-captcha-desc">
 </div>
 
-<a
-href="register.php?refreshcaptcha=1"
-class="refresh">
-
-تغییر کد امنیتی
-
-</a>
-
-<input
-type="text"
-name="captcha"
-placeholder="کد امنیتی"
-required>
-
-<button type="submit">
-
-ثبت نام
-
-</button>
+<div class="auth-actions">
+<button type="submit" class="auth-btn auth-btn--primary">ثبت نام</button>
+</div>
 
 </form>
 
-<a
-href="index.php"
-class="back">
+<a href="index.php" class="auth-btn auth-btn--secondary">بازگشت</a>
 
-بازگشت
-
-</a>
-
+</div>
 </div>
 
 <script>
-
 function togglePassword(){
-
-let p =
-document.getElementById('password');
-
+let p = document.getElementById('password');
 if(p.type=='password'){
-
 p.type='text';
-
 }else{
-
 p.type='password';
-
+}
 }
 
+(function(){
+function hintIsVisible(field){
+if(!field) return false;
+if(field.classList.contains('is-hint-pinned')) return true;
+var active = document.activeElement;
+if(!active || !field.contains(active)) return false;
+if(active.classList && active.classList.contains('auth-hint-trigger')) return false;
+return active.matches('input, textarea, select');
 }
 
+function syncHintState(field){
+var btn = field.querySelector('.auth-hint-trigger');
+if(!btn) return;
+var visible = hintIsVisible(field);
+btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+}
+
+document.querySelectorAll('.auth-field').forEach(function(field){
+var btn = field.querySelector('.auth-hint-trigger');
+if(!btn) return;
+
+field.addEventListener('focusin', function(){
+syncHintState(field);
+});
+
+field.addEventListener('focusout', function(){
+window.setTimeout(function(){
+syncHintState(field);
+}, 0);
+});
+
+btn.addEventListener('click', function(){
+field.classList.toggle('is-hint-pinned');
+syncHintState(field);
+});
+});
+})();
 </script>
 
 </body>
-
 </html>
