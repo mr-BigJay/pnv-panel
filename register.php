@@ -350,7 +350,7 @@ $registerCaptchaRefreshUrl .= '&ref=' . rawurlencode($refFromLink);
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ثبت نام</title>
 <link rel="stylesheet" href="/fonts.css">
-<link rel="stylesheet" href="/assets/css/auth.css?v=2">
+<link rel="stylesheet" href="/assets/css/auth.css?v=3">
 </head>
 <body class="auth-page">
 
@@ -374,42 +374,48 @@ $registerCaptchaRefreshUrl .= '&ref=' . rawurlencode($refFromLink);
 <form method="POST" class="auth-form-stack">
 
 <div class="auth-field">
+<div class="auth-label-row">
 <label class="auth-label" for="username">نام کاربری</label>
-<input class="auth-input" type="text" name="username" id="username" placeholder="نام کاربری" required autocomplete="username">
+<button type="button" class="auth-hint-trigger" aria-expanded="false" aria-controls="username-hint" aria-label="راهنمای نام کاربری"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg></button>
 </div>
-<p class="auth-helper">نام کاربری بین ۶ تا ۲۰ کاراکتر؛ حروف لاتین، عدد و . _ -</p>
+<p id="username-hint" class="auth-hint">نام کاربری بین ۶ تا ۲۰ کاراکتر؛ حروف لاتین، عدد و . _ -</p>
+<input class="auth-input" type="text" name="username" id="username" required autocomplete="username" aria-describedby="username-hint">
+</div>
 
 <div class="auth-field">
+<div class="auth-label-row">
 <label class="auth-label" for="password">رمز عبور</label>
+<button type="button" class="auth-hint-trigger" aria-expanded="false" aria-controls="password-hint" aria-label="راهنمای رمز عبور"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg></button>
+</div>
+<p id="password-hint" class="auth-hint">حداقل ۸ کاراکتر؛ شامل حروف انگلیسی و عدد</p>
 <div class="auth-password">
-<input class="auth-input" type="password" name="password" id="password" placeholder="رمز عبور" required autocomplete="new-password">
+<input class="auth-input" type="password" name="password" id="password" required autocomplete="new-password" aria-describedby="password-hint">
 <span class="auth-eye" onclick="togglePassword()" role="button" tabindex="0" aria-label="نمایش رمز عبور" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePassword();}">👁</span>
 </div>
 </div>
-<p class="auth-helper">حداقل ۸ کاراکتر؛ شامل حروف انگلیسی و عدد</p>
 
 <div class="auth-field">
 <label class="auth-label" for="mobile">شماره موبایل</label>
-<input class="auth-input" type="text" name="mobile" id="mobile" placeholder="شماره موبایل" required autocomplete="tel" inputmode="numeric">
+<input class="auth-input" type="text" name="mobile" id="mobile" required autocomplete="tel" inputmode="numeric">
 </div>
 
 <?php if($refFromLink==""){ ?>
 <div class="auth-field">
 <label class="auth-label" for="referrer">کد یا شماره معرف (اختیاری)</label>
-<input class="auth-input" type="text" name="referrer" id="referrer" placeholder="کد یا شماره معرف (اختیاری)">
+<input class="auth-input" type="text" name="referrer" id="referrer">
 </div>
 <?php } ?>
 
+<div class="auth-field auth-field--captcha">
+<label class="auth-label" for="captcha">کد امنیتی</label>
+<div class="auth-captcha-row">
 <div class="auth-captcha" id="register-captcha-display" role="group" aria-labelledby="register-captcha-desc">
 <p id="register-captcha-desc" class="auth-sr-only">کد امنیتی نمایشی: <?php echo $h($registerCaptchaSpaced); ?></p>
 <span class="auth-captcha-visual" aria-hidden="true"><?php echo $h($registerCaptchaDisplay); ?></span>
 </div>
-
-<a href="<?php echo $h($registerCaptchaRefreshUrl); ?>" class="auth-captcha-refresh">تغییر کد امنیتی</a>
-
-<div class="auth-field">
-<label class="auth-label" for="captcha">کد امنیتی</label>
-<input class="auth-input" type="text" name="captcha" id="captcha" placeholder="کد امنیتی" required autocomplete="off" aria-describedby="register-captcha-desc">
+<a href="<?php echo $h($registerCaptchaRefreshUrl); ?>" class="auth-captcha-refresh" aria-label="تغییر کد امنیتی" title="تغییر کد امنیتی"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></a>
+</div>
+<input class="auth-input" type="text" name="captcha" id="captcha" required autocomplete="off" aria-describedby="register-captcha-desc">
 </div>
 
 <div class="auth-actions">
@@ -432,6 +438,15 @@ p.type='text';
 p.type='password';
 }
 }
+
+document.querySelectorAll('.auth-hint-trigger').forEach(function(btn){
+btn.addEventListener('click', function(){
+var field = btn.closest('.auth-field');
+if(!field) return;
+var open = field.classList.toggle('is-hint-open');
+btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+});
 </script>
 
 </body>

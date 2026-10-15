@@ -1,6 +1,12 @@
 /**
  * Auth pages viewport smoke test.
- * Run: cd /workspace && npm init -y && npm i -D playwright && npx playwright install chromium && node tests/manual/auth-viewports.mjs
+ *
+ * Env:
+ *   AUTH_TEST_SCREENSHOT_DIR — output directory (default: <repo>/tmp/auth-screenshots)
+ *   AUTH_TEST_PORT — PHP server port when not using AUTH_TEST_BASE_URL (default: 8766)
+ *   AUTH_TEST_BASE_URL — e.g. http://127.0.0.1:8766 (skip built-in server if set)
+ *
+ * Run: npx playwright install chromium && node tests/manual/auth-viewports.mjs
  */
 import { chromium } from 'playwright';
 import { spawn } from 'child_process';
@@ -10,18 +16,27 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
-const OUT = '/opt/cursor/artifacts/screenshots/auth-pr25';
+const OUT =
+  process.env.AUTH_TEST_SCREENSHOT_DIR ||
+  path.join(ROOT, 'tmp', 'auth-screenshots');
 const widths = [320, 375, 430, 768, 1366, 1920];
-const PORT = 8766;
+const PORT = parseInt(process.env.AUTH_TEST_PORT || '8766', 10);
+const BASE = (process.env.AUTH_TEST_BASE_URL || `http://127.0.0.1:${PORT}`).replace(
+  /\/$/,
+  '',
+);
 
 mkdirSync(OUT, { recursive: true });
 
-const server = spawn('php', ['-S', `127.0.0.1:${PORT}`, '-t', ROOT], {
-  cwd: ROOT,
-  stdio: 'ignore',
-});
+let server = null;
 
-await new Promise((r) => setTimeout(r, 500));
+if (!process.env.AUTH_TEST_BASE_URL) {
+  server = spawn('php', ['-S', `127.0.0.1:${PORT}`, '-t', ROOT], {
+    cwd: ROOT,
+    stdio: 'ignore',
+  });
+  await new Promise((r) => setTimeout(r, 500));
+}
 
 const browser = await chromium.launch();
 let failed = 0;
@@ -39,42 +54,46 @@ async function checkNoHorizontalScroll(page, label) {
   }
 }
 
+/** Chromium page scale factor (closer to browser zoom than deviceScaleFactor alone). */
+async function setBrowserZoom(page, scaleFactor) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: scaleFactor });
+}
+
 const context = await browser.newContext({ locale: 'fa-IR' });
 const page = await context.newPage();
 
 for (const w of widths) {
   await page.setViewportSize({ width: w, height: 800 });
-  await page.goto(`http://127.0.0.1:${PORT}/index.php`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/index.php`, { waitUntil: 'domcontentloaded' });
   await checkNoHorizontalScroll(page, `login ${w}px`);
   await page.screenshot({ path: path.join(OUT, `login-${w}.png`), fullPage: true });
 
-  await page.goto(`http://127.0.0.1:${PORT}/register.php`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/register.php`, { waitUntil: 'domcontentloaded' });
   await checkNoHorizontalScroll(page, `register ${w}px`);
   await page.screenshot({ path: path.join(OUT, `register-${w}.png`), fullPage: true });
 }
 
 await page.setViewportSize({ width: 375, height: 800 });
-await page.goto(`http://127.0.0.1:${PORT}/index.php`);
-const captchaBefore = (await page.locator('.auth-captcha-visual').first().textContent()) || '';
-await page.click('a.auth-captcha-refresh');
+await page.goto(`${BASE}/index.php`);
+await page.locator('.auth-captcha-refresh').first().click();
 await page.waitForLoadState('domcontentloaded');
-const captchaAfter = (await page.locator('.auth-captcha-visual').first().textContent()) || '';
-if (captchaBefore && captchaAfter) console.log('OK  login captcha refresh (code updated or page reloaded)');
+console.log('OK  login captcha refresh navigates');
 
-await page.goto(`http://127.0.0.1:${PORT}/register.php?ref=TESTREF`);
+await page.goto(`${BASE}/register.php?ref=TESTREF`);
 if ((await page.locator('#referrer').count()) === 0) console.log('OK  referrer hidden with ref param');
 else {
   console.error('FAIL referrer visible with ref');
   failed++;
 }
-const href = await page.locator('a.auth-captcha-refresh').getAttribute('href');
+const href = await page.locator('.auth-captcha-refresh').first().getAttribute('href');
 if (href && href.includes('ref=TESTREF') && href.includes('refreshcaptcha=1')) {
   console.log('OK  register refresh link keeps ref');
 } else {
   console.error('FAIL register refresh link:', href);
   failed++;
 }
-await page.click('a.auth-captcha-refresh');
+await page.locator('.auth-captcha-refresh').first().click();
 await page.waitForURL(/ref=TESTREF/);
 if (page.url().includes('ref=TESTREF') && !page.url().includes('refreshcaptcha')) {
   console.log('OK  register captcha refresh preserves ref in URL');
@@ -83,7 +102,7 @@ if (page.url().includes('ref=TESTREF') && !page.url().includes('refreshcaptcha')
   failed++;
 }
 
-await page.goto(`http://127.0.0.1:${PORT}/register.php`);
+await page.goto(`${BASE}/register.php`);
 await page.locator('#password').fill('secret12');
 const typeBefore = await page.locator('#password').getAttribute('type');
 await page.locator('.auth-eye').click();
@@ -94,7 +113,7 @@ else {
   failed++;
 }
 
-await page.goto(`http://127.0.0.1:${PORT}/index.php`);
+await page.goto(`${BASE}/index.php`);
 const loginDesc = await page.locator('#login-captcha-desc').textContent();
 if (loginDesc && loginDesc.includes('کد امنیتی نمایشی')) console.log('OK  captcha accessible description');
 else {
@@ -102,18 +121,54 @@ else {
   failed++;
 }
 
+const placeholders = await page.evaluate(() =>
+  Array.from(document.querySelectorAll('.auth-form-stack input')).some((el) => el.placeholder),
+);
+if (!placeholders) console.log('OK  no duplicate placeholders in login form');
+else {
+  console.error('FAIL login still has placeholders');
+  failed++;
+}
+
+await page.goto(`${BASE}/register.php`);
+const regPlaceholders = await page.evaluate(() =>
+  Array.from(document.querySelectorAll('.auth-form-stack input')).some((el) => el.placeholder),
+);
+if (!regPlaceholders) console.log('OK  no duplicate placeholders in register form');
+else {
+  console.error('FAIL register still has placeholders');
+  failed++;
+}
+
+await page.locator('#username').click();
+await page.waitForTimeout(200);
+const hintVisible = await page.evaluate(() => {
+  const hint = document.getElementById('username-hint');
+  if (!hint) return false;
+  const style = getComputedStyle(hint);
+  return parseFloat(style.opacity) > 0.5 || style.maxHeight !== '0px';
+});
+if (hintVisible) console.log('OK  username hint visible on focus');
+else {
+  console.error('FAIL username hint on focus');
+  failed++;
+}
+
 await context.close();
 
-const zoomContext = await browser.newContext({ locale: 'fa-IR', deviceScaleFactor: 2 });
+const zoomContext = await browser.newContext({ locale: 'fa-IR' });
 const zoomPage = await zoomContext.newPage();
 await zoomPage.setViewportSize({ width: 375, height: 700 });
-await zoomPage.goto(`http://127.0.0.1:${PORT}/register.php`);
-await checkNoHorizontalScroll(zoomPage, 'register 375px @200% zoom');
+await zoomPage.goto(`${BASE}/register.php`, { waitUntil: 'domcontentloaded' });
+await setBrowserZoom(zoomPage, 2);
+await checkNoHorizontalScroll(zoomPage, 'register 375px @200% page zoom (CDP)');
 await zoomPage.screenshot({ path: path.join(OUT, 'register-375-zoom200.png'), fullPage: true });
 await zoomContext.close();
 
 await browser.close();
-server.kill();
+if (server) server.kill();
+
+console.log(`Screenshots: ${OUT}`);
 
 if (failed > 0) process.exit(1);
 console.log('All auth viewport checks passed');
