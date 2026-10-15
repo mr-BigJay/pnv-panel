@@ -68,7 +68,14 @@ $chars[rand(0,strlen($chars)-1)];
 
 $_SESSION['register_captcha'] = $captcha;
 
-header("Location: register.php");
+$refreshTarget = 'register.php';
+$refForRefresh = trim($_GET['ref'] ?? '');
+
+if($refForRefresh !== ''){
+$refreshTarget .= '?ref=' . rawurlencode($refForRefresh);
+}
+
+header("Location: " . $refreshTarget);
 exit;
 }
 
@@ -324,6 +331,17 @@ $h = static function($v){
 return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
 
+$registerCaptchaDisplay = (string)($_SESSION['register_captcha'] ?? '');
+$registerCaptchaSpaced = $registerCaptchaDisplay !== ''
+? implode(' ', str_split($registerCaptchaDisplay))
+: '';
+
+$registerCaptchaRefreshUrl = 'register.php?refreshcaptcha=1';
+
+if($refFromLink !== ''){
+$registerCaptchaRefreshUrl .= '&ref=' . rawurlencode($refFromLink);
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -332,7 +350,7 @@ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ثبت نام</title>
 <link rel="stylesheet" href="/fonts.css">
-<link rel="stylesheet" href="/assets/css/auth.css?v=1">
+<link rel="stylesheet" href="/assets/css/auth.css?v=2">
 </head>
 <body class="auth-page">
 
@@ -382,13 +400,16 @@ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 </div>
 <?php } ?>
 
-<div class="auth-captcha" aria-hidden="true"><?php echo $h($_SESSION['register_captcha']); ?></div>
+<div class="auth-captcha" id="register-captcha-display" role="group" aria-labelledby="register-captcha-desc">
+<p id="register-captcha-desc" class="auth-sr-only">کد امنیتی نمایشی: <?php echo $h($registerCaptchaSpaced); ?></p>
+<span class="auth-captcha-visual" aria-hidden="true"><?php echo $h($registerCaptchaDisplay); ?></span>
+</div>
 
-<a href="register.php?refreshcaptcha=1" class="auth-captcha-refresh">تغییر کد امنیتی</a>
+<a href="<?php echo $h($registerCaptchaRefreshUrl); ?>" class="auth-captcha-refresh">تغییر کد امنیتی</a>
 
 <div class="auth-field">
 <label class="auth-label" for="captcha">کد امنیتی</label>
-<input class="auth-input" type="text" name="captcha" id="captcha" placeholder="کد امنیتی" required autocomplete="off">
+<input class="auth-input" type="text" name="captcha" id="captcha" placeholder="کد امنیتی" required autocomplete="off" aria-describedby="register-captcha-desc">
 </div>
 
 <div class="auth-actions">
