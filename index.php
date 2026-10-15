@@ -149,7 +149,7 @@ $loginCaptchaSpaced = $loginCaptchaDisplay !== ''
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ورود به پنل کاربری</title>
 <link rel="stylesheet" href="/fonts.css">
-<link rel="stylesheet" href="/assets/css/auth.css?v=2">
+<link rel="stylesheet" href="/assets/css/auth.css?v=3">
 </head>
 <body class="auth-page">
 
@@ -179,16 +179,16 @@ $loginCaptchaSpaced = $loginCaptchaDisplay !== ''
 </div>
 </div>
 
+<div class="auth-field auth-field--captcha">
+<label class="auth-label" for="captcha">کد امنیتی</label>
+<div class="auth-captcha-row">
 <div class="auth-captcha" id="login-captcha-display" role="group" aria-labelledby="login-captcha-desc">
 <p id="login-captcha-desc" class="auth-sr-only">کد امنیتی نمایشی: <?php echo htmlspecialchars($loginCaptchaSpaced, ENT_QUOTES, 'UTF-8'); ?></p>
 <span class="auth-captcha-visual" aria-hidden="true"><?php echo htmlspecialchars($loginCaptchaDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
 </div>
-
-<a href="index.php?refreshcaptcha=1" class="auth-captcha-refresh">تغییر کد امنیتی</a>
-
-<div class="auth-field">
-<label class="auth-label" for="captcha">کد امنیتی</label>
-<input class="auth-input" type="text" name="captcha" id="captcha" placeholder="کد امنیتی" required autocomplete="off" aria-describedby="login-captcha-desc">
+<a href="index.php?refreshcaptcha=1" class="auth-captcha-refresh" aria-label="تغییر کد امنیتی" title="تغییر کد امنیتی"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></a>
+</div>
+<input class="auth-input" type="text" name="captcha" id="captcha" required autocomplete="off" aria-describedby="login-captcha-desc">
 </div>
 
 <div class="auth-actions">
