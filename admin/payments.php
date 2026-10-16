@@ -78,6 +78,12 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+$paymentsXuiEnabled = false;
+
+if(function_exists('xuiLoadConfig') && function_exists('xuiIsEnabled')){
+    $paymentsXuiEnabled = xuiIsEnabled(xuiLoadConfig());
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -207,50 +213,47 @@ if(isset($_POST['approve_payment'])){
         $redirectPer = 20;
     }
 
-    $xuiConfig = xuiLoadConfig();
+    $redirectView = trim((string)($_POST['view'] ?? $_GET['view'] ?? 'pending'));
 
-    if(function_exists('xuiIsEnabled') ? xuiIsEnabled($xuiConfig) : !empty($xuiConfig['enabled'])){
+    if(!in_array($redirectView, ['pending', 'confirmed', 'expired'], true)){
+        $redirectView = 'pending';
+    }
 
-        $result = xuiApprovePaymentIndex($index, 'خرید');
+    if($paymentsXuiEnabled && function_exists('xuiApprovePaymentIndex')){
+        $result = xuiApprovePaymentIndex($index, '');
 
         if(empty($result['ok'])){
-            $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-            header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+            $_SESSION['payment_error'] = 'تایید ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
+            header('Location: ' . pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($redirectView) . '&per=' . $redirectPer));
             exit;
         }
 
         $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($redirectView) . '&per=' . $redirectPer));
         exit;
-
     }
 
     if(!isValidSubscriptionLink($link)){
         $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($redirectView) . '&per=' . $redirectPer));
         exit;
     }
 
     if(isset($payments[$index])){
-
         $payments[$index][6] = 'تایید شد';
-
         $payments[$index][7] = $link;
-
     }
 
     $fp = fopen($paymentsFile,'w');
 
     foreach($payments as $p){
-
         fputcsv($fp, $p);
-
     }
 
     fclose($fp);
 
     $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($redirectView) . '&per=' . $redirectPer));
 
     exit;
 
@@ -329,6 +332,10 @@ foreach($payments as $index => $pay){
 
     if($type == 'خرید' || $type == ''){
 
+        if(function_exists('xuiPaymentRowType') && xuiPaymentRowType($pay, '', $index) === 'تمدید'){
+            continue;
+        }
+
         if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
             continue;
         }
@@ -365,6 +372,26 @@ usort($buyPayments, static function($a, $b){
     return $byDate !== 0 ? $byDate : ($b['index'] <=> $a['index']);
 });
 
+$paymentsListView = trim((string)($_GET['view'] ?? 'pending'));
+
+if(!in_array($paymentsListView, ['pending', 'confirmed', 'expired'], true)){
+    $paymentsListView = 'pending';
+}
+
+if(function_exists('instantPayAdminRowListBucket')){
+    $buyPayments = array_values(array_filter($buyPayments, static function($row) use ($paymentsListView){
+        $pay = $row['data'] ?? [];
+
+        if(!is_array($pay)){
+            return false;
+        }
+
+        $bucket = instantPayAdminRowListBucket($pay);
+
+        return $bucket === $paymentsListView;
+    }));
+}
+
 $currentPage = intval($_GET['p'] ?? 1);
 
 if($currentPage < 1){
@@ -389,10 +416,12 @@ $start = ($currentPage - 1) * $perPage;
 
 $buyPaymentsPage = array_slice($buyPayments, $start, $perPage);
 
-function paymentsListUrl($page, $per){
+function paymentsListUrl($page, $per, $view = 'pending'){
+
+    $view = in_array($view, ['pending', 'confirmed', 'expired'], true) ? $view : 'pending';
 
     return pnvAdminUrl(
-        'index.php?page=payments&p=' . intval($page) . '&per=' . intval($per)
+        'index.php?page=payments&view=' . rawurlencode($view) . '&p=' . intval($page) . '&per=' . intval($per)
     );
 
 }
@@ -483,6 +512,33 @@ font-size:11px;
 font-weight:700;
 vertical-align:middle;
 letter-spacing:.04em;
+}
+
+.payViewTabs{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+justify-content:flex-end;
+margin:-6px 0 16px;
+}
+
+.payViewTab{
+display:inline-flex;
+align-items:center;
+padding:8px 14px;
+border-radius:999px;
+border:1px solid rgba(148,163,184,.22);
+background:#1e293b;
+color:#cbd5e1;
+font-size:13px;
+text-decoration:none;
+transition:background .15s,border-color .15s,color .15s;
+}
+
+.payViewTab.is-active{
+background:#2563eb;
+border-color:#2563eb;
+color:#fff;
 }
 
 .payList{
@@ -835,6 +891,21 @@ flex:0 0 20px;
 <div class="payAlertErr"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
 <?php } ?>
 
+<div class="payViewTabs" role="tablist" aria-label="فیلتر وضعیت خرید">
+<?php
+$payViewLabels = [
+    'confirmed' => 'تایید شده',
+    'pending' => 'درحال بررسی',
+    'expired' => 'منقضی',
+];
+foreach($payViewLabels as $viewKey => $viewLabel){
+    $active = $paymentsListView === $viewKey ? ' is-active' : '';
+    $href = paymentsListUrl(1, $perPage, $viewKey);
+    ?>
+<a class="payViewTab<?php echo $active; ?>" role="tab" href="<?php echo htmlspecialchars($href, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($viewLabel, ENT_QUOTES, 'UTF-8'); ?></a>
+<?php } ?>
+</div>
+
 <div class="payList">
 
 <?php if($totalItems === 0){ ?>
@@ -976,7 +1047,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 <div class="pagination">
 <?php for($x = 1; $x <= $totalPages; $x++){ ?>
 <a
-href="<?php echo htmlspecialchars(paymentsListUrl($x, $perPage), ENT_QUOTES, 'UTF-8'); ?>"
+href="<?php echo htmlspecialchars(paymentsListUrl($x, $perPage, $paymentsListView), ENT_QUOTES, 'UTF-8'); ?>"
 class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 <?php echo $x; ?>
 </a>
@@ -992,7 +1063,9 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 
 <script>
 
-const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments'), JSON_UNESCAPED_UNICODE); ?>;
+const paymentsListView = <?php echo json_encode($paymentsListView, JSON_UNESCAPED_UNICODE); ?>;
+const paymentsXuiEnabled = <?php echo $paymentsXuiEnabled ? 'true' : 'false'; ?>;
+const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments&view=' . rawurlencode($paymentsListView)), JSON_UNESCAPED_UNICODE); ?>;
 const paymentsPerPage = <?php echo (int)$perPage; ?>;
 
 function closeMenus(){
@@ -1109,15 +1182,29 @@ content='<div style="background:#450a0a;padding:14px;border-radius:12px;line-hei
 '<div class="modalBtns"><button class="gray" onclick="closeModal()">بستن</button></div>';
 }
 else{
+if(paymentsXuiEnabled){
 content=
 '<form method="POST">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="view" value="'+paymentsListView+'">'+
+'<input type="hidden" name="approve_index" value="'+id+'">'+
+'<div class="modalBtns">'+
+'<button type="submit" name="approve_payment" class="green">تایید</button>'+
+'</div></form>';
+}
+else{
+content=
+'<form method="POST">'+
+'<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="view" value="'+paymentsListView+'">'+
 '<input type="hidden" name="approve_index" value="'+id+'">'+
 '<input type="text" name="approve_link" id="approveLink" placeholder="لینک اشتراک">'+
 '<div class="modalBtns">'+
 '<button type="button" class="gray" onclick="pasteClipboard()">Paste</button>'+
 '<button type="submit" name="approve_payment" class="green">تایید</button>'+
-'</div></form>'+
+'</div></form>';
+}
+content+=
 '<hr style="margin:20px 0;border-color:#334155;">'+
 '<form method="POST">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+

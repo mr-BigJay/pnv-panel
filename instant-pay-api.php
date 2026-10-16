@@ -11,6 +11,7 @@ if(!isset($_SESSION['user'])){
 
 require_once __DIR__ . '/subscription_lib.php';
 require_once __DIR__ . '/instant_pay_lib.php';
+require_once __DIR__ . '/xui_lib.php';
 require_once __DIR__ . '/coupon_lib.php';
 require_once __DIR__ . '/pnv_campaign_bootstrap.php';
 require_once __DIR__ . '/telegram_lib.php';
@@ -75,6 +76,38 @@ if($action === 'create'){
     $discountFinalThousands = 0;
     $discountType = '';
     $discountValue = 0;
+
+    $typeNorm = function_exists('instantPayNormalizeType') ? instantPayNormalizeType($type) : trim($type);
+
+    if($typeNorm === 'تمدید'){
+        if($sub === ''){
+            echo json_encode(['ok' => false, 'error' => 'لینک اشتراک را وارد کنید'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if(!function_exists('xuiValidateRenewTarget')){
+            echo json_encode(['ok' => false, 'error' => 'اعتبارسنجی تمدید در دسترس نیست'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $renewTarget = xuiValidateRenewTarget($sub);
+
+        if(empty($renewTarget['ok'])){
+            $reason = trim((string)($renewTarget['reason'] ?? 'invalid_link'));
+            $error = trim((string)($renewTarget['error'] ?? ''));
+
+            if($error === '' && function_exists('xuiRenewTargetUserError')){
+                $error = xuiRenewTargetUserError($reason);
+            }
+
+            echo json_encode([
+                'ok' => false,
+                'error' => $error,
+                'reason' => $reason,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
 
     if($hasCoupon){
         if($couponCode === ''){

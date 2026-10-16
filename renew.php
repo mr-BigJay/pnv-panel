@@ -13,6 +13,7 @@ require_once __DIR__ . '/telegram_lib.php';
 require_once __DIR__ . '/plan_ui_lib.php';
 require_once __DIR__ . '/instant_pay_lib.php';
 require_once __DIR__ . '/bank_lib.php';
+require_once __DIR__ . '/xui_lib.php';
 
 $plans = [];
 
@@ -46,6 +47,41 @@ function renewNormalizeSubLink($value){
     return pnvNormalizeSubLinkValue($value);
 }
 
+function renewEnrichSubscriptionRenewability($entry){
+    $link = trim((string)($entry['link'] ?? ''));
+    $entry['renew_status'] = 'unknown';
+    $entry['renewable'] = true;
+
+    if($link === ''){
+        $entry['renew_status'] = 'invalid_link';
+        $entry['renewable'] = false;
+        return $entry;
+    }
+
+    if(!function_exists('xuiValidateRenewTarget')){
+        return $entry;
+    }
+
+    $check = xuiValidateRenewTarget($link);
+    $reason = trim((string)($check['reason'] ?? ''));
+
+    if(!empty($check['ok'])){
+        $entry['renew_status'] = 'ok';
+        $entry['renewable'] = true;
+        return $entry;
+    }
+
+    $entry['renew_status'] = $reason !== '' ? $reason : 'invalid_link';
+
+    if($reason === 'api_error'){
+        $entry['renewable'] = true;
+        return $entry;
+    }
+
+    $entry['renewable'] = false;
+    return $entry;
+}
+
 function renewLoadUserSubscriptions($username){
 
     $entries = pnvLoadUserActiveSubscriptions($username);
@@ -57,6 +93,7 @@ function renewLoadUserSubscriptions($username){
             $username
         );
         unset($entry['plan_text'], $entry['tracking'], $entry['date'], $entry['time']);
+        $entry = renewEnrichSubscriptionRenewability($entry);
     }
     unset($entry);
 
@@ -179,12 +216,24 @@ pointer-events:none !important;
 <option value="">انتخاب از اشتراک‌های من</option>
 <?php foreach($userSubscriptions as $item){
     $linkVal = trim((string)($item['link'] ?? ''));
+    $renewStatus = trim((string)($item['renew_status'] ?? 'unknown'));
+    $renewable = !empty($item['renewable']);
+    $optionLabel = (string)($item['name'] ?? '');
+    if($renewStatus === 'not_found'){
+        $optionLabel .= ' — حذف‌شده از سرور';
+    }
+    elseif(!$renewable && $renewStatus !== '' && $renewStatus !== 'unknown'){
+        $optionLabel .= ' — قابل تمدید نیست';
+    }
 ?>
 <option
     value="<?php echo $h($linkVal); ?>"
     data-link="<?php echo $h($linkVal); ?>"
     data-time-category="<?php echo $h($item['time_category'] ?? 'unknown'); ?>"
-><?php echo $h($item['name']); ?></option>
+    data-renewable="<?php echo $renewable ? '1' : '0'; ?>"
+    data-renew-status="<?php echo $h($renewStatus); ?>"
+    <?php if(!$renewable){ ?>disabled<?php } ?>
+><?php echo $h($optionLabel); ?></option>
 <?php } ?>
 <option value="__other__">لینک دیگر</option>
 </select>
@@ -443,7 +492,9 @@ $metaMap = [];
 foreach($userSubscriptions as $item){
     $metaMap[strtolower((string)($item['link'] ?? ''))] = [
         'time_category' => $item['time_category'] ?? 'unknown',
-        'name' => $item['name'] ?? ''
+        'name' => $item['name'] ?? '',
+        'renewable' => !empty($item['renewable']),
+        'renew_status' => $item['renew_status'] ?? 'unknown',
     ];
 }
 echo json_encode($metaMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -484,6 +535,39 @@ if(catLockModal){
 document.addEventListener('keydown', function(e){
     if(e.key === 'Escape') hideCatLockHint();
 });
+
+function selectedSubRenewable(){
+    const input = document.getElementById('subInput');
+    const select = document.getElementById('subSelect');
+    const sub = input ? String(input.value || '').trim() : '';
+    if(!sub) return false;
+
+    if(select && input && input.classList.contains('is-hidden-input')){
+        const opt = select.options[select.selectedIndex];
+        if(opt && opt.getAttribute('data-renewable') === '0'){
+            return false;
+        }
+    }
+
+    const meta = subMetaByLink[sub.toLowerCase()];
+    if(meta && meta.renewable === false){
+        return false;
+    }
+
+    return true;
+}
+
+function renewBlockedMessage(){
+    const select = document.getElementById('subSelect');
+    if(select){
+        const opt = select.options[select.selectedIndex];
+        const status = opt ? String(opt.getAttribute('data-renew-status') || '') : '';
+        if(status === 'not_found'){
+            return 'این اشتراک دیگر روی سرور وجود ندارد و قابل تمدید نیست. لطفاً اشتراک جدید تهیه کنید.';
+        }
+    }
+    return 'این اشتراک قابل تمدید نیست. لطفاً اشتراک جدید تهیه کنید.';
+}
 
 function resolveSubTimeCategory(link){
     link = String(link || '').trim().toLowerCase();
@@ -603,9 +687,10 @@ function pickSubscription(){
             setSubInputMode(current ? 'manual' : 'empty', current);
             subTimeCategory = resolveSubTimeCategory(current);
         }
-        hideCatLockHint();
-        syncCategoryLocks();
-        return;
+    hideCatLockHint();
+    syncCategoryLocks();
+    updateContinueState();
+    return;
     }
 
     setSubInputMode('picked', value);
@@ -614,6 +699,7 @@ function pickSubscription(){
     selectedPlan = null;
     if(planSelect) planSelect.value = '';
     syncCategoryLocks();
+    updateContinueState();
 }
 window.pickSubscription = pickSubscription;
 
@@ -643,7 +729,8 @@ function updateContinueState(){
         (subTimeCategory === 'limited' && selectedCategory === 'unlimited')
     );
     const hasPlan = !!(selectedCategory && selectedPlan && planSelect && planSelect.value);
-    toStep2Btn.disabled = !!(locked || !hasPlan);
+    const subRenewable = selectedSubRenewable();
+    toStep2Btn.disabled = !!(locked || !hasPlan || !subRenewable);
 }
 
 function renderPlans(){
@@ -732,11 +819,13 @@ if(subInputEl){
         subTimeCategory = resolveSubTimeCategory(subInputEl.value);
         hideCatLockHint();
         syncCategoryLocks();
+        updateContinueState();
     });
     subInputEl.addEventListener('blur', function(){
         if(subInputEl.classList.contains('is-hidden-input')) return;
         subTimeCategory = resolveSubTimeCategory(subInputEl.value);
         syncCategoryLocks();
+        updateContinueState();
     });
 }
 
@@ -861,6 +950,10 @@ syncCardBox();
 toStep2Btn.addEventListener('click', function(){
     const subInput = document.getElementById('subInput');
     if(subInput && !subInput.checkValidity()){ subInput.reportValidity(); return; }
+    if(!selectedSubRenewable()){
+        alert(renewBlockedMessage());
+        return;
+    }
     if(!planSelect.value){ alert('لطفا پلن را انتخاب کنید'); return; }
     showStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1091,6 +1184,10 @@ function ensureInstantPay(forceRestart){
     }
     if(!sub){
         showPayCreateError('لینک اشتراک را وارد کنید');
+        return;
+    }
+    if(!selectedSubRenewable()){
+        showPayCreateError(renewBlockedMessage());
         return;
     }
     if(!forceRestart && currentPay && (currentPay.status === 'waiting' || currentPay.status === 'processing')){
