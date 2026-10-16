@@ -333,11 +333,24 @@ foreach($payments as $index => $pay){
             continue;
         }
 
+        // Use the transaction creation time, not the CSV row position.
+        // Older records may only have a Jalali date/time in columns 4 and 5.
+        $sortTimestamp = intval($pay[8] ?? 0);
+        if($sortTimestamp <= 0 && function_exists('pnvParseDateTimeToTimestamp')){
+            $date = trim((string)($pay[4] ?? ''));
+            $time = trim((string)($pay[5] ?? ''));
+            if($date !== ''){
+                $sortTimestamp = pnvParseDateTimeToTimestamp(trim($date . ' ' . $time));
+            }
+        }
+
         $buyPayments[] = [
 
             'index' => $index,
 
-            'data' => $pay
+            'data' => $pay,
+
+            'sort_timestamp' => $sortTimestamp
 
         ];
 
@@ -345,7 +358,12 @@ foreach($payments as $index => $pay){
 
 }
 
-$buyPayments = array_reverse($buyPayments);
+// Sort the complete list before pagination. Keep the original CSV index for
+// approve/reject/delete operations, and break equal-date ties deterministically.
+usort($buyPayments, static function($a, $b){
+    $byDate = $b['sort_timestamp'] <=> $a['sort_timestamp'];
+    return $byDate !== 0 ? $byDate : ($b['index'] <=> $a['index']);
+});
 
 $currentPage = intval($_GET['p'] ?? 1);
 
