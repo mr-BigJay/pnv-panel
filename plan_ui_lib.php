@@ -179,7 +179,7 @@ if(!function_exists('pnvFormatPlanPrice')){
         $handle = fopen($file, 'r');
 
         while(($row = fgetcsv($handle)) !== false){
-            if(($row[0] ?? '') !== $username){
+            if(strcasecmp(trim((string)($row[0] ?? '')), $username) !== 0){
                 continue;
             }
 
@@ -191,7 +191,14 @@ if(!function_exists('pnvFormatPlanPrice')){
             $buyLink = trim((string)($row[7] ?? ''));
             $renewLink = trim((string)($row[1] ?? ''));
 
+            $configName = trim((string)($row[1] ?? ''));
+
             if($type === 'خرید' && $buyLink !== ''){
+                if($configName !== '' && strcasecmp($configName, $subLink) === 0){
+                    $found = $buyLink;
+                    break;
+                }
+
                 $hay = strtolower($buyLink);
 
                 if($hay === $needle || strpos($hay, $needle) !== false || strpos($needle, $hay) !== false){
@@ -201,6 +208,11 @@ if(!function_exists('pnvFormatPlanPrice')){
             }
 
             if($type === 'تمدید' && $renewLink !== ''){
+                if($configName !== '' && strcasecmp($configName, $subLink) === 0){
+                    $found = $renewLink;
+                    break;
+                }
+
                 $hay = strtolower($renewLink);
 
                 if($hay === $needle || strpos($hay, $needle) !== false || strpos($needle, $hay) !== false){

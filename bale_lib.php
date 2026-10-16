@@ -375,4 +375,236 @@ if(!function_exists('baleConfigPath')){
         $scheme = $https ? 'https' : 'https';
         return $scheme . '://' . $host . '/bale-webhook.php';
     }
+
+    function baleConfirmNotifyDedupPath(){
+        return __DIR__ . '/db/bale_confirm_notify.json';
+    }
+
+    function baleConfirmNotifyKey($row){
+        if(!is_array($row)){
+            return '';
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+        $user = strtolower(trim((string)($row[0] ?? '')));
+        $created = intval($row[8] ?? 0);
+
+        if($tracking === '' && $created <= 0){
+            return '';
+        }
+
+        return $user . '|' . $tracking . '|' . $created;
+    }
+
+    function baleConfirmNotifyWasSent($key, $withinSeconds = 300){
+        $key = trim((string)$key);
+
+        if($key === ''){
+            return false;
+        }
+
+        $file = baleConfirmNotifyDedupPath();
+
+        if(!file_exists($file)){
+            return false;
+        }
+
+        $data = json_decode((string)file_get_contents($file), true);
+
+        if(!is_array($data) || !isset($data[$key])){
+            return false;
+        }
+
+        $sentAt = intval($data[$key]['sent_at'] ?? 0);
+
+        return $sentAt > 0 && (time() - $sentAt) <= max(30, intval($withinSeconds));
+    }
+
+    function baleConfirmNotifyMarkSent($key, $kind = ''){
+        baleConfirmNotifyTryClaim($key, $kind, 86400);
+    }
+
+    /**
+     * با قفل فایل، قبل از ارسال پیام claim می‌کند تا دو درخواست هم‌زمان دوبار notify نزنند.
+     *
+     * @return bool true اگر این caller باید پیام بفرستد
+     */
+    function baleConfirmNotifyTryClaim($key, $kind = '', $withinSeconds = 300){
+        $key = trim((string)$key);
+
+        if($key === ''){
+            return true;
+        }
+
+        if(!is_dir(__DIR__ . '/db')){
+            @mkdir(__DIR__ . '/db', 0755, true);
+        }
+
+        $file = baleConfirmNotifyDedupPath();
+        $fp = fopen($file, 'c+');
+
+        if($fp === false){
+            return true;
+        }
+
+        $claim = false;
+
+        try{
+            if(!flock($fp, LOCK_EX)){
+                return false;
+            }
+
+            $raw = stream_get_contents($fp);
+            $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+            $data = is_array($data) ? $data : [];
+            $now = time();
+            $window = max(30, intval($withinSeconds));
+
+            if(isset($data[$key])){
+                $sentAt = intval($data[$key]['sent_at'] ?? 0);
+
+                if($sentAt > 0 && ($now - $sentAt) <= $window){
+                    return false;
+                }
+            }
+
+            $data[$key] = [
+                'sent_at' => $now,
+                'kind' => ($kind === 'تمدید') ? 'تمدید' : 'خرید',
+            ];
+
+            if(count($data) > 500){
+                uasort($data, static function($a, $b){
+                    return intval($b['sent_at'] ?? 0) <=> intval($a['sent_at'] ?? 0);
+                });
+                $data = array_slice($data, 0, 400, true);
+            }
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            fflush($fp);
+            $claim = true;
+        }
+        finally{
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+
+        return $claim;
+    }
+
+    function baleResolvePaymentKind($row, $hint = ''){
+        if(function_exists('xuiPaymentRowType')){
+            return xuiPaymentRowType($row, $hint);
+        }
+
+        if(!is_array($row)){
+            return trim((string)$hint) === 'تمدید' ? 'تمدید' : 'خرید';
+        }
+
+        $type = trim((string)($row[9] ?? ''));
+
+        if($type === 'تمدید' || trim((string)$hint) === 'تمدید'){
+            return 'تمدید';
+        }
+
+        return 'خرید';
+    }
+
+    function baleProvisionAccountLabel($provision, $row, $kind){
+        $email = trim((string)($provision['email'] ?? ''));
+
+        if($email !== ''){
+            return $email;
+        }
+
+        if($kind === 'خرید'){
+            return trim((string)($row[1] ?? '-'));
+        }
+
+        return trim((string)($row[0] ?? '-'));
+    }
+
+    function baleFormatPaymentConfirmed($row, $kindHint = '', $opts = []){
+        $kind = baleResolvePaymentKind($row, $kindHint);
+        $kindLabel = ($kind === 'تمدید') ? 'تمدید' : 'خرید';
+        $username = trim((string)($row[0] ?? '-'));
+        $plan = trim((string)($row[2] ?? '-'));
+        $tracking = trim((string)($row[3] ?? ''));
+        $amount = intval($row[12] ?? 0);
+
+        if($amount <= 0){
+            $amount = intval($opts['amount_rial'] ?? 0);
+        }
+
+        $provision = is_array($opts['provision'] ?? null) ? $opts['provision'] : [];
+        $account = baleProvisionAccountLabel($provision, $row, $kind);
+        $serverId = trim((string)($provision['server_id'] ?? ''));
+
+        if($serverId === ''){
+            $serverId = 'نامشخص';
+        }
+
+        $lines = [
+            '✅ واریز تأیید شد',
+            $kindLabel . ' | ' . $username,
+        ];
+
+        if($plan !== ''){
+            $lines[] = 'پلن: ' . $plan;
+        }
+
+        if($amount > 0){
+            $lines[] = 'مبلغ: ' . number_format($amount) . ' ریال';
+        }
+
+        if($tracking !== ''){
+            $lines[] = 'پیگیری: ' . $tracking;
+        }
+
+        if($kind === 'تمدید'){
+            $lines[] = '✅ اشتراک ' . $account . ' روی پنل ' . $serverId . ' تمدید شد.';
+        }
+        else{
+            $lines[] = '✅ اشتراک جدید ' . $account . ' در پنل ' . $serverId . ' ایجاد شد.';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    function baleNotifyPaymentConfirmedRow($row, $kindHint = '', $opts = []){
+        if(!is_array($row)){
+            return [];
+        }
+
+        $config = baleLoadConfig();
+
+        if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
+            return [];
+        }
+
+        $ids = baleAdminChatIds($config);
+
+        if(count($ids) === 0){
+            return [];
+        }
+
+        $forceNotify = !empty($opts['force_notify']);
+        $dedupKey = baleConfirmNotifyKey($row);
+        $kind = baleResolvePaymentKind($row, $kindHint);
+
+        if(!$forceNotify && $dedupKey !== '' && !baleConfirmNotifyTryClaim($dedupKey, $kind)){
+            return [];
+        }
+
+        $text = baleFormatPaymentConfirmed($row, $kindHint, $opts);
+        $results = [];
+
+        foreach($ids as $chatId){
+            $results[] = baleSendMessage($chatId, $text, [], $config);
+        }
+
+        return $results;
+    }
 }
