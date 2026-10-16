@@ -278,21 +278,40 @@ if(!function_exists('adminBottomNavStyles')){
 
 $supportActionResult = null;
 
-if($page === 'support' && file_exists(__DIR__ . '/../support_lib.php')){
+if(file_exists(__DIR__ . '/../support_lib.php')){
 
 require_once __DIR__ . '/../support_lib.php';
 
-if($_SERVER['REQUEST_METHOD'] === 'POST'){
+if(function_exists('supportIsAdminPostRequest') && supportIsAdminPostRequest()){
 
-$supportActionResult =
-supportProcessAdminActions(
+if(function_exists('pnvAdminRequireAuth')){
+pnvAdminRequireAuth();
+}
+
+$supportActionResult = supportProcessAdminActions(
 $pnvRootDir . '/db/support.json',
 true
 );
 
-if($supportActionResult['redirect']){
+if(!empty($supportActionResult['redirect'])){
 
 header('Location: ' . $supportActionResult['redirect']);
+
+exit;
+
+}
+
+if(!empty($supportActionResult['error'])){
+
+$_SESSION['support_flash_error'] = $supportActionResult['error'];
+$flashUser = trim((string)($_POST['user'] ?? ''));
+$flashUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php?page=support') : 'index.php?page=support';
+
+if($flashUser !== ''){
+$flashUrl .= (strpos($flashUrl, '?') !== false ? '&' : '?') . 'user=' . urlencode($flashUser);
+}
+
+header('Location: ' . $flashUrl);
 
 exit;
 
@@ -653,6 +672,19 @@ header('Location: ' . pnvAdminUrl('index.php?page=upload'));
 
 exit;
 
+}
+
+// Payments approve/reject/delete must run before HTML output (payments.php uses header() redirects).
+if(
+    $page === 'payments'
+    && (
+        isset($_POST['approve_payment'])
+        || isset($_POST['reject_payment'])
+        || isset($_GET['deletepayment'])
+    )
+){
+    pnvAdminInclude('payments.php');
+    exit;
 }
 
 ?>

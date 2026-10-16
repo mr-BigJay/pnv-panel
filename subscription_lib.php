@@ -174,15 +174,15 @@ if(!function_exists('pnvClearedSubsPath')){
             return '';
         }
 
-        if(preg_match('~https?://[^/\s]+(?::\d+)?/sub/[A-Za-z0-9]+~i', $value, $m)){
+        if(preg_match('~https?://[^/\s]+(?::\d+)?/sub/[A-Za-z0-9_-]+~i', $value, $m)){
             return $m[0];
         }
 
-        if(preg_match('/^[A-Za-z0-9]{8,32}$/', $value)){
+        if(preg_match('/^[A-Za-z0-9_-]{8,64}$/', $value)){
             return $value;
         }
 
-        if(preg_match('/^\s*([A-Za-z0-9]{8,32})\b/u', $value, $m)){
+        if(preg_match('/^\s*([A-Za-z0-9_-]{8,64})\b/u', $value, $m)){
             return $m[1];
         }
 
