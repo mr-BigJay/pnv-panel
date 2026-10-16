@@ -157,5 +157,55 @@ assertTrue(instantPayAdminRowVisible($expiredRow), 'expired json still visible w
 $meta = instantPayAdminRowStatusMeta($visibleRow);
 assertTrue(($meta['title'] ?? '') === 'در حال بررسی', 'waiting json status label');
 
+$renewRow = [
+    'niknam',
+    'https://vip3.example/sub/abc',
+    '20 گیگ - 250 هزار تومان',
+    'AUTO-9680',
+    '',
+    '',
+    'تایید شد',
+    '',
+    time(),
+    'تمدید',
+    '',
+    '',
+    2499680,
+];
+$renewMsg = baleFormatPaymentConfirmed($renewRow, 'تمدید', [
+    'provision' => ['email' => 'reza001', 'server_id' => 'vip3'],
+]);
+assertTrue(strpos($renewMsg, '✅ واریز تأیید شد') !== false, 'renew notify header');
+assertTrue(strpos($renewMsg, 'تمدید | niknam') !== false, 'renew notify kind line');
+assertTrue(strpos($renewMsg, 'پیگیری: AUTO-9680') !== false, 'renew notify tracking');
+assertTrue(strpos($renewMsg, 'reza001') !== false && strpos($renewMsg, 'vip3') !== false, 'renew notify account/server');
+assertTrue(strpos($renewMsg, 'تمدید شد') !== false, 'renew notify footer');
+
+// خرید: col1 نام کانفیگ است (نه URL) — وگرنه xuiPaymentRowType از روی لینک «تمدید» استنتاج می‌کند
+$buyRow = [
+    'niknam',
+    'reza001',
+    '20 گیگ - 250 هزار تومان',
+    'AUTO-9680',
+    '',
+    '',
+    'تایید شد',
+    '',
+    time(),
+    'خرید',
+    '',
+    '',
+    2499680,
+];
+$buyMsg = baleFormatPaymentConfirmed($buyRow, 'خرید', [
+    'provision' => ['email' => 'reza001', 'server_id' => 'vip'],
+]);
+assertTrue(strpos($buyMsg, 'خرید | niknam') !== false, 'buy notify kind line');
+assertTrue(strpos($buyMsg, 'اشتراک جدید reza001 در پنل vip ایجاد شد') !== false, 'buy notify footer');
+
+$dedupKey = 'dedup-test|' . uniqid('', true) . '|' . time();
+assertTrue(baleConfirmNotifyTryClaim($dedupKey, 'تمدید', 60), 'dedup first claim');
+assertTrue(!baleConfirmNotifyTryClaim($dedupKey, 'تمدید', 60), 'dedup second claim blocked');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

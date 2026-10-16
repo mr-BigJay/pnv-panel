@@ -6,6 +6,75 @@ if(!isset($supportEmbedded)){
 
 require_once __DIR__ . '/../support_lib.php';
 
+if(!function_exists('supportUsernamesMatch')){
+
+    function supportUsernamesMatch($left, $right){
+
+        $left = trim((string)$left);
+        $right = trim((string)$right);
+
+        if($left === '' || $right === ''){
+            return false;
+        }
+
+        return strcasecmp($left, $right) === 0;
+
+    }
+
+}
+
+if(!function_exists('supportGetUserProfileSummary')){
+
+    function supportGetUserProfileSummary($username){
+
+        $username = trim((string)$username);
+        $summary = [
+            'username' => $username,
+            'mobile' => '-',
+            'exists' => false,
+        ];
+
+        if($username === ''){
+            return $summary;
+        }
+
+        $usersFile = dirname(__DIR__) . '/db/users.json';
+
+        if(!is_file($usersFile)){
+            return $summary;
+        }
+
+        $users = json_decode((string)file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return $summary;
+        }
+
+        foreach($users as $user){
+
+            if(!is_array($user)){
+                continue;
+            }
+
+            $stored = trim((string)($user['username'] ?? ''));
+
+            if($stored === '' || !supportUsernamesMatch($stored, $username)){
+                continue;
+            }
+
+            $summary['username'] = $stored;
+            $summary['mobile'] = trim((string)($user['mobile'] ?? '')) ?: '-';
+            $summary['exists'] = true;
+            break;
+
+        }
+
+        return $summary;
+
+    }
+
+}
+
 if(!$supportEmbedded && supportIsEmbeddedRequest()){
     $supportEmbedded = true;
 }
@@ -40,14 +109,28 @@ if($actionResult['redirect']){
 }
 
 $data = supportSortTickets($actionResult['data']);
-$currentUser = $_GET['user'] ?? '';
+$currentUser = trim((string)($_GET['user'] ?? ''));
+if($currentUser !== '' && function_exists('supportResolveTicketUsername')){
+    $resolvedUser = supportResolveTicketUsername($data, $currentUser);
+    if($resolvedUser !== ''){
+        $currentUser = $resolvedUser;
+    }
+}
 $editId = $_GET['edit'] ?? '';
 $supportError = $actionResult['error'] ?? '';
+
+if($supportError === '' && !empty($_SESSION['support_flash_error'])){
+    $supportError = (string)$_SESSION['support_flash_error'];
+    unset($_SESSION['support_flash_error']);
+}
 $baseUrl = supportAdminUrl($currentUser, $supportEmbedded);
-$cssHref = '../support_ui.css?v=41';
+$formAction = function_exists('supportAdminFormAction')
+    ? supportAdminFormAction($currentUser, $supportEmbedded)
+    : $baseUrl;
+$cssHref = '../support_ui.css?v=42';
 $profileApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('user-profile.php') : 'user-profile.php';
 $usersApiUrl = function_exists('pnvAdminUrl') ? pnvAdminUrl('support-users-api.php') : 'support-users-api.php';
-$jsHref = '../support_ui.js?v=41';
+$jsHref = '../support_ui.js?v=42';
 
 if(!$supportEmbedded){
 ?>
@@ -90,7 +173,9 @@ if(!$supportEmbedded){
 <?php foreach($data as $ticket){
 
     $ticketUser = $ticket['user'] ?? '';
-    $isActive = $currentUser === $ticketUser;
+    $isActive = function_exists('supportUsernamesMatch')
+        ? supportUsernamesMatch($currentUser, $ticketUser)
+        : ($currentUser === $ticketUser);
     $unread = supportAdminUnreadCount($ticket);
     $preview = supportTicketPreview($ticket);
     $lastTs = supportTicketLastTimestamp($ticket);
@@ -171,7 +256,11 @@ $hasMessages = false;
 
 foreach($data as $ticket){
 
-    if(($ticket['user'] ?? '') !== $currentUser){
+    if(
+        function_exists('supportUsernamesMatch')
+            ? !supportUsernamesMatch($ticket['user'] ?? '', $currentUser)
+            : ($ticket['user'] ?? '') !== $currentUser
+    ){
         continue;
     }
 
@@ -207,7 +296,7 @@ if(!$hasMessages){
 </div>
 
 <footer class="supportSendbox">
-<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner" action="<?php echo htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8'); ?>">
+<form method="POST" enctype="multipart/form-data" id="supportReplyForm" class="msgComposerInner" action="<?php echo htmlspecialchars($formAction, ENT_QUOTES, 'UTF-8'); ?>">
 
 <?php echo $csrfField; ?>
 <input type="hidden" name="reply" value="1">

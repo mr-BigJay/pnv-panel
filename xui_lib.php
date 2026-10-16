@@ -378,7 +378,23 @@ if(!function_exists('xuiConfigPath')){
     function xuiParseSubLink($link){
         $link = trim((string)$link);
 
-        if(!preg_match('#https?://([^/:]+)(?::(\d+))?/sub/([A-Za-z0-9]+)#i', $link, $m)){
+        if($link === ''){
+            return null;
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        if(function_exists('pnvNormalizeSubLinkValue')){
+            $normalized = trim((string)pnvNormalizeSubLinkValue($link));
+
+            if($normalized !== '' && preg_match('#^https?://#i', $normalized)){
+                $link = $normalized;
+            }
+        }
+
+        if(!preg_match('#https?://([^/:]+)(?::(\d+))?/sub/([A-Za-z0-9_-]+)#i', $link, $m)){
             return null;
         }
 
@@ -387,6 +403,745 @@ if(!function_exists('xuiConfigPath')){
             'port' => intval($m[2] ?: 2096),
             'sub_id' => $m[3]
         ];
+    }
+
+    function xuiLooksLikeBareSubId($value){
+        $value = trim((string)$value);
+
+        return $value !== '' && preg_match('/^[A-Za-z0-9_-]{8,64}$/', $value);
+    }
+
+    function xuiPaymentRowType($row, $typeHint = '', $csvIndex = -1){
+        if(!is_array($row)){
+            return trim((string)$typeHint) === 'تمدید' ? 'تمدید' : 'خرید';
+        }
+
+        $csvIndex = intval($csvIndex);
+
+        if($csvIndex >= 0){
+            if(!function_exists('instantPayFindJsonByCsvIndex') && is_file(__DIR__ . '/instant_pay_lib.php')){
+                require_once __DIR__ . '/instant_pay_lib.php';
+            }
+
+            if(function_exists('instantPayFindJsonByCsvIndex')){
+                $jsonRow = instantPayFindJsonByCsvIndex($csvIndex);
+
+                if(is_array($jsonRow) && function_exists('instantPayNormalizeType')){
+                    $jsonType = instantPayNormalizeType($jsonRow['type'] ?? '');
+
+                    if($jsonType === 'تمدید'){
+                        return 'تمدید';
+                    }
+
+                    if($jsonType === 'خرید'){
+                        return 'خرید';
+                    }
+                }
+            }
+        }
+
+        $type = trim((string)($row[9] ?? ''));
+
+        if($type === 'تمدید'){
+            return 'تمدید';
+        }
+
+        if($type === 'خرید'){
+            return 'خرید';
+        }
+
+        if($type === ''){
+            $type = trim((string)$typeHint);
+        }
+
+        if($type === 'تمدید'){
+            return 'تمدید';
+        }
+
+        $col1 = trim((string)($row[1] ?? ''));
+
+        if($col1 !== '' && (xuiParseSubLink($col1) || xuiLooksLikeBareSubId($col1) || xuiExtractSubIdFromText($col1) !== '')){
+            return 'تمدید';
+        }
+
+        return 'خرید';
+    }
+
+    function xuiExtractSubIdFromText($text){
+        $text = trim((string)$text);
+
+        if($text === ''){
+            return '';
+        }
+
+        if(preg_match('#/sub/([A-Za-z0-9_-]{8,64})#i', $text, $m)){
+            return $m[1];
+        }
+
+        if(xuiLooksLikeBareSubId($text)){
+            return $text;
+        }
+
+        return '';
+    }
+
+    function xuiRenewAllowedServerIds($config){
+        $allowed = $config['renew_server_ids'] ?? [];
+        $allowed = is_array($allowed) ? array_values(array_filter($allowed)) : [];
+
+        return $allowed;
+    }
+
+    /**
+     * وقتی در CSV فقط Sub ID است یا host با تنظیمات فرق دارد، بین سرورهای مجاز جستجو می‌کند.
+     *
+     * لینک/subId هدف تمدید از CSV، instant pay، یا خریدهای قبلی همان کاربر.
+     */
+    function xuiResolveRenewPaymentTarget(array $row, $overrideLink = '', $csvIndex = -1){
+        $user = trim((string)($row[0] ?? ''));
+        $overrideLink = trim((string)$overrideLink);
+        $csvIndex = intval($csvIndex);
+        $candidates = [];
+
+        if($overrideLink !== ''){
+            $candidates[] = $overrideLink;
+        }
+
+        $candidates[] = trim((string)($row[1] ?? ''));
+        $col7 = trim((string)($row[7] ?? ''));
+
+        if($col7 !== ''){
+            $candidates[] = $col7;
+        }
+
+        if(!function_exists('instantPayFindJsonByTracking') && is_file(__DIR__ . '/instant_pay_lib.php')){
+            require_once __DIR__ . '/instant_pay_lib.php';
+        }
+
+        if($csvIndex >= 0 && function_exists('instantPayFindJsonByCsvIndex')){
+            $itemByIndex = instantPayFindJsonByCsvIndex($csvIndex);
+
+            if(is_array($itemByIndex)){
+                foreach(['sub', 'link'] as $key){
+                    $value = trim((string)($itemByIndex[$key] ?? ''));
+
+                    if($value !== ''){
+                        $candidates[] = $value;
+                    }
+                }
+            }
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') === 0 && function_exists('instantPayFindJsonByTracking')){
+            $item = instantPayFindJsonByTracking($user, $tracking);
+
+            if(is_array($item)){
+                foreach(['sub', 'link'] as $key){
+                    $value = trim((string)($item[$key] ?? ''));
+
+                    if($value !== ''){
+                        $candidates[] = $value;
+                    }
+                }
+            }
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        foreach($candidates as $candidate){
+            $candidate = trim((string)$candidate);
+
+            if($candidate === ''){
+                continue;
+            }
+
+            if(function_exists('pnvNormalizeSubLinkValue')){
+                $normalized = trim((string)pnvNormalizeSubLinkValue($candidate));
+
+                if($normalized !== ''){
+                    $candidate = $normalized;
+                }
+            }
+
+            $subFromText = xuiExtractSubIdFromText($candidate);
+
+            if($subFromText !== ''){
+                $foundBySub = xuiFindRenewServerBySubId($subFromText);
+
+                if(is_array($foundBySub) && ($foundBySub['sub_id'] ?? '') !== ''){
+                    $host = strtolower(trim((string)($foundBySub['server']['host'] ?? '')));
+
+                    if($host !== ''){
+                        return xuiBuildSubLink($host, (string)$foundBySub['sub_id']);
+                    }
+                }
+            }
+
+            if(xuiParseSubLink($candidate) || xuiLooksLikeBareSubId($candidate)){
+                return $candidate;
+            }
+
+            if($user !== ''){
+                if(!function_exists('pnvFindSubLinkFromCsv') && is_file(__DIR__ . '/plan_ui_lib.php')){
+                    require_once __DIR__ . '/plan_ui_lib.php';
+                }
+
+                if(function_exists('pnvFindSubLinkFromCsv')){
+                    $resolved = trim((string)pnvFindSubLinkFromCsv($user, $candidate));
+
+                    if($resolved !== ''){
+                        if(function_exists('pnvNormalizeSubLinkValue')){
+                            $resolved = trim((string)pnvNormalizeSubLinkValue($resolved));
+                        }
+
+                        if(xuiParseSubLink($resolved) || xuiLooksLikeBareSubId($resolved)){
+                            return $resolved;
+                        }
+                    }
+                }
+            }
+        }
+
+        $configName = trim((string)($row[1] ?? ''));
+
+        if($user !== '' && !function_exists('pnvLoadUserActiveSubscriptions') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        if($user !== '' && function_exists('pnvLoadUserActiveSubscriptions')){
+            $activeSubs = pnvLoadUserActiveSubscriptions($user, false);
+            $configLower = strtolower($configName);
+
+            foreach($activeSubs as $subEntry){
+                $subLink = xuiNormalizeRenewTargetLink($subEntry['link'] ?? '');
+
+                if($subLink === ''){
+                    continue;
+                }
+
+                $subName = strtolower(trim((string)($subEntry['name'] ?? '')));
+
+                if(
+                    $configName === ''
+                    || strcasecmp(trim((string)($subEntry['name'] ?? '')), $configName) === 0
+                    || ($configLower !== '' && ($subName === $configLower || str_contains($subName, $configLower)))
+                    || strcasecmp($subLink, $configName) === 0
+                ){
+                    return $subLink;
+                }
+            }
+
+            if(count($activeSubs) === 1){
+                $only = xuiNormalizeRenewTargetLink($activeSubs[0]['link'] ?? '');
+
+                if($only !== ''){
+                    return $only;
+                }
+            }
+        }
+
+        $historyLink = xuiFindConfirmedSubLinkForUser($user, $configName);
+
+        if($historyLink !== ''){
+            return $historyLink;
+        }
+
+        $emailCandidates = [];
+
+        if($configName !== ''){
+            $emailCandidates[] = $configName;
+        }
+
+        if($user !== ''){
+            $emailCandidates[] = $user;
+        }
+
+        $emailCandidates = array_values(array_unique($emailCandidates));
+
+        foreach($emailCandidates as $emailTry){
+            $found = xuiFindRenewServerByClientEmail($emailTry);
+
+            if(is_array($found) && ($found['sub_id'] ?? '') !== ''){
+                $host = strtolower(trim((string)($found['server']['host'] ?? '')));
+
+                if($host !== ''){
+                    return xuiBuildSubLink($host, (string)$found['sub_id'], $found['config'] ?? null);
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * آخرین لینک تأییدشدهٔ کاربر — تطبیق نام کانفیگ (ستون ۱) با خریدهای قبلی.
+     */
+    function xuiFindConfirmedSubLinkForUser($username, $configHint = ''){
+        $username = trim((string)$username);
+        $configHint = trim((string)$configHint);
+
+        if($username === ''){
+            return '';
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        $payments = xuiLoadPayments();
+        $fallbackLink = '';
+        $fallbackTs = 0;
+
+        foreach($payments as $payRow){
+            if(!is_array($payRow)){
+                continue;
+            }
+
+            if(strcasecmp(trim((string)($payRow[0] ?? '')), $username) !== 0){
+                continue;
+            }
+
+            if(trim((string)($payRow[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            $type = trim((string)($payRow[9] ?? ''));
+            $cfg = trim((string)($payRow[1] ?? ''));
+            $confirmedLink = trim((string)($payRow[7] ?? ''));
+            $ts = intval($payRow[8] ?? 0);
+
+            if($type === 'خرید' && $confirmedLink !== ''){
+                if($configHint !== '' && strcasecmp($cfg, $configHint) === 0){
+                    return xuiNormalizeRenewTargetLink($confirmedLink);
+                }
+
+                if($ts >= $fallbackTs){
+                    $fallbackLink = $confirmedLink;
+                    $fallbackTs = $ts;
+                }
+            }
+
+            if($type === 'تمدید'){
+                $renewTarget = trim((string)($payRow[1] ?? ''));
+                $pick = xuiNormalizeRenewTargetLink($renewTarget);
+
+                if($pick === '' && $confirmedLink !== ''){
+                    $pick = xuiNormalizeRenewTargetLink($confirmedLink);
+                }
+
+                if($pick === ''){
+                    continue;
+                }
+
+                if($configHint !== '' && strcasecmp($cfg, $configHint) === 0){
+                    return $pick;
+                }
+
+                if($ts >= $fallbackTs){
+                    $fallbackLink = $pick;
+                    $fallbackTs = $ts;
+                }
+            }
+        }
+
+        if($configHint === '' && $fallbackLink !== ''){
+            return xuiNormalizeRenewTargetLink($fallbackLink);
+        }
+
+        if($configHint !== '' && !function_exists('pnvFindSubLinkFromCsv') && is_file(__DIR__ . '/plan_ui_lib.php')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+
+        if($configHint !== '' && function_exists('pnvFindSubLinkFromCsv')){
+            $fromCsv = trim((string)pnvFindSubLinkFromCsv($username, $configHint));
+
+            return xuiNormalizeRenewTargetLink($fromCsv);
+        }
+
+        return '';
+    }
+
+    function xuiNormalizeRenewTargetLink($link){
+        $link = trim((string)$link);
+
+        if($link === ''){
+            return '';
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        if(function_exists('pnvNormalizeSubLinkValue')){
+            $normalized = trim((string)pnvNormalizeSubLinkValue($link));
+
+            if($normalized !== ''){
+                $link = $normalized;
+            }
+        }
+
+        if(xuiParseSubLink($link) || xuiLooksLikeBareSubId($link)){
+            return $link;
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array{server:array,client:array,sub_id:string,config?:array}|null
+     */
+    function xuiFindRenewServerByClientEmail($email, $config = null){
+        if($config === null){
+            $config = xuiLoadConfig();
+        }
+
+        $email = trim((string)$email);
+
+        if($email === ''){
+            return null;
+        }
+
+        $restrictIds = xuiRenewAllowedServerIds($config);
+        $servers = is_array($config['servers'] ?? null) ? $config['servers'] : [];
+
+        foreach($servers as $server){
+            if(!is_array($server)){
+                continue;
+            }
+
+            $serverId = (string)($server['id'] ?? '');
+
+            if(count($restrictIds) > 0 && !in_array($serverId, $restrictIds, true)){
+                continue;
+            }
+
+            $client = xuiFindClientOnServerByEmail($server, $email);
+
+            if(!$client){
+                continue;
+            }
+
+            $subId = trim((string)($client['subId'] ?? ''));
+
+            if($subId === ''){
+                continue;
+            }
+
+            return [
+                'server' => $server,
+                'client' => $client,
+                'sub_id' => $subId,
+                'config' => $config,
+            ];
+        }
+
+        return null;
+    }
+
+    function xuiFindClientOnServerByEmail($server, $email){
+        if(!is_array($server)){
+            return null;
+        }
+
+        $email = trim((string)$email);
+
+        if($email === ''){
+            return null;
+        }
+
+        $full = xuiApiRequest($server, 'GET', '/panel/api/clients/get/' . rawurlencode($email));
+
+        if(!empty($full['success']) && is_array($full['obj'] ?? null)){
+            $client = xuiNormalizeClientRecord($full['obj']['client'] ?? $full['obj']);
+
+            if($client){
+                return $client;
+            }
+        }
+
+        $pageSize = 100;
+        $searched = xuiApiRequest(
+            $server,
+            'GET',
+            '/panel/api/clients/list/paged?page=1&pageSize=' . $pageSize
+            . '&search=' . rawurlencode($email)
+            . '&filter=&protocol=&sort=email&order=ascend'
+        );
+
+        if(empty($searched['success'])){
+            return null;
+        }
+
+        $obj = $searched['obj'] ?? [];
+        $list = $obj['list'] ?? $obj['clients'] ?? [];
+
+        if(!is_array($list)){
+            return null;
+        }
+
+        foreach($list as $item){
+            $client = xuiNormalizeClientRecord($item['client'] ?? $item);
+
+            if(!$client){
+                continue;
+            }
+
+            if(strcasecmp(trim((string)($client['email'] ?? '')), $email) === 0){
+                return xuiHydrateClientByEmail($server, $client);
+            }
+        }
+
+        return null;
+    }
+
+    function xuiFindRenewServerBySubId($subId, $config = null, $restrictIds = null){
+        if($config === null){
+            $config = xuiLoadConfig();
+        }
+
+        $subId = trim((string)$subId);
+
+        if($subId === ''){
+            return null;
+        }
+
+        if($restrictIds === null){
+            $restrictIds = xuiRenewAllowedServerIds($config);
+        }
+
+        $restrictIds = is_array($restrictIds) ? array_values(array_filter($restrictIds)) : [];
+        $servers = is_array($config['servers'] ?? null) ? $config['servers'] : [];
+
+        foreach($servers as $server){
+            if(!is_array($server)){
+                continue;
+            }
+
+            $serverId = (string)($server['id'] ?? '');
+
+            if(count($restrictIds) > 0 && !in_array($serverId, $restrictIds, true)){
+                continue;
+            }
+
+            $client = xuiFindClientBySubId($server, $subId, '');
+
+            if($client){
+                return [
+                    'server' => $server,
+                    'client' => $client,
+                    'sub_id' => $subId
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    function xuiResolveRenewContext($paymentRow, $config = null, $overrideLink = ''){
+        if($config === null){
+            $config = xuiLoadConfig();
+        }
+
+        $rawLink = xuiResolveRenewPaymentTarget(
+            is_array($paymentRow) ? $paymentRow : [],
+            $overrideLink
+        );
+
+        if($rawLink === ''){
+            $rawLink = trim((string)($paymentRow[1] ?? ''));
+        }
+
+        if($rawLink === ''){
+            return [
+                'ok' => false,
+                'error' => 'لینک اشتراک تمدید معتبر نیست',
+            ];
+        }
+
+        if(!function_exists('pnvNormalizeSubLinkValue') && is_file(__DIR__ . '/subscription_lib.php')){
+            require_once __DIR__ . '/subscription_lib.php';
+        }
+
+        $subLink = $rawLink;
+
+        if(function_exists('pnvNormalizeSubLinkValue')){
+            $clean = trim((string)pnvNormalizeSubLinkValue($rawLink));
+
+            if($clean !== ''){
+                if(preg_match('#^https?://#i', $clean)){
+                    $subLink = $clean;
+                }
+                elseif(xuiLooksLikeBareSubId($clean)){
+                    $subLink = $clean;
+                }
+            }
+        }
+
+        $parsed = xuiParseSubLink($subLink);
+        $server = null;
+        $client = null;
+
+        if(is_array($parsed)){
+            $server = xuiFindServerByHost($parsed['host'], $config);
+
+            if(!$server){
+                $found = xuiFindRenewServerBySubId($parsed['sub_id'], $config);
+
+                if($found){
+                    $server = $found['server'];
+                    $client = $found['client'];
+                    $parsed['host'] = strtolower((string)($server['host'] ?? $parsed['host']));
+                }
+            }
+
+            if(!$server){
+                return [
+                    'ok' => false,
+                    'error' => 'سرور مربوط به لینک پیدا نشد: ' . $parsed['host']
+                ];
+            }
+
+            $subLink = xuiBuildSubLink($parsed['host'], $parsed['sub_id'], $config);
+        }
+        elseif(xuiLooksLikeBareSubId($subLink)){
+            $found = xuiFindRenewServerBySubId($subLink, $config);
+
+            if(!$found){
+                return ['ok' => false, 'error' => 'لینک اشتراک تمدید معتبر نیست'];
+            }
+
+            $server = $found['server'];
+            $client = $found['client'];
+            $parsed = [
+                'host' => strtolower((string)($server['host'] ?? '')),
+                'port' => intval($config['sub_port'] ?? 2096),
+                'sub_id' => $found['sub_id']
+            ];
+            $subLink = xuiBuildSubLink($parsed['host'], $parsed['sub_id'], $config);
+        }
+        else{
+            return ['ok' => false, 'error' => 'لینک اشتراک تمدید معتبر نیست'];
+        }
+
+        $allowed = xuiRenewAllowedServerIds($config);
+
+        if(count($allowed) > 0 && !in_array($server['id'] ?? '', $allowed, true)){
+            return ['ok' => false, 'error' => 'این سرور برای تمدید مجاز نیست'];
+        }
+
+        if(!$client){
+            $client = xuiFindClientBySubId($server, $parsed['sub_id'], $subLink);
+        }
+
+        if(!$client){
+            return [
+                'ok' => false,
+                'error' => 'کاربر با Sub ID پیدا نشد: ' . $parsed['sub_id']
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'sub_link' => $subLink,
+            'parsed' => $parsed,
+            'server' => $server,
+            'client' => $client
+        ];
+    }
+
+    function xuiEnsureClientUuidForLegacy($server, $client){
+        if(!is_array($client) || !is_array($server)){
+            return $client;
+        }
+
+        $id = trim((string)($client['id'] ?? ''));
+
+        if($id !== '' && !ctype_digit($id)){
+            return $client;
+        }
+
+        $email = trim((string)($client['email'] ?? ''));
+        $subId = trim((string)($client['subId'] ?? ''));
+        $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
+
+        foreach(xuiFetchInbounds($server) as $inbound){
+            if($inboundId > 0 && intval($inbound['id'] ?? 0) !== $inboundId){
+                continue;
+            }
+
+            foreach(xuiParseInboundClients($inbound) as $item){
+                $match = false;
+
+                if($email !== '' && strcasecmp((string)($item['email'] ?? ''), $email) === 0){
+                    $match = true;
+                }
+                elseif($subId !== '' && xuiClientMatchesSubId($item, $subId)){
+                    $match = true;
+                }
+
+                if(!$match){
+                    continue;
+                }
+
+                $uuid = trim((string)($item['id'] ?? ''));
+
+                if($uuid !== '' && !ctype_digit($uuid)){
+                    $client['id'] = $uuid;
+                }
+
+                if(empty($client['_inbound_id'])){
+                    $client['_inbound_id'] = intval($inbound['id'] ?? $inboundId);
+                }
+
+                if(($client['email'] ?? '') === '' && ($item['email'] ?? '') !== ''){
+                    $client['email'] = $item['email'];
+                }
+
+                return $client;
+            }
+        }
+
+        return $client;
+    }
+
+    function xuiBulkAdjustApplied($result, $email){
+        if(empty($result['success'])){
+            return false;
+        }
+
+        if(!is_array($result['obj'] ?? null)){
+            // API قدیمی بدون شمارنده adjusted
+            return true;
+        }
+
+        $adjusted = intval($result['obj']['adjusted'] ?? 0);
+
+        if($adjusted > 0){
+            return true;
+        }
+
+        $emailKey = strtolower(trim((string)$email));
+        $skipped = $result['obj']['skipped'] ?? [];
+
+        if(!is_array($skipped)){
+            return false;
+        }
+
+        foreach($skipped as $row){
+            if(!is_array($row)){
+                continue;
+            }
+
+            if(strcasecmp((string)($row['email'] ?? ''), $emailKey) === 0){
+                return false;
+            }
+        }
+
+        return false;
     }
 
     function xuiGetUserMobile($username){
@@ -1520,11 +2275,13 @@ if(!function_exists('xuiConfigPath')){
         return $expiry;
     }
 
-    function xuiAdjustClientTrafficLegacy($server, $client, $addGb){
+    function xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays = 0){
+        $client = xuiEnsureClientUuidForLegacy($server, is_array($client) ? $client : []);
         $email = trim((string)($client['email'] ?? ''));
         $clientId = trim((string)($client['id'] ?? ''));
         $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
         $addBytes = xuiGbToBytes($addGb);
+        $addDays = max(0, intval($addDays));
 
         if($email === '' || $clientId === '' || $inboundId <= 0){
             return [
@@ -1539,6 +2296,13 @@ if(!function_exists('xuiConfigPath')){
         $currentTotal = xuiClientTotalBytes($client);
         $updated['totalGB'] = $currentTotal + $addBytes;
         $updated['enable'] = true;
+
+        if($addDays > 0){
+            $expiryMs = xuiClientExpiryMs($client);
+            $nowMs = (int)(microtime(true) * 1000);
+            $baseMs = ($expiryMs > $nowMs) ? $expiryMs : $nowMs;
+            $updated['expiryTime'] = $baseMs + ($addDays * 86400000);
+        }
 
         if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
             $updated['subId'] = $client['subId'];
@@ -1578,7 +2342,7 @@ if(!function_exists('xuiConfigPath')){
                 'addBytes' => $bytes
             ]);
 
-            if(!empty($result['success'])){
+            if(xuiBulkAdjustApplied($result, $email)){
                 return [
                     'ok' => true,
                     'raw' => $result,
@@ -1586,11 +2350,26 @@ if(!function_exists('xuiConfigPath')){
                 ];
             }
 
-            $errors[] = 'bulkAdjust: ' . ($result['msg'] ?? 'ناموفق');
+            $detail = $result['msg'] ?? 'ناموفق';
+
+            if(!empty($result['obj']['skipped']) && is_array($result['obj']['skipped'])){
+                foreach($result['obj']['skipped'] as $skipRow){
+                    if(!is_array($skipRow)){
+                        continue;
+                    }
+
+                    if(strcasecmp((string)($skipRow['email'] ?? ''), $email) === 0){
+                        $detail = (string)($skipRow['reason'] ?? $detail);
+                        break;
+                    }
+                }
+            }
+
+            $errors[] = 'bulkAdjust: ' . $detail;
         }
 
         if(is_array($client)){
-            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb);
+            $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb, $addDays);
 
             if(!empty($legacy['ok'])){
                 return $legacy;
@@ -1658,14 +2437,13 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
-    function xuiProvisionRenew($paymentRow){
+    function xuiProvisionRenew($paymentRow, $overrideLink = ''){
         $config = xuiLoadConfig();
 
         if(!xuiIsEnabled($config)){
             return ['ok' => false, 'error' => 'اتوماسیون 3x-ui غیرفعال است'];
         }
 
-        $subLink = trim((string)($paymentRow[1] ?? ''));
         $planText = trim((string)($paymentRow[2] ?? ''));
         $gb = xuiParsePlanGb($planText);
         $days = xuiParsePlanDays($planText);
@@ -1674,30 +2452,18 @@ if(!function_exists('xuiConfigPath')){
             return ['ok' => false, 'error' => 'حجم پلن قابل تشخیص نیست: ' . $planText];
         }
 
-        $parsed = xuiParseSubLink($subLink);
+        $ctx = xuiResolveRenewContext($paymentRow, $config, $overrideLink);
 
-        if(!$parsed){
-            return ['ok' => false, 'error' => 'لینک اشتراک تمدید معتبر نیست'];
+        if(empty($ctx['ok'])){
+            return [
+                'ok' => false,
+                'error' => $ctx['error'] ?? 'تمدید ناموفق بود'
+            ];
         }
 
-        $server = xuiFindServerByHost($parsed['host'], $config);
-
-        if(!$server){
-            return ['ok' => false, 'error' => 'سرور مربوط به لینک پیدا نشد: ' . $parsed['host']];
-        }
-
-        $allowed = $config['renew_server_ids'] ?? [];
-
-        if(is_array($allowed) && count($allowed) > 0 && !in_array($server['id'] ?? '', $allowed, true)){
-            return ['ok' => false, 'error' => 'این سرور برای تمدید مجاز نیست'];
-        }
-
-        $client = xuiFindClientBySubId($server, $parsed['sub_id'], $subLink);
-
-        if(!$client){
-            return ['ok' => false, 'error' => 'کاربر با Sub ID پیدا نشد: ' . $parsed['sub_id']];
-        }
-
+        $parsed = $ctx['parsed'];
+        $server = $ctx['server'];
+        $client = $ctx['client'];
         $email = trim((string)($client['email'] ?? ''));
 
         if($email === ''){
@@ -1716,7 +2482,8 @@ if(!function_exists('xuiConfigPath')){
             'email' => $email,
             'sub_id' => $parsed['sub_id'],
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'method' => $adjusted['method'] ?? ''
         ];
     }
 
@@ -1752,7 +2519,43 @@ if(!function_exists('xuiConfigPath')){
         fclose($handle);
     }
 
+    function xuiLocksDir(){
+        $dir = __DIR__ . '/db/locks';
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0755, true);
+        }
+
+        return $dir;
+    }
+
+    function xuiPaymentApproveLockPath($index){
+        return xuiLocksDir() . '/payment_approve_' . max(0, intval($index)) . '.lock';
+    }
+
     function xuiApprovePaymentIndex($index, $typeHint = ''){
+        $index = intval($index);
+        $lockFp = fopen(xuiPaymentApproveLockPath($index), 'c');
+
+        if($lockFp === false){
+            return ['ok' => false, 'error' => 'قفل تأیید پرداخت در دسترس نیست'];
+        }
+
+        if(!flock($lockFp, LOCK_EX)){
+            fclose($lockFp);
+            return ['ok' => false, 'error' => 'تأیید پرداخت در حال انجام است؛ چند ثانیه بعد دوباره تلاش کنید'];
+        }
+
+        try{
+            return xuiApprovePaymentIndexLocked($index, $typeHint);
+        }
+        finally{
+            flock($lockFp, LOCK_UN);
+            fclose($lockFp);
+        }
+    }
+
+    function xuiApprovePaymentIndexLocked($index, $typeHint = ''){
         $payments = xuiLoadPayments();
 
         if(!isset($payments[$index])){
@@ -1760,7 +2563,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $row = $payments[$index];
-        $type = trim((string)($row[9] ?? $typeHint));
+        $type = xuiPaymentRowType($row, $typeHint, $index);
         $status = trim((string)($row[6] ?? ''));
 
         if($status === 'تایید شد'){
@@ -1771,15 +2574,62 @@ if(!function_exists('xuiConfigPath')){
             ];
         }
 
+        if(!function_exists('xuiPaymentProvisionExecute')){
+            require_once __DIR__ . '/payment_provision_idempotency.php';
+        }
+
+        $renewOverride = '';
+
         if($type === 'تمدید'){
-            $result = xuiProvisionRenew($row);
+            $renewOverride = xuiResolveRenewPaymentTarget($row, '', $index);
+
+            if($renewOverride === ''){
+                $targetHint = trim((string)($row[1] ?? ''));
+                $panelUser = trim((string)($row[0] ?? ''));
+                $error = 'لینک اشتراک تمدید معتبر نیست';
+
+                if($targetHint !== ''){
+                    $error .= ' (هدف: ' . $targetHint . ')';
+                }
+
+                if($panelUser !== ''){
+                    $error .= ', کاربر: ' . $panelUser;
+                }
+
+                return ['ok' => false, 'error' => $error];
+            }
+
+            if(trim((string)($payments[$index][1] ?? '')) !== $renewOverride){
+                $payments[$index][1] = $renewOverride;
+                xuiSavePayments($payments);
+                $row = $payments[$index];
+            }
         }
-        else{
-            $result = xuiProvisionBuy($row);
-        }
+
+        $result = xuiPaymentProvisionExecute($row, $type, static function() use ($type, $row, $renewOverride){
+            if($type === 'تمدید'){
+                return xuiProvisionRenew($row, $renewOverride);
+            }
+
+            return xuiProvisionBuy($row);
+        });
 
         if(empty($result['ok'])){
             return $result;
+        }
+
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$index])){
+            return ['ok' => false, 'error' => 'پرداخت پیدا نشد'];
+        }
+
+        if(trim((string)($payments[$index][6] ?? '')) === 'تایید شد'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'link' => $payments[$index][7] ?? ($result['link'] ?? ''),
+            ];
         }
 
         $payments[$index][6] = 'تایید شد';
@@ -1799,6 +2649,22 @@ if(!function_exists('xuiConfigPath')){
 
             if(!empty($result['link'])){
                 subUsageInvalidateLink($result['link']);
+            }
+        }
+
+        if(!function_exists('baleNotifyPaymentConfirmedRow') && is_file(__DIR__ . '/bale_lib.php')){
+            require_once __DIR__ . '/bale_lib.php';
+        }
+
+        if(function_exists('baleNotifyPaymentConfirmedRow')){
+            try{
+                $notifyRow = $payments[$index] ?? $row;
+                baleNotifyPaymentConfirmedRow($notifyRow, $type, [
+                    'link' => $result['link'] ?? '',
+                    'provision' => $result,
+                ]);
+            }catch(Throwable $e){
+                error_log('bale payment confirm notify failed: ' . $e->getMessage());
             }
         }
 
@@ -1844,5 +2710,95 @@ if(!function_exists('xuiConfigPath')){
         }
 
         return ['ok' => true, 'deleted' => $deleted, 'payments' => $payments];
+    }
+
+    function xuiAdminIsValidManualLink($link){
+        $link = trim((string)$link);
+
+        if($link === ''){
+            return false;
+        }
+
+        if(xuiParseSubLink($link) || xuiLooksLikeBareSubId($link)){
+            return true;
+        }
+
+        if(!filter_var($link, FILTER_VALIDATE_URL)){
+            return false;
+        }
+
+        $validDomains = [
+            'vip.boozhaan.ir',
+            'vip2.boozhaan.ir',
+            'vip3.boozhaan.ir',
+            'vip4.boozhaan.ir',
+        ];
+
+        foreach($validDomains as $domain){
+            if(stripos($link, $domain) !== false){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * تأیید دستی در ادمین — فقط CSV (بدون bulkAdjust / ساخت اشتراک).
+     */
+    function xuiAdminManualConfirmPayment($index, $link, $typeHint = ''){
+        $index = intval($index);
+        $link = trim((string)$link);
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$index])){
+            return ['ok' => false, 'error' => 'پرداخت پیدا نشد'];
+        }
+
+        $row = $payments[$index];
+        $type = xuiPaymentRowType($row, $typeHint);
+        $status = trim((string)($row[6] ?? ''));
+
+        if($status === 'تایید شد'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'link' => $row[7] ?? '',
+                'manual' => true,
+            ];
+        }
+
+        if($link === ''){
+            return ['ok' => false, 'error' => 'لینک اشتراک برای تأیید دستی الزامی است'];
+        }
+
+        if(!xuiAdminIsValidManualLink($link)){
+            return ['ok' => false, 'error' => 'لینک اشتراک معتبر نیست'];
+        }
+
+        if($type === 'تمدید'){
+            $payments[$index][1] = $link;
+        }
+
+        $payments[$index][6] = 'تایید شد';
+        $payments[$index][7] = $link;
+        xuiSavePayments($payments);
+
+        if(function_exists('instantPaySyncPaidFromCsvRow')){
+            instantPaySyncPaidFromCsvRow($index, $link);
+        }
+
+        return [
+            'ok' => true,
+            'link' => $link,
+            'manual' => true,
+        ];
+    }
+
+    /** @deprecated use xuiApprovePaymentIndex — kept for older admin copies */
+    function xuiAdminApprovePayment($index, $typeHint = '', array $opts = []){
+        unset($opts);
+
+        return xuiApprovePaymentIndex(intval($index), $typeHint);
     }
 }

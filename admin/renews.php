@@ -79,6 +79,12 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+$renewsXuiEnabled = false;
+
+if(function_exists('xuiLoadConfig') && function_exists('xuiIsEnabled')){
+    $renewsXuiEnabled = xuiIsEnabled(xuiLoadConfig());
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -158,33 +164,34 @@ if(isset($_POST['approve_payment'])){
 
 $index=intval($_POST['approve_index']);
 $link=trim($_POST['approve_link'] ?? '');
+$redirectView = trim((string)($_POST['view'] ?? $_GET['view'] ?? 'pending'));
 
-$xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig')
-    ? xuiIsEnabled(xuiLoadConfig())
-    : false;
+if(!in_array($redirectView, ['pending', 'confirmed', 'expired'], true)){
+    $redirectView = 'pending';
+}
 
-if($xuiEnabled && function_exists('xuiApprovePaymentIndex')){
+$renewsRedirect = pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($redirectView));
+
+if($renewsXuiEnabled && function_exists('xuiApprovePaymentIndex')){
 
 $result = xuiApprovePaymentIndex($index, 'تمدید');
 
 if(empty($result['ok'])){
-$_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
+$_SESSION['payment_error'] = 'تمدید ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
+header('Location: ' . $renewsRedirect);
 exit;
 }
 
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
 $_SESSION['payment_message_detail'] = (string)($result['link'] ?? '');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
+header('Location: ' . $renewsRedirect);
 exit;
 
 }
 
 if(isset($payments[$index])){
-
 $payments[$index][6]='تایید شد';
 $payments[$index][7]=$link;
-
 }
 
 $fp=fopen($paymentsFile,'w');
@@ -197,7 +204,7 @@ fclose($fp);
 
 $_SESSION['payment_message'] = 'تمدید تایید شد';
 $_SESSION['payment_message_detail'] = $link;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
+header('Location: ' . $renewsRedirect);
 exit;
 
 }
@@ -260,7 +267,13 @@ foreach($payments as $index=>$pay){
 
 $type=trim($pay[9] ?? '');
 
-if($type=='تمدید'){
+$isRenew = ($type === 'تمدید');
+
+if(!$isRenew && function_exists('xuiPaymentRowType')){
+    $isRenew = xuiPaymentRowType($pay, '', $index) === 'تمدید';
+}
+
+if($isRenew){
 
 if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
 continue;
@@ -276,6 +289,24 @@ $renews[]=[
 }
 
 $renews=array_reverse($renews);
+
+$renewsListView = trim((string)($_GET['view'] ?? 'pending'));
+
+if(!in_array($renewsListView, ['pending', 'confirmed', 'expired'], true)){
+    $renewsListView = 'pending';
+}
+
+if(function_exists('instantPayAdminRowListBucket')){
+    $renews = array_values(array_filter($renews, static function($row) use ($renewsListView){
+        $pay = $row['data'] ?? [];
+
+        if(!is_array($pay)){
+            return false;
+        }
+
+        return instantPayAdminRowListBucket($pay) === $renewsListView;
+    }));
+}
 
 $perPage = 20;
 $currentPage = intval($_GET['p'] ?? 1);
@@ -293,8 +324,10 @@ $start = ($currentPage - 1) * $perPage;
 $renewsPage = array_slice($renews, $start, $perPage);
 
 if(!function_exists('renewsListUrl')){
-function renewsListUrl($page){
-return pnvAdminUrl('index.php?page=renews&p=' . intval($page));
+function renewsListUrl($page, $view = 'pending'){
+    $view = in_array($view, ['pending', 'confirmed', 'expired'], true) ? $view : 'pending';
+
+    return pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($view) . '&p=' . intval($page));
 }
 }
 
@@ -438,6 +471,32 @@ font-family:"Lalezar",tahoma,sans-serif;
 font-weight:400;
 letter-spacing:0;
 text-align:right;
+color:#fff;
+}
+
+.renewViewTabs{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+justify-content:flex-end;
+margin:-6px 0 16px;
+}
+
+.renewViewTab{
+display:inline-flex;
+align-items:center;
+padding:8px 14px;
+border-radius:999px;
+border:1px solid rgba(148,163,184,.22);
+background:#1e293b;
+color:#cbd5e1;
+font-size:13px;
+text-decoration:none;
+}
+
+.renewViewTab.is-active{
+background:#2563eb;
+border-color:#2563eb;
 color:#fff;
 }
 
@@ -764,6 +823,21 @@ flex:0 0 20px;
 
 <h2>لیست تمدید ها</h2>
 
+<div class="renewViewTabs" role="tablist" aria-label="فیلتر وضعیت تمدید">
+<?php
+$renewViewLabels = [
+    'confirmed' => 'تایید شده',
+    'pending' => 'درحال بررسی',
+    'expired' => 'منقضی',
+];
+foreach($renewViewLabels as $viewKey => $viewLabel){
+    $active = $renewsListView === $viewKey ? ' is-active' : '';
+    $href = renewsListUrl(1, $viewKey);
+    ?>
+<a class="renewViewTab<?php echo $active; ?>" role="tab" href="<?php echo htmlspecialchars($href, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($viewLabel, ENT_QUOTES, 'UTF-8'); ?></a>
+<?php } ?>
+</div>
+
 <div class="renewList">
 
 <?php if($totalItems === 0){ ?>
@@ -905,7 +979,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 <div class="pagination">
 <?php for($x = 1; $x <= $totalPages; $x++){ ?>
 <a
-href="<?php echo htmlspecialchars(renewsListUrl($x), ENT_QUOTES, 'UTF-8'); ?>"
+href="<?php echo htmlspecialchars(renewsListUrl($x, $renewsListView), ENT_QUOTES, 'UTF-8'); ?>"
 class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 <?php echo $x; ?>
 </a>
@@ -924,7 +998,9 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 var renewResultMessage = <?php echo json_encode($paymentMessage, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultDetail = <?php echo json_encode($paymentMessageDetail, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultError = <?php echo json_encode($paymentError, JSON_UNESCAPED_UNICODE); ?>;
-var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews'), JSON_UNESCAPED_UNICODE); ?>;
+var renewsListView = <?php echo json_encode($renewsListView, JSON_UNESCAPED_UNICODE); ?>;
+var renewsXuiEnabled = <?php echo $renewsXuiEnabled ? 'true' : 'false'; ?>;
+var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews&view=' . rawurlencode($renewsListView)), JSON_UNESCAPED_UNICODE); ?>;
 
 function closeMenus(){
 document.querySelectorAll('.dropdown.active').forEach(function(el){
@@ -1042,18 +1118,23 @@ openModal(
 }
 
 function openAction(id,user,mobile,plan){
+var approveForm = renewsXuiEnabled
+? ('<form method="POST">'+
+'<input type="hidden" name="view" value="'+renewsListView+'">'+
+'<input type="hidden" name="approve_index" value="'+id+'">'+
+'<div class="modalBtns"><button class="green" name="approve_payment">تایید</button></div></form>')
+: ('<form method="POST">'+
+'<input type="hidden" name="view" value="'+renewsListView+'">'+
+'<input type="hidden" name="approve_index" value="'+id+'">'+
+'<input type="text" name="approve_link" placeholder="لینک تمدید">'+
+'<div class="modalBtns"><button class="green" name="approve_payment">تایید</button></div></form>');
+
 openModal(
 '<h3>عملیات تمدید</h3>'+
 '<p><b>کاربر:</b> '+user+'</p>'+
 '<p><b>موبایل:</b> '+mobile+'</p>'+
 '<p><b>پلن:</b> '+plan+'</p>'+
-'<form method="POST">'+
-'<input type="hidden" name="approve_index" value="'+id+'">'+
-'<input type="text" name="approve_link" placeholder="لینک تمدید">'+
-'<div class="modalBtns">'+
-'<button class="green" name="approve_payment">تایید</button>'+
-'</div>'+
-'</form>'+
+approveForm+
 '<hr style="margin:15px 0;">'+
 '<form method="POST">'+
 '<input type="hidden" name="reject_index" value="'+id+'">'+

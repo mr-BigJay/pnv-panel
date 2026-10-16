@@ -94,24 +94,8 @@ $result = instantPayHandleDepositText($text, pnvNowParts());
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];
     $paidId = $item['id'] ?? '';
-    $raw = $paidId !== '' ? instantPayGet($paidId) : null;
-    $userLabel = is_array($raw) ? ($raw['user'] ?? '-') : '-';
 
-    $msg = "✅ پرداخت تأیید شد\n"
-        . 'کاربر: ' . $userLabel . "\n"
-        . 'مبلغ: ' . ($item['amount_text'] ?? '-') . "\n"
-        . 'پلن: ' . ($item['plan'] ?? '-') . "\n"
-        . 'کد: ' . ($item['code'] ?? '-');
-
-    if(!empty($item['link'])){
-        $msg .= "\nلینک:\n" . $item['link'];
-    }
-
-    if(!empty($result['matched_via'])){
-        $msg .= "\nمسیر: " . $result['matched_via'];
-    }
-
-    baleSendMessage($chatId, $msg, [], $config);
+    // نوتیف «واریز تأیید شد» فقط از xuiApprovePaymentIndex → baleNotifyPaymentConfirmedRow (یک‌بار، dedup).
     echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId]);
     exit;
 }

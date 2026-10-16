@@ -30,6 +30,10 @@ server {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
+    location ^~ /bigjay_controller/ {
+        try_files $uri $uri/ /bigjay_controller/index.php?$query_string;
+    }
+
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:PNV_PHP_FPM_SOCK;

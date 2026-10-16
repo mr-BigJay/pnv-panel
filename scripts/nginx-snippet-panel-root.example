@@ -1,0 +1,21 @@
+# Example: panel.ticketin.ir document root must match deploy ROOT (/var/www/html)
+# Put under server { ... } for panel.ticketin.ir
+
+    root /var/www/html;
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location /bigjay_controller/ {
+        try_files $uri $uri/ /bigjay_controller/index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;  # adjust version
+    }
+
+# BAD (causes 404 if alias path wrong):
+#   location /bigjay_controller { alias /var/www/old-admin/; }

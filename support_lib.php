@@ -4,6 +4,14 @@ require_once __DIR__ . '/pnv_date_bootstrap.php';
 
 if(!function_exists('supportLoad')){
 
+    function supportEnsureSession(){
+
+        if(session_status() === PHP_SESSION_NONE){
+            session_start();
+        }
+
+    }
+
     function supportIsEmbeddedRequest(){
 
         return basename($_SERVER['SCRIPT_NAME'] ?? '') === 'index.php'
@@ -70,6 +78,8 @@ if(!function_exists('supportLoad')){
 
     function supportCsrfToken(){
 
+        supportEnsureSession();
+
         if(empty($_SESSION['support_csrf'])){
             $_SESSION['support_csrf'] = bin2hex(random_bytes(16));
         }
@@ -79,6 +89,8 @@ if(!function_exists('supportLoad')){
     }
 
     function supportCsrfVerify($token){
+
+        supportEnsureSession();
 
         return isset($_SESSION['support_csrf'])
             && is_string($token)
@@ -281,7 +293,72 @@ if(!function_exists('supportLoad')){
             return '?';
         }
 
-        return mb_substr($username, 0, 1);
+        if(function_exists('mb_substr')){
+            return mb_substr($username, 0, 1);
+        }
+
+        return substr($username, 0, 1);
+
+    }
+
+    function supportUsernamesMatch($left, $right){
+
+        $left = trim((string)$left);
+        $right = trim((string)$right);
+
+        if($left === '' || $right === ''){
+            return false;
+        }
+
+        return strcasecmp($left, $right) === 0;
+
+    }
+
+    function supportGetUserProfileSummary($username){
+
+        $username = trim((string)$username);
+        $summary = [
+            'username' => $username,
+            'mobile' => '-',
+            'exists' => false,
+        ];
+
+        if($username === ''){
+            return $summary;
+        }
+
+        $usersFile = __DIR__ . '/db/users.json';
+
+        if(!is_file($usersFile)){
+            return $summary;
+        }
+
+        $users = json_decode((string)file_get_contents($usersFile), true);
+
+        if(!is_array($users)){
+            return $summary;
+        }
+
+        foreach($users as $user){
+
+            if(!is_array($user)){
+                continue;
+            }
+
+            $stored = trim((string)($user['username'] ?? ''));
+
+            if($stored === '' || !supportUsernamesMatch($stored, $username)){
+                continue;
+            }
+
+            $summary['username'] = $stored;
+            $summary['mobile'] = trim((string)($user['mobile'] ?? '')) ?: '-';
+            $summary['exists'] = true;
+            break;
+
+        }
+
+        return $summary;
 
     }
 
@@ -337,7 +414,7 @@ if(!function_exists('supportLoad')){
 
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') !== $username){
+            if(!supportUsernamesMatch($ticket['user'] ?? '', $username)){
                 continue;
             }
 
@@ -577,15 +654,39 @@ if(!function_exists('supportLoad')){
 
     function supportFindTicketIndex($data, $username){
 
+        $username = trim((string)$username);
+
+        if($username === ''){
+            return -1;
+        }
+
         foreach($data as $i => $ticket){
 
-            if(($ticket['user'] ?? '') === $username){
+            if(strcasecmp(trim((string)($ticket['user'] ?? '')), $username) === 0){
                 return $i;
             }
 
         }
 
         return -1;
+
+    }
+
+    function supportResolveTicketUsername($data, $username){
+
+        $username = trim((string)$username);
+
+        if($username === ''){
+            return '';
+        }
+
+        $index = supportFindTicketIndex($data, $username);
+
+        if($index >= 0){
+            return trim((string)($data[$index]['user'] ?? $username));
+        }
+
+        return $username;
 
     }
 
@@ -759,6 +860,56 @@ if(!function_exists('supportLoad')){
 
     }
 
+    /** آدرس POST فرم ادمین — همان URL فعلی با page=support تا POST گم نشود. */
+    function supportAdminFormAction($user = '', $embedded = false){
+
+        if(!$embedded && supportIsEmbeddedRequest()){
+            $embedded = true;
+        }
+
+        if($embedded){
+            $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+
+            if(!is_string($path) || $path === ''){
+                $path = function_exists('pnvAdminUrl') ? pnvAdminUrl('index.php') : 'index.php';
+            }
+
+            $url = $path . '?page=support';
+
+            if($user !== ''){
+                $url .= '&user=' . urlencode($user);
+            }
+
+            return $url;
+        }
+
+        return supportAdminUrl($user, false);
+
+    }
+
+    function supportIsAdminPostRequest(){
+
+        if(($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'){
+            return false;
+        }
+
+        if(isset($_POST['reply'])){
+            return true;
+        }
+
+        if(isset($_POST['delete_message'])){
+            return true;
+        }
+
+        if(trim((string)($_POST['edit_id'] ?? '')) !== ''){
+            return true;
+        }
+
+        return isset($_POST['message'], $_POST['user'])
+            && !isset($_POST['delete_message']);
+
+    }
+
     function supportRenderMessageHtml($m, $options){
 
         $sender = $m['sender'] ?? 'user';
@@ -918,6 +1069,8 @@ if(!function_exists('supportLoad')){
 
     function supportProcessAdminActions($file, $embedded = false){
 
+        supportEnsureSession();
+
         $data = supportLoad($file);
         $redirect = null;
         $error = null;
@@ -989,7 +1142,7 @@ if(!function_exists('supportLoad')){
                 $error = 'درخواست نامعتبر است';
             }
             else{
-                $user = $_POST['user'] ?? '';
+                $user = supportResolveTicketUsername($data, $_POST['user'] ?? '');
                 $text = trim($_POST['message'] ?? '');
                 $upload = supportHandleUpload(
                     $_FILES['image'] ?? [],
@@ -998,7 +1151,10 @@ if(!function_exists('supportLoad')){
                 );
                 $image = !empty($upload['ok']) ? ($upload['path'] ?? '') : '';
 
-                if($image === '' && !empty($upload['error'])){
+                if($user === ''){
+                    $error = 'کاربر مقصد مشخص نیست';
+                }
+                elseif($image === '' && !empty($upload['error'])){
                     $error = $upload['error'];
                 }
                 elseif($text === '' && $image === ''){
@@ -1035,10 +1191,18 @@ if(!function_exists('supportLoad')){
 
                         $data[$ticketIndex]['status'] = 'answered';
 
-                        supportSave($file, $data);
+                        if(!supportSave($file, $data)){
+                            $error = 'ذخیره پیام ناموفق بود (دسترسی db/support.json یا uploads/support را بررسی کنید)';
+                        }
 
                     }
-                    $redirect = supportAdminUrl($user, $embedded);
+                    else{
+                        $error = 'گفتگوی کاربر پیدا نشد';
+                    }
+
+                    if($error === null){
+                        $redirect = supportAdminUrl($user, $embedded);
+                    }
                 }
 
             }
