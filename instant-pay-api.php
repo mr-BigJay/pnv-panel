@@ -75,6 +75,8 @@ if($action === 'create'){
     $discountFinalThousands = 0;
     $discountType = '';
     $discountValue = 0;
+    $discountMaxThousands = 0;
+    $discountPlanLabel = '';
 
     if($hasCoupon){
         if($couponCode === ''){
@@ -91,9 +93,15 @@ if($action === 'create'){
 
         $discountPercent = intval($couponResult['percent'] ?? 0);
         $discountSource = (string)($couponResult['source'] ?? 'referral');
-        $discountFinalThousands = intval($couponResult['final'] ?? 0);
+        $discountFinalThousands = intval(
+            $couponResult['final_amount']
+            ?? $couponResult['final']
+            ?? 0
+        );
         $discountType = (string)($couponResult['type'] ?? 'percent');
         $discountValue = intval($couponResult['value'] ?? $discountPercent);
+        $discountMaxThousands = intval($couponResult['max_discount_thousands'] ?? 0);
+        $discountPlanLabel = (string)($couponResult['plan_label'] ?? '');
     }
 
     $result = instantPayCreate([
@@ -111,6 +119,9 @@ if($action === 'create'){
         'discount_type' => $discountType,
         'discount_value' => $discountValue,
         'discount_final_thousands' => $discountFinalThousands,
+        'discount_final_applied' => $hasCoupon,
+        'discount_max_thousands' => $discountMaxThousands,
+        'discount_plan_label' => $discountPlanLabel,
     ]);
 
     if(
