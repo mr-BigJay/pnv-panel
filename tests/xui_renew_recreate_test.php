@@ -109,12 +109,28 @@ $GLOBALS['xuiTestRenewApiProbe'] = static function(){
     return ['ok' => true];
 };
 
-$GLOBALS['xuiTestAdjustClientTraffic'] = static function(){
+$existingAdjustPhase = 0;
+$existingAnchorSec = 1700000001;
+$existingAnchorMs = $existingAnchorSec * 1000;
+$GLOBALS['renewReserveTestNow'] = $existingAnchorSec;
+$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$existingAdjustPhase){
+    $existingAdjustPhase++;
+
     return ['ok' => true, 'method' => 'test_bulkAdjust'];
 };
 
-$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId){
-    return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => xuiGbToBytes(20), 'expiryTime' => 0]];
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$existingAdjustPhase, $existingAnchorMs){
+    $after = $existingAdjustPhase > 0;
+
+    return [
+        'status' => 'found',
+        'client' => [
+            'email' => 'owner_1234',
+            'subId' => $subId,
+            'totalGB' => xuiGbToBytes($after ? 30 : 20),
+            'expiryTime' => $after ? ($existingAnchorMs + (86400000 * 30)) : 0,
+        ],
+    ];
 };
 $GLOBALS['xuiTestRenewRuntimeState'] = [
     'ambiguous' => false,
@@ -123,6 +139,7 @@ $GLOBALS['xuiTestRenewRuntimeState'] = [
 ];
 
 $renewExisting = xuiProvisionRenew($row);
+unset($GLOBALS['renewReserveTestNow']);
 renewRecAssert(!empty($renewExisting['ok']) && ($renewExisting['renew_outcome'] ?? '') === 'renewed', 'existing client renew path');
 
 $GLOBALS['xuiTestRenewLookupClient'] = static function(){
@@ -263,10 +280,14 @@ $GLOBALS['xuiTestRenewRuntimeState'] = [
     'time_unlimited' => true,
     'should_activate_now' => false,
 ];
-$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$adjustCount){
+$adjustAnchorSec = 1700000200;
+$adjustAnchorMs = $adjustAnchorSec * 1000;
+$GLOBALS['renewReserveTestNow'] = $adjustAnchorSec;
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$adjustCount, $adjustAnchorMs){
     $bytes = $adjustCount > 0 ? xuiGbToBytes(30) : xuiGbToBytes(20);
+    $expiry = $adjustCount > 0 ? ($adjustAnchorMs + (86400000 * 30)) : 0;
 
-    return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => $bytes, 'expiryTime' => 0]];
+    return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => $bytes, 'expiryTime' => $expiry]];
 };
 $GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustCount){
     $adjustCount++;
@@ -317,11 +338,13 @@ xuiRenewProvisionStoreWrite($renewApproveKey, [
     'baseline' => ['total_bytes' => xuiGbToBytes(20), 'used_bytes' => 0, 'expiry_ms' => 0, 'email' => 'owner_1234', 'sub_id' => 'abc1234567890ab'],
     'plan_gb' => 10,
     'plan_days' => 30,
+    'activation_anchor_ms' => $adjustAnchorMs,
     'started_at' => time() - 200,
 ]);
 
 $approveRenewRetry = xuiApprovePaymentIndex(1, 'تمدید');
 renewRecAssert(!empty($approveRenewRetry['ok']) && $adjustCount === 1, 'retry after adjust crash does not adjust again');
+unset($GLOBALS['renewReserveTestNow']);
 
 $postCalls = 0;
 $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body) use (&$postCalls){

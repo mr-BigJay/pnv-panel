@@ -43,6 +43,7 @@ $GLOBALS['xuiTestRenewApiProbe'] = static fn() => ['ok' => true];
 $row = ['ownerUser', $link, '10 گیگ - 30 روز', 'AUTO-F1', '', '', 'درحال بررسی', '', 170001, 'تمدید', '', '', 1];
 $key = xuiPaymentRowProvisionKey($row);
 $baseline = ['total_bytes' => xuiGbToBytes(20), 'used_bytes' => 0, 'expiry_ms' => 0, 'email' => 'u1', 'sub_id' => 'abc1234567890ab'];
+$faultAnchorMs = renewReserveNowMs();
 xuiRenewProvisionStoreWrite($key, [
     'state' => 'processing',
     'phase' => 'renew_adjust_started',
@@ -50,6 +51,7 @@ xuiRenewProvisionStoreWrite($key, [
     'baseline' => $baseline,
     'plan_gb' => 10,
     'plan_days' => 30,
+    'activation_anchor_ms' => $faultAnchorMs,
     'started_at' => time() - 200,
 ]);
 $GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $id) => [
@@ -61,7 +63,12 @@ faultAssert(($recoverFail['action'] ?? '') === 'ambiguous', 'incremental without
 
 $GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $id) => [
     'status' => 'found',
-    'client' => ['email' => 'u1', 'subId' => $id, 'totalGB' => xuiGbToBytes(30), 'expiryTime' => 0],
+    'client' => [
+        'email' => 'u1',
+        'subId' => $id,
+        'totalGB' => xuiGbToBytes(30),
+        'expiryTime' => $faultAnchorMs + (86400000 * 30),
+    ],
 ];
 $recoverOk = xuiRenewRecoverProcessingRenew($row, xuiRenewProvisionStoreRead($key));
 faultAssert(($recoverOk['action'] ?? '') === 'finalize', 'incremental verified with baseline+add');
