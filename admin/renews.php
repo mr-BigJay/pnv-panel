@@ -161,6 +161,14 @@ unset($_SESSION['payment_error']);
 if(isset($_POST['approve_payment'])){
 
 $index=intval($_POST['approve_index']);
+if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&tab=cancelled'));
+    exit;
+}
+
 $link=trim($_POST['approve_link'] ?? '');
 
 $xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig')
@@ -209,6 +217,14 @@ exit;
 if(isset($_POST['reject_payment'])){
 
 $index=intval($_POST['reject_index']);
+if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&tab=cancelled'));
+    exit;
+}
+
 $reason=trim($_POST['reject_reason']);
 
 if(isset($payments[$index])){
@@ -236,6 +252,15 @@ exit;
 if(isset($_GET['deletepayment'])){
 
 $id=intval($_GET['deletepayment']);
+$index=$id;
+if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&tab=cancelled'));
+    exit;
+}
+
 
 if(isset($payments[$id])){
 
@@ -881,6 +906,7 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 <span class="renewPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
 <?php if($renewTab === 'cancelled'){ ?>
 <span class="renewPlanLine">کد: <?php echo htmlspecialchars((string)($p[3] ?? '—'), ENT_QUOTES, 'UTF-8'); ?> | مبلغ: <?php echo number_format(intval($p[12] ?? 0)); ?> ریال</span>
+<span class="renewPlanLine"><?php echo htmlspecialchars((string)($p[7] ?? 'لغو شده'), ENT_QUOTES, 'UTF-8'); ?></span>
 <?php } ?>
 <?php if($provisionDetail !== ''){ ?>
 <span class="renewPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
