@@ -290,8 +290,8 @@ pointer-events:none !important;
 <div class="resultSuccessBanner">
 <span class="resultSuccessTick" aria-hidden="true">✅</span>
 <div class="resultSuccessText">
-<strong>تمدید با موفقیت انجام شد</strong>
-<span>لینک و QR آماده است</span>
+<strong id="resultSuccessTitle">تمدید با موفقیت انجام شد</strong>
+<span id="resultSuccessDetail">لینک و QR آماده است</span>
 </div>
 </div>
 <div class="resultPlanSummary planSummary is-visible">
@@ -922,6 +922,16 @@ function fillResult(item){
     resultPlanLine2.innerHTML = 'اکانت: <span class="planSummaryHighlight">' + escapeHtml(displayName) + '</span>';
     resultLink.textContent = link;
     showResultQr(link);
+
+    const successTitle = document.getElementById('resultSuccessTitle');
+    const successDetail = document.getElementById('resultSuccessDetail');
+    const renewMsg = String(item.user_renew_message || '').trim();
+    if(successTitle){
+        successTitle.textContent = renewMsg !== '' ? renewMsg : 'تمدید با موفقیت انجام شد';
+    }
+    if(successDetail){
+        successDetail.textContent = renewMsg !== '' ? 'لینک نهایی اشتراک در زیر آماده است' : 'لینک و QR آماده است';
+    }
 }
 
 toStep3Btn.addEventListener('click', function(){
