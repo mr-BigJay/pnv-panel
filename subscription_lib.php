@@ -7,6 +7,12 @@ if(!function_exists('pnvClearedSubsPath')){
     }
 
     function pnvPaymentsCsvPath(){
+        $override = getenv('PNV_PAYMENTS_CSV_PATH');
+
+        if(is_string($override) && trim($override) !== ''){
+            return trim($override);
+        }
+
         return __DIR__ . '/invoices/payments.csv';
     }
 
