@@ -78,7 +78,8 @@ try{
     assertCreateAtomic(count($csvAfterBlock) === 1 && instantPayCsvRowPending($csvAfterBlock[0]),
         'prior CSV still pending after failed create');
 
-    // JSON save failure after supersede: new CSV row must be rejected, prior stays cancelled.
+    // JSON save failure after supersede: old waiting must be restored and
+    // only the new CSV row rejected; an unsuccessful new order cannot cancel prior.
     $GLOBALS['instantPayTestSaveInterceptor'] = static function($items){
         foreach($items as $item){
             if(($item['subname'] ?? '') === 'newcfg34' && ($item['status'] ?? '') === 'waiting'){
@@ -101,17 +102,19 @@ try{
         'persist_failed when JSON save fails');
     $rows = xuiLoadPayments();
     assertCreateAtomic(count($rows) === 2, 'CSV retains both rows');
-    assertCreateAtomic(!instantPayCsvRowPending($rows[0]), 'superseded prior CSV rejected');
+    assertCreateAtomic(instantPayCsvRowPending($rows[0]), 'prior CSV restored to pending after failed replacement');
     assertCreateAtomic(!instantPayCsvRowPending($rows[1]), 'orphan new CSV rejected after JSON failure');
     $jsonRows = instantPayLoad();
-    assertCreateAtomic(count($jsonRows) === 1 && ($jsonRows[0]['status'] ?? '') === 'cancelled',
-        'prior JSON cancelled when supersede completed');
+    assertCreateAtomic(count($jsonRows) === 1 && ($jsonRows[0]['status'] ?? '') === 'waiting',
+        'prior JSON waiting restored when replacement failed');
 
     echo $failed ? "$failed failed\n" : "All instant pay create atomic tests passed\n";
 }finally{
     unset($GLOBALS['xuiTestSavePaymentsInterceptor'], $GLOBALS['instantPayTestSaveInterceptor']);
     @unlink($dir . '/payments.csv');
     @unlink($dir . '/instant_payments.json');
+    @unlink($dir . '/locks/instant_pay_create.lock');
+    @rmdir($dir . '/locks');
     @rmdir($dir);
 }
 exit($failed ? 1 : 0);
