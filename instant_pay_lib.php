@@ -1082,7 +1082,18 @@ if(!function_exists('instantPayPath')){
 
         if($message !== ''){
             $item['user_renew_message'] = $message;
-            $item['renew_outcome'] = trim((string)($result['renew_outcome'] ?? ''));
+        }
+
+        $outcome = trim((string)($result['renew_outcome'] ?? ''));
+
+        if($outcome !== ''){
+            $item['renew_outcome'] = $outcome;
+        }
+
+        $reserveId = trim((string)($result['renew_reserve_id'] ?? ''));
+
+        if($reserveId !== ''){
+            $item['renew_reserve_id'] = $reserveId;
         }
     }
 
@@ -1146,6 +1157,7 @@ if(!function_exists('instantPayPath')){
             'message' => $item['message'] ?? '',
             'user_renew_message' => $item['user_renew_message'] ?? '',
             'renew_outcome' => $item['renew_outcome'] ?? '',
+            'renew_reserve_id' => $item['renew_reserve_id'] ?? '',
             'payment_received_at' => intval($item['payment_received_at'] ?? 0),
             'provision_failed_at' => intval($item['provision_failed_at'] ?? 0),
             'provision_error' => $item['provision_error'] ?? '',

@@ -114,8 +114,13 @@ $GLOBALS['xuiTestAdjustClientTraffic'] = static function(){
 };
 
 $GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId){
-    return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => xuiGbToBytes(20)]];
+    return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => xuiGbToBytes(20), 'expiryTime' => 0]];
 };
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'should_activate_now' => false,
+];
 
 $renewExisting = xuiProvisionRenew($row);
 renewRecAssert(!empty($renewExisting['ok']) && ($renewExisting['renew_outcome'] ?? '') === 'renewed', 'existing client renew path');

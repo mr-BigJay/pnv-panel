@@ -79,6 +79,10 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+if (is_file(__DIR__ . '/../renew_reserve_lib.php')) {
+    require_once __DIR__ . '/../renew_reserve_lib.php';
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -954,6 +958,10 @@ $payWhen = pnvFormatPaymentRowDateTime($p);
 $provisionDetail = function_exists('instantPayAdminProvisionFailureDetail') ? instantPayAdminProvisionFailureDetail($p) : '';
 if($provisionDetail === '' && !empty($renewStatusMeta['detail'] ?? '')){
     $provisionDetail = (string)$renewStatusMeta['detail'];
+}
+$renewReserveDetail = function_exists('renewReserveAdminDetailForRow') ? renewReserveAdminDetailForRow($p) : '';
+if($renewReserveDetail !== ''){
+    $provisionDetail = $provisionDetail !== '' ? ($provisionDetail . ' | ' . $renewReserveDetail) : $renewReserveDetail;
 }
 
 ?>
