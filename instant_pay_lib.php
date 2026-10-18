@@ -217,7 +217,15 @@ if(!function_exists('instantPayPath')){
             return instantPayWithinMatchGrace($item, $now);
         }
 
+        if($status === 'payment_received_provision_failed'){
+            return false;
+        }
+
         return false;
+    }
+
+    function instantPayDepositConfirmedStatuses(){
+        return ['payment_received', 'processing', 'payment_received_provision_failed', 'paid'];
     }
 
     function instantPayResolveCsvIndex($item){
@@ -542,7 +550,7 @@ if(!function_exists('instantPayPath')){
         foreach($items as $item){
             $st = (string)($item['status'] ?? '');
 
-            if(!in_array($st, ['waiting', 'processing', 'paid', 'expired', 'failed'], true)){
+            if(!in_array($st, ['waiting', 'processing', 'paid', 'expired', 'failed', 'payment_received', 'payment_received_provision_failed'], true)){
                 continue;
             }
 
@@ -1011,6 +1019,11 @@ if(!function_exists('instantPayPath')){
             'message' => $item['message'] ?? '',
             'user_renew_message' => $item['user_renew_message'] ?? '',
             'renew_outcome' => $item['renew_outcome'] ?? '',
+            'payment_received_at' => intval($item['payment_received_at'] ?? 0),
+            'provision_failed_at' => intval($item['provision_failed_at'] ?? 0),
+            'provision_error' => $item['provision_error'] ?? '',
+            'provision_code' => $item['provision_code'] ?? '',
+            'matched_amount' => intval($item['matched_amount'] ?? 0),
         ];
     }
 
@@ -1233,6 +1246,16 @@ if(!function_exists('instantPayPath')){
             return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
         }
 
+        if(($found['status'] ?? '') === 'payment_received_provision_failed'){
+            if(!$force){
+                return [
+                    'ok' => false,
+                    'error' => 'واریز ثبت شده است؛ برای تلاش مجدد فعال‌سازی از مسیر پشتیبانی/ادمین استفاده کنید',
+                    'code' => 'provision_retry_required',
+                ];
+            }
+        }
+
         if(!$force && !instantPayItemMatchable($found)){
             return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . ($found['status'] ?? '') . ')'];
         }
@@ -1268,7 +1291,14 @@ if(!function_exists('instantPayPath')){
             xuiSavePayments($payments);
         }
 
-        // اول وضعیت را روی processing بگذار تا UI هنوز «تأیید شد» نگوید
+        $matchedAmount = intval($meta['amount'] ?? 0);
+        $items[$idx]['status'] = 'payment_received';
+        $items[$idx]['payment_received_at'] = time();
+        $items[$idx]['matched_amount'] = $matchedAmount;
+        $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
+        $items[$idx]['message'] = 'واریز تأیید شد؛ در حال فعال‌سازی اشتراک…';
+        instantPaySave($items);
+
         $items[$idx]['status'] = 'processing';
         $items[$idx]['message'] = 'در حال صدور اشتراک…';
         instantPaySave($items);
@@ -1289,9 +1319,28 @@ if(!function_exists('instantPayPath')){
         }
 
         if(empty($result['ok'])){
-            $items[$idx]['status'] = 'failed';
-            $items[$idx]['message'] = $result['error'] ?? 'تأیید ناموفق';
+            $provisionCode = trim((string)($result['code'] ?? ''));
+
+            if($provisionCode === 'persist_failed' && !empty($result['recoverable'])){
+                $items[$idx]['status'] = 'payment_received';
+                $items[$idx]['message'] = 'واریز ثبت شد؛ ذخیره نهایی سفارش ناقص بود و با تلاش مجدد تکمیل می‌شود';
+                $items[$idx]['provision_code'] = $provisionCode;
+                $items[$idx]['provision_error'] = $result['error'] ?? '';
+                instantPaySave($items);
+
+                return $result;
+            }
+
+            $items[$idx]['status'] = 'payment_received_provision_failed';
+            $items[$idx]['provision_failed_at'] = time();
+            $items[$idx]['provision_error'] = $result['error'] ?? 'فعال‌سازی اشتراک ناموفق بود';
+            $items[$idx]['provision_code'] = $provisionCode;
+            $items[$idx]['message'] = 'واریز شما ثبت شد اما فعال‌سازی اشتراک انجام نشد. نیازی به پرداخت مجدد نیست.';
+            if($matchedAmount <= 0){
+                $items[$idx]['matched_amount'] = intval($items[$idx]['matched_amount'] ?? 0);
+            }
             instantPaySave($items);
+
             return $result;
         }
 
