@@ -1003,6 +1003,19 @@ if(!function_exists('instantPayPath')){
         return $items;
     }
 
+    function instantPayApplyRenewProvisionMeta(array &$item, array $result){
+        if(trim((string)($item['type'] ?? '')) !== 'تمدید'){
+            return;
+        }
+
+        $message = trim((string)($result['user_renew_message'] ?? ''));
+
+        if($message !== ''){
+            $item['user_renew_message'] = $message;
+            $item['renew_outcome'] = trim((string)($result['renew_outcome'] ?? ''));
+        }
+    }
+
     function instantPayPublicView($item){
         if(!is_array($item)){
             return null;
@@ -1060,7 +1073,9 @@ if(!function_exists('instantPayPath')){
             'expires_at' => $expires,
             'remaining' => $remaining,
             'link' => $item['link'] ?? '',
-            'message' => $item['message'] ?? ''
+            'message' => $item['message'] ?? '',
+            'user_renew_message' => $item['user_renew_message'] ?? '',
+            'renew_outcome' => $item['renew_outcome'] ?? '',
         ];
     }
 
@@ -1371,6 +1386,7 @@ if(!function_exists('instantPayPath')){
         $items[$idx]['paid_at'] = time();
         $items[$idx]['link'] = $result['link'] ?? ($found['sub'] ?? '');
         $items[$idx]['message'] = 'پرداخت تأیید شد';
+        instantPayApplyRenewProvisionMeta($items[$idx], is_array($result) ? $result : []);
         $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
         $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
         instantPaySave($items);
