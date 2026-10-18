@@ -31,7 +31,29 @@ def merge(s,file):
     picks=iter(choices)
     return RX.sub(lambda m:m.group(1 if next(picks)=='production' else 2),s)
 
-def library(s):
+def method_region(s, start, end, label):
+    if s.count(start)!=1 or s.count(end)!=1:
+        raise RuntimeError(label+': function bounds changed, manual review required')
+    a=s.index(start)
+    b=s.index(end,a+len(start))
+    if b<=a:
+        raise RuntimeError(label+': invalid function bounds')
+    return a,b,s[a:b]
+
+def library(s, pr_source):
+    # Production's older supersede implementation may merge cleanly by Git,
+    # yet keep the legacy type filter / skip the batch CSV cancellation.
+    # Copy only this transaction-critical function from the audited PR,
+    # preserving Production's separate four-state admin filter below.
+    start='    function instantPaySupersedeUserWaiting('
+    end='    function instantPayCloseUserMatchable('
+    _,_,good=method_region(pr_source,start,end,'audited PR supersede')
+    a,b,old=method_region(s,start,end,'merged supersede')
+    if 'instantPayMarkManyCsvCancelled' not in good or 'if($type !== null &&' not in good:
+        raise RuntimeError('Audited supersede function no longer has required guards')
+    if 'foreach($items as $i => $item)' not in old:
+        raise RuntimeError('Production supersede changed unexpectedly')
+    s=s[:a]+good+s[b:]
     s=one(s,"    function instantPayPurgeStaleAdminRows($items = null){\n        return instantPayExpireDue($items);\n    }",
         "    function instantPayPurgeStaleAdminRows($items = null){\n        $items = instantPayExpireDue($items);\n        return instantPayRebuildCsvIndexes($items);\n    }",'Production CSV index refresh')
     s=one(s,"            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);",
@@ -41,6 +63,10 @@ def library(s):
         "        if($jsonStatus === 'cancelled' || ($status === 'رد شد' && strpos($reason, 'لغو') === 0)){\n"
         "            return 'cancelled';\n        }\n"
         "        if($status === 'رد شد'){\n            return 'rejected';\n        }",'cancelled category before rejected')
+    for x in ("instantPayRollbackFailedCreate(", "flock($lockHandle, LOCK_EX)",
+              "instantPayMarkManyCsvCancelled("):
+        if x not in s:
+            raise RuntimeError("Critical create/rollback/lock guard missing: "+x)
     for x in ('function instantPayAdminRowListBucket(', 'function instantPayAdminCancelledHistory(',
               'function instantPayFindJsonForCsvRow('):
         if x not in s: raise RuntimeError('Missing archive/identity function: '+x)
@@ -79,11 +105,15 @@ def main():
     p.add_argument('--output',type=Path,required=True)
     x=p.parse_args()
     if x.output.exists() and any(x.output.iterdir()): raise RuntimeError('Output directory is nonempty')
+    pr_file=x.merged.parent/'pr'/'instant_pay_lib.php'
+    if not pr_file.is_file():
+        raise RuntimeError('Expected pinned PR worktree beside merged output: '+str(pr_file))
+    pr_source=pr_file.read_text(encoding='utf-8')
     for name in FILES:
         f=x.merged/name
         if not f.is_file(): raise RuntimeError('Missing '+str(f))
         s=merge(f.read_text(encoding='utf-8'),name)
-        if name=='instant_pay_lib.php': s=library(s)
+        if name=='instant_pay_lib.php': s=library(s,pr_source)
         elif name.startswith('admin/'): s=admin(s,name)
         if re.search(r'(?m)^(?:<<<<<<<|=======|>>>>>>>)',s): raise RuntimeError(name+': conflict markers')
         dest=x.output/name
