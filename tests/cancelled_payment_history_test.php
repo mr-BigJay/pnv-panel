@@ -70,6 +70,33 @@ try{
     instantPayPurgeStaleAdminRows();
     checkCancelled(count(xuiLoadPayments()) === 2, 'admin refresh never purges payments');
 
+    // Reuse of a tracking suffix months later must never bind to the old
+    // cancelled order; creation timestamp disambiguates the same AUTO code.
+    $later = [
+        'id'=>'later-confirmed', 'user'=>'demo','type'=>'تمدید','code'=>'3830',
+        'plan'=>'20 گیگ','sub'=>'https://example.com/sub/demo','status'=>'paid',
+        'created_at'=>$now-10,'expires_at'=>$now+1000,'amount'=>2493830,
+        'csv_index'=>2
+    ];
+    $saved[] = $later;
+    instantPaySave($saved);
+    $liveRows = xuiLoadPayments();
+    $liveRows[] = [
+        'demo','https://example.com/sub/demo','20 گیگ','AUTO-3830',
+        '','','تایید شد','',$now-10,'تمدید','','',2493830,'3830'
+    ];
+    checkCancelled(xuiSavePayments($liveRows), 'later CSV row saved');
+    checkCancelled((instantPayFindJsonForCsvRow($liveRows[2])['id'] ?? '') === 'later-confirmed',
+        'CSV lookup uses creation time to avoid old cancelled order');
+    checkCancelled(instantPayAdminRowBucket($liveRows[2]) === 'active',
+        'approved payment not classified as cancelled');
+    checkCancelled(instantPayResolveCsvIndex($saved[0]) === 0
+        && instantPayResolveCsvIndex($later) === 2, 'distinct CSV indexes for reused tracking code');
+    instantPayRebuildCsvIndexes();
+    $reindexed = instantPayLoad();
+    checkCancelled(($reindexed[0]['csv_index'] ?? -1) === 0
+        && ($reindexed[3]['csv_index'] ?? -1) === 2, 'CSV reindex keeps both transaction IDs distinct');
+
     echo $failed ? "$failed failed\n" : "All cancelled history tests passed\n";
 }finally{
     @unlink($dir . '/payments.csv');
