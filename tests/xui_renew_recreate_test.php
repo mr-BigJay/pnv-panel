@@ -439,8 +439,10 @@ renewRecAssert($realConfigBefore === $realConfigAfter, 'real xui_servers.json un
 require_once __DIR__ . '/../instant_pay_lib.php';
 $instantPath = $tmpRoot . '/instant_payments.json';
 putenv('PNV_INSTANT_PAYMENTS_PATH=' . $instantPath);
+$adminCreatedAt = time();
 file_put_contents($instantPath, json_encode([[
     'id' => 'ip-fail-1',
+    'created_at' => $adminCreatedAt,
     'user' => 'ownerUser',
     'tracking' => 'AUTO-9001',
     'code' => '9001',
@@ -458,7 +460,7 @@ $adminRow = [
     '',
     'درحال بررسی',
     '',
-    time(),
+    $adminCreatedAt,
     'تمدید',
     '',
     '',
