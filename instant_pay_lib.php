@@ -1173,7 +1173,30 @@ if(!function_exists('instantPayPath')){
             }
         }
 
-        $items = instantPayExpireDue();
+        // Serialize all checkout creates before reading shared JSON and CSV.
+        // A single file lock across users prevents lost updates and duplicate
+        // CSV indexes from concurrent browser tabs / PHP-FPM workers.
+        $lockDir = dirname(instantPayPath()) . '/locks';
+        if(!is_dir($lockDir) && !@mkdir($lockDir, 0750, true) && !is_dir($lockDir)){
+            return ['ok' => false, 'error' => 'قفل سفارش قابل ایجاد نیست', 'code' => 'lock_failed'];
+        }
+        $lockHandle = @fopen($lockDir . '/instant_pay_create.lock', 'c');
+        if(!$lockHandle){
+            return ['ok' => false, 'error' => 'قفل سفارش در دسترس نیست', 'code' => 'lock_failed'];
+        }
+        if(!flock($lockHandle, LOCK_EX)){
+            fclose($lockHandle);
+            return ['ok' => false, 'error' => 'قفل سفارش برقرار نشد', 'code' => 'lock_failed'];
+        }
+
+        try {
+            // Test-only delay inside the lock to force deterministic contention.
+            if(!empty($GLOBALS['instantPayTestCreateLockHook']) &&
+               is_callable($GLOBALS['instantPayTestCreateLockHook'])){
+                $GLOBALS['instantPayTestCreateLockHook']();
+            }
+            // IMPORTANT: refresh the shared state *after* acquiring the lock.
+            $items = instantPayExpireDue();
 
         $createOpts = [
             'user' => $username,
@@ -1306,6 +1329,10 @@ if(!function_exists('instantPayPath')){
             'ok' => true,
             'item' => instantPayPublicView($item)
         ];
+        } finally {
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+        }
     }
 
     function instantPayMarkPaid($id, $meta = [], $opts = []){
