@@ -244,6 +244,13 @@ $before7 = file_get_contents(getenv('PNV_RENEW_RESERVE_PATH'));
 $badSave = renewReserveSave([['id' => 'x', 'bad' => INF]]);
 $after7 = file_get_contents(getenv('PNV_RENEW_RESERVE_PATH'));
 hardAssert($badSave === false && $before7 === $after7, 'json_encode failure keeps prior queue file');
+$provPath = xuiRenewProvisionStorePath('json_fail_key');
+@mkdir(dirname($provPath), 0755, true);
+file_put_contents($provPath, '{"state":"processing","baseline":{"total_bytes":1}}');
+$provBefore = file_get_contents($provPath);
+$provBad = xuiRenewProvisionStoreWrite('json_fail_key', ['state' => 'processing', 'bad' => INF]);
+$provAfter = file_get_contents($provPath);
+hardAssert($provBad === false && $provBefore === $provAfter, 'provision json_encode failure keeps prior store');
 
 // 8) persist_failed preserves provision fields via approve patch (no state wipe)
 $row8 = ['ownerUser', $link, '10 گیگ - 30 روز', 'H-8', '', '', 'درحال بررسی', '', 170018, 'تمدید', '', '', 1];
