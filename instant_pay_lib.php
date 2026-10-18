@@ -507,6 +507,71 @@ if(!function_exists('instantPayPath')){
         return xuiSavePayments($rows);
     }
 
+    /**
+     * Recover a checkout that never persisted its new JSON order.
+     * Restore only prior waiting rows superseded by this checkout and reject
+     * the newly appended CSV row. Never roll back approved financial records.
+     * Call only while the create lock is held.
+     */
+    function instantPayRollbackFailedCreate(array $oldItems, array $oldCsv, $newCsvIndex, $newRow){
+        $rows = xuiLoadPayments();
+        $newCsvIndex = intval($newCsvIndex);
+        if(!isset($rows[$newCsvIndex]) || !is_array($rows[$newCsvIndex])
+            || trim((string)($rows[$newCsvIndex][3] ?? '')) !== trim((string)($newRow[3] ?? ''))
+            || intval($rows[$newCsvIndex][8] ?? 0) !== intval($newRow[8] ?? 0)
+            || trim((string)($rows[$newCsvIndex][0] ?? '')) !== trim((string)($newRow[0] ?? ''))){
+            return false;
+        }
+
+        foreach($oldCsv as $i => $prior){
+            if(!isset($rows[$i]) || !is_array($prior) || !is_array($rows[$i])){
+                return false;
+            }
+            $current = $rows[$i];
+            if(trim((string)($prior[0] ?? '')) !== trim((string)($current[0] ?? ''))
+                || trim((string)($prior[3] ?? '')) !== trim((string)($current[3] ?? ''))
+                || intval($prior[8] ?? 0) !== intval($current[8] ?? 0)){
+                return false;
+            }
+            if(instantPayCsvRowPending($prior)
+                && trim((string)($current[6] ?? '')) === 'رد شد'
+                && trim((string)($current[7] ?? '')) === 'لغو به‌خاطر درخواست جدید'){
+                $rows[$i][6] = $prior[6] ?? 'درحال بررسی';
+                $rows[$i][7] = $prior[7] ?? '';
+            }
+        }
+
+        if(instantPayCsvRowPending($rows[$newCsvIndex])){
+            $rows[$newCsvIndex][6] = 'رد شد';
+            $rows[$newCsvIndex][7] = 'ساخت سفارش ناموفق؛ نیازمند درخواست جدید';
+        }
+        if(!xuiSavePayments($rows)){
+            return false;
+        }
+
+        // Undo only this checkout's cancellations in JSON, not unrelated
+        // changes made by payment processing or other handlers.
+        $oldMap = [];
+        foreach($oldItems as $old){
+            if(is_array($old) && isset($old['id'])){
+                $oldMap[(string)$old['id']] = $old;
+            }
+        }
+        $stored = instantPayLoad();
+        foreach($stored as $i => $current){
+            $id = (string)($current['id'] ?? '');
+            if(!isset($oldMap[$id])){
+                continue;
+            }
+            if(($oldMap[$id]['status'] ?? '') === 'waiting'
+                && ($current['status'] ?? '') === 'cancelled'
+                && ($current['message'] ?? '') === 'لغو به‌خاطر درخواست جدید'){
+                $stored[$i] = $oldMap[$id];
+            }
+        }
+        return instantPaySave($stored);
+    }
+
     // Archive cancelled AUTO orders without deleting financial CSV rows (single write).
     function instantPayMarkManyCsvCancelled(array $items, $reason){
         if(!function_exists('xuiLoadPayments') || !function_exists('xuiSavePayments')){
@@ -1260,6 +1325,8 @@ if(!function_exists('instantPayPath')){
         ];
 
         $payments = xuiLoadPayments();
+        $oldPayments = $payments;
+        $oldItems = $items;
         $payments[] = $row;
         $csvIndex = count($payments) - 1;
 
@@ -1270,15 +1337,14 @@ if(!function_exists('instantPayPath')){
         $items = instantPaySupersedeUserWaiting($username, null, $newOrderId, $items);
 
         if(!is_array($items)){
-            $payments = xuiLoadPayments();
-
-            if(isset($payments[$csvIndex]) && instantPayCsvRowPending($payments[$csvIndex])){
-                $payments[$csvIndex][6] = 'رد شد';
-                $payments[$csvIndex][7] = 'ایجاد سفارش جدید ناموفق (بایگانی سفارش قبلی)';
-                xuiSavePayments($payments);
-            }
-
-            return ['ok' => false, 'error' => 'بایگانی سفارش قبلی ناموفق بود؛ درخواست جدید ساخته نشد'];
+            $recovered = instantPayRollbackFailedCreate($oldItems, $oldPayments, $csvIndex, $row);
+            return [
+                'ok' => false,
+                'error' => $recovered
+                    ? 'بایگانی سفارش قبلی ناموفق بود؛ سفارش قبلی محفوظ است'
+                    : 'بایگانی ناموفق و بازیابی خودکار ناقص است؛ با پشتیبانی تماس بگیرید',
+                'code' => $recovered ? 'create_failed' : 'manual_recovery_required',
+            ];
         }
 
         $item = [
@@ -1311,15 +1377,13 @@ if(!function_exists('instantPayPath')){
         $items[] = $item;
 
         if(!instantPaySave($items)){
-            instantPayRejectCsvRowAtIndex(
-                $csvIndex,
-                'ذخیره وضعیت سفارش ناموفق (سفارش قابل واریز خودکار نیست)'
-            );
-
+            $recovered = instantPayRollbackFailedCreate($oldItems, $oldPayments, $csvIndex, $row);
             return [
                 'ok' => false,
-                'error' => 'ذخیره وضعیت سفارش ناموفق بود؛ لطفاً دوباره تلاش کنید',
-                'code' => 'persist_failed',
+                'error' => $recovered
+                    ? 'ذخیره سفارش جدید ناموفق بود؛ سفارش قبلی محفوظ است'
+                    : 'ذخیره سفارش ناموفق و بازیابی خودکار ناقص است؛ با پشتیبانی تماس بگیرید',
+                'code' => $recovered ? 'persist_failed' : 'manual_recovery_required',
             ];
         }
 
