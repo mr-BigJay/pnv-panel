@@ -189,9 +189,15 @@ $GLOBALS['xuiTestRenewRuntimeState'] = [
     'should_activate_now' => true,
     'volume_exhausted' => true,
 ];
+$anchorMs = renewReserveNowMs();
 $GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $subId) => [
     'status' => 'found',
-    'client' => ['email' => 'u1', 'subId' => $subId, 'totalGB' => xuiGbToBytes(1), 'expiryTime' => (renewReserveNow() + 3600) * 1000],
+    'client' => [
+        'email' => 'u1',
+        'subId' => $subId,
+        'totalGB' => xuiGbToBytes(50),
+        'expiryTime' => $anchorMs + (86400000 * 30),
+    ],
 ];
 $absoluteCalls = 0;
 $act = renewReserveActivateOne(renewReserveLoad()[0]);

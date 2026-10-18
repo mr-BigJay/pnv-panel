@@ -252,10 +252,15 @@ $renewApproveRow[8] = 1700000100;
 $renewApproveKey = xuiPaymentRowProvisionKey($renewApproveRow);
 @unlink(xuiRenewProvisionStorePath($renewApproveKey));
 
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'should_activate_now' => false,
+];
 $GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$adjustCount){
-    $bytes = $adjustCount > 0 ? xuiGbToBytes(10) : xuiGbToBytes(20);
+    $bytes = $adjustCount > 0 ? xuiGbToBytes(30) : xuiGbToBytes(20);
 
-    return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => $bytes]];
+    return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => $bytes, 'expiryTime' => 0]];
 };
 $GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustCount){
     $adjustCount++;
@@ -291,12 +296,21 @@ fputcsv($renewCsv, $renewApproveRow);
 fclose($renewCsv);
 
 $renewDirect = xuiProvisionRenew($renewApproveRow);
-renewRecAssert(!empty($renewDirect['ok']) && $adjustCount === 1, 'renew adjust runs once before simulated crash');
+renewRecAssert(
+    empty($renewDirect['ok'])
+    && ($renewDirect['code'] ?? '') === 'persist_failed'
+    && $adjustCount === 1,
+    'renew adjust runs once before simulated crash'
+);
 
 unset($GLOBALS['xuiTestRenewProvisionStoreWrite']);
 xuiRenewProvisionStoreWrite($renewApproveKey, [
     'state' => 'processing',
     'phase' => 'renew_adjust_started',
+    'operation' => 'incremental',
+    'baseline' => ['total_bytes' => xuiGbToBytes(20), 'used_bytes' => 0, 'expiry_ms' => 0, 'email' => 'owner_1234', 'sub_id' => 'abc1234567890ab'],
+    'plan_gb' => 10,
+    'plan_days' => 30,
     'started_at' => time() - 200,
 ]);
 

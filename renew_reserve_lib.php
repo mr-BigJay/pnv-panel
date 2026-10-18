@@ -28,19 +28,82 @@ if(!function_exists('renewReservePath')){
         return renewReserveNow() * 1000;
     }
 
-    function renewReserveLoad(){
+    function renewReserveQueueLockPath(){
+        $dir = function_exists('xuiLocksDir') ? xuiLocksDir() : (__DIR__ . '/db/locks');
+
+        return rtrim($dir, '/') . '/renew_reservations_queue.lock';
+    }
+
+    function renewReserveWithQueueLock(callable $callback){
+        $lockPath = renewReserveQueueLockPath();
+        $dir = dirname($lockPath);
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0755, true);
+        }
+
+        $fp = fopen($lockPath, 'c');
+
+        if($fp === false || !flock($fp, LOCK_EX)){
+            if(is_resource($fp)){
+                fclose($fp);
+            }
+
+            return ['ok' => false, 'error' => 'queue_lock_failed'];
+        }
+
+        try{
+            return $callback();
+        }
+        finally{
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+
+    function renewReserveLoadResult(){
         $path = renewReservePath();
 
         if(!is_file($path)){
-            return [];
+            return ['ok' => true, 'items' => []];
         }
 
-        $data = json_decode((string)file_get_contents($path), true);
+        $raw = (string)file_get_contents($path);
+        $data = json_decode($raw, true);
 
-        return is_array($data) ? $data : [];
+        if(json_last_error() !== JSON_ERROR_NONE || !is_array($data)){
+            return [
+                'ok' => false,
+                'error' => 'corrupt_json',
+                'items' => null,
+            ];
+        }
+
+        return ['ok' => true, 'items' => $data];
+    }
+
+    function renewReserveLoad(){
+        $result = renewReserveLoadResult();
+
+        if(empty($result['ok'])){
+            return null;
+        }
+
+        return is_array($result['items']) ? $result['items'] : [];
     }
 
     function renewReserveSave(array $items){
+        if(
+            !empty($GLOBALS['renewReserveTestSaveFail'])
+            && is_callable($GLOBALS['renewReserveTestSaveFail'])
+        ){
+            $allow = $GLOBALS['renewReserveTestSaveFail']($items);
+
+            if($allow === false){
+                return false;
+            }
+        }
+
         $path = renewReservePath();
         $dir = dirname($path);
 
@@ -48,11 +111,23 @@ if(!function_exists('renewReservePath')){
             @mkdir($dir, 0755, true);
         }
 
-        file_put_contents(
-            $path,
-            json_encode(array_values($items), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-            LOCK_EX
-        );
+        $json = json_encode(array_values($items), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        $tmp = $path . '.tmp.' . getmypid();
+        $written = file_put_contents($tmp, $json, LOCK_EX);
+
+        if($written === false || $written < strlen($json)){
+            @unlink($tmp);
+
+            return false;
+        }
+
+        if(!@rename($tmp, $path)){
+            @unlink($tmp);
+
+            return false;
+        }
+
+        return true;
     }
 
     function renewReserveQueueKey($username, $host, $subId){
@@ -70,7 +145,13 @@ if(!function_exists('renewReservePath')){
             return null;
         }
 
-        foreach(renewReserveLoad() as $item){
+        $items = renewReserveLoad();
+
+        if(!is_array($items)){
+            return null;
+        }
+
+        foreach($items as $item){
             if(trim((string)($item['provision_key'] ?? '')) === $provisionKey){
                 return $item;
             }
@@ -83,7 +164,13 @@ if(!function_exists('renewReservePath')){
         $username = strtolower(trim((string)$username));
         $out = [];
 
-        foreach(renewReserveLoad() as $item){
+        $items = renewReserveLoad();
+
+        if(!is_array($items)){
+            return [];
+        }
+
+        foreach($items as $item){
             if(strtolower(trim((string)($item['username'] ?? ''))) !== $username){
                 continue;
             }
@@ -229,94 +316,142 @@ if(!function_exists('renewReservePath')){
     }
 
     function renewReserveEnqueue(array $entry){
-        $items = renewReserveLoad();
-        $provisionKey = trim((string)($entry['provision_key'] ?? ''));
+        $result = renewReserveWithQueueLock(static function() use ($entry){
+            $loaded = renewReserveLoadResult();
 
-        if($provisionKey !== ''){
-            foreach($items as $existing){
-                if(trim((string)($existing['provision_key'] ?? '')) === $provisionKey){
-                    return $existing;
+            if(empty($loaded['ok'])){
+                return ['ok' => false, 'error' => $loaded['error'] ?? 'load_failed'];
+            }
+
+            $items = $loaded['items'];
+            $provisionKey = trim((string)($entry['provision_key'] ?? ''));
+
+            if($provisionKey !== ''){
+                foreach($items as $existing){
+                    if(trim((string)($existing['provision_key'] ?? '')) === $provisionKey){
+                        return ['ok' => true, 'item' => $existing];
+                    }
                 }
             }
+
+            $entry['id'] = trim((string)($entry['id'] ?? ''));
+
+            if($entry['id'] === ''){
+                $entry['id'] = renewReserveMakeId();
+            }
+
+            $entry['status'] = trim((string)($entry['status'] ?? 'reserved'));
+            $entry['reserved_at'] = intval($entry['reserved_at'] ?? renewReserveNow());
+            $entry['queue_key'] = trim((string)($entry['queue_key'] ?? ''));
+            $items[] = $entry;
+
+            if(!renewReserveSave($items)){
+                return ['ok' => false, 'error' => 'save_failed'];
+            }
+
+            return ['ok' => true, 'item' => $entry];
+        });
+
+        if(!is_array($result) || empty($result['ok'])){
+            return null;
         }
 
-        $entry['id'] = trim((string)($entry['id'] ?? ''));
-
-        if($entry['id'] === ''){
-            $entry['id'] = renewReserveMakeId();
-        }
-
-        $entry['status'] = trim((string)($entry['status'] ?? 'reserved'));
-        $entry['reserved_at'] = intval($entry['reserved_at'] ?? renewReserveNow());
-        $entry['queue_key'] = trim((string)($entry['queue_key'] ?? ''));
-        $items[] = $entry;
-        renewReserveSave($items);
-
-        return $entry;
+        return is_array($result['item'] ?? null) ? $result['item'] : null;
     }
 
     function renewReserveUpdateById($id, array $patch){
         $id = trim((string)$id);
-        $items = renewReserveLoad();
-        $found = null;
+        $result = renewReserveWithQueueLock(static function() use ($id, $patch){
+            $loaded = renewReserveLoadResult();
 
-        foreach($items as $i => $item){
-            if(trim((string)($item['id'] ?? '')) !== $id){
-                continue;
+            if(empty($loaded['ok'])){
+                return ['ok' => false, 'error' => $loaded['error'] ?? 'load_failed'];
             }
 
-            $items[$i] = array_merge($item, $patch);
-            $found = $items[$i];
-            break;
-        }
+            $items = $loaded['items'];
+            $found = null;
 
-        if($found === null){
+            foreach($items as $i => $item){
+                if(trim((string)($item['id'] ?? '')) !== $id){
+                    continue;
+                }
+
+                $items[$i] = array_merge($item, $patch);
+                $found = $items[$i];
+                break;
+            }
+
+            if($found === null){
+                return ['ok' => false, 'error' => 'not_found'];
+            }
+
+            if(!renewReserveSave($items)){
+                return ['ok' => false, 'error' => 'save_failed'];
+            }
+
+            return ['ok' => true, 'item' => $found];
+        });
+
+        if(!is_array($result) || empty($result['ok'])){
             return null;
         }
 
-        renewReserveSave($items);
-
-        return $found;
+        return is_array($result['item'] ?? null) ? $result['item'] : null;
     }
 
     function renewReservePendingOrdered(){
-        $items = renewReserveLoad();
+        $loaded = renewReserveLoadResult();
+
+        if(empty($loaded['ok']) || !is_array($loaded['items'])){
+            return [];
+        }
+
+        $byQueue = [];
+
+        foreach($loaded['items'] as $item){
+            $key = (string)($item['queue_key'] ?? '');
+
+            if($key === ''){
+                continue;
+            }
+
+            $byQueue[$key][] = $item;
+        }
+
         $pending = [];
+        $blockStatuses = ['activating', 'ambiguous', 'activation_failed'];
 
-        foreach($items as $item){
-            $st = trim((string)($item['status'] ?? ''));
+        foreach($byQueue as $list){
+            usort($list, static function($a, $b){
+                return intval($a['reserved_at'] ?? 0) <=> intval($b['reserved_at'] ?? 0);
+            });
 
-            if($st === 'reserved'){
-                $pending[] = $item;
+            $blocked = false;
+
+            foreach($list as $item){
+                $st = trim((string)($item['status'] ?? ''));
+
+                if($blocked){
+                    continue;
+                }
+
+                if(in_array($st, $blockStatuses, true)){
+                    $blocked = true;
+                    continue;
+                }
+
+                if($st === 'reserved'){
+                    $pending[] = $item;
+                    break;
+                }
             }
         }
 
         usort($pending, static function($a, $b){
-            $qk = strcmp((string)($a['queue_key'] ?? ''), (string)($b['queue_key'] ?? ''));
-
-            if($qk !== 0){
-                return $qk;
-            }
-
             return intval($a['reserved_at'] ?? 0) <=> intval($b['reserved_at'] ?? 0);
         });
 
-        $seen = [];
-
-        foreach($pending as $i => $item){
-            $key = (string)($item['queue_key'] ?? '');
-
-            if($key !== '' && isset($seen[$key])){
-                unset($pending[$i]);
-                continue;
-            }
-
-            if($key !== ''){
-                $seen[$key] = true;
-            }
-        }
-
-        return array_values($pending);
+        return $pending;
     }
 
     function renewReserveUserMessageReserved(){
@@ -394,7 +529,13 @@ if(!function_exists('renewReservePath')){
         try{
             $fresh = null;
 
-            foreach(renewReserveLoad() as $item){
+            $allItems = renewReserveLoad();
+
+            if(!is_array($allItems)){
+                return ['ok' => false, 'error' => 'صف رزرو قابل خواندن نیست', 'code' => 'queue_corrupt'];
+            }
+
+            foreach($allItems as $item){
                 if(trim((string)($item['id'] ?? '')) === $id){
                     $fresh = $item;
                     break;
@@ -488,19 +629,71 @@ if(!function_exists('renewReservePath')){
                 return ['ok' => false, 'skipped' => true, 'reason' => 'not_due'];
             }
 
-            $opId = hash('sha256', $id . '|activate|' . renewReserveNow());
-            renewReserveUpdateById($id, [
-                'status' => 'activating',
-                'activating_at' => renewReserveNow(),
-                'activation_op_id' => $opId,
-            ]);
-
             $gb = intval($fresh['plan_gb'] ?? 0);
             $days = intval($fresh['plan_days'] ?? 0);
             $email = trim((string)($client['email'] ?? ''));
+            $anchorMs = intval($fresh['activation_anchor_ms'] ?? 0);
+
+            if($anchorMs <= 0){
+                $anchorMs = renewReserveNowMs();
+            }
+
+            $opId = hash('sha256', $id . '|activate|' . $anchorMs);
+            $activating = renewReserveUpdateById($id, [
+                'status' => 'activating',
+                'activating_at' => renewReserveNow(),
+                'activation_op_id' => $opId,
+                'activation_anchor_ms' => $anchorMs,
+            ]);
+
+            if(!is_array($activating)){
+                return ['ok' => false, 'error' => 'ثبت وضعیت activating ناموفق بود', 'code' => 'persist_failed'];
+            }
+
             $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days);
 
             if(empty($applied['ok'])){
+                $code = trim((string)($applied['code'] ?? ''));
+
+                if($code === 'transport_error'){
+                    $verifyLookup = xuiRenewLookupClient($server, $subId, $subLink);
+
+                    if(($verifyLookup['status'] ?? '') === 'found' && is_array($verifyLookup['client'] ?? null)){
+                        if(xuiRenewVerifyAbsolutePlan($verifyLookup['client'], $gb, $days, $anchorMs)){
+                            $done = renewReserveUpdateById($id, [
+                                'status' => 'activated',
+                                'activated_at' => renewReserveNow(),
+                                'last_check_at' => renewReserveNow(),
+                                'last_check_note' => 'verified_after_transport',
+                                'activation_op_id' => $opId,
+                            ]);
+
+                            if(!is_array($done)){
+                                return ['ok' => false, 'code' => 'persist_failed', 'error' => 'فعال‌سازی تأیید شد اما ذخیره ناموفق بود'];
+                            }
+
+                            return ['ok' => true, 'reserve_id' => $id, 'method' => 'verify_after_transport'];
+                        }
+
+                        renewReserveUpdateById($id, [
+                            'status' => 'reserved',
+                            'last_error' => '',
+                            'last_check_at' => renewReserveNow(),
+                            'last_check_note' => 'transport_no_change',
+                        ]);
+
+                        return ['ok' => false, 'code' => 'api_error', 'error' => 'تغییر اعمال نشده؛ retry امن'];
+                    }
+
+                    renewReserveUpdateById($id, [
+                        'status' => 'ambiguous',
+                        'last_error' => 'نتیجه فعال‌سازی پس از timeout نامشخص است',
+                        'last_check_at' => renewReserveNow(),
+                    ]);
+
+                    return ['ok' => false, 'code' => 'ambiguous', 'error' => 'فعال‌سازی نامشخص'];
+                }
+
                 renewReserveUpdateById($id, [
                     'status' => 'activation_failed',
                     'last_error' => $applied['error'] ?? 'فعال‌سازی ناموفق',
@@ -510,13 +703,38 @@ if(!function_exists('renewReservePath')){
                 return $applied;
             }
 
-            renewReserveUpdateById($id, [
+            $verifyLookup = xuiRenewLookupClient($server, $subId, $subLink);
+
+            if(
+                ($verifyLookup['status'] ?? '') !== 'found'
+                || !is_array($verifyLookup['client'] ?? null)
+                || !xuiRenewVerifyAbsolutePlan($verifyLookup['client'], $gb, $days, $anchorMs)
+            ){
+                renewReserveUpdateById($id, [
+                    'status' => 'ambiguous',
+                    'last_error' => 'پاسخ API موفق بود اما تطابق پلن روی سرور اثبات نشد',
+                    'last_check_at' => renewReserveNow(),
+                ]);
+
+                return ['ok' => false, 'code' => 'ambiguous', 'error' => 'تطابق پلن اثبات نشد'];
+            }
+
+            $done = renewReserveUpdateById($id, [
                 'status' => 'activated',
                 'activated_at' => renewReserveNow(),
                 'last_check_at' => renewReserveNow(),
                 'last_check_note' => 'ok',
                 'activation_op_id' => $opId,
             ]);
+
+            if(!is_array($done)){
+                return [
+                    'ok' => false,
+                    'code' => 'persist_failed',
+                    'error' => 'فعال‌سازی روی XUI انجام شد اما ذخیره activated ناموفق بود',
+                    'recoverable' => true,
+                ];
+            }
 
             return [
                 'ok' => true,

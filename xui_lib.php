@@ -1893,11 +1893,99 @@ if(!function_exists('xuiConfigPath')){
             ];
         }
 
+        $code = 'activation_failed';
+
+        if(function_exists('xuiApiFailureKind') && xuiApiFailureKind($result) === 'transport'){
+            $code = 'transport_error';
+        }
+
         return [
             'ok' => false,
             'error' => $result['msg'] ?? 'فعال‌سازی مطلق پلن ناموفق بود',
-            'code' => 'activation_failed',
+            'code' => $code,
+            'raw' => $result,
         ];
+    }
+
+    function xuiRenewClientSnapshot($client){
+        if(!is_array($client)){
+            return [
+                'total_bytes' => 0,
+                'used_bytes' => 0,
+                'expiry_ms' => 0,
+                'email' => '',
+                'sub_id' => '',
+            ];
+        }
+
+        return [
+            'total_bytes' => xuiClientTotalBytes($client),
+            'used_bytes' => xuiClientUsedBytes($client),
+            'expiry_ms' => xuiClientExpiryMs($client),
+            'email' => trim((string)($client['email'] ?? '')),
+            'sub_id' => trim((string)($client['subId'] ?? '')),
+        ];
+    }
+
+    function xuiRenewVerifyIncrementalAdjust(array $baseline, $client, $addGb, $addDays){
+        $snap = xuiRenewClientSnapshot($client);
+        $expectedMinTotal = intval($baseline['total_bytes'] ?? 0) + xuiGbToBytes($addGb);
+
+        if($snap['total_bytes'] + 1048576 < $expectedMinTotal){
+            return false;
+        }
+
+        if(intval($addDays) > 0){
+            $baseExpiry = intval($baseline['expiry_ms'] ?? 0);
+            $newExpiry = intval($snap['expiry_ms'] ?? 0);
+
+            if($baseExpiry > 0 && $newExpiry > 0 && $newExpiry <= $baseExpiry){
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function xuiRenewVerifyAbsolutePlan($client, $gb, $days, $anchorMs = null){
+        $snap = xuiRenewClientSnapshot($client);
+        $targetBytes = xuiGbToBytes($gb);
+        $tolerance = 16 * 1024 * 1024;
+
+        if(abs($snap['total_bytes'] - $targetBytes) > $tolerance){
+            return false;
+        }
+
+        $days = max(0, intval($days));
+
+        if($days <= 0){
+            return intval($snap['expiry_ms'] ?? 0) === 0;
+        }
+
+        if($anchorMs === null){
+            $anchorMs = function_exists('renewReserveNowMs') ? renewReserveNowMs() : (int)(microtime(true) * 1000);
+        }
+
+        $expectedExpiry = $anchorMs + ($days * 86400000);
+        $actualExpiry = intval($snap['expiry_ms'] ?? 0);
+
+        if($actualExpiry <= 0){
+            return false;
+        }
+
+        return abs($actualExpiry - $expectedExpiry) <= 180000;
+    }
+
+    function xuiRenewVerifyRecreateClient($client, $gb, $days, $subIdWanted){
+        $snap = xuiRenewClientSnapshot($client);
+
+        if($subIdWanted !== '' && $snap['sub_id'] !== '' && $snap['sub_id'] !== $subIdWanted){
+            return false;
+        }
+
+        $anchorMs = function_exists('renewReserveNowMs') ? renewReserveNowMs() : (int)(microtime(true) * 1000);
+
+        return xuiRenewVerifyAbsolutePlan($client, $gb, $days, $anchorMs);
     }
 
     function xuiRenewLog($event, array $context = []){
@@ -2037,7 +2125,27 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $path = xuiRenewProvisionStorePath($key);
-        file_put_contents($path, json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
+        $dir = dirname($path);
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0755, true);
+        }
+
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        $tmp = $path . '.tmp.' . getmypid();
+        $written = file_put_contents($tmp, $json, LOCK_EX);
+
+        if($written === false || $written < strlen($json)){
+            @unlink($tmp);
+
+            return false;
+        }
+
+        if(!@rename($tmp, $path)){
+            @unlink($tmp);
+
+            return false;
+        }
 
         return true;
     }
@@ -2057,6 +2165,8 @@ if(!function_exists('xuiConfigPath')){
 
     function xuiRenewRecoverProcessingRenew(array $paymentRow, array $stored){
         $startedAt = intval($stored['started_at'] ?? 0);
+        $phase = trim((string)($stored['phase'] ?? ''));
+        $operation = trim((string)($stored['operation'] ?? ''));
 
         if($startedAt > 0 && (time() - $startedAt) < 90 && empty($stored['result'])){
             return [
@@ -2066,9 +2176,25 @@ if(!function_exists('xuiConfigPath')){
             ];
         }
 
-        $config = xuiLoadConfig();
+        if(!function_exists('renewReserveFindByProvisionKey')){
+            require_once __DIR__ . '/renew_reserve_lib.php';
+        }
+
+        $provisionKey = xuiPaymentRowProvisionKey($paymentRow);
         $planText = trim((string)($paymentRow[2] ?? ''));
-        $gb = xuiParsePlanGb($planText);
+        $gb = intval($stored['plan_gb'] ?? 0);
+
+        if($gb <= 0){
+            $gb = xuiParsePlanGb($planText);
+        }
+
+        $days = intval($stored['plan_days'] ?? 0);
+
+        if($days <= 0 && function_exists('xuiResolveRenewPlanDays')){
+            $duration = xuiResolveRenewPlanDays($planText);
+            $days = !empty($duration['ok']) ? intval($duration['days'] ?? 0) : 0;
+        }
+
         $subLink = xuiResolveRenewPaymentRowLink($paymentRow);
 
         if($subLink === ''){
@@ -2076,6 +2202,30 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $parsed = xuiParseSubLink($subLink);
+        $config = xuiLoadConfig();
+
+        if(
+            $phase === 'renew_reserve_started'
+            || $operation === 'reserve'
+            || ($phase === 'provision_complete' && ($stored['result']['renew_outcome'] ?? '') === 'reserved')
+        ){
+            $reservation = renewReserveFindByProvisionKey($provisionKey);
+
+            if(is_array($reservation) && trim((string)($reservation['id'] ?? '')) !== ''){
+                $link = xuiBuildSubLink($parsed['host'] ?? '', $parsed['sub_id'] ?? ($reservation['sub_id'] ?? ''), $config);
+
+                return [
+                    'action' => 'finalize',
+                    'result' => renewReserveBuildPaymentSuccess($reservation, $link),
+                ];
+            }
+
+            return [
+                'action' => 'ambiguous',
+                'error' => 'رزرو ثبت‌شده برای این پرداخت پیدا نشد',
+                'code' => 'ambiguous_provision',
+            ];
+        }
 
         if(!$parsed || $gb <= 0){
             return [
@@ -2105,63 +2255,84 @@ if(!function_exists('xuiConfigPath')){
             ];
         }
 
-        $targetBytes = xuiGbToBytes($gb);
-
-        if(($lookup['status'] ?? '') === 'found' && is_array($lookup['client'] ?? null)){
-            $client = $lookup['client'];
-            $currentBytes = xuiClientTotalBytes($client);
-            $email = trim((string)($client['email'] ?? ''));
-
-            if($email === ''){
-                return [
-                    'action' => 'ambiguous',
-                    'error' => 'کلاینت بدون email؛ نیاز به بررسی دستی',
-                    'code' => 'ambiguous_provision',
-                ];
-            }
-
-            if($currentBytes >= $targetBytes){
-                return [
-                    'action' => 'finalize',
-                    'result' => [
-                        'ok' => true,
-                        'link' => xuiBuildSubLink($parsed['host'], $parsed['sub_id'], $config),
-                        'email' => $email,
-                        'sub_id' => $parsed['sub_id'],
-                        'server_id' => $server['id'] ?? '',
-                        'gb' => $gb,
-                        'renew_outcome' => 'renewed',
-                        'user_renew_message' => xuiRenewUserMessageRenewed(),
-                        'method' => 'recover_processing_renew',
-                    ],
-                ];
-            }
-
-            if($currentBytes > 0){
-                return [
-                    'action' => 'ambiguous',
-                    'error' => 'حجم کلاینت بین حالت قبل و بعد از تمدید است؛ برای جلوگیری از افزایش دوباره، بررسی دستی لازم است',
-                    'code' => 'ambiguous_provision',
-                ];
-            }
+        if(($lookup['status'] ?? '') === 'not_found'){
+            return [
+                'action' => 'ambiguous',
+                'error' => 'کلاینت تمدید پیدا نشد؛ وضعیت عملیات نامشخص است',
+                'code' => 'ambiguous_provision',
+            ];
         }
 
-        if(($lookup['status'] ?? '') === 'not_found'){
-            $phase = trim((string)($stored['phase'] ?? ''));
+        if(($lookup['status'] ?? '') !== 'found' || !is_array($lookup['client'] ?? null)){
+            return [
+                'action' => 'ambiguous',
+                'error' => 'وضعیت فعال‌سازی تمدید نامشخص است',
+                'code' => 'ambiguous_provision',
+            ];
+        }
 
-            if($phase === 'renew_adjust_started'){
+        $client = $lookup['client'];
+        $email = trim((string)($client['email'] ?? ''));
+
+        if($email === ''){
+            return [
+                'action' => 'ambiguous',
+                'error' => 'کلاینت بدون email؛ نیاز به بررسی دستی',
+                'code' => 'ambiguous_provision',
+            ];
+        }
+
+        $baseline = is_array($stored['baseline'] ?? null) ? $stored['baseline'] : null;
+        $verified = false;
+        $outcome = 'renewed';
+        $method = 'recover_processing_renew';
+
+        if($operation === 'incremental' || $phase === 'renew_adjust_started'){
+            if(!is_array($baseline)){
                 return [
                     'action' => 'ambiguous',
-                    'error' => 'کلاینت تمدید پیدا نشد؛ وضعیت عملیات نامشخص است',
+                    'error' => 'وضعیت پایه قبل از تمدید ذخیره نشده است',
                     'code' => 'ambiguous_provision',
                 ];
             }
+
+            $verified = xuiRenewVerifyIncrementalAdjust($baseline, $client, $gb, $days);
+            $method = 'recover_incremental';
+        }
+        elseif($operation === 'absolute' || $phase === 'renew_absolute_started'){
+            $anchorMs = intval($stored['activation_anchor_ms'] ?? 0);
+            $verified = xuiRenewVerifyAbsolutePlan($client, $gb, $days, $anchorMs > 0 ? $anchorMs : null);
+            $method = 'recover_absolute';
+        }
+        else{
+            return [
+                'action' => 'ambiguous',
+                'error' => 'مرحله عملیات تمدید برای بازیابی مشخص نیست',
+                'code' => 'ambiguous_provision',
+            ];
+        }
+
+        if(!$verified){
+            return [
+                'action' => 'ambiguous',
+                'error' => 'شواهد کافی برای اثبات نتیجه تمدید وجود ندارد',
+                'code' => 'ambiguous_provision',
+            ];
         }
 
         return [
-            'action' => 'ambiguous',
-            'error' => 'وضعیت فعال‌سازی تمدید نامشخص است؛ بررسی دستی لازم است',
-            'code' => 'ambiguous_provision',
+            'action' => 'finalize',
+            'result' => [
+                'ok' => true,
+                'link' => xuiBuildSubLink($parsed['host'], $parsed['sub_id'], $config),
+                'email' => $email,
+                'sub_id' => $parsed['sub_id'],
+                'server_id' => $server['id'] ?? '',
+                'gb' => $gb,
+                'renew_outcome' => $outcome,
+                'user_renew_message' => xuiRenewUserMessageRenewed(),
+                'method' => $method,
+            ],
         ];
     }
 
@@ -2172,12 +2343,20 @@ if(!function_exists('xuiConfigPath')){
             return ['ok' => false, 'error' => 'پرداخت پیدا نشد'];
         }
 
-        xuiRenewProvisionStoreWrite($provisionKey, [
+        if(!xuiRenewProvisionStoreWrite($provisionKey, [
             'state' => 'done',
             'done_at' => time(),
             'result' => $result,
             'transaction_id' => xuiPaymentRowTransactionId($row),
-        ]);
+        ])){
+            return [
+                'ok' => false,
+                'error' => 'ذخیره نتیجه نهایی provision ناموفق بود',
+                'code' => 'persist_failed',
+                'recoverable' => true,
+                'link' => $result['link'] ?? '',
+            ];
+        }
 
         if(trim((string)($payments[$index][6] ?? '')) === 'تایید شد'){
             return array_merge($result, ['ok' => true, 'already' => true]);
@@ -2415,7 +2594,7 @@ if(!function_exists('xuiConfigPath')){
                 return ['ok' => false, 'error' => 'ایمیل کلاینت خالی است', 'code' => 'client_email_missing'];
             }
 
-            if($currentBytes >= $targetBytes){
+            if(xuiRenewVerifyRecreateClient($client, $gb, $days, $subIdWanted)){
                 return [
                     'ok' => true,
                     'link' => xuiBuildSubLink($parsed['host'], $subIdWanted, $config),
@@ -2431,8 +2610,8 @@ if(!function_exists('xuiConfigPath')){
 
             return [
                 'ok' => false,
-                'error' => 'کلاینت موجود با حجم متفاوت است؛ برای جلوگیری از اشتراک تکراری تمدید خودکار انجام نشد',
-                'code' => 'ambiguous_existing_client',
+                'error' => 'کلاینت موجود با پلن هدف تطابق قابل اثبات ندارد؛ برای جلوگیری از گزارش نادرست، بازیابی متوقف شد',
+                'code' => 'ambiguous_provision',
             ];
         }
 
@@ -2649,13 +2828,6 @@ if(!function_exists('xuiConfigPath')){
 
             $link = xuiBuildSubLink($parsed['host'], $parsed['sub_id'], $config);
             $provisionKey = xuiPaymentRowProvisionKey($paymentRow);
-            $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
-            xuiRenewProvisionStoreWrite($provisionKey, array_merge($stored, [
-                'state' => 'processing',
-                'phase' => 'renew_adjust_started',
-                'started_at' => intval($stored['started_at'] ?? time()),
-                'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
-            ]));
 
             if($action === 'reserve'){
                 $existingReserve = renewReserveFindByProvisionKey($provisionKey);
@@ -2664,14 +2836,75 @@ if(!function_exists('xuiConfigPath')){
                     return renewReserveBuildPaymentSuccess($existingReserve, $link);
                 }
 
+                $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
+
+                if(!xuiRenewProvisionStoreWrite($provisionKey, array_merge($stored, [
+                    'state' => 'processing',
+                    'phase' => 'renew_reserve_started',
+                    'operation' => 'reserve',
+                    'started_at' => intval($stored['started_at'] ?? time()),
+                    'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
+                    'baseline' => xuiRenewClientSnapshot($client),
+                    'plan_gb' => $gb,
+                    'plan_days' => $days,
+                ]))){
+                    return [
+                        'ok' => false,
+                        'error' => 'ذخیره وضعیت رزرو ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                    ];
+                }
+
                 $reservation = renewReserveCreateFromPayment($paymentRow, $parsed, $server, $gb, $days, $planText);
+
+                if(!is_array($reservation)){
+                    return [
+                        'ok' => false,
+                        'error' => 'ثبت رزرو در صف ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                    ];
+                }
+
                 $renewResult = renewReserveBuildPaymentSuccess($reservation, $link);
-                xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult);
+
+                if(!xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult)){
+                    return [
+                        'ok' => false,
+                        'error' => 'رزرو ثبت شد اما ذخیره نتیجه نهایی ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                        'renew_outcome' => 'reserved',
+                    ];
+                }
 
                 return $renewResult;
             }
 
             if($action === 'activate_now'){
+                $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
+                $anchorMs = function_exists('renewReserveNowMs') ? renewReserveNowMs() : (int)(microtime(true) * 1000);
+
+                if(!xuiRenewProvisionStoreWrite($provisionKey, array_merge($stored, [
+                    'state' => 'processing',
+                    'phase' => 'renew_absolute_started',
+                    'operation' => 'absolute',
+                    'started_at' => intval($stored['started_at'] ?? time()),
+                    'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
+                    'baseline' => xuiRenewClientSnapshot($client),
+                    'plan_gb' => $gb,
+                    'plan_days' => $days,
+                    'activation_anchor_ms' => $anchorMs,
+                ]))){
+                    return [
+                        'ok' => false,
+                        'error' => 'ذخیره وضعیت قبل از فعال‌سازی ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                    ];
+                }
+
                 $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days);
 
                 if(empty($applied['ok'])){
@@ -2689,9 +2922,38 @@ if(!function_exists('xuiConfigPath')){
                     'user_renew_message' => xuiRenewUserMessageRenewed(),
                     'method' => $applied['method'] ?? 'absolute',
                 ];
-                xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult);
+
+                if(!xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult)){
+                    return [
+                        'ok' => false,
+                        'error' => 'فعال‌سازی انجام شد اما ذخیره نتیجه ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                        'link' => $link,
+                    ];
+                }
 
                 return $renewResult;
+            }
+
+            $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
+
+            if(!xuiRenewProvisionStoreWrite($provisionKey, array_merge($stored, [
+                'state' => 'processing',
+                'phase' => 'renew_adjust_started',
+                'operation' => 'incremental',
+                'started_at' => intval($stored['started_at'] ?? time()),
+                'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
+                'baseline' => xuiRenewClientSnapshot($client),
+                'plan_gb' => $gb,
+                'plan_days' => $days,
+            ]))){
+                return [
+                    'ok' => false,
+                    'error' => 'ذخیره وضعیت قبل از تمدید ناموفق بود',
+                    'code' => 'persist_failed',
+                    'recoverable' => true,
+                ];
             }
 
             $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
@@ -2711,7 +2973,16 @@ if(!function_exists('xuiConfigPath')){
                 'user_renew_message' => xuiRenewUserMessageRenewed(),
                 'method' => $adjusted['method'] ?? '',
             ];
-            xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult);
+
+            if(!xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult)){
+                return [
+                    'ok' => false,
+                    'error' => 'تمدید انجام شد اما ذخیره نتیجه ناموفق بود',
+                    'code' => 'persist_failed',
+                    'recoverable' => true,
+                    'link' => $link,
+                ];
+            }
 
             return $renewResult;
         }
@@ -2889,11 +3160,19 @@ if(!function_exists('xuiConfigPath')){
         }
 
         if(!is_array($stored) || ($stored['state'] ?? '') !== 'processing'){
-            xuiRenewProvisionStoreWrite($provisionKey, [
+            if(!xuiRenewProvisionStoreWrite($provisionKey, [
                 'state' => 'processing',
+                'phase' => 'approve_started',
                 'started_at' => time(),
                 'transaction_id' => xuiPaymentRowTransactionId($row),
-            ]);
+            ])){
+                return [
+                    'ok' => false,
+                    'error' => 'ذخیره وضعیت شروع تأیید ناموفق بود',
+                    'code' => 'persist_failed',
+                    'recoverable' => true,
+                ];
+            }
         }
 
         if($type === 'تمدید'){
