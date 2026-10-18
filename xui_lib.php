@@ -2628,7 +2628,9 @@ if(!function_exists('xuiConfigPath')){
         $tracking = trim((string)($paymentRow[3] ?? ''));
 
         if(strpos($tracking, 'AUTO-') === 0 && function_exists('instantPayFindJsonByTracking')){
-            $item = instantPayFindJsonByTracking(trim((string)($paymentRow[0] ?? '')), $tracking);
+            $item = function_exists('instantPayFindJsonForCsvRow')
+                ? instantPayFindJsonForCsvRow($paymentRow)
+                : instantPayFindJsonByTracking(trim((string)($paymentRow[0] ?? '')), $tracking);
 
             if(is_array($item)){
                 $candidates[] = trim((string)($item['sub'] ?? ''));
