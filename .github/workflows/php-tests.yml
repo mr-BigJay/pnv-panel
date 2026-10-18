@@ -15,6 +15,10 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
+      - name: Lint server3 deployment helpers
+        run: |
+          python3 -m py_compile scripts/pnv_pr28_merge_production.py
+          bash -n scripts/deploy-pr28-server3.sh
       - name: Run test suite
         run: |
           set -euo pipefail
