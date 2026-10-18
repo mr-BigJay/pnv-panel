@@ -101,11 +101,24 @@ $GLOBALS['xuiTestRenewRuntimeState'] = [
     'time_unlimited' => true,
     'should_activate_now' => false,
 ];
-$GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $subId) => [
-    'status' => 'found',
-    'client' => ['email' => 'u1', 'subId' => $subId, 'totalGB' => xuiGbToBytes(10), 'expiryTime' => 0],
-];
+$unlimitedAnchorSec = 1700001101;
+$GLOBALS['renewReserveTestNow'] = $unlimitedAnchorSec;
+$unlimitedAnchorMs = $unlimitedAnchorSec * 1000;
+$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $subId) use (&$adjustCalls, $unlimitedAnchorMs){
+    $after = $adjustCalls > 0;
+
+    return [
+        'status' => 'found',
+        'client' => [
+            'email' => 'u1',
+            'subId' => $subId,
+            'totalGB' => xuiGbToBytes($after ? 60 : 10),
+            'expiryTime' => $after ? ($unlimitedAnchorMs + (86400000 * 30)) : 0,
+        ],
+    ];
+};
 $unlimited = xuiProvisionRenew($rowUnlimited);
+unset($GLOBALS['renewReserveTestNow']);
 renewReserveAssert('unlimited-time existing renew immediate', ($unlimited['renew_outcome'] ?? '') === 'renewed' && $adjustCalls === 1);
 
 // Recreate deleted sub

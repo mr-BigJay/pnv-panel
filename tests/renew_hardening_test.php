@@ -43,6 +43,7 @@ $GLOBALS['xuiTestRenewApiProbe'] = static fn() => ['ok' => true];
 $row1 = ['ownerUser', $link, '10 گیگ - 30 روز', 'H-1', '', '', 'درحال بررسی', '', 170010, 'تمدید', '', '', 1];
 $key1 = xuiPaymentRowProvisionKey($row1);
 $baseline1 = ['total_bytes' => xuiGbToBytes(20), 'used_bytes' => 0, 'expiry_ms' => 0, 'email' => 'u1', 'sub_id' => 'abc1234567890ab'];
+$hardAnchorMs = renewReserveNowMs();
 xuiRenewProvisionStoreWrite($key1, [
     'state' => 'processing',
     'phase' => 'renew_adjust_started',
@@ -50,11 +51,17 @@ xuiRenewProvisionStoreWrite($key1, [
     'baseline' => $baseline1,
     'plan_gb' => 10,
     'plan_days' => 30,
+    'activation_anchor_ms' => $hardAnchorMs,
     'started_at' => time() - 200,
 ]);
 $GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $id) => [
     'status' => 'found',
-    'client' => ['email' => 'u1', 'subId' => $id, 'totalGB' => xuiGbToBytes(30), 'expiryTime' => 0],
+    'client' => [
+        'email' => 'u1',
+        'subId' => $id,
+        'totalGB' => xuiGbToBytes(30),
+        'expiryTime' => $hardAnchorMs + (86400000 * 30),
+    ],
 ];
 $recover1 = xuiRenewRecoverProcessingRenew($row1, xuiRenewProvisionStoreRead($key1));
 hardAssert(($recover1['action'] ?? '') === 'finalize', 'XUI done crash finalizes from baseline verify');
@@ -64,15 +71,20 @@ $adjustCalls = 0;
 $row2 = ['ownerUser', $link, '10 گیگ - 30 روز', 'H-2', '', '', 'درحال بررسی', '', 170011, 'تمدید', '', '', 1];
 $key2 = xuiPaymentRowProvisionKey($row2);
 @unlink(xuiRenewProvisionStorePath($key2));
+$hard2AnchorSec = 1800000001;
+$hard2AnchorMs = $hard2AnchorSec * 1000;
+$GLOBALS['renewReserveTestNow'] = $hard2AnchorSec;
 $GLOBALS['xuiTestRenewRuntimeState'] = ['ambiguous' => false, 'time_unlimited' => true, 'should_activate_now' => false];
-$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustCalls){
+$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustCalls, $hard2AnchorMs){
+    $after = $adjustCalls > 0;
+
     return [
         'status' => 'found',
         'client' => [
             'email' => 'u1',
             'subId' => $id,
-            'totalGB' => $adjustCalls > 0 ? xuiGbToBytes(30) : xuiGbToBytes(20),
-            'expiryTime' => 0,
+            'totalGB' => xuiGbToBytes($after ? 30 : 20),
+            'expiryTime' => $after ? ($hard2AnchorMs + (86400000 * 30)) : 0,
         ],
     ];
 };
@@ -96,6 +108,7 @@ hardAssert(is_array($stored2['baseline'] ?? null) && ($stored2['operation'] ?? '
 xuiRenewProvisionStorePatch($key2, ['started_at' => time() - 200]);
 $approve2 = xuiApprovePaymentIndex(1, 'تمدید');
 hardAssert(!empty($approve2['ok']) && $adjustCalls === 1, 'retry finalize without second adjust');
+unset($GLOBALS['renewReserveTestNow']);
 
 // 3) recreate wrong expiry -> ambiguous
 $anchor3 = 1800000000;

@@ -1819,7 +1819,17 @@ if(!function_exists('xuiConfigPath')){
                 return [
                     'ok' => true,
                     'raw' => $result,
-                    'method' => 'bulkAdjust'
+                    'method' => 'bulkAdjust',
+                    'days_applied' => $addDays > 0,
+                ];
+            }
+
+            if(xuiApiFailureKind($result) === 'transport'){
+                return [
+                    'ok' => false,
+                    'error' => $result['msg'] ?? 'bulkAdjust transport error',
+                    'code' => 'transport_error',
+                    'method' => 'bulkAdjust',
                 ];
             }
 
@@ -1827,6 +1837,14 @@ if(!function_exists('xuiConfigPath')){
         }
 
         if(is_array($client)){
+            if($addDays > 0){
+                return [
+                    'ok' => false,
+                    'error' => 'افزایش حجم با API قدیمی برای پلن زمان‌دار مدت را اعمال نمی‌کند',
+                    'code' => 'duration_not_applied',
+                ];
+            }
+
             $legacy = xuiAdjustClientTrafficLegacy($server, $client, $addGb);
 
             if(!empty($legacy['ok'])){
@@ -1934,24 +1952,42 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
-    function xuiRenewVerifyIncrementalAdjust(array $baseline, $client, $addGb, $addDays){
+    function xuiRenewVerifyIncrementalAdjust(array $baseline, $client, $addGb, $addDays, $anchorMs = null){
         $snap = xuiRenewClientSnapshot($client);
         $expectedMinTotal = intval($baseline['total_bytes'] ?? 0) + xuiGbToBytes($addGb);
+        $addDays = max(0, intval($addDays));
 
         if($snap['total_bytes'] + 1048576 < $expectedMinTotal){
             return false;
         }
 
-        if(intval($addDays) > 0){
-            $baseExpiry = intval($baseline['expiry_ms'] ?? 0);
-            $newExpiry = intval($snap['expiry_ms'] ?? 0);
+        if($addDays <= 0){
+            return true;
+        }
 
-            if($baseExpiry > 0 && $newExpiry > 0 && $newExpiry <= $baseExpiry){
-                return false;
+        $baseExpiry = intval($baseline['expiry_ms'] ?? 0);
+        $newExpiry = intval($snap['expiry_ms'] ?? 0);
+        $toleranceMs = 180000;
+
+        if($newExpiry <= 0){
+            return false;
+        }
+
+        if($anchorMs !== null && intval($anchorMs) > 0){
+            $expectedFromAnchor = intval($anchorMs) + ($addDays * 86400000);
+
+            if($baseExpiry <= 0){
+                return abs($newExpiry - $expectedFromAnchor) <= $toleranceMs;
             }
         }
 
-        return true;
+        if($baseExpiry > 0){
+            $expectedExtended = $baseExpiry + ($addDays * 86400000);
+
+            return $newExpiry + $toleranceMs >= $expectedExtended;
+        }
+
+        return false;
     }
 
     function xuiRenewVerifyAbsolutePlan($client, $gb, $days, $anchorMs = null){
@@ -2320,7 +2356,14 @@ if(!function_exists('xuiConfigPath')){
                 ];
             }
 
-            $verified = xuiRenewVerifyIncrementalAdjust($baseline, $client, $gb, $days);
+            $anchorMs = intval($stored['activation_anchor_ms'] ?? 0);
+            $verified = xuiRenewVerifyIncrementalAdjust(
+                $baseline,
+                $client,
+                $gb,
+                $days,
+                $anchorMs > 0 ? $anchorMs : null
+            );
             $method = 'recover_incremental';
         }
         elseif($operation === 'absolute' || $phase === 'renew_absolute_started'){
@@ -3064,6 +3107,11 @@ if(!function_exists('xuiConfigPath')){
             }
 
             $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
+            $anchorMs = intval($stored['activation_anchor_ms'] ?? 0);
+
+            if($anchorMs <= 0){
+                $anchorMs = function_exists('renewReserveNowMs') ? renewReserveNowMs() : (int)(microtime(true) * 1000);
+            }
 
             if(!xuiRenewProvisionStoreWrite($provisionKey, array_merge($stored, [
                 'state' => 'processing',
@@ -3074,6 +3122,7 @@ if(!function_exists('xuiConfigPath')){
                 'baseline' => xuiRenewClientSnapshot($client),
                 'plan_gb' => $gb,
                 'plan_days' => $days,
+                'activation_anchor_ms' => $anchorMs,
             ]))){
                 return [
                     'ok' => false,
@@ -3086,7 +3135,41 @@ if(!function_exists('xuiConfigPath')){
             $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
 
             if(empty($adjusted['ok'])){
-                return $adjusted;
+                $adjustCode = trim((string)($adjusted['code'] ?? ''));
+
+                if($adjustCode === 'transport_error' && $days > 0){
+                    $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
+                    $baselineSnap = xuiRenewClientSnapshot($client);
+
+                    if(
+                        ($verifyLookup['status'] ?? '') === 'found'
+                        && is_array($verifyLookup['client'] ?? null)
+                        && xuiRenewVerifyIncrementalAdjust($baselineSnap, $verifyLookup['client'], $gb, $days, $anchorMs)
+                    ){
+                        $adjusted = ['ok' => true, 'method' => 'verify_after_transport'];
+                    }
+                }
+
+                if(empty($adjusted['ok'])){
+                    return $adjusted;
+                }
+            }
+
+            if($days > 0){
+                $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
+                $baselineSnap = xuiRenewClientSnapshot($client);
+
+                if(
+                    ($verifyLookup['status'] ?? '') !== 'found'
+                    || !is_array($verifyLookup['client'] ?? null)
+                    || !xuiRenewVerifyIncrementalAdjust($baselineSnap, $verifyLookup['client'], $gb, $days, $anchorMs)
+                ){
+                    return [
+                        'ok' => false,
+                        'error' => 'حجم یا مدت تمدید روی سرور با پلن خریداری‌شده تطابق ندارد',
+                        'code' => 'ambiguous_provision',
+                    ];
+                }
             }
 
             $renewResult = [
