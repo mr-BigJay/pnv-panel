@@ -8,6 +8,12 @@ require_once __DIR__ . '/pnv_date_bootstrap.php';
 if(!function_exists('instantPayPath')){
 
     function instantPayPath(){
+        $override = getenv('PNV_INSTANT_PAYMENTS_PATH');
+
+        if(is_string($override) && trim($override) !== ''){
+            return trim($override);
+        }
+
         return __DIR__ . '/db/instant_payments.json';
     }
 
@@ -644,6 +650,23 @@ if(!function_exists('instantPayPath')){
 
     function instantPayAdminRowStatusMeta($row){
         $status = trim((string)($row[6] ?? ''));
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') === 0){
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+
+            if(is_array($item) && ($item['status'] ?? '') === 'payment_received_provision_failed'){
+                return [
+                    'title' => 'واریز تأیید شد — فعال‌سازی ناموفق',
+                    'class' => 'statusDot--red',
+                    'detail' => instantPayAdminProvisionFailureDetail($row, $item),
+                ];
+            }
+
+            if(is_array($item) && ($item['status'] ?? '') === 'payment_received'){
+                return ['title' => 'واریز تأیید شد', 'class' => 'statusDot--blue'];
+            }
+        }
 
         if($status === 'تایید شد'){
             return ['title' => 'تایید شد', 'class' => 'statusDot--green'];
@@ -654,8 +677,6 @@ if(!function_exists('instantPayPath')){
         }
 
         if(instantPayAdminRowIsInProgress($row)){
-            $tracking = trim((string)($row[3] ?? ''));
-
             if(strpos($tracking, 'AUTO-') === 0){
                 $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
 
@@ -668,6 +689,41 @@ if(!function_exists('instantPayPath')){
         }
 
         return ['title' => 'در حال بررسی', 'class' => 'statusDot--yellow'];
+    }
+
+    function instantPayAdminProvisionFailureDetail($row, $item = null){
+        if(!is_array($row)){
+            return '';
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') !== 0){
+            return '';
+        }
+
+        if(!is_array($item)){
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+        }
+
+        if(!is_array($item) || ($item['status'] ?? '') !== 'payment_received_provision_failed'){
+            return '';
+        }
+
+        $user = trim((string)($row[0] ?? ($item['user'] ?? '')));
+        $sub = trim((string)($item['sub'] ?? ($row[1] ?? '')));
+        $amountRial = intval($item['matched_amount'] ?? ($row[12] ?? 0));
+        $amountText = $amountRial > 0 ? (number_format($amountRial) . ' ریال') : '—';
+        $error = trim((string)($item['provision_error'] ?? ($item['message'] ?? '')));
+
+        if($error === ''){
+            $error = 'خطای نامشخص فعال‌سازی';
+        }
+
+        return 'کاربر: ' . ($user !== '' ? $user : '—')
+            . ' | اشتراک: ' . ($sub !== '' ? $sub : '—')
+            . ' | مبلغ: ' . $amountText
+            . ' | خطا: ' . $error;
     }
 
     /**
@@ -692,6 +748,12 @@ if(!function_exists('instantPayPath')){
         }
 
         if(in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true)){
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+
+            if(is_array($item) && ($item['status'] ?? '') === 'payment_received_provision_failed'){
+                return true;
+            }
+
             return instantPayAdminRowIsInProgress($row);
         }
 
