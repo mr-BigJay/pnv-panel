@@ -158,7 +158,7 @@ instantPaySave([[
 ]]);
 assertTrue(instantPayAdminRowVisible($expiredRow), 'expired json still visible within admin window');
 
-$meta = instantPayAdminRowStatusMeta($visibleRow);
+$meta = instantPayAdminRowStatusMeta($expiredRow);
 assertTrue(($meta['title'] ?? '') === 'منقضی شده', 'expired JSON status label');
 
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
