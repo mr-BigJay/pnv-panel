@@ -23,12 +23,17 @@ $tmpRoot = sys_get_temp_dir() . '/pnv_renew_test_' . getmypid();
 @mkdir($tmpRoot, 0777, true);
 $csvPath = $tmpRoot . '/payments.csv';
 $configPath = $tmpRoot . '/xui_servers.json';
+$plansPath = $tmpRoot . '/plans.json';
 $locksDir = $tmpRoot . '/locks';
 @mkdir($locksDir, 0777, true);
 
 putenv('PNV_PAYMENTS_CSV_PATH=' . $csvPath);
 putenv('PNV_XUI_CONFIG_PATH=' . $configPath);
+putenv('PNV_PLANS_CATALOG_PATH=' . $plansPath);
 putenv('PNV_LOCKS_DIR=' . $locksDir);
+file_put_contents($plansPath, json_encode([
+    ['name' => '10 گیگ', 'days' => 'نامحدود'],
+], JSON_UNESCAPED_UNICODE));
 
 require_once __DIR__ . '/../subscription_lib.php';
 require_once __DIR__ . '/../xui_lib.php';
@@ -479,6 +484,7 @@ unset(
 );
 putenv('PNV_PAYMENTS_CSV_PATH');
 putenv('PNV_XUI_CONFIG_PATH');
+putenv('PNV_PLANS_CATALOG_PATH');
 putenv('PNV_LOCKS_DIR');
 putenv('PNV_INSTANT_PAYMENTS_PATH');
 
@@ -486,6 +492,7 @@ putenv('PNV_INSTANT_PAYMENTS_PATH');
 @rmdir($locksDir);
 @unlink($csvPath);
 @unlink($configPath);
+@unlink($plansPath);
 @rmdir($tmpRoot);
 
 if($fail > 0){
