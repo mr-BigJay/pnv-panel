@@ -499,49 +499,17 @@ if(!function_exists('instantPayPath')){
         return !$changed || xuiSavePayments($rows);
     }
 
+    /**
+     * Legacy callers must not delete accounting history either.
+     * Kept for compatibility; returns 0 removed rows.
+     */
     function instantPayDeleteAbandonedCsv($item){
-        if(!is_array($item) || !function_exists('xuiLoadPayments') || !function_exists('xuiDeletePaymentIndexes')){
-            return 0;
+        if(is_array($item)){
+            instantPayMarkCsvCancelled($item, 'لغو به‌خاطر درخواست جدید');
         }
-
-        $tracking = instantPayTrackingCode($item);
-        $user = trim((string)($item['user'] ?? ''));
-        $payments = xuiLoadPayments();
-        $toDelete = [];
-
-        foreach($payments as $i => $row){
-            if(!is_array($row)){
-                continue;
-            }
-
-            if(trim((string)($row[3] ?? '')) !== $tracking){
-                continue;
-            }
-
-            if($user !== '' && strcasecmp(trim((string)($row[0] ?? '')), $user) !== 0){
-                continue;
-            }
-
-            $st = trim((string)($row[6] ?? ''));
-
-            if(in_array($st, ['', 'درحال بررسی', 'در حال بررسی', 'رد شد'], true)){
-                $toDelete[] = $i;
-            }
-        }
-
-        if(!$toDelete){
-            return 0;
-        }
-
-        $result = xuiDeletePaymentIndexes($toDelete);
-        instantPayRebuildCsvIndexes();
-
-        return intval($result['deleted'] ?? 0);
+        return 0;
     }
 
-    /**
-     * ردیف‌های پرداخت آنیِ رها‌شده را از CSV حذف و لیست ادمین را تمیز می‌کند.
-     */
     // Keep the legacy entrypoint but never purge financial records on admin page views.
     function instantPayPurgeStaleAdminRows($items = null){
         return instantPayExpireDue($items);
