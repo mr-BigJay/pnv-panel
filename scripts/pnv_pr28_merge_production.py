@@ -90,7 +90,11 @@ def admin(s,file):
     s=s.replace('$paymentTab' if buy else '$renewTab','$statusFilter').replace('tab=cancelled','status=cancelled')
     if "if($statusFilter !== 'cancelled')" not in s or s.count("instantPayAdminRowBucket($payments[$index])")!=3:
         raise RuntimeError(file+': legacy action handlers not guarded')
-    archive=("$"+prefix+f"CancelledArchive = instantPayAdminCancelledHistory($payments, '{label}');\n"
+    # A few legacy admin tests render a partial admin tree without instant_pay_lib.php.
+    # Keep the page usable when the optional archive provider is absent;
+    # in real Production the library is loaded, so the archive is populated.
+    archive=("$"+prefix+f"CancelledArchive = function_exists('instantPayAdminCancelledHistory')\n"
+             +f"    ? instantPayAdminCancelledHistory($payments, '{label}') : [];\n"
              +counts+"['cancelled'] = count($" + prefix +"CancelledArchive);\n"
              +"if($statusFilter === 'cancelled'){\n    "+records+" = $"+prefix+"CancelledArchive;\n}\n\n")
     anchor="$currentPage = intval($_GET['p'] ?? 1);" if buy else '$perPage = 20;'
