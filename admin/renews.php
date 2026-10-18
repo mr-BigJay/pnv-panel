@@ -910,6 +910,7 @@ $status = 'درحال بررسی';
 
 $statusClass = 'is-pending';
 $statusTitle = 'درحال بررسی';
+$renewStatusMeta = [];
 if(function_exists('instantPayAdminRowStatusMeta')){
     $renewStatusMeta = instantPayAdminRowStatusMeta($p);
     $statusTitle = $renewStatusMeta['title'] ?? $statusTitle;
@@ -950,6 +951,10 @@ $targetSubId = $parsedTarget['sub_id'];
 $planParts = renewParsePlanParts($p[2] ?? '');
 $planLine = renewFormatPlanLine($planParts);
 $payWhen = pnvFormatPaymentRowDateTime($p);
+$provisionDetail = function_exists('instantPayAdminProvisionFailureDetail') ? instantPayAdminProvisionFailureDetail($p) : '';
+if($provisionDetail === '' && !empty($renewStatusMeta['detail'] ?? '')){
+    $provisionDetail = (string)$renewStatusMeta['detail'];
+}
 
 ?>
 
@@ -975,6 +980,9 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
 
 <span class="renewPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php if($provisionDetail !== ''){ ?>
+<span class="renewPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php } ?>
 </div>
 
 <div class="renewActions">

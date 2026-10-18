@@ -983,6 +983,7 @@ $status = 'درحال بررسی';
 
 $statusClass = 'is-pending';
 $statusTitle = 'درحال بررسی';
+$payStatusMeta = [];
 if(function_exists('instantPayAdminRowStatusMeta')){
     $payStatusMeta = instantPayAdminRowStatusMeta($p);
     $statusTitle = $payStatusMeta['title'] ?? $statusTitle;
@@ -1022,6 +1023,10 @@ $configName = '—';
 }
 $planLine = paymentsFormatPlanLine($p[2] ?? '');
 $payWhen = pnvFormatPaymentRowDateTime($p);
+$provisionDetail = function_exists('instantPayAdminProvisionFailureDetail') ? instantPayAdminProvisionFailureDetail($p) : '';
+if($provisionDetail === '' && !empty($payStatusMeta['detail'] ?? '')){
+    $provisionDetail = (string)$payStatusMeta['detail'];
+}
 
 ?>
 
@@ -1035,6 +1040,9 @@ $payWhen = pnvFormatPaymentRowDateTime($p);
 <div class="payColPlan">
 <span class="payConfigName"><?php echo htmlspecialchars($configName, ENT_QUOTES, 'UTF-8'); ?></span>
 <span class="payPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php if($provisionDetail !== ''){ ?>
+<span class="payPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php } ?>
 </div>
 
 <div class="payActions">

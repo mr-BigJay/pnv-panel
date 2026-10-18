@@ -191,7 +191,145 @@ $GLOBALS['xuiTestRenewLookupClient'] = static function(){
 
 $ambiguous = xuiProvisionRenew($recreateRow);
 renewRecAssert(empty($ambiguous['ok']) && ($ambiguous['code'] ?? '') === 'ambiguous_provision', 'transport failure becomes ambiguous_provision');
-renewRecAssert($ambiguousCalls === 2, 'ambiguous path does not blindly retry extra creates');
+renewRecAssert($ambiguousCalls === 1, 'first create transport skips legacy POST');
+
+$postCalls = 0;
+$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body) use (&$postCalls){
+    if($method === 'GET' && strpos($path, '/panel/api/clients/get/') === 0){
+        return ['success' => false, 'msg' => 'not found'];
+    }
+
+    if($method === 'POST' && strpos($path, '/panel/api/clients/add') === 0){
+        $postCalls++;
+        return ['success' => false, 'msg' => 'خطا در ارتباط با 3x-ui: Operation timed out'];
+    }
+
+    if($method === 'POST' && strpos($path, '/panel/api/inbounds/addClient') === 0){
+        $postCalls++;
+        return ['success' => false, 'msg' => 'should not be called'];
+    }
+
+    return ['success' => false, 'msg' => 'unexpected'];
+};
+$lookupPhase = 0;
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$lookupPhase){
+    $lookupPhase++;
+
+    if($lookupPhase === 1){
+        return ['status' => 'not_found'];
+    }
+
+    return [
+        'status' => 'found',
+        'client' => [
+            'email' => 'owner_recreated',
+            'subId' => $subId,
+            'totalGB' => xuiGbToBytes(10),
+        ],
+    ];
+};
+file_put_contents($csvPath, $sampleCsv);
+$transportRecreate = xuiProvisionRenewRecreate(
+    $server,
+    ['host' => 'vip4.example.com', 'port' => 2096, 'sub_id' => 'abc1234567890ab'],
+    $recreateRow,
+    10,
+    30,
+    xuiLoadConfig()
+);
+renewRecAssert(!empty($transportRecreate['ok']) && $postCalls === 1, 'timeout after successful create verified by lookup without legacy POST');
+
+$adjustCount = 0;
+$renewApproveRow = $recreateRow;
+$renewApproveRow[3] = 'AUTO-2002';
+$renewApproveRow[6] = 'درحال بررسی';
+$renewApproveRow[8] = 1700000100;
+$renewApproveKey = xuiPaymentRowProvisionKey($renewApproveRow);
+@unlink(xuiRenewProvisionStorePath($renewApproveKey));
+
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$adjustCount){
+    $bytes = $adjustCount > 0 ? xuiGbToBytes(10) : xuiGbToBytes(20);
+
+    return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => $bytes]];
+};
+$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustCount){
+    $adjustCount++;
+
+    return ['ok' => true, 'method' => 'test_bulkAdjust'];
+};
+$GLOBALS['xuiTestRenewProvisionStoreWrite'] = static function($key, $payload){
+    if(($payload['phase'] ?? '') === 'provision_complete'){
+        return false;
+    }
+
+    return true;
+};
+$GLOBALS['xuiTestApiRequest'] = null;
+
+$renewCsv = fopen($csvPath, 'w');
+fputcsv($renewCsv, [
+    'ownerUser',
+    'https://vip4.example.com:2096/sub/abc1234567890ab',
+    '10 گیگ - 30 روز',
+    'HIST-3',
+    '',
+    '',
+    'تایید شد',
+    'https://vip4.example.com:2096/sub/abc1234567890ab',
+    1699999997,
+    'تمدید',
+    '',
+    '',
+    1500000,
+]);
+fputcsv($renewCsv, $renewApproveRow);
+fclose($renewCsv);
+
+$renewDirect = xuiProvisionRenew($renewApproveRow);
+renewRecAssert(!empty($renewDirect['ok']) && $adjustCount === 1, 'renew adjust runs once before simulated crash');
+
+unset($GLOBALS['xuiTestRenewProvisionStoreWrite']);
+xuiRenewProvisionStoreWrite($renewApproveKey, [
+    'state' => 'processing',
+    'phase' => 'renew_adjust_started',
+    'started_at' => time() - 200,
+]);
+
+$approveRenewRetry = xuiApprovePaymentIndex(1, 'تمدید');
+renewRecAssert(!empty($approveRenewRetry['ok']) && $adjustCount === 1, 'retry after adjust crash does not adjust again');
+
+$postCalls = 0;
+$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body) use (&$postCalls){
+    if($method === 'POST'){
+        $postCalls++;
+    }
+
+    return ['success' => false, 'msg' => 'unexpected'];
+};
+$GLOBALS['xuiTestRenewLookupClient'] = static function(){
+    return ['status' => 'not_found'];
+};
+$createDoneRow = $recreateRow;
+$createDoneRow[3] = 'AUTO-2003';
+$createDoneRow[6] = 'درحال بررسی';
+$createDoneRow[8] = 1700000200;
+$createDoneKey = xuiPaymentRowProvisionKey($createDoneRow);
+xuiRenewProvisionStoreWrite($createDoneKey, [
+    'state' => 'processing',
+    'phase' => 'provision_complete',
+    'started_at' => time() - 200,
+    'result' => [
+        'ok' => true,
+        'link' => $expectedLink,
+        'renew_outcome' => 'recreated',
+    ],
+]);
+$createCsv = fopen($csvPath, 'w');
+fputcsv($createCsv, $createDoneRow);
+fclose($createCsv);
+
+$approveCreateResume = xuiApprovePaymentIndex(0, 'تمدید');
+renewRecAssert(!empty($approveCreateResume['ok']) && $postCalls === 0, 'retry after create completes csv without extra API create');
 
 $interruptRow = $recreateRow;
 $interruptRow[6] = 'درحال بررسی';
@@ -245,16 +383,56 @@ $realConfigAfter = is_file($realConfig) ? file_get_contents($realConfig) : null;
 renewRecAssert($realCsvBefore === $realCsvAfter, 'real payments.csv untouched');
 renewRecAssert($realConfigBefore === $realConfigAfter, 'real xui_servers.json untouched');
 
+require_once __DIR__ . '/../instant_pay_lib.php';
+$instantPath = $tmpRoot . '/instant_payments.json';
+putenv('PNV_INSTANT_PAYMENTS_PATH=' . $instantPath);
+file_put_contents($instantPath, json_encode([[
+    'id' => 'ip-fail-1',
+    'user' => 'ownerUser',
+    'tracking' => 'AUTO-9001',
+    'code' => '9001',
+    'status' => 'payment_received_provision_failed',
+    'sub' => 'https://vip4.example.com:2096/sub/abc1234567890ab',
+    'matched_amount' => 15000000,
+    'provision_error' => 'ambiguous_provision test',
+]], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+$adminRow = [
+    'ownerUser',
+    'https://vip4.example.com:2096/sub/abc1234567890ab',
+    '10 گیگ - 30 روز',
+    'AUTO-9001',
+    '',
+    '',
+    'درحال بررسی',
+    '',
+    time(),
+    'تمدید',
+    '',
+    '',
+    15000000,
+];
+$adminMeta = instantPayAdminRowStatusMeta($adminRow);
+renewRecAssert(($adminMeta['class'] ?? '') === 'statusDot--red', 'admin status shows provision failure');
+$adminDetail = instantPayAdminProvisionFailureDetail($adminRow);
+renewRecAssert(
+    strpos($adminDetail, 'ownerUser') !== false
+    && strpos($adminDetail, 'vip4.example.com') !== false
+    && strpos($adminDetail, 'ambiguous_provision') !== false,
+    'admin detail includes user sub amount and error'
+);
+
 unset(
     $GLOBALS['xuiTestRenewApiProbe'],
     $GLOBALS['xuiTestRenewLookupClient'],
     $GLOBALS['xuiTestAdjustClientTraffic'],
     $GLOBALS['xuiTestApiRequest'],
-    $GLOBALS['xuiTestSavePaymentsInterceptor']
+    $GLOBALS['xuiTestSavePaymentsInterceptor'],
+    $GLOBALS['xuiTestRenewProvisionStoreWrite']
 );
 putenv('PNV_PAYMENTS_CSV_PATH');
 putenv('PNV_XUI_CONFIG_PATH');
 putenv('PNV_LOCKS_DIR');
+putenv('PNV_INSTANT_PAYMENTS_PATH');
 
 @array_map('unlink', glob($locksDir . '/*'));
 @rmdir($locksDir);
