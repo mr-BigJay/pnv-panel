@@ -154,6 +154,13 @@ if(!function_exists('instantPayPath')){
             if(!instantPayCsvRowPending($row)){
                 continue;
             }
+            $tracking = trim((string)($row[3] ?? ''));
+            if(strpos($tracking, 'AUTO-') === 0){
+                $linked = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+                if(is_array($linked) && !instantPayItemMatchable($linked)){
+                    continue;
+                }
+            }
 
             $rowAmount = instantPayCsvRowAmountRial($row);
 
@@ -451,6 +458,35 @@ if(!function_exists('instantPayPath')){
         return $items;
     }
 
+    // Archive a cancelled AUTO order without deleting its financial CSV row.
+    function instantPayMarkCsvCancelled($item, $reason){
+        if(!is_array($item) || !function_exists('xuiLoadPayments') || !function_exists('xuiSavePayments')){
+            return false;
+        }
+        $rows = xuiLoadPayments();
+        $tracking = instantPayNormalizeTracking(instantPayTrackingCode($item));
+        $username = strtolower(trim((string)($item['user'] ?? '')));
+        $created = intval($item['created_at'] ?? 0);
+        $changed = false;
+        foreach($rows as $i => $row){
+            if(!is_array($row)
+                || instantPayNormalizeTracking($row[3] ?? '') !== $tracking
+                || strtolower(trim((string)($row[0] ?? ''))) !== $username
+                || ($created > 0 && intval($row[8] ?? 0) !== $created)){
+                continue;
+            }
+            if(trim((string)($row[6] ?? '')) === 'تایید شد'){
+                return false; // Never cancel an approved payment.
+            }
+            if(instantPayCsvRowPending($row)){
+                $rows[$i][6] = 'رد شد';
+                $rows[$i][7] = $reason;
+                $changed = true;
+            }
+        }
+        return !$changed || xuiSavePayments($rows);
+    }
+
     function instantPayDeleteAbandonedCsv($item){
         if(!is_array($item) || !function_exists('xuiLoadPayments') || !function_exists('xuiDeletePaymentIndexes')){
             return 0;
@@ -494,121 +530,68 @@ if(!function_exists('instantPayPath')){
     /**
      * ردیف‌های پرداخت آنیِ رها‌شده را از CSV حذف و لیست ادمین را تمیز می‌کند.
      */
+    // Keep the legacy entrypoint but never purge financial records on admin page views.
     function instantPayPurgeStaleAdminRows($items = null){
-        if($items === null){
-            $items = instantPayExpireDue();
-        }
+        return instantPayExpireDue($items);
+    }
 
-        $now = time();
-        $grace = instantPayMatchGraceSeconds();
-        $changed = false;
-
-        foreach($items as $i => $item){
-            $status = (string)($item['status'] ?? '');
-            $expires = intval($item['expires_at'] ?? 0);
-            $shouldDelete = false;
-
-            if(in_array($status, ['cancelled', 'failed'], true)){
-                if($status === 'failed' && instantPayWithinMatchGrace($item, $now)){
-                    $shouldDelete = false;
-                }
-                elseif($status === 'cancelled' && instantPayWithinMatchGrace($item, $now)){
-                    $shouldDelete = false;
-                }
-                else{
-                    $shouldDelete = true;
-                }
-            }
-
-            if($status === 'expired' && $expires > 0 && !instantPayWithinMatchGrace($item, $now)){
-                $shouldDelete = true;
-            }
-
-            if($status === 'waiting' && $expires > 0 && $expires < $now){
-                $items[$i]['status'] = 'expired';
-                $changed = true;
-
-                if(!instantPayWithinMatchGrace($items[$i], $now)){
-                    $shouldDelete = true;
-                }
-            }
-
-            if($shouldDelete && empty($items[$i]['csv_purged'])){
-                instantPayDeleteAbandonedCsv($items[$i]);
-                $items[$i]['csv_purged'] = true;
-                $items[$i]['csv_index'] = -1;
-                $changed = true;
+    function instantPayAdminRowBucket($row){
+        if(!is_array($row)) return 'active';
+        $status = trim((string)($row[6] ?? ''));
+        if($status === 'تایید شد') return 'active';
+        $tracking = trim((string)($row[3] ?? ''));
+        if(strpos($tracking, 'AUTO-') === 0){
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            if(is_array($item) && ($item['status'] ?? '') === 'cancelled'){
+                return 'cancelled';
             }
         }
+        $reason = trim((string)($row[7] ?? ''));
+        return $status === 'رد شد' && strpos($reason, 'لغو') === 0 ? 'cancelled' : 'active';
+    }
 
-        if($changed){
-            instantPaySave($items);
-            $items = instantPayRebuildCsvIndexes(instantPayLoad());
-        }
-
-        if(!function_exists('xuiLoadPayments') || !function_exists('xuiDeletePaymentIndexes')){
-            return $items;
-        }
-
-        $payments = xuiLoadPayments();
-        $activeKeys = [];
-
-        foreach($items as $item){
-            $st = (string)($item['status'] ?? '');
-
-            if(!in_array($st, ['waiting', 'processing', 'paid', 'expired', 'failed', 'payment_received', 'payment_received_provision_failed'], true)){
-                continue;
-            }
-
-            if(empty($item['csv_purged']) && in_array($st, ['expired', 'failed'], true) && !instantPayWithinMatchGrace($item, $now)){
-                continue;
-            }
-
-            if(empty($item['csv_purged'])){
-                $activeKeys[strtolower(trim((string)($item['user'] ?? ''))) . '|' . instantPayTrackingCode($item)] = true;
-            }
-        }
-
-        $orphanDelete = [];
-        $window = instantPayMaxOrderAgeSeconds();
-
-        foreach($payments as $pi => $row){
-            if(!is_array($row)){
-                continue;
-            }
-
-            $tracking = trim((string)($row[3] ?? ''));
-
-            if(strpos($tracking, 'AUTO-') !== 0){
-                continue;
-            }
-
-            $st = trim((string)($row[6] ?? ''));
-
-            if(!in_array($st, ['', 'درحال بررسی', 'در حال بررسی', 'رد شد'], true)){
-                continue;
-            }
-
+    // Read-only reconstruction of cancelled orders deleted from CSV by old code.
+    // Synthetic rows have index=null and must never be passed to payment actions.
+    function instantPayAdminCancelledHistory($payments, $type){
+        $rows = [];
+        $seen = [];
+        $wanted = instantPayNormalizeType($type);
+        foreach((array)$payments as $i => $row){
+            if(!is_array($row) || instantPayNormalizeType($row[9] ?? '') !== $wanted) continue;
             $created = intval($row[8] ?? 0);
-            $key = strtolower(trim((string)($row[0] ?? ''))) . '|' . instantPayNormalizeTracking($tracking);
-
-            if(function_exists('instantPayAdminRowIsInProgress') && instantPayAdminRowIsInProgress($row)){
-                continue;
+            $key = strtolower(trim((string)($row[0] ?? '')))
+                . '|' . instantPayNormalizeTracking($row[3] ?? '') . '|' . $created;
+            $seen[$key] = true;
+            if(instantPayAdminRowBucket($row) === 'cancelled'){
+                $rows[] = ['index'=>$i,'data'=>$row,'synthetic'=>false,'sort_timestamp'=>$created];
             }
-
-            if($created > 0 && ($now - $created) < $window && isset($activeKeys[$key])){
-                continue;
-            }
-
-            $orphanDelete[] = $pi;
         }
-
-        if($orphanDelete){
-            xuiDeletePaymentIndexes($orphanDelete);
-            instantPayRebuildCsvIndexes();
+        foreach(instantPayLoad() as $item){
+            if(!is_array($item) || ($item['status'] ?? '') !== 'cancelled'
+                || instantPayNormalizeType($item['type'] ?? '') !== $wanted) continue;
+            $created = intval($item['created_at'] ?? 0);
+            $tracking = instantPayTrackingCode($item);
+            $key = strtolower(trim((string)($item['user'] ?? '')))
+                . '|' . instantPayNormalizeTracking($tracking) . '|' . $created;
+            if(isset($seen[$key])) continue;
+            $seen[$key] = true;
+            $rows[] = [
+                'index'=>null,'synthetic'=>true,'sort_timestamp'=>$created,
+                'data'=>[
+                    $item['user'] ?? '',
+                    $wanted === 'تمدید' ? ($item['sub'] ?? '') : ($item['subname'] ?? ''),
+                    $item['plan'] ?? '',$tracking,'','','رد شد',
+                    $item['message'] ?? 'لغو شده',$created,$wanted,
+                    $item['coupon_code'] ?? '',intval($item['discount_percent'] ?? 0),
+                    intval($item['amount'] ?? 0),$item['code'] ?? ''
+                ]
+            ];
         }
-
-        return $items;
+        usort($rows, static function($a,$b){
+            $byTime = $b['sort_timestamp'] <=> $a['sort_timestamp'];
+            return $byTime !== 0 ? $byTime : (($b['index'] ?? -1) <=> ($a['index'] ?? -1));
+        });
+        return $rows;
     }
 
     function instantPayNormalizeType($type){
@@ -652,7 +635,15 @@ if(!function_exists('instantPayPath')){
         $status = trim((string)($row[6] ?? ''));
         $tracking = trim((string)($row[3] ?? ''));
 
+        if($status !== 'تایید شد' && instantPayAdminRowBucket($row) === 'cancelled'){
+            return ['title' => 'کنسل شده', 'class' => 'statusDot--red'];
+        }
         if(strpos($tracking, 'AUTO-') === 0){
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            if($status !== 'تایید شد' && is_array($item) && ($item['status'] ?? '') === 'expired'){
+                return ['title' => 'منقضی شده', 'class' => 'statusDot--red'];
+            }
+
             $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
 
             if(is_array($item) && ($item['status'] ?? '') === 'payment_received_provision_failed'){
@@ -731,41 +722,8 @@ if(!function_exists('instantPayPath')){
      * سفارش AUTOِ درحال‌انجام تا پایان مهلت پرداخت + ۱۰ دقیقه دیده می‌شود.
      */
     function instantPayAdminRowVisible($row){
-        if(!is_array($row)){
-            return false;
-        }
-
-        $tracking = trim((string)($row[3] ?? ''));
-
-        if(strpos($tracking, 'AUTO-') !== 0){
-            return true;
-        }
-
-        $status = trim((string)($row[6] ?? ''));
-
-        if($status === 'تایید شد'){
-            return true;
-        }
-
-        if(in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true)){
-            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
-
-            if(is_array($item) && ($item['status'] ?? '') === 'payment_received_provision_failed'){
-                return true;
-            }
-
-            return instantPayAdminRowIsInProgress($row);
-        }
-
-        if($status === 'رد شد'){
-            $reason = trim((string)($row[7] ?? ''));
-
-            if(in_array($reason, ['لغو شد', 'منقضی شد', 'لغو به‌خاطر مبلغ جدید', 'لغو به‌خاطر درخواست جدید'], true)){
-                return false;
-            }
-        }
-
-        return true;
+        // Admin tabs decide presentation; do not hide historic financial records.
+        return is_array($row);
     }
 
     function instantPayOptsSignature($opts){
@@ -831,7 +789,7 @@ if(!function_exists('instantPayPath')){
 
     function instantPaySupersedeUserWaiting($username, $type, $exceptId = null, $items = null){
         $username = trim((string)$username);
-        $type = instantPayNormalizeType($type);
+        $type = $type === null ? null : instantPayNormalizeType($type);
         $exceptId = $exceptId !== null ? trim((string)$exceptId) : null;
 
         if($items === null){
@@ -850,7 +808,7 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
-            if(instantPayNormalizeType($item['type'] ?? 'خرید') !== $type){
+            if($type !== null && instantPayNormalizeType($item['type'] ?? 'خرید') !== $type){
                 continue;
             }
 
@@ -864,15 +822,13 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
+            if(!instantPayMarkCsvCancelled($items[$i], 'لغو به‌خاطر درخواست جدید')) return false;
             $items[$i]['status'] = 'cancelled';
             $items[$i]['message'] = 'لغو به‌خاطر درخواست جدید';
             $items[$i]['cancelled_at'] = $now;
+            $items[$i]['csv_purged'] = false;
             $changed = true;
-
             checkoutReleaseDiscountOrder($items[$i]['id'] ?? '');
-            instantPayDeleteAbandonedCsv($items[$i]);
-            $items[$i]['csv_purged'] = true;
-            $items[$i]['csv_index'] = -1;
         }
 
         if($changed){
@@ -884,49 +840,7 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayCloseUserMatchable($username, $exceptId = null, $items = null, $type = null){
-        if($type !== null){
-            return instantPaySupersedeUserWaiting($username, $type, $exceptId, $items);
-        }
-
-        $username = trim((string)$username);
-        $exceptId = $exceptId !== null ? trim((string)$exceptId) : null;
-
-        if($items === null){
-            $items = instantPayExpireDue();
-        }
-
-        $changed = false;
-        $now = time();
-
-        foreach($items as $i => $item){
-            if(($item['user'] ?? '') !== $username){
-                continue;
-            }
-
-            $id = (string)($item['id'] ?? '');
-
-            if($exceptId !== null && $exceptId !== '' && $id === $exceptId){
-                continue;
-            }
-
-            $status = (string)($item['status'] ?? '');
-
-            if($status !== 'waiting'){
-                continue;
-            }
-
-            $items[$i]['status'] = 'cancelled';
-            $items[$i]['message'] = 'لغو به‌خاطر مبلغ جدید';
-            $items[$i]['cancelled_at'] = $now;
-            $changed = true;
-        }
-
-        if($changed){
-            instantPaySave($items);
-            $items = instantPayRebuildCsvIndexes(instantPayLoad());
-        }
-
-        return $items;
+        return instantPaySupersedeUserWaiting($username, $type, $exceptId, $items);
     }
 
     function instantPayExpireDue($items = null){
@@ -984,9 +898,11 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
+            if(!instantPayMarkCsvCancelled($items[$i], 'لغو توسط کاربر')) return false;
             $items[$i]['status'] = 'cancelled';
             $items[$i]['message'] = 'لغو توسط کاربر';
             $items[$i]['cancelled_at'] = time();
+            $items[$i]['csv_purged'] = false;
             $changed = true;
 
             if(!function_exists('checkoutReleaseDiscountOrder')){
@@ -995,9 +911,7 @@ if(!function_exists('instantPayPath')){
 
             checkoutReleaseDiscountOrder($items[$i]['id'] ?? '');
 
-            instantPayDeleteAbandonedCsv($items[$i]);
-            $items[$i]['csv_purged'] = true;
-            $items[$i]['csv_index'] = -1;
+            // Retain the cancelled CSV row.
         }
 
         if($changed){
@@ -1195,23 +1109,15 @@ if(!function_exists('instantPayPath')){
             'discount_final_thousands' => $discountFinalThousands,
         ];
 
-        $reusable = instantPayFindReusableWaiting($username, $createOpts, $items);
-
-        if(is_array($reusable)){
-            return [
-                'ok' => true,
-                'item' => instantPayPublicView($reusable),
-                'reused' => true,
-            ];
-        }
-
-        // فقط یک درخواست درحال‌انجام برای هر نوع (خرید/تمدید)
-        $items = instantPaySupersedeUserWaiting($username, $type, null, $items);
-
+        // A successful new checkout replaces all prior waiting checkouts.
+        // Simply navigating away must not cancel the previous checkout.
         $code = instantPayAllocateCode($items);
-
         if($code === null){
-            return ['ok' => false, 'error' => 'کد یکتا در دسترس نیست؛ کمی بعد دوباره تلاش کنید'];
+            return ['ok'=>false,'error'=>'کد یکتا در دسترس نیست؛ کمی بعد دوباره تلاش کنید'];
+        }
+        $items = instantPaySupersedeUserWaiting($username, null, null, $items);
+        if(!is_array($items)){
+            return ['ok'=>false,'error'=>'بایگانی سفارش قبلی ناموفق بود؛ درخواست جدید ساخته نشد'];
         }
 
         $priceThousands = intval($plan['price'] ?? 0);
