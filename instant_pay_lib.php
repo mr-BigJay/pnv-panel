@@ -1618,6 +1618,17 @@ if(!function_exists('instantPayPath')){
         $tracking = trim((string)($row[3] ?? ''));
         $jsonItem = instantPayFindJsonForCsvRow($row);
 
+        // An orphan AUTO CSV entry is not proof that a valid checkout exists:
+        // JSON persistence may have failed after the CSV append. Never
+        // provision such entries without an administrator's recovery review.
+        if(strpos($tracking, 'AUTO-') === 0 && !is_array($jsonItem)){
+            return [
+                'ok' => false,
+                'code' => 'missing_order_json',
+                'error' => 'سفارش متناظر با ردیف پرداخت پیدا نشد؛ بررسی دستی لازم است',
+            ];
+        }
+
         if(is_array($jsonItem) && !empty($jsonItem['id'])){
             $items = instantPayLoad();
 
