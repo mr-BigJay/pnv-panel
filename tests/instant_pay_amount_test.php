@@ -124,6 +124,7 @@ instantPaySave([[
     'type' => 'خرید',
     'status' => 'cancelled',
     'code' => 2920,
+    'created_at' => $cancelRow[8],
     'expires_at' => time() + 600,
     'csv_index' => 0,
 ]]);
@@ -136,6 +137,7 @@ $items = [[
     'type' => 'خرید',
     'status' => 'waiting',
     'code' => 2920,
+    'created_at' => $visibleRow[8],
     'expires_at' => time() + 600,
     'csv_index' => 0,
 ]];
@@ -150,6 +152,7 @@ instantPaySave([[
     'type' => 'خرید',
     'status' => 'expired',
     'code' => 2920,
+    'created_at' => $expiredRow[8],
     'expires_at' => time() - 100,
     'csv_index' => 0,
 ]]);
