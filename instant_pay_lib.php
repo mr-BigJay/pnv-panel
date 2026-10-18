@@ -138,6 +138,26 @@ if(!function_exists('instantPayPath')){
         return null;
     }
 
+    // Tracking codes may be reused months later. Bind CSV/JSON by creation time.
+    function instantPayFindJsonForCsvRow($row, $items = null){
+        if(!is_array($row)) return null;
+        $user = strtolower(trim((string)($row[0] ?? '')));
+        $tracking = instantPayNormalizeTracking($row[3] ?? '');
+        $created = intval($row[8] ?? 0);
+        if($user === '' || $tracking === '') return null;
+        if($items === null) $items = instantPayLoad();
+        foreach($items as $item){
+            if(!is_array($item)
+                || strtolower(trim((string)($item['user'] ?? ''))) !== $user
+                || instantPayNormalizeTracking(instantPayTrackingCode($item)) !== $tracking
+                || ($created > 0 && intval($item['created_at'] ?? 0) !== $created)){
+                continue;
+            }
+            return $item;
+        }
+        return null;
+    }
+
     function instantPayFindCsvMatchByAmount($amountRial){
         $amountRial = intval($amountRial);
 
@@ -156,7 +176,7 @@ if(!function_exists('instantPayPath')){
             }
             $tracking = trim((string)($row[3] ?? ''));
             if(strpos($tracking, 'AUTO-') === 0){
-                $linked = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+                $linked = instantPayFindJsonForCsvRow($row);
                 if(is_array($linked) && !instantPayItemMatchable($linked)){
                     continue;
                 }
@@ -242,37 +262,28 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayResolveCsvIndex($item){
-        $csvIndex = intval($item['csv_index'] ?? -1);
-
-        if($csvIndex >= 0){
-            return $csvIndex;
-        }
-
-        if(!function_exists('xuiLoadPayments')){
-            return -1;
-        }
-
-        instantPayRebuildCsvIndexes();
-        $tracking = instantPayTrackingCode($item);
+        if(!is_array($item) || !function_exists('xuiLoadPayments')) return -1;
         $user = strtolower(trim((string)($item['user'] ?? '')));
+        $tracking = instantPayNormalizeTracking(instantPayTrackingCode($item));
+        $created = intval($item['created_at'] ?? 0);
         $payments = xuiLoadPayments();
-
-        foreach($payments as $i => $row){
-            if(!is_array($row)){
-                continue;
+        $preferred = intval($item['csv_index'] ?? -1);
+        if($preferred >= 0 && isset($payments[$preferred])){
+            $p = $payments[$preferred];
+            if(strtolower(trim((string)($p[0] ?? ''))) === $user
+                && instantPayNormalizeTracking($p[3] ?? '') === $tracking
+                && ($created <= 0 || intval($p[8] ?? 0) === $created)){
+                return $preferred;
             }
-
-            if(trim((string)($row[3] ?? '')) !== $tracking){
-                continue;
-            }
-
-            if($user !== '' && strtolower(trim((string)($row[0] ?? ''))) !== $user){
-                continue;
-            }
-
-            return $i;
         }
-
+        foreach($payments as $i => $p){
+            if(!is_array($p)) continue;
+            if(strtolower(trim((string)($p[0] ?? ''))) === $user
+                && instantPayNormalizeTracking($p[3] ?? '') === $tracking
+                && ($created <= 0 || intval($p[8] ?? 0) === $created)){
+                return $i;
+            }
+        }
         return -1;
     }
 
@@ -435,14 +446,15 @@ if(!function_exists('instantPayPath')){
             }
 
             $user = strtolower(trim((string)($row[0] ?? '')));
-            $map[$user . '|' . $tracking] = $i;
+            $map[$user . '|' . $tracking . '|' . intval($row[8] ?? 0)] = $i;
         }
 
         $changed = false;
 
         foreach($items as $i => $item){
             $tracking = instantPayTrackingCode($item);
-            $key = strtolower(trim((string)($item['user'] ?? ''))) . '|' . $tracking;
+            $key = strtolower(trim((string)($item['user'] ?? ''))) . '|' . $tracking
+                . '|' . intval($item['created_at'] ?? 0);
             $newIndex = array_key_exists($key, $map) ? intval($map[$key]) : -1;
 
             if(intval($item['csv_index'] ?? -1) !== $newIndex){
@@ -541,7 +553,7 @@ if(!function_exists('instantPayPath')){
         if($status === 'تایید شد') return 'active';
         $tracking = trim((string)($row[3] ?? ''));
         if(strpos($tracking, 'AUTO-') === 0){
-            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            $item = instantPayFindJsonForCsvRow($row);
             if(is_array($item) && ($item['status'] ?? '') === 'cancelled'){
                 return 'cancelled';
             }
@@ -639,12 +651,12 @@ if(!function_exists('instantPayPath')){
             return ['title' => 'کنسل شده', 'class' => 'statusDot--red'];
         }
         if(strpos($tracking, 'AUTO-') === 0){
-            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            $item = instantPayFindJsonForCsvRow($row);
             if($status !== 'تایید شد' && is_array($item) && ($item['status'] ?? '') === 'expired'){
                 return ['title' => 'منقضی شده', 'class' => 'statusDot--red'];
             }
 
-            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            $item = instantPayFindJsonForCsvRow($row);
 
             if(is_array($item) && ($item['status'] ?? '') === 'payment_received_provision_failed'){
                 return [
@@ -669,7 +681,7 @@ if(!function_exists('instantPayPath')){
 
         if(instantPayAdminRowIsInProgress($row)){
             if(strpos($tracking, 'AUTO-') === 0){
-                $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+                $item = instantPayFindJsonForCsvRow($row);
 
                 if(is_array($item) && ($item['status'] ?? '') === 'processing'){
                     return ['title' => 'در حال صدور', 'class' => 'statusDot--yellow'];
@@ -694,7 +706,7 @@ if(!function_exists('instantPayPath')){
         }
 
         if(!is_array($item)){
-            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            $item = instantPayFindJsonForCsvRow($row);
         }
 
         if(!is_array($item) || ($item['status'] ?? '') !== 'payment_received_provision_failed'){
@@ -1260,6 +1272,7 @@ if(!function_exists('instantPayPath')){
         if($csvIndex < 0){
             return ['ok' => false, 'error' => 'ایندکس پرداخت نامعتبر است'];
         }
+        $items[$idx]['csv_index'] = $csvIndex;
 
         // تاریخ/ساعت را برای لاگ پر می‌کنیم
         $payments = xuiLoadPayments();
@@ -1419,7 +1432,7 @@ if(!function_exists('instantPayPath')){
 
         $user = trim((string)($row[0] ?? ''));
         $tracking = trim((string)($row[3] ?? ''));
-        $jsonItem = instantPayFindJsonByTracking($user, $tracking);
+        $jsonItem = instantPayFindJsonForCsvRow($row);
 
         if(is_array($jsonItem) && !empty($jsonItem['id'])){
             $items = instantPayLoad();
