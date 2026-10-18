@@ -79,6 +79,10 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+if (is_file(__DIR__ . '/../renew_reserve_lib.php')) {
+    require_once __DIR__ . '/../renew_reserve_lib.php';
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -782,6 +786,7 @@ $status = 'درحال بررسی';
 
 $statusClass = 'is-pending';
 $statusTitle = 'درحال بررسی';
+$renewStatusMeta = [];
 if(function_exists('instantPayAdminRowStatusMeta')){
     $renewStatusMeta = instantPayAdminRowStatusMeta($p);
     $statusTitle = $renewStatusMeta['title'] ?? $statusTitle;
@@ -822,6 +827,14 @@ $targetSubId = $parsedTarget['sub_id'];
 $planParts = renewParsePlanParts($p[2] ?? '');
 $planLine = renewFormatPlanLine($planParts);
 $payWhen = pnvFormatPaymentRowDateTime($p);
+$provisionDetail = function_exists('instantPayAdminProvisionFailureDetail') ? instantPayAdminProvisionFailureDetail($p) : '';
+if($provisionDetail === '' && !empty($renewStatusMeta['detail'] ?? '')){
+    $provisionDetail = (string)$renewStatusMeta['detail'];
+}
+$renewReserveDetail = function_exists('renewReserveAdminDetailForRow') ? renewReserveAdminDetailForRow($p) : '';
+if($renewReserveDetail !== ''){
+    $provisionDetail = $provisionDetail !== '' ? ($provisionDetail . ' | ' . $renewReserveDetail) : $renewReserveDetail;
+}
 
 ?>
 
@@ -847,6 +860,9 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
 
 <span class="renewPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php if($provisionDetail !== ''){ ?>
+<span class="renewPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php } ?>
 </div>
 
 <div class="renewActions">
