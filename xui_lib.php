@@ -186,7 +186,10 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiLoadPlansCatalog(){
-        $file = __DIR__ . '/db/plans.json';
+        $override = getenv('PNV_PLANS_CATALOG_PATH');
+        $file = is_string($override) && $override !== ''
+            ? $override
+            : __DIR__ . '/db/plans.json';
 
         if(!file_exists($file)){
             return [];
