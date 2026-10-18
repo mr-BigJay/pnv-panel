@@ -46,9 +46,9 @@ if($action === 'status'){
 }
 
 if($action === 'cancel'){
-    $id = trim((string)($_GET['id'] ?? $_POST['id'] ?? ''));
-    instantPayCancelUserWaiting($username, $id !== '' ? $id : null);
-    echo json_encode(['ok' => true, 'cancelled' => true], JSON_UNESCAPED_UNICODE);
+    // Legacy clients may still call this on back/navigation. Never cancel a
+    // pending bank transfer merely because the customer left the page.
+    echo json_encode(['ok'=>true,'cancelled'=>false,'message'=>'سفارش تا پایان مهلت پرداخت معتبر است'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

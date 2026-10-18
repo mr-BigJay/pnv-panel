@@ -114,7 +114,7 @@ assertTrue(($meta['title'] ?? '') === 'در حال بررسی', 'in-progress sta
 
 $oldRow = $csvRow;
 $oldRow[8] = time() - instantPayAdminVisibilitySeconds() - 60;
-assertTrue(!instantPayAdminRowVisible($oldRow), 'auto pending outside admin window hidden');
+assertTrue(instantPayAdminRowVisible($oldRow), 'old pending rows stay visible for financial audit');
 
 $cancelRow = $csvRow;
 $cancelRow[8] = time();
@@ -124,10 +124,12 @@ instantPaySave([[
     'type' => 'خرید',
     'status' => 'cancelled',
     'code' => 2920,
+    'created_at' => $cancelRow[8],
     'expires_at' => time() + 600,
     'csv_index' => 0,
 ]]);
-assertTrue(!instantPayAdminRowVisible($cancelRow), 'cancelled json hides admin row');
+assertTrue(instantPayAdminRowVisible($cancelRow), 'cancelled row remains visible to admin');
+assertTrue(instantPayAdminRowBucket($cancelRow) === 'cancelled', 'cancelled row belongs in archive tab');
 
 $items = [[
     'id' => 't1',
@@ -135,6 +137,7 @@ $items = [[
     'type' => 'خرید',
     'status' => 'waiting',
     'code' => 2920,
+    'created_at' => $visibleRow[8],
     'expires_at' => time() + 600,
     'csv_index' => 0,
 ]];
@@ -149,13 +152,14 @@ instantPaySave([[
     'type' => 'خرید',
     'status' => 'expired',
     'code' => 2920,
+    'created_at' => $expiredRow[8],
     'expires_at' => time() - 100,
     'csv_index' => 0,
 ]]);
 assertTrue(instantPayAdminRowVisible($expiredRow), 'expired json still visible within admin window');
 
-$meta = instantPayAdminRowStatusMeta($visibleRow);
-assertTrue(($meta['title'] ?? '') === 'در حال بررسی', 'waiting json status label');
+$meta = instantPayAdminRowStatusMeta($expiredRow);
+assertTrue(($meta['title'] ?? '') === 'منقضی شده', 'expired JSON status label');
 
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

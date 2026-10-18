@@ -470,28 +470,7 @@ toStep2Btn.addEventListener('click', function(){
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-function cancelPayBeacon(id){
-    id = String(id || '').trim();
-    if(!id) return;
-    const body = new URLSearchParams();
-    body.set('action', 'cancel');
-    body.set('id', id);
-    const payload = body.toString();
-    try{
-        if(navigator.sendBeacon){
-            const blob = new Blob([payload], { type: 'application/x-www-form-urlencoded;charset=UTF-8' });
-            if(navigator.sendBeacon('instant-pay-api.php', blob)) return;
-        }
-    }catch(e){}
-    fetch('instant-pay-api.php', {
-        method: 'POST',
-        credentials: 'same-origin',
-        keepalive: true,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        body: payload
-    }).catch(function(){});
-}
-
+// Navigation/back does not cancel an unpaid bank transfer.
 const userBackLink = document.querySelector('.userBack');
 if(userBackLink){
     userBackLink.addEventListener('click', function(){
@@ -593,7 +572,6 @@ function stopPayWatchers(){
 
 function resetPaySession(){
     stopPayWatchers();
-    const cancelId = currentPay && currentPay.id ? currentPay.id : '';
     currentPay = null;
     payCreateInFlight = false;
     if(payCreating) payCreating.classList.remove('is-visible');
@@ -605,9 +583,6 @@ function resetPaySession(){
     if(instantPayHead){ instantPayHead.textContent = 'مهلت پرداخت'; }
     const restartBtn = document.getElementById('restartPayBtn');
     if(restartBtn) restartBtn.hidden = true;
-    if(cancelId){
-        cancelPayBeacon(cancelId);
-    }
 }
 
 function renderPay(item){
@@ -801,20 +776,8 @@ function ensureInstantPay(forceRestart){
         });
     };
 
-    if(prevId){
-        // اول سفارش قبلی را لغو کن، بعد مبلغ جدید بساز (جلوگیری از تداخل)
-        const body = new URLSearchParams();
-        body.set('action', 'cancel');
-        body.set('id', prevId);
-        fetch('instant-pay-api.php', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: body.toString()
-        }).finally(startCreate);
-    } else {
-        startCreate();
-    }
+    // New checkout supersedes old waiting orders atomically on the server.
+    startCreate();
 }
 
 function copyText(t, msg, opts){

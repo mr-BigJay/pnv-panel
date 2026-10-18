@@ -200,6 +200,14 @@ if(isset($_POST['approve_payment'])){
 
     $index = intval($_POST['approve_index']);
 
+    if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&tab=cancelled'));
+    exit;
+}
+
     $link = trim($_POST['approve_link'] ?? '');
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
@@ -260,6 +268,14 @@ if(isset($_POST['reject_payment'])){
 
     $index = intval($_POST['reject_index']);
 
+    if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&tab=cancelled'));
+    exit;
+}
+
     $reason = trim($_POST['reject_reason']);
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
@@ -294,6 +310,15 @@ if(isset($_POST['reject_payment'])){
 if(isset($_GET['deletepayment'])){
 
     $id = intval($_GET['deletepayment']);
+    $index = $id;
+
+    if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&tab=cancelled'));
+    exit;
+}
 
     if(isset($payments[$id])){
 
@@ -365,6 +390,18 @@ usort($buyPayments, static function($a, $b){
     return $byDate !== 0 ? $byDate : ($b['index'] <=> $a['index']);
 });
 
+// Cancelled transactions (including legacy JSON orders with deleted CSV rows)
+// live in a read-only archive, separate from the active list.
+$buyActivePayments = array_values(array_filter($buyPayments, static function($row){
+    return !function_exists('instantPayAdminRowBucket')
+        || instantPayAdminRowBucket($row['data']) !== 'cancelled';
+}));
+$buyCancelledPayments = function_exists('instantPayAdminCancelledHistory')
+    ? instantPayAdminCancelledHistory($payments, 'خرید')
+    : [];
+$paymentTab = ($_GET['tab'] ?? '') === 'cancelled' ? 'cancelled' : 'active';
+$buyPayments = $paymentTab === 'cancelled' ? $buyCancelledPayments : $buyActivePayments;
+
 $currentPage = intval($_GET['p'] ?? 1);
 
 if($currentPage < 1){
@@ -390,11 +427,11 @@ $start = ($currentPage - 1) * $perPage;
 $buyPaymentsPage = array_slice($buyPayments, $start, $perPage);
 
 function paymentsListUrl($page, $per){
-
+    global $paymentTab;
     return pnvAdminUrl(
-        'index.php?page=payments&p=' . intval($page) . '&per=' . intval($per)
+        'index.php?page=payments&p=' . intval($page)
+        . '&per=' . intval($per) . '&tab=' . rawurlencode($paymentTab)
     );
-
 }
 
 function paymentsFormatPlanLine($plan){
@@ -822,11 +859,19 @@ flex:0 0 20px;
 .statusIcon svg{width:11px;height:11px}
 }
 
+.pnvPaymentTabs{display:flex;align-items:center;gap:8px;margin:14px 0 18px;flex-wrap:wrap}
+.pnvPaymentTabs a{border:1px solid #334155;border-radius:999px;padding:9px 15px;text-decoration:none;color:inherit;font-size:13px;font-weight:600;transition:background .15s}
+.pnvPaymentTabs a.is-selected{background:#2563eb;color:#fff;border-color:#2563eb}
+.pnvPaymentTabs .tabCount{font-variant-numeric:tabular-nums;opacity:.85;margin-inline-start:4px}
 </style>
 
 <div class="box paymentsPage" data-payments-ui="cards">
 
 <h2>لیست خرید های جدید <span class="payUiTag" title="payments UI cards v20260815">cards</span></h2>
+<nav class="pnvPaymentTabs" aria-label="وضعیت درخواست‌های خرید">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=payments&tab=active&per=' . (int)$perPage), ENT_QUOTES, 'UTF-8'); ?>" class="<?php echo $paymentTab === 'active' ? 'is-selected' : ''; ?>" <?php echo $paymentTab === 'active' ? 'aria-current="page"' : ''; ?>>درخواست‌ها <span class="tabCount"><?php echo count($buyActivePayments); ?></span></a>
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=payments&tab=cancelled&per=' . (int)$perPage), ENT_QUOTES, 'UTF-8'); ?>" class="<?php echo $paymentTab === 'cancelled' ? 'is-selected' : ''; ?>" <?php echo $paymentTab === 'cancelled' ? 'aria-current="page"' : ''; ?>>کنسل شده <span class="tabCount"><?php echo count($buyCancelledPayments); ?></span></a>
+</nav>
 
 <?php if($paymentMessage !== ''){ ?>
 <div class="payAlertOk"><?php echo htmlspecialchars($paymentMessage, ENT_QUOTES, 'UTF-8'); ?></div>
@@ -838,7 +883,7 @@ flex:0 0 20px;
 <div class="payList">
 
 <?php if($totalItems === 0){ ?>
-<div class="payCard payCardEmpty">خریدی برای نمایش نیست</div>
+<div class="payCard payCardEmpty"><?php echo $paymentTab === 'cancelled' ? 'درخواست کنسل‌شده‌ای ثبت نشده است' : 'خریدی برای نمایش نیست'; ?></div>
 <?php } ?>
 
 <?php foreach($buyPaymentsPage as $row){
@@ -910,6 +955,10 @@ if($provisionDetail === '' && !empty($payStatusMeta['detail'] ?? '')){
 <div class="payColPlan">
 <span class="payConfigName"><?php echo htmlspecialchars($configName, ENT_QUOTES, 'UTF-8'); ?></span>
 <span class="payPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php if($paymentTab === 'cancelled'){ ?>
+<span class="payPlanLine">کد: <?php echo htmlspecialchars((string)($p[3] ?? '—'), ENT_QUOTES, 'UTF-8'); ?> | مبلغ: <?php echo number_format(intval($p[12] ?? 0)); ?> ریال</span>
+<span class="payPlanLine"><?php echo htmlspecialchars((string)($p[7] ?? 'لغو شده'), ENT_QUOTES, 'UTF-8'); ?></span>
+<?php } ?>
 <?php if($provisionDetail !== ''){ ?>
 <span class="payPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
 <?php } ?>
@@ -931,6 +980,7 @@ if($provisionDetail === '' && !empty($payStatusMeta['detail'] ?? '')){
 </span>
 <?php } ?>
 
+<?php if($paymentTab !== 'cancelled'){ ?>
 <button
 class="menuBtn"
 type="button"
@@ -971,6 +1021,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 <?php echo json_encode($p[1] ?? ""); ?>
 )'>حذف</button>
 </div>
+<?php } // Cancelled archive is read-only. ?>
 
 </div>
 

@@ -17,8 +17,10 @@ try {
     }
 
     $makeRow = static function ($name, $date, $time, $timestamp, $type = 'خرید') {
+        // Use approved rows so the same sort regression also applies to
+        // Production's status-filtered admin list (default: approved).
         return [$name, 'config', '1 گیگ', 'tracking', $date, $time,
-            'درحال بررسی', '', $timestamp, $type];
+            'تایید شد', '', $timestamp, $type];
     };
 
     // The newest transaction is *not* the last row in the file.
@@ -46,7 +48,7 @@ try {
     }
     $_SESSION['admin'] = true;
     $_SERVER['REQUEST_METHOD'] = 'GET';
-    $_GET = ['page' => 'payments', 'p' => '1'];
+    $_GET = ['page' => 'payments', 'p' => '1', 'status' => 'approved'];
 
     ob_start();
     try {

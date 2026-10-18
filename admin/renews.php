@@ -161,6 +161,14 @@ unset($_SESSION['payment_error']);
 if(isset($_POST['approve_payment'])){
 
 $index=intval($_POST['approve_index']);
+if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&tab=cancelled'));
+    exit;
+}
+
 $link=trim($_POST['approve_link'] ?? '');
 
 $xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig')
@@ -209,6 +217,14 @@ exit;
 if(isset($_POST['reject_payment'])){
 
 $index=intval($_POST['reject_index']);
+if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&tab=cancelled'));
+    exit;
+}
+
 $reason=trim($_POST['reject_reason']);
 
 if(isset($payments[$index])){
@@ -236,6 +252,15 @@ exit;
 if(isset($_GET['deletepayment'])){
 
 $id=intval($_GET['deletepayment']);
+$index=$id;
+if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=renews&tab=cancelled'));
+    exit;
+}
+
 
 if(isset($payments[$id])){
 
@@ -281,6 +306,16 @@ $renews[]=[
 
 $renews=array_reverse($renews);
 
+$renewActivePayments = array_values(array_filter($renews, static function($item){
+    return !function_exists('instantPayAdminRowBucket')
+        || instantPayAdminRowBucket($item['data']) !== 'cancelled';
+}));
+$renewCancelledPayments = function_exists('instantPayAdminCancelledHistory')
+    ? instantPayAdminCancelledHistory($payments, 'تمدید')
+    : [];
+$renewTab = ($_GET['tab'] ?? '') === 'cancelled' ? 'cancelled' : 'active';
+$renews = $renewTab === 'cancelled' ? $renewCancelledPayments : $renewActivePayments;
+
 $perPage = 20;
 $currentPage = intval($_GET['p'] ?? 1);
 if($currentPage < 1){
@@ -298,7 +333,8 @@ $renewsPage = array_slice($renews, $start, $perPage);
 
 if(!function_exists('renewsListUrl')){
 function renewsListUrl($page){
-return pnvAdminUrl('index.php?page=renews&p=' . intval($page));
+global $renewTab;
+return pnvAdminUrl('index.php?page=renews&p=' . intval($page) . '&tab=' . rawurlencode($renewTab));
 }
 }
 
@@ -762,16 +798,24 @@ flex:0 0 20px;
 .statusIcon svg{width:11px;height:11px}
 }
 
+.pnvPaymentTabs{display:flex;align-items:center;gap:8px;margin:14px 0 18px;flex-wrap:wrap}
+.pnvPaymentTabs a{border:1px solid #334155;border-radius:999px;padding:9px 15px;text-decoration:none;color:inherit;font-size:13px;font-weight:600;transition:background .15s}
+.pnvPaymentTabs a.is-selected{background:#2563eb;color:#fff;border-color:#2563eb}
+.pnvPaymentTabs .tabCount{font-variant-numeric:tabular-nums;opacity:.85;margin-inline-start:4px}
 </style>
 
 <div class="box renewsPage">
 
 <h2>لیست تمدید ها</h2>
+<nav class="pnvPaymentTabs" aria-label="وضعیت درخواست‌های تمدید">
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=renews&tab=active'), ENT_QUOTES, 'UTF-8'); ?>" class="<?php echo $renewTab === 'active' ? 'is-selected' : ''; ?>" <?php echo $renewTab === 'active' ? 'aria-current="page"' : ''; ?>>درخواست‌ها <span class="tabCount"><?php echo count($renewActivePayments); ?></span></a>
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=renews&tab=cancelled'), ENT_QUOTES, 'UTF-8'); ?>" class="<?php echo $renewTab === 'cancelled' ? 'is-selected' : ''; ?>" <?php echo $renewTab === 'cancelled' ? 'aria-current="page"' : ''; ?>>کنسل شده <span class="tabCount"><?php echo count($renewCancelledPayments); ?></span></a>
+</nav>
 
 <div class="renewList">
 
 <?php if($totalItems === 0){ ?>
-<div class="renewCard renewCardEmpty">تمدیدی برای نمایش نیست</div>
+<div class="renewCard renewCardEmpty"><?php echo $renewTab === 'cancelled' ? 'درخواست کنسل‌شده‌ای ثبت نشده است' : 'تمدیدی برای نمایش نیست'; ?></div>
 <?php } ?>
 
 <?php foreach($renewsPage as $r){
@@ -860,6 +904,10 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
 
 <span class="renewPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php if($renewTab === 'cancelled'){ ?>
+<span class="renewPlanLine">کد: <?php echo htmlspecialchars((string)($p[3] ?? '—'), ENT_QUOTES, 'UTF-8'); ?> | مبلغ: <?php echo number_format(intval($p[12] ?? 0)); ?> ریال</span>
+<span class="renewPlanLine"><?php echo htmlspecialchars((string)($p[7] ?? 'لغو شده'), ENT_QUOTES, 'UTF-8'); ?></span>
+<?php } ?>
 <?php if($provisionDetail !== ''){ ?>
 <span class="renewPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
 <?php } ?>
@@ -881,6 +929,7 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 </span>
 <?php } ?>
 
+<?php if($renewTab !== 'cancelled'){ ?>
 <button
 class="menuBtn"
 type="button"
@@ -908,6 +957,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 )">عملیات</button>
 <button type="button" class="red" onclick="deleteItem('<?php echo $i; ?>')">حذف</button>
 </div>
+<?php } // Cancelled archive is read-only. ?>
 
 </div>
 
