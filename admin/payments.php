@@ -200,6 +200,14 @@ if(isset($_POST['approve_payment'])){
 
     $index = intval($_POST['approve_index']);
 
+    if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&tab=cancelled'));
+    exit;
+}
+
     $link = trim($_POST['approve_link'] ?? '');
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
@@ -260,6 +268,14 @@ if(isset($_POST['reject_payment'])){
 
     $index = intval($_POST['reject_index']);
 
+    if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&tab=cancelled'));
+    exit;
+}
+
     $reason = trim($_POST['reject_reason']);
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
 
@@ -294,6 +310,15 @@ if(isset($_POST['reject_payment'])){
 if(isset($_GET['deletepayment'])){
 
     $id = intval($_GET['deletepayment']);
+    $index = $id;
+
+    if(isset($payments[$index])
+    && function_exists('instantPayAdminRowBucket')
+    && instantPayAdminRowBucket($payments[$index]) === 'cancelled'){
+    $_SESSION['payment_error'] = 'درخواست کنسل‌شده فقط قابل مشاهده است؛ برای تأیید واریز باید از مسیر بازیابی کنترل‌شده استفاده شود';
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&tab=cancelled'));
+    exit;
+}
 
     if(isset($payments[$id])){
 
@@ -932,6 +957,7 @@ if($provisionDetail === '' && !empty($payStatusMeta['detail'] ?? '')){
 <span class="payPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
 <?php if($paymentTab === 'cancelled'){ ?>
 <span class="payPlanLine">کد: <?php echo htmlspecialchars((string)($p[3] ?? '—'), ENT_QUOTES, 'UTF-8'); ?> | مبلغ: <?php echo number_format(intval($p[12] ?? 0)); ?> ریال</span>
+<span class="payPlanLine"><?php echo htmlspecialchars((string)($p[7] ?? 'لغو شده'), ENT_QUOTES, 'UTF-8'); ?></span>
 <?php } ?>
 <?php if($provisionDetail !== ''){ ?>
 <span class="payPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
