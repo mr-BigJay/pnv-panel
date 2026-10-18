@@ -14,6 +14,10 @@ require_once __DIR__ . '/plan_ui_lib.php';
 require_once __DIR__ . '/instant_pay_lib.php';
 require_once __DIR__ . '/bank_lib.php';
 
+if(is_file(__DIR__ . '/renew_reserve_lib.php')){
+    require_once __DIR__ . '/renew_reserve_lib.php';
+}
+
 $plans = [];
 
 if(file_exists('db/plans.json')){
@@ -64,6 +68,9 @@ function renewLoadUserSubscriptions($username){
 }
 
 $userSubscriptions = renewLoadUserSubscriptions($_SESSION['user']);
+$userRenewReserves = function_exists('renewReserveListForUser')
+    ? renewReserveListForUser($_SESSION['user'], ['reserved', 'activating'])
+    : [];
 
 $message = "";
 $error = "";
@@ -191,6 +198,7 @@ pointer-events:none !important;
 <div class="subPickedLink" id="subPickedLink" hidden></div>
 <?php } ?>
 <input type="text" id="subInput" name="sub" placeholder="لینک اشتراک را وارد کنید" required>
+<div class="subPickedLink" id="renewReserveHint" hidden style="margin-top:8px;color:#93c5fd;font-size:13px"></div>
 </div>
 
 <div class="sectionTitle">نوع پلن را انتخاب کنید</div>
@@ -448,6 +456,40 @@ foreach($userSubscriptions as $item){
 }
 echo json_encode($metaMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>;
+const renewReservesByLink = <?php
+$reserveMap = [];
+foreach($userRenewReserves as $reserve){
+    $linkKey = strtolower(trim((string)($reserve['sub_link'] ?? '')));
+    if($linkKey === ''){
+        continue;
+    }
+    if(!isset($reserveMap[$linkKey])){
+        $reserveMap[$linkKey] = [];
+    }
+    $reserveMap[$linkKey][] = [
+        'plan' => (string)($reserve['plan_text'] ?? ''),
+        'status' => (string)($reserve['status'] ?? ''),
+    ];
+}
+echo json_encode($reserveMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+?>;
+
+function updateRenewReserveHint(link){
+    const el = document.getElementById('renewReserveHint');
+    if(!el){
+        return;
+    }
+    const key = String(link || '').trim().toLowerCase();
+    const list = renewReservesByLink[key] || [];
+    if(!list.length){
+        el.hidden = true;
+        el.textContent = '';
+        return;
+    }
+    const plan = list[0].plan || 'پلن رزروشده';
+    el.hidden = false;
+    el.textContent = 'پلن رزروشده: ' + plan + ' — پس از اتمام حجم یا زمان فعلی فعال می‌شود.';
+}
 
 function lockMessageFor(cat){
     if(subTimeCategory !== 'limited' && cat === 'limited'){
@@ -604,12 +646,14 @@ function pickSubscription(){
             subTimeCategory = resolveSubTimeCategory(current);
         }
         hideCatLockHint();
+        updateRenewReserveHint(value === '__other__' ? '' : value);
         syncCategoryLocks();
         return;
     }
 
     setSubInputMode('picked', value);
     subTimeCategory = (opt && opt.getAttribute('data-time-category')) || resolveSubTimeCategory(value) || 'unknown';
+    updateRenewReserveHint(value);
     hideCatLockHint();
     selectedPlan = null;
     if(planSelect) planSelect.value = '';

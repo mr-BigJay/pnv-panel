@@ -326,6 +326,12 @@ if(!function_exists('xuiConfigPath')){
     function xuiFetchSubUserinfoExpire($link){
         $link = trim((string)$link);
 
+        if(array_key_exists('xuiTestSubUserinfoExpire', $GLOBALS)){
+            $v = $GLOBALS['xuiTestSubUserinfoExpire'];
+
+            return $v === null ? null : max(0, intval($v));
+        }
+
         if($link === '' || !preg_match('#^https?://#i', $link) || !function_exists('curl_init')){
             return null;
         }
@@ -1834,6 +1840,66 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
+    function xuiApplyRenewPlanAbsolute($server, $client, $gb, $days){
+        if(!empty($GLOBALS['xuiTestApplyRenewPlanAbsolute']) && is_callable($GLOBALS['xuiTestApplyRenewPlanAbsolute'])){
+            return $GLOBALS['xuiTestApplyRenewPlanAbsolute']($server, $client, $gb, $days);
+        }
+
+        if(!is_array($client)){
+            return ['ok' => false, 'error' => 'کلاینت برای فعال‌سازی پلن نامعتبر است'];
+        }
+
+        $email = trim((string)($client['email'] ?? ''));
+        $clientId = trim((string)($client['id'] ?? ''));
+        $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
+        $targetBytes = xuiGbToBytes($gb);
+        $days = max(0, intval($days));
+        $expiryMs = 0;
+
+        if($days > 0){
+            $nowMs = function_exists('renewReserveNowMs')
+                ? renewReserveNowMs()
+                : (int)(microtime(true) * 1000);
+            $expiryMs = $nowMs + ($days * 86400000);
+        }
+
+        if($email === '' || $clientId === '' || $inboundId <= 0){
+            return ['ok' => false, 'error' => 'اطلاعات کلاینت برای فعال‌سازی مطلق ناقص است'];
+        }
+
+        $updated = $client;
+        unset($updated['_inbound_id']);
+        $updated['totalGB'] = $targetBytes;
+        $updated['expiryTime'] = $expiryMs;
+        $updated['enable'] = true;
+        $updated['reset'] = 1;
+
+        if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
+            $updated['subId'] = $client['subId'];
+        }
+
+        $result = xuiApiRequest($server, 'POST', '/panel/api/inbounds/updateClient/' . rawurlencode($clientId), [
+            'id' => $inboundId,
+            'settings' => json_encode([
+                'clients' => [$updated],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+
+        if(!empty($result['success'])){
+            return [
+                'ok' => true,
+                'method' => 'updateClient_absolute',
+                'raw' => $result,
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'error' => $result['msg'] ?? 'فعال‌سازی مطلق پلن ناموفق بود',
+            'code' => 'activation_failed',
+        ];
+    }
+
     function xuiRenewLog($event, array $context = []){
         $safe = [];
 
@@ -1855,7 +1921,7 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiRenewUserMessageRecreated(){
-        return 'اشتراک قبلی شما روی سرور موجود نبود. اشتراک جدید مطابق پلن خریداری‌شده با موفقیت ایجاد و فعال شد.';
+        return 'اشتراک شما مطابق پلن انتخابی مجدداً ساخته و فعال شد.';
     }
 
     function xuiLocksDir(){
@@ -2559,6 +2625,10 @@ if(!function_exists('xuiConfigPath')){
         }
 
         if(($lookup['status'] ?? '') === 'found' && is_array($lookup['client'] ?? null)){
+            if(!function_exists('renewReserveDecideAction')){
+                require_once __DIR__ . '/renew_reserve_lib.php';
+            }
+
             $client = $lookup['client'];
             $email = trim((string)($client['email'] ?? ''));
 
@@ -2566,6 +2636,18 @@ if(!function_exists('xuiConfigPath')){
                 return ['ok' => false, 'error' => 'ایمیل کلاینت خالی است'];
             }
 
+            $runtime = xuiRenewAnalyzeRuntimeState($server, $client, $subLink);
+            $action = renewReserveDecideAction($runtime);
+
+            if($action === 'ambiguous'){
+                return [
+                    'ok' => false,
+                    'error' => 'وضعیت واقعی اشتراک (زمان/حجم) نامشخص است؛ فعال‌سازی خودکار انجام نشد',
+                    'code' => 'ambiguous_provision',
+                ];
+            }
+
+            $link = xuiBuildSubLink($parsed['host'], $parsed['sub_id'], $config);
             $provisionKey = xuiPaymentRowProvisionKey($paymentRow);
             $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
             xuiRenewProvisionStoreWrite($provisionKey, array_merge($stored, [
@@ -2575,6 +2657,43 @@ if(!function_exists('xuiConfigPath')){
                 'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
             ]));
 
+            if($action === 'reserve'){
+                $existingReserve = renewReserveFindByProvisionKey($provisionKey);
+
+                if(is_array($existingReserve)){
+                    return renewReserveBuildPaymentSuccess($existingReserve, $link);
+                }
+
+                $reservation = renewReserveCreateFromPayment($paymentRow, $parsed, $server, $gb, $days, $planText);
+                $renewResult = renewReserveBuildPaymentSuccess($reservation, $link);
+                xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult);
+
+                return $renewResult;
+            }
+
+            if($action === 'activate_now'){
+                $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days);
+
+                if(empty($applied['ok'])){
+                    return $applied;
+                }
+
+                $renewResult = [
+                    'ok' => true,
+                    'link' => $link,
+                    'email' => $email,
+                    'sub_id' => $parsed['sub_id'],
+                    'server_id' => $server['id'] ?? '',
+                    'gb' => $gb,
+                    'renew_outcome' => 'renewed',
+                    'user_renew_message' => xuiRenewUserMessageRenewed(),
+                    'method' => $applied['method'] ?? 'absolute',
+                ];
+                xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult);
+
+                return $renewResult;
+            }
+
             $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
 
             if(empty($adjusted['ok'])){
@@ -2583,7 +2702,7 @@ if(!function_exists('xuiConfigPath')){
 
             $renewResult = [
                 'ok' => true,
-                'link' => xuiBuildSubLink($parsed['host'], $parsed['sub_id'], $config),
+                'link' => $link,
                 'email' => $email,
                 'sub_id' => $parsed['sub_id'],
                 'server_id' => $server['id'] ?? '',
