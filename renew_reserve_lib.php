@@ -28,6 +28,14 @@ if(!function_exists('renewReservePath')){
         return renewReserveNow() * 1000;
     }
 
+    function renewReserveActivatingGraceSeconds(){
+        if(isset($GLOBALS['renewReserveTestActivatingGrace'])){
+            return max(1, intval($GLOBALS['renewReserveTestActivatingGrace']));
+        }
+
+        return 180;
+    }
+
     function renewReserveQueueLockPath(){
         $dir = function_exists('xuiLocksDir') ? xuiLocksDir() : (__DIR__ . '/db/locks');
 
@@ -112,6 +120,11 @@ if(!function_exists('renewReservePath')){
         }
 
         $json = json_encode(array_values($items), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        if($json === false){
+            return false;
+        }
+
         $tmp = $path . '.tmp.' . getmypid();
         $written = file_put_contents($tmp, $json, LOCK_EX);
 
@@ -454,6 +467,187 @@ if(!function_exists('renewReservePath')){
         return $pending;
     }
 
+    function renewReserveQueueWorkItems(){
+        $loaded = renewReserveLoadResult();
+
+        if(empty($loaded['ok']) || !is_array($loaded['items'])){
+            return [];
+        }
+
+        $byQueue = [];
+
+        foreach($loaded['items'] as $item){
+            $key = (string)($item['queue_key'] ?? '');
+
+            if($key === ''){
+                continue;
+            }
+
+            $byQueue[$key][] = $item;
+        }
+
+        $grace = renewReserveActivatingGraceSeconds();
+        $work = [];
+
+        foreach($byQueue as $list){
+            usort($list, static function($a, $b){
+                return intval($a['reserved_at'] ?? 0) <=> intval($b['reserved_at'] ?? 0);
+            });
+
+            foreach($list as $item){
+                $st = trim((string)($item['status'] ?? ''));
+
+                if($st === 'activated'){
+                    continue;
+                }
+
+                if(in_array($st, ['ambiguous', 'activation_failed'], true)){
+                    break;
+                }
+
+                if($st === 'activating'){
+                    $started = intval($item['activating_at'] ?? 0);
+
+                    if($started > 0 && (renewReserveNow() - $started) >= $grace){
+                        $work[] = $item;
+                    }
+
+                    break;
+                }
+
+                if($st === 'reserved'){
+                    $work[] = $item;
+                    break;
+                }
+
+                break;
+            }
+        }
+
+        usort($work, static function($a, $b){
+            return intval($a['reserved_at'] ?? 0) <=> intval($b['reserved_at'] ?? 0);
+        });
+
+        return $work;
+    }
+
+    function renewReserveRecoverStaleActivating(array $fresh){
+        if(!function_exists('xuiLoadConfig')){
+            require_once __DIR__ . '/xui_lib.php';
+        }
+
+        $config = xuiLoadConfig();
+        $id = trim((string)($fresh['id'] ?? ''));
+        $host = trim((string)($fresh['server_host'] ?? ''));
+        $subId = trim((string)($fresh['sub_id'] ?? ''));
+        $subLink = trim((string)($fresh['sub_link'] ?? ''));
+        $gb = intval($fresh['plan_gb'] ?? 0);
+        $days = intval($fresh['plan_days'] ?? 0);
+        $anchorMs = intval($fresh['activation_anchor_ms'] ?? 0);
+        $opId = trim((string)($fresh['activation_op_id'] ?? ''));
+
+        if($anchorMs <= 0){
+            return [
+                'ok' => false,
+                'code' => 'ambiguous',
+                'error' => 'مرجع زمانی فعال‌سازی ذخیره نشده است',
+            ];
+        }
+
+        $server = xuiFindServerByHost($host, $config);
+
+        if(!$server){
+            renewReserveUpdateById($id, [
+                'status' => 'activation_failed',
+                'last_error' => 'سرور XUI پیدا نشد',
+                'last_check_at' => renewReserveNow(),
+            ]);
+
+            return ['ok' => false, 'error' => 'سرور پیدا نشد'];
+        }
+
+        $lookup = xuiRenewLookupClient($server, $subId, $subLink);
+
+        if(($lookup['status'] ?? '') === 'api_error'){
+            renewReserveUpdateById($id, [
+                'last_check_at' => renewReserveNow(),
+                'last_check_note' => 'api_unreachable',
+            ]);
+
+            return ['ok' => false, 'error' => 'XUI در دسترس نیست', 'code' => 'api_error'];
+        }
+
+        if(($lookup['status'] ?? '') === 'not_found'){
+            renewReserveUpdateById($id, [
+                'status' => 'ambiguous',
+                'last_error' => 'کلاینت قبل از فعال‌سازی حذف شده است',
+                'last_check_at' => renewReserveNow(),
+            ]);
+
+            return ['ok' => false, 'code' => 'ambiguous', 'error' => 'کلاینت حذف شده'];
+        }
+
+        if(($lookup['status'] ?? '') !== 'found' || !is_array($lookup['client'] ?? null)){
+            renewReserveUpdateById($id, [
+                'status' => 'ambiguous',
+                'last_error' => 'وضعیت اشتراک نامشخص است',
+                'last_check_at' => renewReserveNow(),
+            ]);
+
+            return ['ok' => false, 'code' => 'ambiguous'];
+        }
+
+        $client = $lookup['client'];
+
+        if(xuiRenewVerifyAbsolutePlan($client, $gb, $days, $anchorMs)){
+            $done = renewReserveUpdateById($id, [
+                'status' => 'activated',
+                'activated_at' => renewReserveNow(),
+                'last_check_at' => renewReserveNow(),
+                'last_check_note' => 'recovered_stale_activating',
+                'activation_op_id' => $opId !== '' ? $opId : ($fresh['activation_op_id'] ?? ''),
+            ]);
+
+            if(!is_array($done)){
+                return [
+                    'ok' => false,
+                    'code' => 'persist_failed',
+                    'error' => 'فعال‌سازی تأیید شد اما ذخیره activated ناموفق بود',
+                    'recoverable' => true,
+                ];
+            }
+
+            return ['ok' => true, 'reserve_id' => $id, 'method' => 'recover_stale_activating'];
+        }
+
+        $runtime = xuiRenewAnalyzeRuntimeState($server, $client, $subLink);
+
+        if(!empty($runtime['should_activate_now']) && empty($runtime['ambiguous'])){
+            $reopened = renewReserveUpdateById($id, [
+                'status' => 'reserved',
+                'activating_at' => 0,
+                'last_error' => '',
+                'last_check_at' => renewReserveNow(),
+                'last_check_note' => 'stale_no_apply_detected',
+                'activation_anchor_ms' => $anchorMs,
+            ]);
+
+            if(!is_array($reopened)){
+                return ['ok' => false, 'code' => 'persist_failed', 'error' => 'ذخیره وضعیت reserved ناموفق بود'];
+            }
+
+            return ['ok' => false, 'skipped' => true, 'reason' => 'stale_reopened_for_retry'];
+        }
+
+        renewReserveUpdateById($id, [
+            'status' => 'ambiguous',
+            'last_error' => 'فعال‌سازی قبلی نامشخص ماند',
+            'last_check_at' => renewReserveNow(),
+        ]);
+
+        return ['ok' => false, 'code' => 'ambiguous', 'error' => 'فعال‌سازی نامشخص'];
+    }
+
     function renewReserveUserMessageReserved(){
         return 'پرداخت تأیید شد. پلن جدید پس از اتمام حجم یا زمان پلن فعلی به‌صورت خودکار فعال می‌شود.';
     }
@@ -558,17 +752,13 @@ if(!function_exists('renewReservePath')){
 
             if($st === 'activating'){
                 $started = intval($fresh['activating_at'] ?? 0);
+                $grace = renewReserveActivatingGraceSeconds();
 
-                if($started > 0 && (renewReserveNow() - $started) < 300){
+                if($started > 0 && (renewReserveNow() - $started) < $grace){
                     return ['ok' => false, 'skipped' => true, 'reason' => 'activating'];
                 }
 
-                renewReserveUpdateById($id, [
-                    'status' => 'ambiguous',
-                    'last_error' => 'فعال‌سازی قبلی نامشخص ماند',
-                ]);
-
-                return ['ok' => false, 'code' => 'ambiguous', 'error' => 'فعال‌سازی نامشخص'];
+                return renewReserveRecoverStaleActivating($fresh);
             }
 
             $host = trim((string)($fresh['server_host'] ?? ''));
@@ -650,7 +840,7 @@ if(!function_exists('renewReservePath')){
                 return ['ok' => false, 'error' => 'ثبت وضعیت activating ناموفق بود', 'code' => 'persist_failed'];
             }
 
-            $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days);
+            $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days, $anchorMs);
 
             if(empty($applied['ok'])){
                 $code = trim((string)($applied['code'] ?? ''));
@@ -753,7 +943,7 @@ if(!function_exists('renewReservePath')){
         $processed = 0;
         $summary = ['activated' => 0, 'skipped' => 0, 'failed' => 0];
 
-        foreach(renewReservePendingOrdered() as $reservation){
+        foreach(renewReserveQueueWorkItems() as $reservation){
             if($processed >= $limit){
                 break;
             }

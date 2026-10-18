@@ -216,8 +216,12 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body) use
 
     return ['success' => false, 'msg' => 'unexpected'];
 };
+@unlink(xuiRenewProvisionStorePath(xuiPaymentRowProvisionKey($recreateRow)));
+$transportAnchorSec = 1700000050;
+$GLOBALS['renewReserveTestNow'] = $transportAnchorSec;
+$transportAnchorMs = $transportAnchorSec * 1000;
 $lookupPhase = 0;
-$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$lookupPhase){
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$lookupPhase, $transportAnchorMs){
     $lookupPhase++;
 
     if($lookupPhase === 1){
@@ -230,6 +234,7 @@ $GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$look
             'email' => 'owner_recreated',
             'subId' => $subId,
             'totalGB' => xuiGbToBytes(10),
+            'expiryTime' => $transportAnchorMs + (86400000 * 30),
         ],
     ];
 };
@@ -243,6 +248,7 @@ $transportRecreate = xuiProvisionRenewRecreate(
     xuiLoadConfig()
 );
 renewRecAssert(!empty($transportRecreate['ok']) && $postCalls === 1, 'timeout after successful create verified by lookup without legacy POST');
+unset($GLOBALS['renewReserveTestNow']);
 
 $adjustCount = 0;
 $renewApproveRow = $recreateRow;
