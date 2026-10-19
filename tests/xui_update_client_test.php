@@ -39,6 +39,16 @@ function liveClient($gb, $days, $anchorMs){
     ];
 }
 
+function setReloadSequence(array $states){
+    $i = 0;
+    $GLOBALS['xuiTestReloadClientForPlanVerify'] = static function() use ($states, &$i){
+        $idx = min($i, count($states) - 1);
+        $i++;
+        $fn = $states[$idx];
+        return is_callable($fn) ? $fn() : $fn;
+    };
+}
+
 // 1) Definitive unsupported modern (JSON 404) -> legacy form, then verify.
 $calls = [];
 $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body, $options = []) use (&$calls){
@@ -54,7 +64,10 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body, $op
 
     return ['success' => false, 'msg' => 'unexpected'];
 };
-$GLOBALS['xuiTestReloadClientForPlanVerify'] = static fn() => liveClient(10, 30, 1700000000000);
+setReloadSequence([
+    fn() => liveClient(90, 0, $anchor),
+    fn() => liveClient(10, 30, $anchor),
+]);
 
 $r1 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
 updAssert(!empty($r1['ok']), 'legacy succeeds after definitive modern 404');
@@ -70,7 +83,7 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$cal
 
     return ['success' => false, 'msg' => 'پاسخ نامعتبر از 3x-ui (HTTP 404)', 'http' => 404];
 };
-$GLOBALS['xuiTestReloadClientForPlanVerify'] = static fn() => liveClient(90, 0, $anchor);
+setReloadSequence([fn() => liveClient(90, 0, $anchor), fn() => liveClient(90, 0, $anchor)]);
 
 $r2 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
 updAssert(empty($r2['ok']) && ($r2['code'] ?? '') === 'ambiguous_provision', 'invalid 404 stops without legacy');
@@ -85,7 +98,7 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$cal
 
     return ['success' => false, 'msg' => 'internal error', 'http' => 500];
 };
-$GLOBALS['xuiTestReloadClientForPlanVerify'] = static fn() => liveClient(90, 0, $anchor);
+setReloadSequence([fn() => liveClient(90, 0, $anchor), fn() => liveClient(90, 0, $anchor)]);
 
 $r3 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
 updAssert(empty($r3['ok']) && ($r3['code'] ?? '') === 'ambiguous_provision', '500 is ambiguous');
@@ -100,7 +113,10 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$cal
 
     return ['success' => false, 'msg' => 'خطا در ارتباط با 3x-ui: Operation timed out', 'http' => 0];
 };
-$GLOBALS['xuiTestReloadClientForPlanVerify'] = static fn() => liveClient(10, 30, $anchor);
+setReloadSequence([
+    fn() => liveClient(90, 0, $anchor),
+    fn() => liveClient(10, 30, $anchor),
+]);
 
 $r4 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
 updAssert(!empty($r4['ok']) && ($r4['method'] ?? '') === 'verify_after_modern_ambiguous_absolute', 'timeout + verified state succeeds');
@@ -119,7 +135,7 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$cal
 
     return ['success' => false, 'msg' => 'unexpected'];
 };
-$GLOBALS['xuiTestReloadClientForPlanVerify'] = static fn() => liveClient(90, 0, $anchor);
+setReloadSequence([fn() => liveClient(90, 0, $anchor), fn() => liveClient(90, 0, $anchor)]);
 
 $r5 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
 updAssert(empty($r5['ok']) && ($r5['code'] ?? '') === 'verification_failed', 'success without real change rejected');
@@ -141,7 +157,10 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body, $op
 
     return ['success' => false];
 };
-$GLOBALS['xuiTestReloadClientForPlanVerify'] = static fn() => liveClient(10, 30, $anchor);
+setReloadSequence([
+    fn() => liveClient(90, 0, $anchor),
+    fn() => liveClient(10, 30, $anchor),
+]);
 xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
 $settings = json_decode((string)($calls[0]['settings'] ?? ''), true);
 $written = $settings['clients'][0] ?? [];
@@ -161,6 +180,73 @@ $skip = xuiApplyRenewPlanAbsolute($server, liveClient(10, 30, $anchor), 10, 30, 
 updAssert(!empty($skip['ok']) && ($skip['method'] ?? '') === 'already_applied', 'already applied short-circuit');
 updAssert(count($calls) === 0, 'no HTTP when already applied');
 unset($GLOBALS['xuiTestApiRequest']);
+
+// 8) Live GET shows plan already applied -> no POST (duplicate prevention).
+$calls = [];
+$GLOBALS['xuiTestApiRequest'] = static function() use (&$calls){
+    $calls[] = 'blocked';
+    return ['success' => true];
+};
+setReloadSequence([fn() => liveClient(10, 30, $anchor)]);
+$r8 = xuiPushClientPlanUpdate($server, $client, ['totalGB' => xuiGbToBytes(10)], [
+    'mode' => 'absolute',
+    'gb' => 10,
+    'days' => 30,
+    'anchor_ms' => $anchor,
+    'require_enable' => true,
+]);
+updAssert(!empty($r8['ok']) && ($r8['method'] ?? '') === 'already_applied_live', 'preflight GET skips writes');
+updAssert(count($calls) === 0, 'duplicate renew blocked before POST');
+unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
+
+// 9) Identity drift after reload fails verification (no false success).
+setReloadSequence([
+    fn() => liveClient(90, 0, $anchor),
+    static function(){
+        $c = liveClient(10, 30, 1700000000000);
+        $c['subId'] = 'different_sub_id';
+        return $c;
+    },
+]);
+$GLOBALS['xuiTestApiRequest'] = static fn() => ['success' => true, 'msg' => 'updated'];
+$r9 = xuiPushClientPlanUpdate($server, $client, ['totalGB' => xuiGbToBytes(10)], [
+    'mode' => 'absolute',
+    'gb' => 10,
+    'days' => 30,
+    'anchor_ms' => $anchor,
+    'require_enable' => true,
+]);
+updAssert(empty($r9['ok']) && ($r9['code'] ?? '') === 'verification_failed', 'subId drift fails post-success verify');
+unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
+
+// 10) Modern JSON body keeps locked identity/protocol fields.
+$modernBodies = [];
+$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body) use (&$modernBodies){
+    if(strpos($path, '/panel/api/clients/update/') === 0){
+        $modernBodies[] = $body;
+        return ['success' => true];
+    }
+    return ['success' => false];
+};
+setReloadSequence([fn() => liveClient(90, 0, $anchor), fn() => liveClient(10, 30, $anchor)]);
+xuiPushClientPlanUpdate($server, $client, [
+    'totalGB' => xuiGbToBytes(10),
+    'email' => 'evil@example.com',
+    'id' => '00000000-0000-0000-0000-000000000000',
+    'subId' => 'hijacked',
+], [
+    'mode' => 'absolute',
+    'gb' => 10,
+    'days' => 30,
+    'anchor_ms' => $anchor,
+    'require_enable' => true,
+]);
+$mb = $modernBodies[0] ?? [];
+updAssert(($mb['email'] ?? '') === $client['email'], 'modern update cannot override email');
+updAssert(($mb['id'] ?? '') === $client['id'], 'modern update cannot override uuid');
+updAssert(($mb['subId'] ?? '') === $client['subId'], 'modern update cannot override subId');
+updAssert(($mb['flow'] ?? '') === $client['flow'], 'modern update keeps flow');
+unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
 
 echo $failed ? "$failed failed\n" : "All xui update client tests passed\n";
 exit($failed ? 1 : 0);

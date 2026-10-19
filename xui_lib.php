@@ -1000,10 +1000,46 @@ if(!function_exists('xuiConfigPath')){
         return xuiHydrateClientByEmail($server, $client);
     }
 
+    function xuiClientIdentitySnapshot($client){
+        if(!is_array($client)){
+            return ['id' => '', 'email' => '', 'subId' => ''];
+        }
+
+        return [
+            'id' => trim((string)($client['id'] ?? '')),
+            'email' => trim((string)($client['email'] ?? '')),
+            'subId' => trim((string)($client['subId'] ?? '')),
+        ];
+    }
+
+    function xuiClientIdentityMatches(array $expected, $live){
+        if(!is_array($live)){
+            return false;
+        }
+
+        foreach(['id', 'email', 'subId'] as $key){
+            $want = trim((string)($expected[$key] ?? ''));
+
+            if($want === ''){
+                continue;
+            }
+
+            if(trim((string)($live[$key] ?? '')) !== $want){
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     function xuiPushClientPlanVerifyLive($server, $client, array $verifyOptions){
         $live = xuiReloadClientForPlanVerify($server, $client);
 
         if(!is_array($live)){
+            return false;
+        }
+
+        if(!xuiClientIdentityMatches(xuiClientIdentitySnapshot($client), $live)){
             return false;
         }
 
@@ -1035,6 +1071,13 @@ if(!function_exists('xuiConfigPath')){
 
         $body = array_merge(xuiPrepareClientPayloadForWrite($client), $fields);
         unset($body['_inbound_id']);
+
+        foreach(['id', 'email', 'subId', 'flow', 'password', 'security', 'auth'] as $lockedKey){
+            if(array_key_exists($lockedKey, $client) && !is_array($client[$lockedKey])){
+                $body[$lockedKey] = $client[$lockedKey];
+            }
+        }
+
         $body['email'] = $email;
 
         $path = '/panel/api/clients/update/' . rawurlencode($email);
@@ -1052,8 +1095,10 @@ if(!function_exists('xuiConfigPath')){
 
         $updated = array_merge(xuiPrepareClientPayloadForWrite($client), $fields);
 
-        if(trim((string)($updated['id'] ?? '')) === '' && trim((string)($client['id'] ?? '')) !== ''){
-            $updated['id'] = $client['id'];
+        foreach(['id', 'email', 'subId', 'flow', 'password', 'security', 'auth'] as $lockedKey){
+            if(array_key_exists($lockedKey, $client) && !is_array($client[$lockedKey])){
+                $updated[$lockedKey] = $client[$lockedKey];
+            }
         }
 
         $path = '/panel/api/inbounds/updateClient/' . rawurlencode($clientId);
@@ -1069,6 +1114,15 @@ if(!function_exists('xuiConfigPath')){
     function xuiPushClientPlanUpdate($server, $client, array $fields, array $verifyOptions = []){
         $verifyOptions = is_array($verifyOptions) ? $verifyOptions : [];
         $errors = [];
+
+        if(count($verifyOptions) > 0 && xuiPushClientPlanVerifyLive($server, $client, $verifyOptions)){
+            return [
+                'ok' => true,
+                'method' => 'already_applied_live',
+                'verified' => true,
+                'skipped_api' => true,
+            ];
+        }
 
         $finishVerified = static function($method, $raw) use ($server, $client, $verifyOptions){
             if(count($verifyOptions) === 0){
@@ -1163,14 +1217,10 @@ if(!function_exists('xuiConfigPath')){
             return $resolveAmbiguous('legacy_ambiguous', $legacy);
         }
 
-        $code = xuiApiResponseIsAmbiguous($modern) || xuiApiResponseIsAmbiguous($legacy)
-            ? 'ambiguous_provision'
-            : 'activation_failed';
-
         return [
             'ok' => false,
             'error' => implode(' | ', $errors),
-            'code' => $code,
+            'code' => 'activation_failed',
             'raw' => $legacy,
         ];
     }
@@ -2433,14 +2483,7 @@ if(!function_exists('xuiConfigPath')){
                 || strpos($k, 'secret') !== false
                 || strpos($k, 'email') !== false
                 || strpos($k, 'uuid') !== false
-                || $k === 'path'
             ){
-                if($k === 'path'){
-                    $safe[$key] = function_exists('xuiSanitizeLogScalar')
-                        ? xuiSanitizeLogScalar($value)
-                        : '{path}';
-                }
-
                 continue;
             }
 
