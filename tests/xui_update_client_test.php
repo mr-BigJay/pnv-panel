@@ -342,5 +342,21 @@ updAssert(empty($r13['ok']) && ($r13['code'] ?? '') === 'client_read_incomplete'
 updAssert(count($calls) === 0, 'no POST when preflight data incomplete');
 unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
 
+// 14) Failed clients/get must not reuse stale local row as verified live (no POST).
+$postCalls = [];
+$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$postCalls){
+    if(strtoupper($method) === 'GET' && strpos($path, '/panel/api/clients/get/') === 0){
+        return ['success' => false, 'msg' => 'خطا در ارتباط با 3x-ui: Connection refused', 'http' => 0];
+    }
+
+    $postCalls[] = $path;
+    return ['success' => true];
+};
+unset($GLOBALS['xuiTestReloadClientForPlanVerify']);
+$r14 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
+updAssert(empty($r14['ok']) && ($r14['code'] ?? '') === 'client_read_failed', 'GET failure with stale local client blocks renew');
+updAssert(count($postCalls) === 0, 'no POST when GET fails despite cached client row');
+unset($GLOBALS['xuiTestApiRequest']);
+
 echo $failed ? "$failed failed\n" : "All xui update client tests passed\n";
 exit($failed ? 1 : 0);
