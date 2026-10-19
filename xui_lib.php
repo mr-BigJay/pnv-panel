@@ -1023,7 +1023,297 @@ if(!function_exists('xuiConfigPath')){
         return [
             'id', 'email', 'subId', 'flow', 'password', 'limitIp', 'tgId', 'comment',
             'alterId', 'enable', 'expiryTime', 'totalGB', 'reset', 'security', 'auth',
+            'privateKey', 'publicKey', 'preSharedKey', 'allowedIPs', 'allowedIPsByInbound',
+            'keepAlive', 'reverse', 'group', 'secret', 'adTag', 'forwardedPorts',
+            'resetDay', 'resetWeekday', 'resetMax', 'trafficReset', 'trafficResetDay',
         ];
+    }
+
+    function xuiClientApiWriteExcludedKeys(){
+        return [
+            '_inbound_id',
+            'up',
+            'down',
+            'used',
+            'total',
+            'inboundId',
+            'clientStats',
+            'uuid',
+        ];
+    }
+
+    function xuiClientModernApiTypedFields(){
+        return [
+            'allowedIPs' => 'string_array',
+            'allowedIPsByInbound' => 'int_map_string_array',
+            'enable' => 'bool',
+            'limitIp' => 'int',
+            'reset' => 'int',
+            'resetDay' => 'int',
+            'resetWeekday' => 'int',
+            'resetMax' => 'int',
+            'trafficResetDay' => 'int',
+            'keepAlive' => 'nullable_int',
+            'tgId' => 'int64',
+            'totalGB' => 'int64',
+            'expiryTime' => 'int64',
+            'created_at' => 'int64',
+            'updated_at' => 'int64',
+            'createdAt' => 'int64',
+            'updatedAt' => 'int64',
+            'reverse' => 'json_object',
+        ];
+    }
+
+    function xuiCoerceOmitSentinel(){
+        static $sentinel = null;
+
+        if($sentinel === null){
+            $sentinel = new stdClass();
+        }
+
+        return $sentinel;
+    }
+
+    function xuiCoerceIsOmit($value){
+        return $value === xuiCoerceOmitSentinel();
+    }
+
+    function xuiCoerceStringArrayValue($value){
+        if($value === null || $value === ''){
+            return xuiCoerceOmitSentinel();
+        }
+
+        if(is_array($value)){
+            $out = [];
+
+            foreach($value as $item){
+                if(!is_scalar($item)){
+                    continue;
+                }
+
+                $text = trim((string)$item);
+
+                if($text !== ''){
+                    $out[] = $text;
+                }
+            }
+
+            return count($out) > 0 ? $out : xuiCoerceOmitSentinel();
+        }
+
+        if(!is_string($value)){
+            return xuiCoerceOmitSentinel();
+        }
+
+        $trim = trim($value);
+
+        if($trim === ''){
+            return xuiCoerceOmitSentinel();
+        }
+
+        if($trim[0] === '['){
+            $decoded = json_decode($trim, true);
+
+            if(is_array($decoded)){
+                return xuiCoerceStringArrayValue($decoded);
+            }
+
+            return xuiCoerceOmitSentinel();
+        }
+
+        $parts = preg_split('/\s*,\s*/', $trim) ?: [];
+        $out = [];
+
+        foreach($parts as $part){
+            $part = trim((string)$part);
+
+            if($part !== ''){
+                $out[] = $part;
+            }
+        }
+
+        return count($out) > 0 ? $out : xuiCoerceOmitSentinel();
+    }
+
+    function xuiCoerceIntMapStringArrayValue($value){
+        if($value === null || $value === ''){
+            return xuiCoerceOmitSentinel();
+        }
+
+        if(is_string($value)){
+            $decoded = json_decode($value, true);
+
+            if(!is_array($decoded)){
+                return xuiCoerceOmitSentinel();
+            }
+
+            $value = $decoded;
+        }
+
+        if(!is_array($value)){
+            return xuiCoerceOmitSentinel();
+        }
+
+        $out = [];
+
+        foreach($value as $key => $entry){
+            $inboundId = is_int($key) ? $key : intval((string)$key);
+
+            if($inboundId <= 0){
+                continue;
+            }
+
+            $ips = xuiCoerceStringArrayValue($entry);
+
+            if(xuiCoerceIsOmit($ips)){
+                continue;
+            }
+
+            $out[$inboundId] = $ips;
+        }
+
+        return count($out) > 0 ? $out : xuiCoerceOmitSentinel();
+    }
+
+    function xuiCoerceJsonObjectValue($value){
+        if($value === null || $value === ''){
+            return xuiCoerceOmitSentinel();
+        }
+
+        if(is_array($value)){
+            return $value;
+        }
+
+        if(is_string($value)){
+            $decoded = json_decode($value, true);
+
+            if(is_array($decoded)){
+                return $decoded;
+            }
+        }
+
+        return xuiCoerceOmitSentinel();
+    }
+
+    function xuiCoerceBoolValue($value){
+        if(is_bool($value)){
+            return $value;
+        }
+
+        if(is_int($value) || is_float($value)){
+            return $value !== 0;
+        }
+
+        if(is_string($value)){
+            $text = strtolower(trim($value));
+
+            if($text === 'true' || $text === '1' || $text === 'yes'){
+                return true;
+            }
+
+            if($text === 'false' || $text === '0' || $text === 'no' || $text === ''){
+                return false;
+            }
+        }
+
+        return (bool)$value;
+    }
+
+    function xuiCoerceIntValue($value){
+        if(is_int($value)){
+            return $value;
+        }
+
+        if(is_bool($value)){
+            return $value ? 1 : 0;
+        }
+
+        if(is_string($value) && trim($value) === ''){
+            return 0;
+        }
+
+        return intval($value);
+    }
+
+    function xuiCoerceInt64Value($value){
+        if(is_int($value)){
+            return $value;
+        }
+
+        if(is_float($value)){
+            return (int)$value;
+        }
+
+        if(is_string($value)){
+            $text = trim($value);
+
+            if($text === ''){
+                return 0;
+            }
+
+            if(ctype_digit($text) || ($text[0] === '-' && ctype_digit(substr($text, 1)))){
+                return intval($text);
+            }
+        }
+
+        return intval($value);
+    }
+
+    function xuiCoerceNullableIntValue($value){
+        if($value === null || $value === ''){
+            return xuiCoerceOmitSentinel();
+        }
+
+        $intVal = xuiCoerceIntValue($value);
+
+        if($intVal <= 0){
+            return xuiCoerceOmitSentinel();
+        }
+
+        return $intVal;
+    }
+
+    function xuiCoerceClientApiFieldValue($value, $type){
+        switch($type){
+            case 'string_array':
+                return xuiCoerceStringArrayValue($value);
+            case 'int_map_string_array':
+                return xuiCoerceIntMapStringArrayValue($value);
+            case 'json_object':
+                return xuiCoerceJsonObjectValue($value);
+            case 'bool':
+                return xuiCoerceBoolValue($value);
+            case 'int':
+                return xuiCoerceIntValue($value);
+            case 'int64':
+                return xuiCoerceInt64Value($value);
+            case 'nullable_int':
+                return xuiCoerceNullableIntValue($value);
+            default:
+                return $value;
+        }
+    }
+
+    function xuiApplyClientApiFieldTypes(array $payload){
+        $typed = xuiClientModernApiTypedFields();
+
+        foreach($typed as $key => $type){
+            if(!array_key_exists($key, $payload)){
+                continue;
+            }
+
+            $coerced = xuiCoerceClientApiFieldValue($payload[$key], $type);
+
+            if(xuiCoerceIsOmit($coerced)){
+                unset($payload[$key]);
+                continue;
+            }
+
+            $payload[$key] = $coerced;
+        }
+
+        return $payload;
     }
 
     function xuiPrepareClientPayloadForWrite($client){
@@ -1031,35 +1321,32 @@ if(!function_exists('xuiConfigPath')){
             return [];
         }
 
+        $excluded = array_flip(xuiClientApiWriteExcludedKeys());
         $payload = [];
 
-        foreach(xuiClientPreservedFieldKeys() as $key){
-            if(!array_key_exists($key, $client)){
+        foreach($client as $key => $value){
+            if($key === '_inbound_id' || isset($excluded[$key])){
                 continue;
             }
 
-            $value = $client[$key];
+            if(is_object($value)){
+                continue;
+            }
 
-            if(is_array($value) || is_object($value)){
+            if(is_array($value) && !isset(xuiClientModernApiTypedFields()[$key])){
                 continue;
             }
 
             $payload[$key] = $value;
         }
 
-        foreach($client as $key => $value){
-            if($key === '_inbound_id' || is_array($value) || is_object($value)){
-                continue;
-            }
-
-            if(!array_key_exists($key, $payload)){
-                $payload[$key] = $value;
-            }
+        if(trim((string)($payload['id'] ?? '')) === '' && trim((string)($client['uuid'] ?? '')) !== ''){
+            $payload['id'] = trim((string)$client['uuid']);
         }
 
         unset($payload['_inbound_id']);
 
-        return $payload;
+        return xuiApplyClientApiFieldTypes($payload);
     }
 
     function xuiReloadClientForPlanVerify($server, $client){
@@ -1274,12 +1561,19 @@ if(!function_exists('xuiConfigPath')){
         unset($body['_inbound_id']);
 
         foreach(['id', 'email', 'subId', 'flow', 'password', 'security', 'auth'] as $lockedKey){
-            if(array_key_exists($lockedKey, $client) && !is_array($client[$lockedKey])){
-                $body[$lockedKey] = $client[$lockedKey];
+            if(!array_key_exists($lockedKey, $client)){
+                continue;
+            }
+
+            $lockedValue = $client[$lockedKey];
+
+            if(is_scalar($lockedValue) || $lockedValue === null){
+                $body[$lockedKey] = $lockedValue;
             }
         }
 
         $body['email'] = $email;
+        $body = xuiApplyClientApiFieldTypes($body);
 
         $path = '/panel/api/clients/update/' . rawurlencode($email);
 
@@ -1297,10 +1591,18 @@ if(!function_exists('xuiConfigPath')){
         $updated = array_merge(xuiPrepareClientPayloadForWrite($client), $fields);
 
         foreach(['id', 'email', 'subId', 'flow', 'password', 'security', 'auth'] as $lockedKey){
-            if(array_key_exists($lockedKey, $client) && !is_array($client[$lockedKey])){
-                $updated[$lockedKey] = $client[$lockedKey];
+            if(!array_key_exists($lockedKey, $client)){
+                continue;
+            }
+
+            $lockedValue = $client[$lockedKey];
+
+            if(is_scalar($lockedValue) || $lockedValue === null){
+                $updated[$lockedKey] = $lockedValue;
             }
         }
+
+        $updated = xuiApplyClientApiFieldTypes($updated);
 
         $path = '/panel/api/inbounds/updateClient/' . rawurlencode($clientId);
 
@@ -1491,7 +1793,7 @@ if(!function_exists('xuiConfigPath')){
             $client['_inbound_id'] = intval($inboundId);
         }
 
-        return $client;
+        return xuiApplyClientApiFieldTypes($client);
     }
 
     function xuiClientMatchesSubId($client, $subId){
