@@ -16,14 +16,14 @@ if(!function_exists('pnvAdminIsLoggedIn')){
     }
 }
 
-if(!function_exists('getUserMobile')){
+if(!function_exists('getUserMobile') || !function_exists('pnvAdminSafeRedirect')){
     foreach ([
         __DIR__ . '/functions.php',
         __DIR__ . '/../admin/functions.php',
     ] as $renewsBootFile) {
         if (is_file($renewsBootFile)) {
             require_once $renewsBootFile;
-            if(function_exists('getUserMobile')){
+            if(function_exists('getUserMobile') && function_exists('pnvAdminSafeRedirect')){
                 break;
             }
         }
@@ -173,14 +173,12 @@ $result = xuiApprovePaymentIndex($index, 'تمدید');
 
 if(empty($result['ok'])){
 $_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+pnvAdminSafeRedirect(pnvAdminUrl('index.php?page=renews'));
 }
 
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
 $_SESSION['payment_message_detail'] = (string)($result['link'] ?? '');
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+pnvAdminSafeRedirect(pnvAdminUrl('index.php?page=renews'));
 
 }
 
@@ -201,8 +199,7 @@ fclose($fp);
 
 $_SESSION['payment_message'] = 'تمدید تایید شد';
 $_SESSION['payment_message_detail'] = $link;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+pnvAdminSafeRedirect(pnvAdminUrl('index.php?page=renews'));
 
 }
 
@@ -228,8 +225,7 @@ fclose($fp);
 
 $_SESSION['payment_message'] = 'تمدید رد شد';
 $_SESSION['payment_message_detail'] = $reason;
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+pnvAdminSafeRedirect(pnvAdminUrl('index.php?page=renews'));
 
 }
 
@@ -253,8 +249,7 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-header('Location: ' . pnvAdminUrl('index.php?page=renews'));
-exit;
+pnvAdminSafeRedirect(pnvAdminUrl('index.php?page=renews'));
 
 }
 
