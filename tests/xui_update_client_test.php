@@ -76,18 +76,55 @@ updAssert($calls[1]['encode'] === 'form', 'legacy uses form encoding');
 
 unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
 
-// 2) Invalid HTML 404 on modern -> ambiguous, no second POST.
+// 2) HTML/non-JSON 404 on modern -> endpoint missing, safe legacy fallback.
+$calls = [];
+$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body, $options = []) use (&$calls){
+    $calls[] = ['path' => $path, 'encode' => is_array($options) ? ($options['encode'] ?? 'json') : 'json'];
+
+    if(strpos($path, '/panel/api/clients/update/') === 0){
+        return [
+            'success' => false,
+            'msg' => 'پاسخ نامعتبر از 3x-ui (HTTP 404)',
+            'http' => 404,
+            'raw' => '<html><body>404 page not found</body></html>',
+            'response_format' => 'non_json',
+        ];
+    }
+
+    if(strpos($path, '/panel/api/inbounds/updateClient/') === 0){
+        return ['success' => true, 'msg' => 'ok'];
+    }
+
+    return ['success' => false, 'msg' => 'unexpected'];
+};
+setReloadSequence([
+    fn() => liveClient(90, 0, $anchor),
+    fn() => liveClient(10, 30, $anchor),
+]);
+
+$r2 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
+updAssert(!empty($r2['ok']), 'HTML 404 on modern allows legacy fallback');
+updAssert(count($calls) === 2, 'modern then legacy after HTML 404');
+updAssert($calls[1]['encode'] === 'form', 'legacy form after HTML endpoint 404');
+
+unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
+
+// 2b) JSON 404 client missing on modern -> no legacy POST.
 $calls = [];
 $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$calls){
     $calls[] = $path;
 
-    return ['success' => false, 'msg' => 'پاسخ نامعتبر از 3x-ui (HTTP 404)', 'http' => 404];
+    if(strpos($path, '/panel/api/clients/update/') === 0){
+        return ['success' => false, 'msg' => 'Client not found for email', 'http' => 404];
+    }
+
+    return ['success' => false, 'msg' => 'unexpected'];
 };
 setReloadSequence([fn() => liveClient(90, 0, $anchor), fn() => liveClient(90, 0, $anchor)]);
 
-$r2 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
-updAssert(empty($r2['ok']) && ($r2['code'] ?? '') === 'ambiguous_provision', 'invalid 404 stops without legacy');
-updAssert(count($calls) === 1, 'no legacy POST after ambiguous modern failure');
+$r2b = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
+updAssert(empty($r2b['ok']) && ($r2b['code'] ?? '') === 'activation_failed', 'client-not-found JSON 404 skips legacy');
+updAssert(count($calls) === 1, 'only modern POST when client missing');
 
 unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
 
@@ -246,6 +283,63 @@ updAssert(($mb['email'] ?? '') === $client['email'], 'modern update cannot overr
 updAssert(($mb['id'] ?? '') === $client['id'], 'modern update cannot override uuid');
 updAssert(($mb['subId'] ?? '') === $client['subId'], 'modern update cannot override subId');
 updAssert(($mb['flow'] ?? '') === $client['flow'], 'modern update keeps flow');
+unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
+
+// 11) Preflight GET failure -> no POST.
+$calls = [];
+$GLOBALS['xuiTestApiRequest'] = static function() use (&$calls){
+    $calls[] = 'blocked';
+    return ['success' => true];
+};
+$GLOBALS['xuiTestReloadClientForPlanVerify'] = static fn() => null;
+$r11 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
+updAssert(empty($r11['ok']) && ($r11['code'] ?? '') === 'client_read_failed', 'failed preflight GET stops renew');
+updAssert(count($calls) === 0, 'no POST when preflight read fails');
+unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
+
+// 12) Preflight identity mismatch -> no POST.
+$calls = [];
+$GLOBALS['xuiTestApiRequest'] = static function() use (&$calls){
+    $calls[] = 'blocked';
+    return ['success' => true];
+};
+setReloadSequence([
+    static function(){
+        $c = liveClient(90, 0, 1700000000000);
+        $c['id'] = '00000000-0000-0000-0000-000000000001';
+        return $c;
+    },
+]);
+$r12 = xuiPushClientPlanUpdate($server, $client, ['totalGB' => xuiGbToBytes(10)], [
+    'mode' => 'absolute',
+    'gb' => 10,
+    'days' => 30,
+    'anchor_ms' => $anchor,
+    'require_enable' => true,
+]);
+updAssert(empty($r12['ok']) && ($r12['code'] ?? '') === 'client_identity_mismatch', 'preflight identity mismatch blocks POST');
+updAssert(count($calls) === 0, 'no POST on preflight identity mismatch');
+unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
+
+// 13) Preflight incomplete client record -> no POST.
+$calls = [];
+$GLOBALS['xuiTestApiRequest'] = static function() use (&$calls){
+    $calls[] = 'blocked';
+    return ['success' => true];
+};
+setReloadSequence([
+    static function(){
+        return [
+            'email' => '',
+            'subId' => 'sub1234567890abcd',
+            'totalGB' => xuiGbToBytes(90),
+            'enable' => true,
+        ];
+    },
+]);
+$r13 = xuiApplyRenewPlanAbsolute($server, $client, 10, 30, $anchor);
+updAssert(empty($r13['ok']) && ($r13['code'] ?? '') === 'client_read_incomplete', 'incomplete preflight read blocks POST');
+updAssert(count($calls) === 0, 'no POST when preflight data incomplete');
 unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
 
 echo $failed ? "$failed failed\n" : "All xui update client tests passed\n";

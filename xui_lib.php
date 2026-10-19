@@ -747,7 +747,13 @@ if(!function_exists('xuiConfigPath')){
         $json = json_decode($raw, true);
 
         if(!is_array($json)){
-            return ['success' => false, 'msg' => 'پاسخ نامعتبر از 3x-ui (HTTP ' . $status . ')', 'http' => $status, 'raw' => $raw];
+            return [
+                'success' => false,
+                'msg' => 'پاسخ نامعتبر از 3x-ui (HTTP ' . $status . ')',
+                'http' => $status,
+                'raw' => is_string($raw) ? $raw : '',
+                'response_format' => 'non_json',
+            ];
         }
 
         $json['http'] = $status;
@@ -863,16 +869,86 @@ if(!function_exists('xuiConfigPath')){
         }
     }
 
+    function xuiApiResultHasNonJsonBody($result){
+        if(!is_array($result)){
+            return false;
+        }
+
+        if(($result['response_format'] ?? '') === 'non_json'){
+            return true;
+        }
+
+        $raw = $result['raw'] ?? null;
+
+        if(!is_string($raw) || trim($raw) === ''){
+            return false;
+        }
+
+        $trim = ltrim($raw);
+
+        if(stripos($trim, '<!doctype') === 0 || stripos($trim, '<html') === 0){
+            return true;
+        }
+
+        return json_decode($raw, true) === null && trim($raw) !== 'null';
+    }
+
+    function xuiApiModernClientsUpdateClientNotFound($result){
+        if(!is_array($result) || !empty($result['success'])){
+            return false;
+        }
+
+        if(intval($result['http'] ?? 0) !== 404){
+            return false;
+        }
+
+        if(xuiApiResultHasNonJsonBody($result)){
+            return false;
+        }
+
+        $msg = function_exists('mb_strtolower')
+            ? mb_strtolower((string)($result['msg'] ?? ''))
+            : strtolower((string)($result['msg'] ?? ''));
+
+        if($msg === ''){
+            return false;
+        }
+
+        $clientHints = ['client', 'email', 'user', 'کلاینت', 'کاربر'];
+
+        foreach($clientHints as $hint){
+            if(strpos($msg, $hint) !== false){
+                return true;
+            }
+        }
+
+        if(strpos($msg, 'not found') !== false || strpos($msg, 'یافت نشد') !== false){
+            if(strpos($msg, 'inbound') !== false || strpos($msg, 'route') !== false){
+                return false;
+            }
+        }
+
+        return false;
+    }
+
     function xuiApiResponseIsAmbiguous($result){
         if(!is_array($result) || !empty($result['success'])){
+            return false;
+        }
+
+        $http = intval($result['http'] ?? 0);
+
+        if($http === 404 && xuiApiResultHasNonJsonBody($result)){
+            return false;
+        }
+
+        if(xuiApiModernClientsUpdateClientNotFound($result)){
             return false;
         }
 
         if(xuiApiFailureKind($result) === 'transport'){
             return true;
         }
-
-        $http = intval($result['http'] ?? 0);
 
         if($http >= 500 || $http === 408 || $http === 429){
             return true;
@@ -890,9 +966,17 @@ if(!function_exists('xuiConfigPath')){
             return false;
         }
 
+        if(xuiApiModernClientsUpdateClientNotFound($result)){
+            return false;
+        }
+
         $http = intval($result['http'] ?? 0);
 
         if($http === 405){
+            return true;
+        }
+
+        if($http === 404 && xuiApiResultHasNonJsonBody($result)){
             return true;
         }
 
@@ -1032,13 +1116,60 @@ if(!function_exists('xuiConfigPath')){
         return true;
     }
 
-    function xuiPushClientPlanVerifyLive($server, $client, array $verifyOptions){
-        $live = xuiReloadClientForPlanVerify($server, $client);
-
+    function xuiClientReadIsCompleteForWrite($live){
         if(!is_array($live)){
             return false;
         }
 
+        if(trim((string)($live['email'] ?? '')) === ''){
+            return false;
+        }
+
+        return xuiClientInboundUpdatePathKey($live) !== '';
+    }
+
+    function xuiRequireClientPreflightRead($server, $client){
+        if(!is_array($client)){
+            return [
+                'ok' => false,
+                'code' => 'client_read_failed',
+                'error' => 'کلاینت برای خواندن وضعیت نامعتبر است',
+            ];
+        }
+
+        $live = xuiReloadClientForPlanVerify($server, $client);
+
+        if(!is_array($live)){
+            return [
+                'ok' => false,
+                'code' => 'client_read_failed',
+                'error' => 'خواندن وضعیت کلاینت از 3x-ui قبل از تمدید ناموفق بود',
+            ];
+        }
+
+        if(!xuiClientReadIsCompleteForWrite($live)){
+            return [
+                'ok' => false,
+                'code' => 'client_read_incomplete',
+                'error' => 'داده کلاینت از 3x-ui ناقص است؛ تمدید بدون POST متوقف شد',
+            ];
+        }
+
+        if(!xuiClientIdentityMatches(xuiClientIdentitySnapshot($client), $live)){
+            return [
+                'ok' => false,
+                'code' => 'client_identity_mismatch',
+                'error' => 'هویت کلاینت پس از خواندن وضعیت با رکورد محلی تطابق ندارد',
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'live' => $live,
+        ];
+    }
+
+    function xuiPushClientPlanStateMatches(array $live, array $client, array $verifyOptions){
         if(!xuiClientIdentityMatches(xuiClientIdentitySnapshot($client), $live)){
             return false;
         }
@@ -1060,6 +1191,16 @@ if(!function_exists('xuiConfigPath')){
         $anchorMs = $verifyOptions['anchor_ms'] ?? null;
 
         return xuiRenewVerifyAbsolutePlan($live, $gb, $days, $anchorMs);
+    }
+
+    function xuiPushClientPlanVerifyLive($server, $client, array $verifyOptions){
+        $live = xuiReloadClientForPlanVerify($server, $client);
+
+        if(!is_array($live)){
+            return false;
+        }
+
+        return xuiPushClientPlanStateMatches($live, $client, $verifyOptions);
     }
 
     function xuiUpdateClientViaModernApi($server, $client, array $fields){
@@ -1115,13 +1256,25 @@ if(!function_exists('xuiConfigPath')){
         $verifyOptions = is_array($verifyOptions) ? $verifyOptions : [];
         $errors = [];
 
-        if(count($verifyOptions) > 0 && xuiPushClientPlanVerifyLive($server, $client, $verifyOptions)){
-            return [
-                'ok' => true,
-                'method' => 'already_applied_live',
-                'verified' => true,
-                'skipped_api' => true,
-            ];
+        if(count($verifyOptions) > 0){
+            $preflight = xuiRequireClientPreflightRead($server, $client);
+
+            if(empty($preflight['ok'])){
+                return [
+                    'ok' => false,
+                    'error' => $preflight['error'] ?? 'خواندن وضعیت کلاینت ناموفق بود',
+                    'code' => $preflight['code'] ?? 'client_read_failed',
+                ];
+            }
+
+            if(xuiPushClientPlanStateMatches($preflight['live'], $client, $verifyOptions)){
+                return [
+                    'ok' => true,
+                    'method' => 'already_applied_live',
+                    'verified' => true,
+                    'skipped_api' => true,
+                ];
+            }
         }
 
         $finishVerified = static function($method, $raw) use ($server, $client, $verifyOptions){
@@ -2540,8 +2693,25 @@ if(!function_exists('xuiConfigPath')){
             strpos($msg, 'خطا در ارتباط') !== false
             || strpos($msg, 'timeout') !== false
             || strpos($msg, 'timed out') !== false
-            || strpos($msg, 'پاسخ نامعتبر') !== false
         ){
+            return 'transport';
+        }
+
+        if(strpos($msg, 'پاسخ نامعتبر') !== false){
+            $http = intval($result['http'] ?? 0);
+
+            if($http === 404 && xuiApiResultHasNonJsonBody($result)){
+                return 'api';
+            }
+
+            if($http >= 400 && $http < 500 && $http !== 404){
+                return 'api';
+            }
+
+            if($http === 0){
+                return 'transport';
+            }
+
             return 'transport';
         }
 
