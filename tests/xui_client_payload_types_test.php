@@ -69,6 +69,38 @@ payloadAssert(
     'allowedIPs array preserved'
 );
 
+// Valid empty array is explicit, not dropped.
+$emptyIps = array_merge($baseClient, ['allowedIPs' => []]);
+$preparedEmpty = xuiPrepareClientPayloadForWriteEx($emptyIps);
+payloadAssert(!empty($preparedEmpty['ok']), 'empty allowedIPs array accepted');
+payloadAssert(array_key_exists('allowedIPs', $preparedEmpty['payload'] ?? []), 'empty allowedIPs kept in payload');
+payloadAssert(($preparedEmpty['payload']['allowedIPs'] ?? null) === [], 'empty allowedIPs stays empty array');
+
+// Malformed JSON-text is invalid (fail-closed on write).
+$malformed = xuiPrepareClientPayloadForWriteEx(array_merge($baseClient, ['allowedIPs' => '[not-json']));
+payloadAssert(empty($malformed['ok']) && ($malformed['field'] ?? '') === 'allowedIPs', 'malformed allowedIPs rejected');
+
+// Invalid totalGB must not silently become zero.
+$badTotal = xuiPrepareClientPayloadForWriteEx(array_merge($baseClient, ['totalGB' => 'not-a-number']));
+payloadAssert(empty($badTotal['ok']) && ($badTotal['field'] ?? '') === 'totalGB', 'invalid totalGB rejected');
+
+// expiryTime zero remains valid.
+$zeroExpiry = xuiPrepareClientPayloadForWriteEx(array_merge($baseClient, ['expiryTime' => 0]));
+payloadAssert(!empty($zeroExpiry['ok']) && intval($zeroExpiry['payload']['expiryTime'] ?? -1) === 0, 'expiryTime zero allowed');
+
+// Normalize keeps volume/expiry raw values; invalid allowedIPs left untouched for lookup paths.
+$normalized = xuiNormalizeClientRecord([
+    'email' => 'user_demo',
+    'id' => $baseClient['id'],
+    'subId' => $baseClient['subId'],
+    'totalGB' => (string)xuiGbToBytes(90),
+    'expiryTime' => '0',
+    'allowedIPs' => '[not-json',
+]);
+payloadAssert(intval($normalized['totalGB'] ?? 0) === xuiGbToBytes(90), 'normalize preserves totalGB for volume math');
+payloadAssert(($normalized['allowedIPs'] ?? '') === '[not-json', 'normalize keeps malformed allowedIPs unchanged');
+payloadAssert(xuiClientTotalBytes($normalized) === xuiGbToBytes(90), 'volume helper still works after normalize');
+
 // allowedIPsByInbound map coercion.
 $byInbound = array_merge($baseClient, [
     'allowedIPsByInbound' => [
@@ -152,6 +184,23 @@ $settings = json_decode((string)$legacySettings, true);
 $legacyClient = $settings['clients'][0] ?? [];
 payloadAssert(is_array($legacyClient['allowedIPs'] ?? null), 'legacy settings JSON uses allowedIPs array');
 payloadAssert(!payloadJsonHasStringAllowedIPs((string)$legacySettings), 'legacy settings avoid string allowedIPs');
+unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
+
+// Invalid live allowedIPs blocks POST (fail-closed, no silent drop).
+$postCalls = [];
+$badLive = array_merge($live, ['allowedIPs' => '[broken-json']);
+$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$postCalls){
+    $postCalls[] = $path;
+    return ['success' => true];
+};
+setReloadSequence([static fn() => $badLive]);
+$blocked = xuiPushClientPlanUpdate($server, $badLive, ['totalGB' => xuiGbToBytes(10)], [
+    'mode' => 'bytes_at_least',
+    'total_bytes' => xuiGbToBytes(100),
+    'require_enable' => true,
+]);
+payloadAssert(empty($blocked['ok']) && ($blocked['code'] ?? '') === 'client_field_invalid', 'invalid allowedIPs blocks renew POST');
+payloadAssert(count($postCalls) === 0, 'no POST when allowedIPs invalid');
 unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestReloadClientForPlanVerify']);
 
 echo $failed ? "$failed failed\n" : "All xui client payload type tests passed\n";

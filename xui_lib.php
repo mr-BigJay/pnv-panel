@@ -1075,12 +1075,56 @@ if(!function_exists('xuiConfigPath')){
         return $sentinel;
     }
 
+    function xuiCoerceInvalidSentinel(){
+        static $sentinel = null;
+
+        if($sentinel === null){
+            $sentinel = new stdClass();
+        }
+
+        return $sentinel;
+    }
+
     function xuiCoerceIsOmit($value){
         return $value === xuiCoerceOmitSentinel();
     }
 
-    function xuiCoerceStringArrayValue($value){
-        if($value === null || $value === ''){
+    function xuiCoerceIsInvalid($value){
+        return $value === xuiCoerceInvalidSentinel();
+    }
+
+    function xuiClientApiFieldTypesFailure($field, $reason = ''){
+        $field = trim((string)$field);
+        $suffix = trim((string)$reason);
+
+        return [
+            'ok' => false,
+            'code' => 'client_field_invalid',
+            'field' => $field,
+            'error' => 'فیلد ' . ($field !== '' ? $field : 'client')
+                . ' برای API 3x-ui نامعتبر است'
+                . ($suffix !== '' ? (': ' . $suffix) : ''),
+        ];
+    }
+
+    function xuiApiResultFromFieldTypesFailure(array $failure){
+        return [
+            'success' => false,
+            'msg' => $failure['error'] ?? 'client field invalid',
+            'xui_code' => $failure['code'] ?? 'client_field_invalid',
+            'xui_field' => $failure['field'] ?? '',
+        ];
+    }
+
+    function xuiCoerceStringArrayValue($value, array $options = []){
+        $allowEmpty = !empty($options['allow_empty_array']);
+        $strict = !empty($options['strict']);
+
+        if($value === null){
+            return $strict ? xuiCoerceInvalidSentinel() : xuiCoerceOmitSentinel();
+        }
+
+        if($value === ''){
             return xuiCoerceOmitSentinel();
         }
 
@@ -1089,6 +1133,10 @@ if(!function_exists('xuiConfigPath')){
 
             foreach($value as $item){
                 if(!is_scalar($item)){
+                    if($strict){
+                        return xuiCoerceInvalidSentinel();
+                    }
+
                     continue;
                 }
 
@@ -1099,11 +1147,15 @@ if(!function_exists('xuiConfigPath')){
                 }
             }
 
-            return count($out) > 0 ? $out : xuiCoerceOmitSentinel();
+            if(count($out) === 0){
+                return $allowEmpty ? [] : xuiCoerceOmitSentinel();
+            }
+
+            return $out;
         }
 
         if(!is_string($value)){
-            return xuiCoerceOmitSentinel();
+            return $strict ? xuiCoerceInvalidSentinel() : xuiCoerceOmitSentinel();
         }
 
         $trim = trim($value);
@@ -1115,11 +1167,11 @@ if(!function_exists('xuiConfigPath')){
         if($trim[0] === '['){
             $decoded = json_decode($trim, true);
 
-            if(is_array($decoded)){
-                return xuiCoerceStringArrayValue($decoded);
+            if(!is_array($decoded)){
+                return xuiCoerceInvalidSentinel();
             }
 
-            return xuiCoerceOmitSentinel();
+            return xuiCoerceStringArrayValue($decoded, $options);
         }
 
         $parts = preg_split('/\s*,\s*/', $trim) ?: [];
@@ -1133,11 +1185,22 @@ if(!function_exists('xuiConfigPath')){
             }
         }
 
-        return count($out) > 0 ? $out : xuiCoerceOmitSentinel();
+        if(count($out) === 0){
+            return xuiCoerceOmitSentinel();
+        }
+
+        return $out;
     }
 
-    function xuiCoerceIntMapStringArrayValue($value){
-        if($value === null || $value === ''){
+    function xuiCoerceIntMapStringArrayValue($value, array $options = []){
+        $allowEmpty = !empty($options['allow_empty_array']);
+        $strict = !empty($options['strict']);
+
+        if($value === null){
+            return $strict ? xuiCoerceInvalidSentinel() : xuiCoerceOmitSentinel();
+        }
+
+        if($value === ''){
             return xuiCoerceOmitSentinel();
         }
 
@@ -1145,38 +1208,58 @@ if(!function_exists('xuiConfigPath')){
             $decoded = json_decode($value, true);
 
             if(!is_array($decoded)){
-                return xuiCoerceOmitSentinel();
+                return xuiCoerceInvalidSentinel();
             }
 
             $value = $decoded;
         }
 
         if(!is_array($value)){
-            return xuiCoerceOmitSentinel();
+            return $strict ? xuiCoerceInvalidSentinel() : xuiCoerceOmitSentinel();
         }
 
         $out = [];
+        $entryOptions = $options;
+        $entryOptions['strict'] = true;
 
         foreach($value as $key => $entry){
             $inboundId = is_int($key) ? $key : intval((string)$key);
 
             if($inboundId <= 0){
+                if($strict){
+                    return xuiCoerceInvalidSentinel();
+                }
+
                 continue;
             }
 
-            $ips = xuiCoerceStringArrayValue($entry);
+            $ips = xuiCoerceStringArrayValue($entry, $entryOptions);
+
+            if(xuiCoerceIsInvalid($ips)){
+                return xuiCoerceInvalidSentinel();
+            }
 
             if(xuiCoerceIsOmit($ips)){
+                if($strict){
+                    return xuiCoerceInvalidSentinel();
+                }
+
                 continue;
             }
 
             $out[$inboundId] = $ips;
         }
 
-        return count($out) > 0 ? $out : xuiCoerceOmitSentinel();
+        if(count($out) === 0){
+            return $allowEmpty ? [] : xuiCoerceOmitSentinel();
+        }
+
+        return $out;
     }
 
-    function xuiCoerceJsonObjectValue($value){
+    function xuiCoerceJsonObjectValue($value, array $options = []){
+        $strict = !empty($options['strict']);
+
         if($value === null || $value === ''){
             return xuiCoerceOmitSentinel();
         }
@@ -1191,9 +1274,11 @@ if(!function_exists('xuiConfigPath')){
             if(is_array($decoded)){
                 return $decoded;
             }
+
+            return xuiCoerceInvalidSentinel();
         }
 
-        return xuiCoerceOmitSentinel();
+        return $strict ? xuiCoerceInvalidSentinel() : xuiCoerceOmitSentinel();
     }
 
     function xuiCoerceBoolValue($value){
@@ -1260,6 +1345,40 @@ if(!function_exists('xuiConfigPath')){
         return intval($value);
     }
 
+    function xuiCoerceInt64StrictValue($value){
+        if(is_int($value)){
+            return $value;
+        }
+
+        if(is_float($value)){
+            if(floor($value) !== $value){
+                return xuiCoerceInvalidSentinel();
+            }
+
+            return (int)$value;
+        }
+
+        if(is_string($value)){
+            $text = trim($value);
+
+            if($text === ''){
+                return xuiCoerceInvalidSentinel();
+            }
+
+            if(ctype_digit($text) || ($text[0] === '-' && ctype_digit(substr($text, 1)))){
+                return intval($text);
+            }
+
+            return xuiCoerceInvalidSentinel();
+        }
+
+        if($value === null){
+            return xuiCoerceInvalidSentinel();
+        }
+
+        return xuiCoerceInvalidSentinel();
+    }
+
     function xuiCoerceNullableIntValue($value){
         if($value === null || $value === ''){
             return xuiCoerceOmitSentinel();
@@ -1274,19 +1393,27 @@ if(!function_exists('xuiConfigPath')){
         return $intVal;
     }
 
-    function xuiCoerceClientApiFieldValue($value, $type){
+    function xuiClientModernApiStrictInt64Fields(){
+        return ['totalGB', 'expiryTime'];
+    }
+
+    function xuiCoerceClientApiFieldValue($value, $type, array $options = []){
         switch($type){
             case 'string_array':
-                return xuiCoerceStringArrayValue($value);
+                return xuiCoerceStringArrayValue($value, $options);
             case 'int_map_string_array':
-                return xuiCoerceIntMapStringArrayValue($value);
+                return xuiCoerceIntMapStringArrayValue($value, $options);
             case 'json_object':
-                return xuiCoerceJsonObjectValue($value);
+                return xuiCoerceJsonObjectValue($value, $options);
             case 'bool':
                 return xuiCoerceBoolValue($value);
             case 'int':
                 return xuiCoerceIntValue($value);
             case 'int64':
+                if(!empty($options['strict_int64'])){
+                    return xuiCoerceInt64StrictValue($value);
+                }
+
                 return xuiCoerceInt64Value($value);
             case 'nullable_int':
                 return xuiCoerceNullableIntValue($value);
@@ -1295,15 +1422,36 @@ if(!function_exists('xuiConfigPath')){
         }
     }
 
-    function xuiApplyClientApiFieldTypes(array $payload){
+    function xuiApplyClientApiFieldTypes(array $payload, array $options = []){
         $typed = xuiClientModernApiTypedFields();
+        $strict = !empty($options['strict']);
+        $coerceOptions = [
+            'strict' => $strict,
+            'allow_empty_array' => !empty($options['allow_empty_array']),
+            'strict_int64' => !empty($options['strict_int64']),
+        ];
+        $strictInt64 = xuiClientModernApiStrictInt64Fields();
 
         foreach($typed as $key => $type){
             if(!array_key_exists($key, $payload)){
                 continue;
             }
 
-            $coerced = xuiCoerceClientApiFieldValue($payload[$key], $type);
+            $fieldOptions = $coerceOptions;
+
+            if($type === 'int64' && $strict && in_array($key, $strictInt64, true)){
+                $fieldOptions['strict_int64'] = true;
+            }
+
+            $coerced = xuiCoerceClientApiFieldValue($payload[$key], $type, $fieldOptions);
+
+            if(xuiCoerceIsInvalid($coerced)){
+                if($strict){
+                    return xuiClientApiFieldTypesFailure($key);
+                }
+
+                continue;
+            }
 
             if(xuiCoerceIsOmit($coerced)){
                 unset($payload[$key]);
@@ -1313,12 +1461,45 @@ if(!function_exists('xuiConfigPath')){
             $payload[$key] = $coerced;
         }
 
-        return $payload;
+        return [
+            'ok' => true,
+            'payload' => $payload,
+        ];
     }
 
-    function xuiPrepareClientPayloadForWrite($client){
+    function xuiNormalizeClientAccessFieldsForRead(array $client){
+        foreach(['allowedIPs', 'allowedIPsByInbound'] as $field){
+            if(!array_key_exists($field, $client)){
+                continue;
+            }
+
+            $typed = xuiApplyClientApiFieldTypes([
+                $field => $client[$field],
+            ], [
+                'strict' => false,
+                'allow_empty_array' => true,
+            ]);
+
+            if(empty($typed['ok'])){
+                continue;
+            }
+
+            $payload = $typed['payload'];
+
+            if(array_key_exists($field, $payload)){
+                $client[$field] = $payload[$field];
+            }
+            else{
+                unset($client[$field]);
+            }
+        }
+
+        return $client;
+    }
+
+    function xuiPrepareClientPayloadForWriteEx($client){
         if(!is_array($client)){
-            return [];
+            return xuiClientApiFieldTypesFailure('client', 'record is not an array');
         }
 
         $excluded = array_flip(xuiClientApiWriteExcludedKeys());
@@ -1346,7 +1527,21 @@ if(!function_exists('xuiConfigPath')){
 
         unset($payload['_inbound_id']);
 
-        return xuiApplyClientApiFieldTypes($payload);
+        return xuiApplyClientApiFieldTypes($payload, [
+            'strict' => true,
+            'allow_empty_array' => true,
+            'strict_int64' => true,
+        ]);
+    }
+
+    function xuiPrepareClientPayloadForWrite($client){
+        $prepared = xuiPrepareClientPayloadForWriteEx($client);
+
+        if(empty($prepared['ok'])){
+            return [];
+        }
+
+        return $prepared['payload'];
     }
 
     function xuiReloadClientForPlanVerify($server, $client){
@@ -1557,7 +1752,13 @@ if(!function_exists('xuiConfigPath')){
             return ['success' => false, 'msg' => 'email خالی است'];
         }
 
-        $body = array_merge(xuiPrepareClientPayloadForWrite($client), $fields);
+        $prepared = xuiPrepareClientPayloadForWriteEx($client);
+
+        if(empty($prepared['ok'])){
+            return xuiApiResultFromFieldTypesFailure($prepared);
+        }
+
+        $body = array_merge($prepared['payload'], $fields);
         unset($body['_inbound_id']);
 
         foreach(['id', 'email', 'subId', 'flow', 'password', 'security', 'auth'] as $lockedKey){
@@ -1573,7 +1774,18 @@ if(!function_exists('xuiConfigPath')){
         }
 
         $body['email'] = $email;
-        $body = xuiApplyClientApiFieldTypes($body);
+
+        $typed = xuiApplyClientApiFieldTypes($body, [
+            'strict' => true,
+            'allow_empty_array' => true,
+            'strict_int64' => true,
+        ]);
+
+        if(empty($typed['ok'])){
+            return xuiApiResultFromFieldTypesFailure($typed);
+        }
+
+        $body = $typed['payload'];
 
         $path = '/panel/api/clients/update/' . rawurlencode($email);
 
@@ -1588,7 +1800,13 @@ if(!function_exists('xuiConfigPath')){
             return ['success' => false, 'msg' => 'اطلاعات inbound/client برای updateClient ناقص است'];
         }
 
-        $updated = array_merge(xuiPrepareClientPayloadForWrite($client), $fields);
+        $prepared = xuiPrepareClientPayloadForWriteEx($client);
+
+        if(empty($prepared['ok'])){
+            return xuiApiResultFromFieldTypesFailure($prepared);
+        }
+
+        $updated = array_merge($prepared['payload'], $fields);
 
         foreach(['id', 'email', 'subId', 'flow', 'password', 'security', 'auth'] as $lockedKey){
             if(!array_key_exists($lockedKey, $client)){
@@ -1602,7 +1820,17 @@ if(!function_exists('xuiConfigPath')){
             }
         }
 
-        $updated = xuiApplyClientApiFieldTypes($updated);
+        $typed = xuiApplyClientApiFieldTypes($updated, [
+            'strict' => true,
+            'allow_empty_array' => true,
+            'strict_int64' => true,
+        ]);
+
+        if(empty($typed['ok'])){
+            return xuiApiResultFromFieldTypesFailure($typed);
+        }
+
+        $updated = $typed['payload'];
 
         $path = '/panel/api/inbounds/updateClient/' . rawurlencode($clientId);
 
@@ -1701,6 +1929,16 @@ if(!function_exists('xuiConfigPath')){
             return $finishVerified('clients_update', $modern);
         }
 
+        if(($modern['xui_code'] ?? '') === 'client_field_invalid'){
+            return [
+                'ok' => false,
+                'error' => $modern['msg'] ?? 'فیلد کلاینت برای API 3x-ui نامعتبر است',
+                'code' => 'client_field_invalid',
+                'field' => $modern['xui_field'] ?? '',
+                'raw' => $modern,
+            ];
+        }
+
         xuiApiLogHttpFailure($server, 'POST', '/panel/api/clients/update/{email}', $modern);
         $errors[] = 'clients/update failed';
 
@@ -1721,6 +1959,16 @@ if(!function_exists('xuiConfigPath')){
 
         if(!empty($legacy['success'])){
             return $finishVerified('updateClient', $legacy);
+        }
+
+        if(($legacy['xui_code'] ?? '') === 'client_field_invalid'){
+            return [
+                'ok' => false,
+                'error' => $legacy['msg'] ?? 'فیلد کلاینت برای API 3x-ui نامعتبر است',
+                'code' => 'client_field_invalid',
+                'field' => $legacy['xui_field'] ?? '',
+                'raw' => $legacy,
+            ];
         }
 
         xuiApiLogHttpFailure(
@@ -1793,7 +2041,7 @@ if(!function_exists('xuiConfigPath')){
             $client['_inbound_id'] = intval($inboundId);
         }
 
-        return xuiApplyClientApiFieldTypes($client);
+        return xuiNormalizeClientAccessFieldsForRead($client);
     }
 
     function xuiClientMatchesSubId($client, $subId){
