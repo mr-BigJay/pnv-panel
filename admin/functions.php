@@ -1,5 +1,23 @@
 <?php
 
+function pnvAdminSafeRedirect($url){
+    $url = trim((string)$url);
+
+    if($url === ''){
+        return;
+    }
+
+    if(!headers_sent()){
+        header('Location: ' . $url);
+        exit;
+    }
+
+    $escaped = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+    echo '<script>window.location.replace(' . json_encode($url, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ');</script>';
+    echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escaped . '"></noscript>';
+    exit;
+}
+
 function statusColor($status){
 
 if($status=='تایید شد'){
