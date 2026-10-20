@@ -91,6 +91,19 @@ $sampleB = "پست بانک\nواريز به کارت: 6156\n+998,190\n1405/05/1
 $metaTime2 = baleDedupMeta($sampleB, '111', '9100', $amount);
 baleDedupAssert(instantPayDepositUsageKey($metaTime2) !== $keyA, '4: same amount different time → different keys');
 
+// 4b: bank reference wins over minute collision
+$refSample = "پست بانک\nواريز به کارت: 6156\n+998,190\n1405/05/10\n9:47\nشماره پیگیری: 881122334455\nمانده: 44,108,899 ريال";
+$refFp = baleBuildPostbankDepositUsageKey($refSample, $amount);
+baleDedupAssert(!empty($refFp['ok']) && str_contains($refFp['key'] ?? '', '881122334455'), '4b: bank reference dedup key');
+
+// 4c: same minute/amount without balance → manual review (ambiguous)
+$ambig = "پست بانک\nواريز به کارت: 6156\n+998,190\n1405/05/10\n9:47";
+$ambigFp = baleBuildPostbankDepositUsageKey($ambig, $amount);
+baleDedupAssert(empty($ambigFp['ok']) && ($ambigFp['code'] ?? '') === 'ambiguous_bank_fingerprint', '4c: missing balance+seconds → ambiguous');
+$metaAmbig = baleDedupMeta($ambig, '111', '9300', $amount);
+$ambigApply = instantPayTryDepositMatch($amount, $metaAmbig, ['apply' => true]);
+baleDedupAssert(empty($ambigApply['ok']) && ($ambigApply['code'] ?? '') === 'ambiguous_bank_fingerprint', '4c: apply blocked for ambiguous fingerprint');
+
 // 5: two orders same amount different cards
 instantPaySave([]);
 baleDedupSeed('ord-post', $postCard, 'post', $orderAmount);
@@ -165,6 +178,56 @@ instantPaySave([[
 ]]);
 $retry = instantPayTryDepositMatch($orderAmount, $metaTime2, ['apply' => true]);
 baleDedupAssert(empty($retry['ok']) && ($retry['code'] ?? '') === 'deposit_already_used', '7-8: duplicate apply rejected');
+
+// 9: multiprocess parallel claim+stub activation — only one worker wins
+if(function_exists('pcntl_fork')){
+    $raceSample = "پست بانک\nواريز به کارت: 6156\n+998,190\n1405/05/12\n11:22\nمانده: 44,200,000 ريال";
+    $metaRace = baleDedupMeta($raceSample, '111', '9400', $amount);
+    $keyRace = instantPayDepositUsageKey($metaRace);
+    $childPath = $tmpDir . '/race_child.json';
+    @unlink($childPath);
+    $stubOk = static function(){
+        return ['ok' => true, 'item' => ['id' => 'ord-race', 'status' => 'paid']];
+    };
+    $child = pcntl_fork();
+    if($child === 0){
+        $r = instantPayApplyDepositMatchWithClaim($keyRace, 'ord-race-a', $metaRace, $stubOk);
+        file_put_contents($childPath, json_encode(['ok' => !empty($r['ok']), 'code' => $r['code'] ?? '']));
+        exit(0);
+    }
+    $parent = instantPayApplyDepositMatchWithClaim($keyRace, 'ord-race-b', $metaRace, $stubOk);
+    pcntl_waitpid($child, $status);
+    $childOut = json_decode(@file_get_contents($childPath) ?: '{}', true);
+    $wins = intval(!empty($parent['ok'])) + intval(!empty($childOut['ok']));
+    baleDedupAssert($wins === 1, '9: parallel claim exactly one success');
+    $loserCode = empty($parent['ok']) ? ($parent['code'] ?? '') : ($childOut['code'] ?? '');
+    baleDedupAssert($loserCode === 'deposit_already_used', '9: loser blocked as deposit_already_used');
+}
+
+// 10: restart simulation — processing claim same order resumes without double complete
+instantPaySave([[
+    'id' => 'ord-restart',
+    'user' => 'u',
+    'type' => 'خرید',
+    'status' => 'waiting',
+    'amount' => $orderAmount,
+    'currency' => 'rial',
+    'code' => 8190,
+    'card' => $postCard,
+    'card_bank' => 'post',
+    'created_at' => $now,
+    'expires_at' => $now + 1800,
+    'csv_index' => 51,
+]]);
+$restartSample = "پست بانک\nواريز به کارت: 6156\n+998,190\n1405/05/13\n7:01\nمانده: 44,300,000 ريال";
+$metaRestart = baleDedupMeta($restartSample, '111', '9500', $amount);
+$keyRestart = instantPayDepositUsageKey($metaRestart);
+instantPayClaimDepositUsage($keyRestart, 'ord-restart', $metaRestart);
+$resumeClaim = instantPayClaimDepositUsage($keyRestart, 'ord-restart', $metaRestart);
+baleDedupAssert(!empty($resumeClaim['ok']) && !empty($resumeClaim['resume']), '10: worker restart resumes same-order claim');
+instantPayCompleteDepositClaim($keyRestart, 'ord-restart');
+$afterComplete = instantPayTryDepositMatch($orderAmount, $metaRestart, ['apply' => true]);
+baleDedupAssert(empty($afterComplete['ok']) && ($afterComplete['code'] ?? '') === 'deposit_already_used', '10: after complete restart cannot re-provision');
 
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

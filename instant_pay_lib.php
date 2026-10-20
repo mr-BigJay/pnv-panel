@@ -2717,6 +2717,12 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayClaimDepositUsage($usageKey, $orderId, array $depositMeta = []){
+        return instantPayWithStoreLock(static function() use ($usageKey, $orderId, $depositMeta){
+            return instantPayClaimDepositUsageUnlocked($usageKey, $orderId, $depositMeta);
+        });
+    }
+
+    function instantPayClaimDepositUsageUnlocked($usageKey, $orderId, array $depositMeta = []){
         $usageKey = trim((string)$usageKey);
         $orderId = trim((string)$orderId);
 
@@ -2779,6 +2785,12 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayCompleteDepositClaim($usageKey, $orderId = ''){
+        return instantPayWithStoreLock(static function() use ($usageKey, $orderId){
+            return instantPayCompleteDepositClaimUnlocked($usageKey, $orderId);
+        });
+    }
+
+    function instantPayCompleteDepositClaimUnlocked($usageKey, $orderId = ''){
         $usageKey = trim((string)$usageKey);
         $orderId = trim((string)$orderId);
         $rows = instantPayLoadUsedDeposits();
@@ -2815,6 +2827,12 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayReleaseDepositClaim($usageKey, $orderId = ''){
+        return instantPayWithStoreLock(static function() use ($usageKey, $orderId){
+            return instantPayReleaseDepositClaimUnlocked($usageKey, $orderId);
+        });
+    }
+
+    function instantPayReleaseDepositClaimUnlocked($usageKey, $orderId = ''){
         $usageKey = trim((string)$usageKey);
         $orderId = trim((string)$orderId);
         $rows = instantPayLoadUsedDeposits();

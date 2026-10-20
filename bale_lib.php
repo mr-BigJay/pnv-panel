@@ -12,7 +12,12 @@ if(!function_exists('baleConfigPath')){
             'bot_token' => '',
             'admin_chat_ids' => '',
             'webhook_secret' => '',
+            'webhook_secret_pending' => '',
+            'webhook_secret_enforced' => false,
             'webhook_secret_required' => false,
+            'webhook_registered_at' => 0,
+            'webhook_last_validated_at' => 0,
+            'postbank_forward_bot_id' => '',
             'bot_username' => 'Jay24x7Pusbank_bot',
             'forward_hint' => 'پیام واریز @postbank_bot را به این بازو فوروارد کنید',
             'pay_window_seconds' => 1800,
@@ -94,46 +99,121 @@ if(!function_exists('baleConfigPath')){
         return $secret;
     }
 
-    function baleVerifyWebhookRequest($config = null){
-        if($config === null){
-            $config = baleLoadConfig();
-        }
-
+    function baleWebhookActiveSecret(array $config){
+        $pending = trim((string)($config['webhook_secret_pending'] ?? ''));
         $secret = trim((string)($config['webhook_secret'] ?? ''));
 
-        if($secret === ''){
-            if(!empty($config['webhook_secret_required'])){
-                return [
-                    'ok' => false,
-                    'code' => 'webhook_secret_missing',
-                    'error' => 'webhook_secret در تنظیمات بله تنظیم نشده است',
-                ];
-            }
+        return $pending !== '' ? $pending : $secret;
+    }
 
-            return [
-                'ok' => true,
-                'legacy' => true,
-                'warning' => 'webhook_secret خالی است؛ فقط فوروارد postbank + admin_chat مجاز است',
-            ];
-        }
-
-        $provided = '';
-
+    function baleWebhookSecretHeaderValue(){
         foreach([
             'HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN',
             'HTTP_X_BALE_WEBHOOK_SECRET',
         ] as $headerKey){
             if(!empty($_SERVER[$headerKey]) && is_string($_SERVER[$headerKey])){
-                $provided = trim($_SERVER[$headerKey]);
-                break;
+                return trim($_SERVER[$headerKey]);
             }
         }
+
+        return '';
+    }
+
+    function baleVerifyWebhookRequest($config = null){
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        $enforced = !empty($config['webhook_secret_enforced']) || !empty($config['webhook_secret_required']);
+        $secret = baleWebhookActiveSecret($config);
+
+        if(!$enforced){
+            return [
+                'ok' => true,
+                'migration' => true,
+                'warning' => 'secret هنوز enforce نشده؛ تأیید پرداخت فقط از مسیر baleCanProcessPaymentDeposit',
+            ];
+        }
+
+        if($secret === ''){
+            return [
+                'ok' => false,
+                'code' => 'webhook_secret_missing',
+                'error' => 'webhook_secret برای enforce تنظیم نشده است',
+            ];
+        }
+
+        $provided = baleWebhookSecretHeaderValue();
 
         if($provided === '' || !hash_equals($secret, $provided)){
             return [
                 'ok' => false,
                 'code' => 'webhook_unauthorized',
                 'error' => 'منشأ Webhook معتبر نیست',
+            ];
+        }
+
+        return ['ok' => true, 'enforced' => true];
+    }
+
+    function baleMessageForwardSenderId(array $message){
+        if(!empty($message['forward_from']) && is_array($message['forward_from'])){
+            return trim((string)($message['forward_from']['id'] ?? ''));
+        }
+
+        if(!empty($message['forward_origin']) && is_array($message['forward_origin'])){
+            $origin = $message['forward_origin'];
+
+            if(!empty($origin['sender_user']) && is_array($origin['sender_user'])){
+                return trim((string)($origin['sender_user']['id'] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    function baleMessageForwardSenderIsBot(array $message){
+        if(!empty($message['forward_from']) && is_array($message['forward_from'])){
+            if(array_key_exists('is_bot', $message['forward_from'])){
+                return !empty($message['forward_from']['is_bot']);
+            }
+        }
+
+        if(!empty($message['forward_origin']) && is_array($message['forward_origin'])){
+            $user = $message['forward_origin']['sender_user'] ?? null;
+
+            if(is_array($user) && array_key_exists('is_bot', $user)){
+                return !empty($user['is_bot']);
+            }
+        }
+
+        return false;
+    }
+
+    function baleCanProcessPaymentDeposit(array $config, array $message, $chatId){
+        $chatId = (string)$chatId;
+
+        if(count(baleAdminChatIds($config)) === 0){
+            return [
+                'ok' => false,
+                'code' => 'admin_not_configured',
+                'error' => 'admin_chat_ids تنظیم نشده است',
+            ];
+        }
+
+        if(!baleIsAdminChat($chatId, $config)){
+            return [
+                'ok' => false,
+                'code' => 'unauthorized_chat',
+                'error' => 'chat مجاز نیست',
+            ];
+        }
+
+        if(!baleMessageIsTrustedPostbankDeposit($message, $config)){
+            return [
+                'ok' => false,
+                'code' => 'untrusted_deposit_source',
+                'error' => 'فوروارد معتبر postbank نیست',
             ];
         }
 
@@ -211,18 +291,34 @@ if(!function_exists('baleConfigPath')){
         return false;
     }
 
-    function baleMessageIsTrustedPostbankDeposit(array $message){
+    function baleMessageIsTrustedPostbankDeposit(array $message, $config = null){
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        if(empty($message['forward_date'])){
+            return false;
+        }
+
         if(!baleMessageIsForward($message)){
             return false;
         }
 
         $forwardUser = baleNormalizeBotUsername(baleMessageForwardUsername($message));
 
-        if($forwardUser !== ''){
-            return in_array($forwardUser, baleTrustedPostbankBotUsernames(), true);
+        if($forwardUser === '' || !in_array($forwardUser, baleTrustedPostbankBotUsernames(), true)){
+            return false;
         }
 
-        return false;
+        $pinnedId = trim((string)($config['postbank_forward_bot_id'] ?? ''));
+
+        if($pinnedId !== ''){
+            $senderId = baleMessageForwardSenderId($message);
+
+            return $senderId !== '' && $senderId === $pinnedId;
+        }
+
+        return baleMessageForwardSenderIsBot($message);
     }
 
     function baleApiRequest($method, $params = [], $config = null){
@@ -283,13 +379,58 @@ if(!function_exists('baleConfigPath')){
         }
 
         $params = ['url' => $url];
-        $secret = trim((string)($config['webhook_secret'] ?? ''));
+        $secret = baleWebhookActiveSecret($config);
 
         if($secret !== ''){
             $params['secret_token'] = $secret;
         }
 
         return baleApiRequest('setWebhook', $params, $config);
+    }
+
+    function baleGetWebhookInfo($config = null){
+        return baleApiRequest('getWebhookInfo', [], $config);
+    }
+
+    function balePrepareWebhookSecret(array &$config){
+        try{
+            $secret = bin2hex(random_bytes(16));
+        }
+        catch(Throwable $e){
+            $secret = sha1(uniqid('bale_wh_', true));
+        }
+
+        $config['webhook_secret_pending'] = $secret;
+        $config['webhook_secret_enforced'] = false;
+        $config['webhook_secret_required'] = false;
+
+        return $secret;
+    }
+
+    function baleActivateWebhookSecretEnforcement(array &$config){
+        $pending = trim((string)($config['webhook_secret_pending'] ?? ''));
+
+        if($pending !== ''){
+            $config['webhook_secret'] = $pending;
+            $config['webhook_secret_pending'] = '';
+        }
+
+        if(trim((string)($config['webhook_secret'] ?? '')) === ''){
+            return false;
+        }
+
+        $config['webhook_secret_enforced'] = true;
+        $config['webhook_secret_required'] = true;
+        $config['webhook_last_validated_at'] = time();
+
+        return true;
+    }
+
+    function baleRollbackWebhookSecretEnforcement(array &$config){
+        $config['webhook_secret_enforced'] = false;
+        $config['webhook_secret_required'] = false;
+
+        return true;
     }
 
     function baleDeleteWebhook($config = null){
@@ -403,6 +544,41 @@ if(!function_exists('baleConfigPath')){
      *
      * @return array{ok:bool,key?:string,code?:string,amount?:int,card?:string,date?:string,time?:string}
      */
+    function baleExtractPostbankBankReference($text){
+        $text = baleNormalizeBankText($text);
+
+        if($text === ''){
+            return '';
+        }
+
+        $patterns = [
+            '/(?:شماره\s*پیگیری|کد\s*پیگیری|کد\s*مرجع|شماره\s*مرجع|reference)\s*[:：]?\s*(\d{6,20})/iu',
+            '/(?:rrn|ref)\s*[:：]?\s*(\d{6,20})/iu',
+        ];
+
+        foreach($patterns as $pattern){
+            if(preg_match($pattern, $text, $m)){
+                $ref = preg_replace('/\D+/', '', (string)($m[1] ?? ''));
+
+                if($ref !== ''){
+                    return $ref;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    function baleExtractPostbankBalanceRial($text){
+        $text = baleNormalizeBankText($text);
+
+        if($text === '' || !preg_match('/^\s*مانده\s*:\s*(\d{1,3}(?:,\d{3})+|\d{4,12})/imu', $text, $m)){
+            return 0;
+        }
+
+        return baleParseAmountToken($m[1] ?? '');
+    }
+
     function baleBuildPostbankDepositUsageKey($text, $amountRial = 0){
         $text = baleNormalizeBankText($text);
         $amountRial = intval($amountRial);
@@ -416,36 +592,65 @@ if(!function_exists('baleConfigPath')){
             return ['ok' => false, 'code' => 'not_postbank'];
         }
 
+        $bankRef = baleExtractPostbankBankReference($text);
+
+        if($bankRef !== ''){
+            return [
+                'ok' => true,
+                'key' => 'bale_bank_ref|post|' . $bankRef,
+                'bank_reference' => $bankRef,
+                'amount' => $amountRial,
+            ];
+        }
+
         $card = baleExtractDestinationCardDigits($text);
         $date = '';
         $time = '';
+        $timeHasSeconds = false;
 
         if(preg_match('/(\d{4}\/\d{1,2}\/\d{1,2})/u', $text, $dateMatch)){
             $date = trim((string)($dateMatch[1] ?? ''));
         }
 
-        if(preg_match('/^\s*(\d{1,2}:\d{2})\s*$/mu', $text, $timeMatch)){
+        if(preg_match('/^\s*(\d{1,2}:\d{2}:\d{2})\s*$/mu', $text, $timeMatchSec)){
+            $time = trim((string)($timeMatchSec[1] ?? ''));
+            $timeHasSeconds = true;
+        }
+        elseif(preg_match('/^\s*(\d{1,2}:\d{2})\s*$/mu', $text, $timeMatch)){
             $time = trim((string)($timeMatch[1] ?? ''));
         }
+
+        $balance = baleExtractPostbankBalanceRial($text);
 
         if($card === '' || $date === '' || $time === ''){
             return ['ok' => false, 'code' => 'ambiguous_bank_fingerprint'];
         }
 
+        if(!$timeHasSeconds && $balance <= 0){
+            return ['ok' => false, 'code' => 'ambiguous_bank_fingerprint'];
+        }
+
+        $key = 'bale_bank|post|'
+            . $card
+            . '|'
+            . $amountRial
+            . '|'
+            . $date
+            . '|'
+            . $time;
+
+        if($balance > 0){
+            $key .= '|bal:' . $balance;
+        }
+
         return [
             'ok' => true,
-            'key' => 'bale_bank|post|'
-                . $card
-                . '|'
-                . $amountRial
-                . '|'
-                . $date
-                . '|'
-                . $time,
+            'key' => $key,
             'amount' => $amountRial,
             'card' => $card,
             'date' => $date,
             'time' => $time,
+            'balance' => $balance,
         ];
     }
 

@@ -3,8 +3,8 @@
 /**
  * Webhook بازوی بله برای تشخیص واریز کارت‌به‌کارت (فوروارد @postbank_bot)
  *
- * mode=pay (پیش‌فرض): admin_chat_ids + فوروارد postbank؛ secret اگر تنظیم شده اجباری است
- * mode=setup: ثبت chat_id ادمین با secret (بدون تأیید پرداخت)
+ * تأیید پرداخت فقط برای admin_chat_ids + فوروارد معتبر postbank (backend).
+ * Secret فقط وقتی enforce شده باشد اجباری است (migration مرحله‌ای).
  */
 
 require_once __DIR__ . '/bale_lib.php';
@@ -22,11 +22,6 @@ if(!is_array($update)){
 }
 
 $config = baleLoadConfig();
-$mode = strtolower(trim((string)($_GET['mode'] ?? 'pay')));
-
-if($mode !== 'setup'){
-    $mode = 'pay';
-}
 
 if(empty($config['enabled']) || trim((string)($config['bot_token'] ?? '')) === ''){
     echo json_encode(['ok' => false, 'error' => 'bale disabled']);
@@ -42,6 +37,11 @@ if(empty($auth['ok'])){
     exit;
 }
 
+if(!empty($auth['enforced'])){
+    $config['webhook_last_validated_at'] = time();
+    baleSaveConfig($config);
+}
+
 $message = $update['message']
     ?? ($update['edited_message'] ?? ($update['channel_post'] ?? ($update['edited_channel_post'] ?? null)));
 
@@ -53,51 +53,54 @@ if(!is_array($message)){
 $chatId = (string)($message['chat']['id'] ?? '');
 $text = baleExtractMessageText($message);
 
-if($mode === 'setup'){
-    if($text === '/start' || $text === 'start'){
-        if($chatId !== ''){
-            baleAppendAdminChatId($chatId, $config);
-        }
-
-        baleSendMessage(
-            $chatId,
-            "حالت setup فعال است.\n"
-            . "شناسه چت: {$chatId}\n"
-            . "در پنل ادمین → بله نیز می‌توانید همین عدد را ذخیره کنید.\n"
-            . "برای پرداخت از Webhook با mode=pay و فوروارد @postbank_bot استفاده کنید.",
-            [],
-            $config
-        );
-        echo json_encode(['ok' => true, 'setup' => true, 'chat_id' => $chatId]);
+if($text === '/start' || $text === 'start'){
+    if(!baleIsAdminChat($chatId, $config)){
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'unauthorized chat']);
         exit;
     }
 
-    echo json_encode(['ok' => true, 'setup' => true, 'ignored' => 'send /start to register chat id']);
-    exit;
-}
-
-if(count(baleAdminChatIds($config)) === 0){
-    http_response_code(503);
-    echo json_encode(['ok' => false, 'code' => 'admin_not_configured', 'error' => 'admin_chat_ids تنظیم نشده است']);
-    exit;
-}
-
-if(!baleIsAdminChat($chatId, $config)){
-    http_response_code(403);
-    echo json_encode(['ok' => false, 'error' => 'unauthorized chat']);
-    exit;
-}
-
-if($text === '/start' || $text === 'start'){
     baleSendMessage(
         $chatId,
         "ربات پرداخت آنی فعال است.\n"
         . "شناسه چت شما: {$chatId}\n\n"
-        . "پیام واریز @postbank_bot را فقط با «فوروارد» (نه کپی متن) به همین بازو بفرستید.",
+        . "پیام واریز @postbank_bot را فقط با «فوروارد» (نه کپی متن) به همین بازو بفرستید.\n"
+        . "شناسه چت فقط از پنل ادمین (با احراز هویت) ثبت می‌شود.",
         [],
         $config
     );
     echo json_encode(['ok' => true, 'start' => true, 'chat_id' => $chatId]);
+    exit;
+}
+
+$payGate = baleCanProcessPaymentDeposit($config, $message, $chatId);
+
+if(empty($payGate['ok'])){
+    $code = (string)($payGate['code'] ?? 'payment_denied');
+
+    if($code === 'admin_not_configured'){
+        http_response_code(503);
+        echo json_encode(['ok' => false, 'code' => $code, 'error' => $payGate['error'] ?? 'admin not configured']);
+        exit;
+    }
+
+    if($code === 'unauthorized_chat'){
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'code' => $code, 'error' => $payGate['error'] ?? 'unauthorized chat']);
+        exit;
+    }
+
+    if($text !== ''){
+        baleSendMessage(
+            $chatId,
+            "⚠️ این پیام به‌عنوان فوروارد معتبر @postbank_bot پذیرفته نشد.\n"
+            . "کپی متن یا پیام دستی برای تأیید خودکار کافی نیست.",
+            [],
+            $config
+        );
+    }
+
+    echo json_encode(['ok' => false, 'code' => $code, 'error' => $payGate['error'] ?? 'denied']);
     exit;
 }
 
@@ -110,18 +113,6 @@ if($text === ''){
         $config
     );
     echo json_encode(['ok' => true, 'ignored' => 'empty text']);
-    exit;
-}
-
-if(!baleMessageIsTrustedPostbankDeposit($message)){
-    baleSendMessage(
-        $chatId,
-        "⚠️ این پیام به‌عنوان فوروارد معتبر @postbank_bot پذیرفته نشد.\n"
-        . "کپی متن یا پیام دستی برای تأیید خودکار کافی نیست.",
-        [],
-        $config
-    );
-    echo json_encode(['ok' => false, 'code' => 'untrusted_deposit_source', 'error' => 'forward from postbank required']);
     exit;
 }
 
