@@ -353,6 +353,83 @@ renewReserveAssert('limited renew reserved not applied immediately', ($reserved[
 $store = renewReserveLoad();
 renewReserveAssert('reserve persisted after restart', count($store) === 1 && ($store[0]['status'] ?? '') === 'reserved');
 
+// Existing queued unlimited-time purchase from an old deployment: cron
+// must add GB at its next pass, even if current quota/time has not expired.
+renewReserveResetStores($locksDir, $reservePath);
+$historyCsv();
+$queueAddCalls = 0;
+$queueBaselineMs = renewReserveNowMs();
+$oldUnlimitedReserve = [
+    'id'=>'old_unlimited_rsv',
+    'status'=>'reserved',
+    'username'=>'ownerUser',
+    'sub_id'=>'abc1234567890ab',
+    'sub_link'=>$link,
+    'server_host'=>'vip4.example.com',
+    'server_id'=>'vip4',
+    'plan_gb'=>10,
+    'plan_days'=>0,
+    'queue_key'=>renewReserveQueueKey('ownerUser', 'vip4.example.com', 'abc1234567890ab'),
+    'reserved_at'=>renewReserveNow()-500,
+];
+file_put_contents($reservePath, json_encode([$oldUnlimitedReserve], JSON_UNESCAPED_UNICODE));
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous'=>false,'time_unlimited'=>true,
+    'should_activate_now'=>false,'volume_exhausted'=>false,
+];
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $id) use (&$queueAddCalls){
+    return ['status'=>'found', 'client'=>[
+        'email'=>'u1','subId'=>$id,
+        'totalGB'=>xuiGbToBytes($queueAddCalls > 0 ? 110 : 100),
+        'up'=>0,'down'=>0,'expiryTime'=>0,
+    ]];
+};
+$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$queueAddCalls){
+    $queueAddCalls++;
+    return ['ok'=>true,'method'=>'queued_bulk_add'];
+};
+$oldQueueResult = renewReserveActivateOne(renewReserveLoad()[0]);
+renewReserveAssert('old queued unlimited plan immediately adds quota on cron pass',
+    !empty($oldQueueResult['ok']) && $queueAddCalls===1
+    && (renewReserveLoad()[0]['status'] ?? '')==='activated');
+$oldQueueAgain = renewReserveActivateOne(renewReserveLoad()[0]);
+renewReserveAssert('old queued unlimited does not add quota a second time',
+    !empty($oldQueueAgain['already']) && $queueAddCalls===1);
+
+// A worker crash after a completed volume change must be recovered from the
+// stored baseline, not by issuing a second add mutation.
+$staleQueue = array_merge($oldUnlimitedReserve, [
+    'status'=>'activating',
+    'activation_operation'=>'incremental_unlimited',
+    'activation_baseline'=>[
+        'total_bytes'=>xuiGbToBytes(100),
+        'used_bytes'=>0,
+        'expiry_ms'=>0,
+        'email'=>'u1',
+        'sub_id'=>'abc1234567890ab',
+    ],
+    'activation_anchor_ms'=>$queueBaselineMs,
+    'activating_at'=>renewReserveNow()-400,
+]);
+file_put_contents($reservePath, json_encode([$staleQueue], JSON_UNESCAPED_UNICODE));
+$recoveredQueue = renewReserveActivateOne(renewReserveLoad()[0]);
+renewReserveAssert('stale queued unlimited volume add recovers without another API mutation',
+    !empty($recoveredQueue['ok']) && $queueAddCalls===1
+    && (renewReserveLoad()[0]['status'] ?? '')==='activated');
+
+// A failed or unreadable verification must NEVER trigger another addition.
+$staleQueue['status']='activating';
+file_put_contents($reservePath, json_encode([$staleQueue], JSON_UNESCAPED_UNICODE));
+$GLOBALS['xuiTestRenewLookupClient'] = static fn($srv,$id) => [
+    'status'=>'found','client'=>[
+        'email'=>'u1','subId'=>$id,'totalGB'=>xuiGbToBytes(100),'expiryTime'=>0
+    ]
+];
+$unverifiedQueue = renewReserveActivateOne(renewReserveLoad()[0]);
+renewReserveAssert('unverified queued unlimited is blocked from duplicate API write',
+    empty($unverifiedQueue['ok']) && ($unverifiedQueue['code']??'')==='ambiguous'
+    && $queueAddCalls===1 && (renewReserveLoad()[0]['status'] ?? '')==='ambiguous');
+
 // FIFO two reserves same sub
 renewReserveResetStores($locksDir, $reservePath);
 $historyCsv();
