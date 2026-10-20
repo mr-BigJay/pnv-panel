@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from worker.parse import build_credit_transaction, normalize_transaction_record
+from worker.playwright_env import apply_playwright_env
 
 log = logging.getLogger("tejarat_worker.browser")
 
@@ -54,6 +55,8 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     Returns (transactions, health). Never logs credentials or page HTML.
     """
     from playwright.sync_api import sync_playwright
+
+    apply_playwright_env()
 
     default_log = "https://hb.tejaratbank.ir/account/log"
     bank_url = _env("TEJARAT_BANK_URL", default_log)

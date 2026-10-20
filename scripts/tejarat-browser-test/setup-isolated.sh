@@ -134,6 +134,7 @@ declare -A ENV_MAP=(
   [PNV_WORKER_VERSION]="0.1.0-test"
   [DISPLAY]="${DISPLAY_NUM}"
   [PNV_TEJARAT_TEST_ROOT]="${TARGET}"
+  [PLAYWRIGHT_BROWSERS_PATH]="${TARGET}/browsers"
 )
 
 merge_env_file() {

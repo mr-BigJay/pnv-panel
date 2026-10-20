@@ -5,6 +5,7 @@ set -euo pipefail
 TARGET="${PNV_TEJARAT_TEST_ROOT:-/opt/tejarat-browser-test}"
 USER_NAME="${PNV_TEJARAT_USER:-tejarat-browser}"
 REQ="${TARGET}/services/tejarat-browser-worker/requirements.txt"
+BROWSERS="${TARGET}/browsers"
 
 [[ "$(id -u)" -eq 0 ]] || { echo "Run with sudo" >&2; exit 1; }
 id "${USER_NAME}" &>/dev/null || { echo "User ${USER_NAME} missing" >&2; exit 1; }
@@ -32,15 +33,26 @@ if [[ -z "${PY}" ]]; then
   exit 1
 fi
 
+install -d -o "${USER_NAME}" -g "${USER_NAME}" -m 0755 "${BROWSERS}"
+
 if ! sudo -u "${USER_NAME}" "${PY}" -c "import playwright" 2>/dev/null; then
-  echo "==> Installing Python deps + playwright in venv"
+  echo "==> Installing Python deps in venv"
   sudo -u "${USER_NAME}" env HOME="${TARGET}" "${PY}" -m pip install -q -r "${REQ}"
-  if [[ -d "${TARGET}/browsers" ]]; then
-    sudo -u "${USER_NAME}" env HOME="${TARGET}" PLAYWRIGHT_BROWSERS_PATH="${TARGET}/browsers" \
-      "${PY}" -m playwright install chromium
-  else
-    sudo -u "${USER_NAME}" env HOME="${TARGET}" "${PY}" -m playwright install chromium
-  fi
+fi
+
+echo "==> Ensuring Chromium for Playwright (PLAYWRIGHT_BROWSERS_PATH=${BROWSERS})"
+sudo -u "${USER_NAME}" env \
+  HOME="${TARGET}" \
+  PLAYWRIGHT_BROWSERS_PATH="${BROWSERS}" \
+  "${PY}" -m playwright install chromium
+
+if grep -q '^PLAYWRIGHT_BROWSERS_PATH=' /etc/pnv/tejarat-worker-test.env 2>/dev/null; then
+  sed -i "s|^PLAYWRIGHT_BROWSERS_PATH=.*|PLAYWRIGHT_BROWSERS_PATH=${BROWSERS}|" /etc/pnv/tejarat-worker-test.env
+else
+  echo "PLAYWRIGHT_BROWSERS_PATH=${BROWSERS}" >>/etc/pnv/tejarat-worker-test.env
+fi
+if ! grep -q '^PNV_TEJARAT_TEST_ROOT=' /etc/pnv/tejarat-worker-test.env 2>/dev/null; then
+  echo "PNV_TEJARAT_TEST_ROOT=${TARGET}" >>/etc/pnv/tejarat-worker-test.env
 fi
 
 echo "==> Verify"

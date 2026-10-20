@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from worker.browser import storage_state_path
+from worker.playwright_env import apply_playwright_env
 
 
 def env(name: str, default: str = "") -> str:
@@ -29,6 +30,8 @@ def main() -> int:
     except ImportError:
         print("playwright not installed", file=sys.stderr)
         return 2
+
+    apply_playwright_env()
 
     state = storage_state_path()
     if not state.is_file():

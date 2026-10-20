@@ -15,6 +15,7 @@ import sys
 import time
 
 from worker.browser import storage_state_path
+from worker.playwright_env import apply_playwright_env
 
 
 def env(name: str, default: str = "") -> str:
@@ -35,6 +36,8 @@ def main() -> int:
     except ImportError:
         print("playwright not installed", file=sys.stderr)
         return 2
+
+    apply_playwright_env()
 
     state_file = storage_state_path()
     print(f"Storage will be saved to: {state_file}")
