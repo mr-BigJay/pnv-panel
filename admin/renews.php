@@ -172,7 +172,10 @@ if($xuiEnabled && function_exists('xuiApprovePaymentIndex')){
 $result = xuiApprovePaymentIndex($index, 'تمدید');
 
 if(empty($result['ok'])){
-$_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
+$provisionErr = function_exists('xuiProvisionErrorMessage')
+    ? xuiProvisionErrorMessage($result)
+    : ($result['error'] ?? 'خطای نامشخص');
+$_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . $provisionErr;
 header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 }
