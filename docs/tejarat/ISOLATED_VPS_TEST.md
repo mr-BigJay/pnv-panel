@@ -4,12 +4,32 @@
 
 روی VPS شما از قبل وجود دارد: Playwright، Chromium، `venv/`، `browsers/`، `vnc/`، Xvfb با **`DISPLAY=:91`**.
 
-## نصب امن (غیرمخرب، قابل تکرار)
+## پیش‌نیاز: شاخه PR #34 روی VPS
 
-از clone یا tarball PR #34 (نه از `/var/www/html`):
+اسکریپت `setup-isolated.sh` **روی `main` نیست** — فقط روی `cursor/tejarat-browser-worker-cbea`.
 
 ```bash
-cd /path/to/pnv-panel   # شاخه cursor/tejarat-browser-worker-cbea
+cd ~/pnv-panel
+git fetch origin cursor/tejarat-browser-worker-cbea
+git checkout cursor/tejarat-browser-worker-cbea
+git pull origin cursor/tejarat-browser-worker-cbea
+test -f scripts/tejarat-browser-test/setup-isolated.sh && echo OK || echo "هنوز فایل نیست — مسیر repo را چک کنید"
+```
+
+اگر `~/pnv-panel` همان Production است، **checkout نکنید**؛ clone جدا بزنید:
+
+```bash
+git clone -b cursor/tejarat-browser-worker-cbea --depth 1 \
+  https://github.com/mr-BigJay/pnv-panel.git ~/pnv-panel-tejarat
+cd ~/pnv-panel-tejarat
+```
+
+## نصب امن (غیرمخرب، قابل تکرار)
+
+از همان clone (نه از `/var/www/html`):
+
+```bash
+cd ~/pnv-panel-tejarat   # یا ~/pnv-panel بعد از checkout شاخه بالا
 
 # مرحله ۱ — فقط sync کد + بکاپ؛ venv/browsers/vnc/session/db حفظ می‌شوند
 sudo PNV_TEJARAT_USER=tejarat-browser \
@@ -61,8 +81,7 @@ sudo -u tejarat-browser bash -lc '
   export TEJARAT_HEADLESS=false
   export DISPLAY=:91
   cd /opt/tejarat-browser-test/services/tejarat-browser-worker
-  /opt/tejarat-browser-test/scripts/tejarat-browser-test/run-worker.sh -h 2>/dev/null || true
-  # از venv موجود:
+  export PYTHONPATH=/opt/tejarat-browser-test/services/tejarat-browser-worker
   /opt/tejarat-browser-test/venv/bin/python -m worker.manual_login
 '
 ```
