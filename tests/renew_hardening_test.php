@@ -77,8 +77,8 @@ $GLOBALS['renewReserveTestNow'] = $hard2AnchorSec;
 $GLOBALS['xuiTestRenewRuntimeState'] = [
     'ambiguous' => false,
     'time_unlimited' => true,
-    'volume_exhausted' => true,
-    'should_activate_now' => true,
+    'volume_exhausted' => false,
+    'should_activate_now' => false,
 ];
 $GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustCalls, $hard2AnchorMs){
     $after = $adjustCalls > 0;
