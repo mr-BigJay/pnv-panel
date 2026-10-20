@@ -7,18 +7,45 @@ from __future__ import annotations
 import re
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
+from zoneinfo import ZoneInfo
+
+TEHRAN_TZ = ZoneInfo("Asia/Tehran")
 
 REF_MIN_LEN = 6
 REF_MAX_LEN = 64
 AMOUNT_MIN_RIAL = 1000
 AMOUNT_MAX_RIAL = 5_000_000_000
 
+JALALI_YEAR_MIN = 1300
+JALALI_YEAR_MAX = 1500
+GREGORIAN_YEAR_MIN = 1900
+GREGORIAN_YEAR_MAX = 2100
+
 REF_REJECT_PREFIXES = ("row-", "tmp-", "fake-")
 
 
 def _digits_only(raw: str) -> str:
     return re.sub(r"\D+", "", raw or "")
+
+
+def classify_calendar_year(year: int) -> Literal["jalali", "gregorian"] | None:
+    if JALALI_YEAR_MIN <= year <= JALALI_YEAR_MAX:
+        return "jalali"
+    if GREGORIAN_YEAR_MIN <= year <= GREGORIAN_YEAR_MAX:
+        return "gregorian"
+    return None
+
+
+def _tehran_unix(gy: int, gm: int, gd: int, hh: int, mm: int, ss: int) -> int | None:
+    try:
+        dt = datetime(gy, gm, gd, hh, mm, ss, tzinfo=TEHRAN_TZ)
+    except ValueError:
+        return None
+    ts = int(dt.timestamp())
+    if ts <= 0 or ts > time.time() + 86400:
+        return None
+    return ts
 
 
 def parse_bank_reference(raw: str) -> str | None:
@@ -29,7 +56,6 @@ def parse_bank_reference(raw: str) -> str | None:
     for prefix in REF_REJECT_PREFIXES:
         if lower.startswith(prefix):
             return None
-    # Tracking / reference: digits or alphanumeric bank codes
     if re.fullmatch(r"\d{6,32}", text):
         return text[:REF_MAX_LEN]
     if re.fullmatch(r"[A-Za-z0-9\-]{8,64}", text):
@@ -113,6 +139,26 @@ def _jalali_to_gregorian(jy: int, jm: int, jd: int) -> tuple[int, int, int]:
     return gy, gm, g_day_no + 1
 
 
+def _parse_slash_date(y: int, mo: int, d: int, hh: int, mm: int, ss: int) -> int | None:
+    if mo < 1 or mo > 12 or d < 1 or d > 31:
+        return None
+    if hh < 0 or hh > 23 or mm < 0 or mm > 59 or ss < 0 or ss > 59:
+        return None
+
+    calendar = classify_calendar_year(y)
+    if calendar is None:
+        return None
+
+    if calendar == "jalali":
+        if mo > 12 or d > 31:
+            return None
+        gy, gm, gd = _jalali_to_gregorian(y, mo, d)
+    else:
+        gy, gm, gd = y, mo, d
+
+    return _tehran_unix(gy, gm, gd, hh, mm, ss)
+
+
 def parse_occurred_at(date_raw: str, time_raw: str = "") -> int | None:
     date_raw = (date_raw or "").strip()
     time_raw = (time_raw or "").strip()
@@ -121,8 +167,8 @@ def parse_occurred_at(date_raw: str, time_raw: str = "") -> int | None:
     if not combined:
         return None
 
-    if re.fullmatch(r"\d{10,12}", combined):
-        ts = int(combined)
+    if re.fullmatch(r"\d{10,12}", combined.replace(" ", "")):
+        ts = int(combined.replace(" ", ""))
         if ts > 1_000_000_000_000:
             ts //= 1000
         if 946684800 <= ts <= time.time() + 86400:
@@ -137,28 +183,21 @@ def parse_occurred_at(date_raw: str, time_raw: str = "") -> int | None:
         hh = int(m.group(4) or 0)
         mm = int(m.group(5) or 0)
         ss = int(m.group(6) or 0)
-        if y >= 1300:
-            gy, gm, gd = _jalali_to_gregorian(y, mo, d)
-        else:
-            gy, gm, gd = y, mo, d
-        try:
-            dt = datetime(gy, gm, gd, hh, mm, ss)
-            ts = int(dt.timestamp())
-            if ts <= 0 or ts > time.time() + 86400:
-                return None
-            return ts
-        except ValueError:
-            return None
+        return _parse_slash_date(y, mo, d, hh, mm, ss)
 
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
-            dt = datetime.strptime(combined[:19], fmt)
-            ts = int(dt.timestamp())
-            if ts <= 0 or ts > time.time() + 86400:
-                return None
-            return ts
+            naive = datetime.strptime(combined[:19], fmt)
         except ValueError:
             continue
+        calendar = classify_calendar_year(naive.year)
+        if calendar is None:
+            return None
+        if calendar == "jalali":
+            gy, gm, gd = _jalali_to_gregorian(naive.year, naive.month, naive.day)
+        else:
+            gy, gm, gd = naive.year, naive.month, naive.day
+        return _tehran_unix(gy, gm, gd, naive.hour, naive.minute, naive.second)
 
     return None
 
@@ -221,12 +260,11 @@ def normalize_transaction_record(record: dict[str, Any]) -> dict[str, Any] | Non
 
     occurred = int(record.get("occurred_at") or record.get("timestamp") or 0)
     if occurred <= 0:
-        occurred = parse_occurred_at(
+        parsed = parse_occurred_at(
             str(record.get("date") or record.get("description") or ""),
             str(record.get("time") or ""),
         )
-        if occurred is None:
-            occurred = 0
+        occurred = parsed if parsed is not None else 0
 
     card = normalize_destination_card(
         str(record.get("destination_card") or record.get("card") or "")

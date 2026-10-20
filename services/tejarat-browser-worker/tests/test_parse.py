@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import time
 import unittest
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from worker.parse import (
+    TEHRAN_TZ,
     build_credit_transaction,
+    classify_calendar_year,
     normalize_transaction_record,
     parse_amount_rial,
     parse_bank_reference,
     parse_occurred_at,
 )
+
+CARD = "5859831111222233"
 
 
 class TestBankReference(unittest.TestCase):
@@ -47,14 +53,92 @@ class TestAmountRial(unittest.TestCase):
         self.assertEqual(amount, 0)
 
 
-class TestOccurredAt(unittest.TestCase):
-    def test_jalali_datetime(self):
+class TestCalendarClassification(unittest.TestCase):
+    def test_jalali_year(self):
+        self.assertEqual(classify_calendar_year(1403), "jalali")
+
+    def test_gregorian_year_2026(self):
+        self.assertEqual(classify_calendar_year(2026), "gregorian")
+
+    def test_ambiguous_year(self):
+        self.assertIsNone(classify_calendar_year(1700))
+        self.assertIsNone(classify_calendar_year(1600))
+
+
+class TestOccurredAtCalendar(unittest.TestCase):
+    def test_valid_jalali_datetime(self):
         ts = parse_occurred_at("1403/05/10", "14:30")
         self.assertIsNotNone(ts)
-        self.assertLess(ts, time.time() + 60)
+        expected = int(
+            datetime(2024, 7, 31, 14, 30, 0, tzinfo=TEHRAN_TZ).timestamp()
+        )
+        self.assertEqual(ts, expected)
+
+    def test_valid_gregorian_datetime(self):
+        ts = parse_occurred_at("2026-01-15", "10:00")
+        self.assertIsNotNone(ts)
+        expected = int(
+            datetime(2026, 1, 15, 10, 0, 0, tzinfo=TEHRAN_TZ).timestamp()
+        )
+        self.assertEqual(ts, expected)
+
+    def test_gregorian_slash_not_jalali(self):
+        """2026 must not be interpreted as Jalali year 2026."""
+        ts = parse_occurred_at("2026/01/15", "10:00")
+        self.assertIsNotNone(ts)
+        expected = int(
+            datetime(2026, 1, 15, 10, 0, 0, tzinfo=TEHRAN_TZ).timestamp()
+        )
+        self.assertEqual(ts, expected)
+
+    def test_invalid_ambiguous_year(self):
+        self.assertIsNone(parse_occurred_at("1700/05/10", "12:00"))
 
     def test_negative_empty(self):
         self.assertIsNone(parse_occurred_at("", ""))
+
+
+class TestTehranTimezone(unittest.TestCase):
+    def test_tehran_independent_of_server_tz(self):
+        """Anchor noon Tehran to a fixed UTC instant (+3:30)."""
+        ts = parse_occurred_at("2024-06-01", "12:00")
+        self.assertIsNotNone(ts)
+        expected = int(
+            datetime(2024, 6, 1, 12, 0, 0, tzinfo=TEHRAN_TZ).timestamp()
+        )
+        self.assertEqual(ts, expected)
+        utc_dt = datetime.fromtimestamp(ts, tz=ZoneInfo("UTC"))
+        self.assertEqual(utc_dt.hour, 8)
+        self.assertEqual(utc_dt.minute, 30)
+
+    def test_midnight_crossing_tehran(self):
+        before = parse_occurred_at("1403/12/29", "23:50")
+        after = parse_occurred_at("1404/01/01", "00:10")
+        self.assertIsNotNone(before)
+        self.assertIsNotNone(after)
+        assert after is not None and before is not None
+        self.assertLess(before, after)
+        self.assertGreater(after - before, 0)
+        self.assertLess(after - before, 48 * 3600)
+
+
+class TestStableDuplicateTransaction(unittest.TestCase):
+    def test_same_bank_fields_same_id_and_time(self):
+        kwargs = dict(
+            reference_raw="556677889900",
+            amount_raw="250,000 ریال",
+            date_raw="1403/07/01",
+            time_raw="09:15",
+            destination_card_raw=CARD,
+        )
+        a = build_credit_transaction(**kwargs)
+        b = build_credit_transaction(**kwargs)
+        self.assertIsNotNone(a)
+        self.assertIsNotNone(b)
+        assert a is not None and b is not None
+        self.assertEqual(a["transaction_id"], b["transaction_id"])
+        self.assertEqual(a["occurred_at"], b["occurred_at"])
+        self.assertEqual(a["amount"], b["amount"])
 
 
 class TestBuildCreditTransaction(unittest.TestCase):
@@ -64,7 +148,7 @@ class TestBuildCreditTransaction(unittest.TestCase):
             amount_raw="500,000 ریال",
             date_raw="1403/06/01",
             time_raw="10:15",
-            destination_card_raw="5859831111222233",
+            destination_card_raw=CARD,
         )
         self.assertIsNotNone(tx)
         assert tx is not None
@@ -79,7 +163,7 @@ class TestBuildCreditTransaction(unittest.TestCase):
                 reference_raw="",
                 amount_raw="500,000 ریال",
                 date_raw="1403/06/01",
-                destination_card_raw="5859831111222233",
+                destination_card_raw=CARD,
             )
         )
 
@@ -89,7 +173,7 @@ class TestBuildCreditTransaction(unittest.TestCase):
                 reference_raw="112233445566",
                 amount_raw="500,000",
                 date_raw="1403/06/01",
-                destination_card_raw="5859831111222233",
+                destination_card_raw=CARD,
             )
         )
 
@@ -99,7 +183,7 @@ class TestFixtureNormalize(unittest.TestCase):
         tx = normalize_transaction_record(
             {
                 "amount": 1497890,
-                "destination_card": "5859831111222233",
+                "destination_card": CARD,
                 "transaction_id": "FIX-TJ-001",
                 "occurred_at": 1700000100,
                 "direction": "credit",
@@ -114,7 +198,7 @@ class TestFixtureNormalize(unittest.TestCase):
             normalize_transaction_record(
                 {
                     "amount": 1497890,
-                    "destination_card": "5859831111222233",
+                    "destination_card": CARD,
                     "transaction_id": "row-9-123",
                     "occurred_at": 1700000100,
                 }
