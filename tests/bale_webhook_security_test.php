@@ -49,6 +49,12 @@ $config = baleDefaultConfig();
 $config['webhook_secret'] = 'test-secret-123';
 baleSecAssert(baleVerifyWebhookRequest($config)['code'] === 'webhook_unauthorized', 'missing header rejected');
 
+$legacyCfg = baleDefaultConfig();
+$legacyCfg['webhook_secret'] = '';
+$legacyCfg['webhook_secret_required'] = false;
+$legacy = baleVerifyWebhookRequest($legacyCfg);
+baleSecAssert(!empty($legacy['ok']) && !empty($legacy['legacy']), 'legacy mode allowed when secret empty and not required');
+
 $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] = 'wrong';
 baleSecAssert(baleVerifyWebhookRequest($config)['code'] === 'webhook_unauthorized', 'wrong secret rejected');
 

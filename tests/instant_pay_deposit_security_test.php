@@ -122,19 +122,29 @@ secAssert(instantPayCompleteDepositClaim($claimKey, 'ord-claim'), 'complete clai
 $dup = instantPayClaimDepositUsage($claimKey, 'ord-claim', $metaClaim);
 secAssert(empty($dup['ok']) && ($dup['code'] ?? '') === 'deposit_already_used', 'completed claim blocks reuse');
 
-// شکست persist claim
-$badUsedDir = $tmpDir . '/used_ro_dir';
-mkdir($badUsedDir, 0755, true);
-$badUsedPath = $badUsedDir . '/used.json';
-file_put_contents($badUsedPath, '[]');
-chmod($badUsedDir, 0555);
-putenv('PNV_USED_DEPOSITS_PATH=' . $badUsedPath);
+// شکست persist claim (مسیر میانی = فایل، نه پوشه — ذخیره حتماً fail می‌شود)
+$blockerFile = $tmpDir . '/used-not-a-dir.json';
+file_put_contents($blockerFile, '[]');
+$blockedUsedPath = $blockerFile . '/nested/used.json';
+putenv('PNV_USED_DEPOSITS_PATH=' . $blockedUsedPath);
 $metaFail = $metaClaim;
 $metaFail['transaction_id'] = 'TX-CLAIM-FAIL';
 $failKey = instantPayDepositUsageKey($metaFail);
+$prevHandler = set_error_handler(static function($errno, $errstr){
+    if($errno === E_WARNING && str_contains($errstr, 'file_put_contents')){
+        return true;
+    }
+
+    return false;
+});
 $failClaim = instantPayClaimDepositUsage($failKey, 'ord-fail', $metaFail);
+if($prevHandler !== null){
+    set_error_handler($prevHandler);
+}
+else{
+    restore_error_handler();
+}
 secAssert(empty($failClaim['ok']) && ($failClaim['code'] ?? '') === 'dedup_persist_failed', 'claim persist failure is fail-closed');
-chmod($badUsedPath, 0644);
 putenv('PNV_USED_DEPOSITS_PATH=' . $tmpDir . '/used.json');
 
 // tejarat tx بدون کارت مقصد در normalize حذف می‌شود

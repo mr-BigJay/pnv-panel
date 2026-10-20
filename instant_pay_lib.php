@@ -2460,6 +2460,19 @@ if(!function_exists('instantPayPath')){
             }
         }
 
+        if(function_exists('baleBuildPostbankDepositUsageKey')){
+            $amountRial = intval($depositMeta['amount'] ?? 0);
+            $fp = baleBuildPostbankDepositUsageKey($text, $amountRial);
+
+            if(!empty($fp['ok']) && trim((string)($fp['key'] ?? '')) !== ''){
+                $depositMeta['bank_usage_key'] = trim((string)$fp['key']);
+                $depositMeta['bank_reference'] = $depositMeta['bank_usage_key'];
+            }
+            elseif(($fp['code'] ?? '') === 'ambiguous_bank_fingerprint'){
+                $depositMeta['bank_fingerprint_ambiguous'] = true;
+            }
+        }
+
         return $depositMeta;
     }
 
@@ -2615,6 +2628,17 @@ if(!function_exists('instantPayPath')){
 
     function instantPayDepositUsageKey(array $depositMeta){
         $deposit = instantPayDepositMetaNormalized($depositMeta);
+        $bankUsageKey = trim((string)($depositMeta['bank_usage_key'] ?? ''));
+
+        if($bankUsageKey !== ''){
+            return $bankUsageKey;
+        }
+
+        $bankReference = trim((string)($depositMeta['bank_reference'] ?? ''));
+
+        if($bankReference !== ''){
+            return $bankReference;
+        }
 
         if($deposit['transaction_id'] !== ''){
             return $deposit['source'] . '|' . $deposit['bank_id'] . '|' . $deposit['transaction_id'];
@@ -2626,20 +2650,6 @@ if(!function_exists('instantPayPath')){
                 . '|' . $deposit['destination_card']
                 . '|' . intval($depositMeta['amount'] ?? 0)
                 . '|' . $deposit['occurred_at'];
-        }
-
-        $baleChat = trim((string)($depositMeta['bale_chat_id'] ?? ''));
-        $baleMessage = trim((string)($depositMeta['bale_message_id'] ?? ''));
-
-        if($deposit['source'] === 'bale' && $baleChat !== '' && $baleMessage !== ''){
-            return 'bale|' . $baleChat . '|' . $baleMessage;
-        }
-
-        if($deposit['source'] === 'bale' && $deposit['text'] !== ''){
-            return 'bale|'
-                . $deposit['bank_id']
-                . '|'
-                . hash('sha256', $deposit['text']);
         }
 
         return '';
@@ -2944,6 +2954,14 @@ if(!function_exists('instantPayPath')){
         $dryRun = !empty($opts['dry_run']);
 
         $depositMeta['amount'] = $amountRial;
+
+        if($apply && !$dryRun && !empty($depositMeta['bank_fingerprint_ambiguous'])){
+            return [
+                'ok' => false,
+                'code' => 'ambiguous_bank_fingerprint',
+                'error' => 'اثر انگشت واریز بانکی یکتا نیست؛ بررسی دستی لازم است',
+            ];
+        }
 
         if($apply && !$dryRun && !instantPayDepositHasDedupKey($depositMeta)){
             return [

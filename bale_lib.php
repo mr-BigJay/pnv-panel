@@ -12,6 +12,7 @@ if(!function_exists('baleConfigPath')){
             'bot_token' => '',
             'admin_chat_ids' => '',
             'webhook_secret' => '',
+            'webhook_secret_required' => false,
             'bot_username' => 'Jay24x7Pusbank_bot',
             'forward_hint' => 'پیام واریز @postbank_bot را به این بازو فوروارد کنید',
             'pay_window_seconds' => 1800,
@@ -101,10 +102,18 @@ if(!function_exists('baleConfigPath')){
         $secret = trim((string)($config['webhook_secret'] ?? ''));
 
         if($secret === ''){
+            if(!empty($config['webhook_secret_required'])){
+                return [
+                    'ok' => false,
+                    'code' => 'webhook_secret_missing',
+                    'error' => 'webhook_secret در تنظیمات بله تنظیم نشده است',
+                ];
+            }
+
             return [
-                'ok' => false,
-                'code' => 'webhook_secret_missing',
-                'error' => 'webhook_secret در تنظیمات بله تنظیم نشده است',
+                'ok' => true,
+                'legacy' => true,
+                'warning' => 'webhook_secret خالی است؛ فقط فوروارد postbank + admin_chat مجاز است',
             ];
         }
 
@@ -389,6 +398,57 @@ if(!function_exists('baleConfigPath')){
      * 9:47
      * مانده: 44,108,899 ريال
      */
+    /**
+     * اثر انگشت پایدار واریز پست‌بانک (مستقل از message_id فوروارد).
+     *
+     * @return array{ok:bool,key?:string,code?:string,amount?:int,card?:string,date?:string,time?:string}
+     */
+    function baleBuildPostbankDepositUsageKey($text, $amountRial = 0){
+        $text = baleNormalizeBankText($text);
+        $amountRial = intval($amountRial);
+
+        if($amountRial <= 0){
+            $amounts = baleExtractRialAmounts($text);
+            $amountRial = intval($amounts[0] ?? 0);
+        }
+
+        if(!baleLooksLikePostBankNotice($text) || $amountRial < 1000){
+            return ['ok' => false, 'code' => 'not_postbank'];
+        }
+
+        $card = baleExtractDestinationCardDigits($text);
+        $date = '';
+        $time = '';
+
+        if(preg_match('/(\d{4}\/\d{1,2}\/\d{1,2})/u', $text, $dateMatch)){
+            $date = trim((string)($dateMatch[1] ?? ''));
+        }
+
+        if(preg_match('/^\s*(\d{1,2}:\d{2})\s*$/mu', $text, $timeMatch)){
+            $time = trim((string)($timeMatch[1] ?? ''));
+        }
+
+        if($card === '' || $date === '' || $time === ''){
+            return ['ok' => false, 'code' => 'ambiguous_bank_fingerprint'];
+        }
+
+        return [
+            'ok' => true,
+            'key' => 'bale_bank|post|'
+                . $card
+                . '|'
+                . $amountRial
+                . '|'
+                . $date
+                . '|'
+                . $time,
+            'amount' => $amountRial,
+            'card' => $card,
+            'date' => $date,
+            'time' => $time,
+        ];
+    }
+
     function baleExtractDestinationCardDigits($text){
         $text = baleNormalizeBankText($text);
 

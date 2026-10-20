@@ -3,7 +3,7 @@
 /**
  * Webhook بازوی بله برای تشخیص واریز کارت‌به‌کارت (فوروارد @postbank_bot)
  *
- * mode=pay (پیش‌فرض): فقط با secret معتبر + admin_chat_ids + فوروارد postbank
+ * mode=pay (پیش‌فرض): admin_chat_ids + فوروارد postbank؛ secret اگر تنظیم شده اجباری است
  * mode=setup: ثبت chat_id ادمین با secret (بدون تأیید پرداخت)
  */
 
