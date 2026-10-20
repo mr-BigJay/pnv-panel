@@ -98,6 +98,15 @@ xuiFallbackAssert('modern success skips both legacy routes', !empty($out['ok']) 
 
 xuiFallbackAssert('5xx errors classified as transport', xuiApiFailureKind(['success'=>false,'http'=>502,'msg'=>'server error'])==='transport');
 
+xuiFallbackAssert('GET can retry auth', xuiApiCanRetryAuth('GET', ['success'=>false,'http'=>500]));
+xuiFallbackAssert('POST 401 can retry auth', xuiApiCanRetryAuth('POST', ['success'=>false,'http'=>401]));
+xuiFallbackAssert('POST 403 can retry auth', xuiApiCanRetryAuth('POST', ['success'=>false,'http'=>403]));
+xuiFallbackAssert('POST 0 cannot be replayed', !xuiApiCanRetryAuth('POST', ['success'=>false,'http'=>0]));
+xuiFallbackAssert('POST 502 cannot be replayed', !xuiApiCanRetryAuth('POST', ['success'=>false,'http'=>502]));
+xuiFallbackAssert('POST 404 cannot be replayed across auth modes', !xuiApiCanRetryAuth('POST', ['success'=>false,'http'=>404]));
+xuiFallbackAssert('POST 200 success:false cannot be replayed', !xuiApiCanRetryAuth('POST', ['success'=>false,'http'=>200]));
+xuiFallbackAssert('POST missing status cannot be replayed', !xuiApiCanRetryAuth('POST', ['success'=>false]));
+
 unset($GLOBALS['xuiTestApiRequest'], $GLOBALS['xuiTestApiRequestForm']);
 if($failed){
     fwrite(STDERR, "$failed XUI write fallback regression test(s) failed\n");
