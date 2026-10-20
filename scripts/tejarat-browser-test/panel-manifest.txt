@@ -1,0 +1,13 @@
+# فایل‌های PR #34 برای overlay امن روی پنل (هر خط یک مسیر نسبی)
+tejarat-worker-ingest.php
+tejarat_auto_verify_lib.php
+tejarat_worker_lib.php
+admin/tejarat.php
+admin/admin_nav.php
+admin/payments.php
+instant_pay_lib.php
+scripts/cron-tejarat-verify.php
+scripts/tejarat-health-check.php
+db/tejarat_verify.example.json
+db/tejarat_worker_health.example.json
+db/tejarat_worker_inbox.example.json
