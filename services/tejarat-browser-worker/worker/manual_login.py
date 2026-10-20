@@ -22,8 +22,9 @@ def env(name: str, default: str = "") -> str:
 
 
 def main() -> int:
-    bank_url = env("TEJARAT_BANK_URL", "https://hb.tejaratbank.ir")
-    stmt_url = env("TEJARAT_STATEMENT_URL", bank_url)
+    default_log = "https://hb.tejaratbank.ir/account/log"
+    bank_url = env("TEJARAT_BANK_URL", default_log)
+    stmt_url = env("TEJARAT_STATEMENT_URL", bank_url or default_log)
     headless = env("TEJARAT_HEADLESS", "false").lower() in ("1", "true", "yes")
     done_sel = env("TEJARAT_LOGIN_DONE_SELECTOR")
     probe_sel = env("TEJARAT_LOGIN_PROBE_SELECTOR")

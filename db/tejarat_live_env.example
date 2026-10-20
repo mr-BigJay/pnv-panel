@@ -1,0 +1,18 @@
+# کپی به /etc/pnv/tejarat-worker-test.env (مقادیر حساس را commit نکنید)
+# پنل: https://panel.ticketin.ir/bigjay_controller/
+
+PNV_TEJARAT_INGEST_URL=https://panel.ticketin.ir/bigjay_controller/tejarat-worker-ingest.php
+PNV_TEJARAT_INGEST_SECRET=FROM_panel_db_tejarat_verify.json_worker_ingest_secret
+TEJARAT_COLLECT_MODE=live
+TEJARAT_BANK_URL=https://hb.tejaratbank.ir/account/log
+TEJARAT_STATEMENT_URL=https://hb.tejaratbank.ir/account/log
+TEJARAT_HEADLESS=true
+TEJARAT_DESTINATION_CARD=585983XXXXXXXXXX
+DISPLAY=:91
+PNV_WORKER_STORAGE=/opt/tejarat-browser-test/session
+PNV_TEJARAT_TEST_ROOT=/opt/tejarat-browser-test
+TEJARAT_POLL_INTERVAL_SECONDS=120
+TEJARAT_LOGIN_PROBE_SELECTOR=
+# پس از DevTools روی VPS پر کنید — نمونه در docs/tejarat/SELECTORS.md
+TEJARAT_STMT_SELECTORS_JSON={"row":"tbody tr","reference_cell":"td:nth-child(4)","amount_cell":"td:nth-child(3)","date_cell":"td:nth-child(1)","time_cell":"td:nth-child(2)","credit_cell":"td:nth-child(3)"}
+# TEJARAT_NAV_STEPS_JSON=[{"click":"text=گردش حساب","wait_ms":1500}]

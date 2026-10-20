@@ -55,8 +55,9 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     from playwright.sync_api import sync_playwright
 
-    bank_url = _env("TEJARAT_BANK_URL", "https://hb.tejaratbank.ir")
-    stmt_url = _env("TEJARAT_STATEMENT_URL", bank_url)
+    default_log = "https://hb.tejaratbank.ir/account/log"
+    bank_url = _env("TEJARAT_BANK_URL", default_log)
+    stmt_url = _env("TEJARAT_STATEMENT_URL", bank_url or default_log)
     headless = _env("TEJARAT_HEADLESS", "true").lower() in ("1", "true", "yes")
     login_required_flag = _env("TEJARAT_FORCE_LOGIN_REQUIRED", "").lower() in ("1", "true", "yes")
 
