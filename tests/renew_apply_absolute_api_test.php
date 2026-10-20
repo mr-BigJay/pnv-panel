@@ -59,6 +59,11 @@ $calls = [];
 $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path, $body) use (&$calls){
     $calls[] = ['kind' => 'json', 'method' => $method, 'path' => $path, 'body' => $body];
 
+    // Only a definite 404 allows changing the endpoint/encoding.
+    if(strpos($path, '/panel/api/clients/update/') === 0){
+        return ['success' => false, 'msg' => 'modern endpoint missing', 'http' => 404];
+    }
+
     return ['success' => false, 'msg' => 'json legacy failed', 'http' => 500];
 };
 

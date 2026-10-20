@@ -742,6 +742,16 @@ if(!function_exists('xuiConfigPath')){
         return $json;
     }
 
+    /** Only authenticated reads and rejected 401/403 writes may try another auth mode. */
+    function xuiApiCanRetryAuth($method, $response){
+        if(in_array(strtoupper((string)$method), ['GET', 'HEAD', 'OPTIONS'], true)){
+            return true;
+        }
+
+        return is_array($response)
+            && in_array(intval($response['http'] ?? 0), [401, 403], true);
+    }
+
     function xuiApiRequest($server, $method, $path, $body = null){
         if(!empty($GLOBALS['xuiTestApiRequest']) && is_callable($GLOBALS['xuiTestApiRequest'])){
             return $GLOBALS['xuiTestApiRequest']($server, $method, $path, $body);
@@ -767,6 +777,12 @@ if(!function_exists('xuiConfigPath')){
             $last = xuiApiRequestRaw($server, $method, $path, $body, $mode);
 
             if(!empty($last['success'])){
+                return $last;
+            }
+
+            // A write may already have been applied despite a timeout/5xx.
+            // Only a definite authentication rejection permits re-auth/retry.
+            if(!xuiApiCanRetryAuth($method, $last)){
                 return $last;
             }
 
@@ -903,6 +919,12 @@ if(!function_exists('xuiConfigPath')){
                 return $last;
             }
 
+            // A write may already have been applied despite a timeout/5xx.
+            // Only a definite authentication rejection permits re-auth/retry.
+            if(!xuiApiCanRetryAuth($method, $last)){
+                return $last;
+            }
+
             if($mode === 'session'){
                 $id = trim((string)($server['id'] ?? ''));
 
@@ -1015,10 +1037,23 @@ if(!function_exists('xuiConfigPath')){
             'reset' => 1,
         ];
 
-        foreach(['flow', 'security'] as $field){
-            if(isset($client[$field]) && $client[$field] !== ''){
+        // Newer 3x-ui clients/update is a full-row replacement, not a PATCH.
+        // Keep supported credentials/limits already present on the existing client.
+        // Do not pass _inbound_id or the numeric clientStats database-row id.
+        foreach([
+            'flow', 'security', 'password', 'auth', 'alterId',
+            'limitHwid', 'reverse', 'group_name', 'renewal',
+            'renewalPeriod', 'renewalInterval', 'renewalUsage',
+        ] as $field){
+            if(array_key_exists($field, $client) && $client[$field] !== null){
                 $payload[$field] = $client[$field];
             }
+        }
+
+        $clientId = trim((string)($client['id'] ?? ''));
+
+        if($clientId !== '' && !ctype_digit($clientId)){
+            $payload['id'] = $clientId;
         }
 
         return $payload;
@@ -1985,6 +2020,19 @@ if(!function_exists('xuiConfigPath')){
         return $expiry;
     }
 
+    /**
+     * HTTP 400/404/405/415 is a definite request rejection suitable for trying
+     * another encoding/endpoint. Timeout, 5xx, 2xx-success:false and missing
+     * status are ambiguous for a mutating request; never replay them.
+     */
+    function xuiApiDefinitivelyRejectedMutation($result){
+        if(!is_array($result) || !empty($result['success'])){
+            return false;
+        }
+
+        return in_array(intval($result['http'] ?? 0), [400, 404, 405, 415], true);
+    }
+
     function xuiAdjustClientTrafficLegacy($server, $client, $addGb){
         $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
         $normalized = xuiNormalizeClientRecord($client, $inboundId > 0 ? $inboundId : null);
@@ -2030,9 +2078,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         // Never replay a mutation after a timeout/5xx/ambiguous response.
-        $status = intval($formResult['http'] ?? 0);
-
-        if(!in_array($status, [400, 404, 405, 415], true)){
+        if(!xuiApiDefinitivelyRejectedMutation($formResult)){
             return [
                 'ok' => false,
                 'error' => 'updateClient form failed | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
@@ -2162,6 +2208,9 @@ if(!function_exists('xuiConfigPath')){
 
         $last = ['success' => false, 'msg' => 'هیچ مسیر API برای فعال‌سازی مطلق در دسترس نبود', 'http' => 0];
 
+        // Prefer new clients API, fall back only if endpoint explicitly rejects the request.
+        // 0/5xx/200-with-success:false may represent an applied but unconfirmed mutation.
+        // Do not send another POST in those cases; the caller must re-read the client.
         if($email !== ''){
             $modernPath = '/panel/api/clients/update/' . rawurlencode($email);
             $modernResult = xuiApiRequest($server, 'POST', $modernPath, xuiModernClientUpdatePayload($client, $targetBytes, $expiryMs));
@@ -2172,6 +2221,15 @@ if(!function_exists('xuiConfigPath')){
                 return [
                     'ok' => true,
                     'method' => 'clients_update',
+                    'attempts' => $attempts,
+                ];
+            }
+
+            if(!xuiApiDefinitivelyRejectedMutation($modernResult)){
+                return [
+                    'ok' => false,
+                    'error' => '3x-ui clients/update: نتیجه تغییر قطعی نیست | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
+                    'code' => 'transport_error',
                     'attempts' => $attempts,
                 ];
             }
@@ -2191,6 +2249,15 @@ if(!function_exists('xuiConfigPath')){
                 return [
                     'ok' => true,
                     'method' => 'updateClient_absolute_form',
+                    'attempts' => $attempts,
+                ];
+            }
+
+            if(!xuiApiDefinitivelyRejectedMutation($formResult)){
+                return [
+                    'ok' => false,
+                    'error' => '3x-ui updateClient form: نتیجه تغییر قطعی نیست | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
+                    'code' => 'transport_error',
                     'attempts' => $attempts,
                 ];
             }
@@ -2217,7 +2284,7 @@ if(!function_exists('xuiConfigPath')){
 
         $code = 'activation_failed';
 
-        if(function_exists('xuiApiFailureKind') && xuiApiFailureKind($last) === 'transport'){
+        if(!xuiApiDefinitivelyRejectedMutation($last)){
             $code = 'transport_error';
         }
 
@@ -2378,6 +2445,14 @@ if(!function_exists('xuiConfigPath')){
 
         if(!empty($result['success'])){
             return 'ok';
+        }
+
+        // A mutating request may have reached 3x-ui even when its HTTP response
+        // was lost or failed. Require a read-back before considering any retry.
+        $http = intval($result['http'] ?? 0);
+
+        if(array_key_exists('http', $result) && ($http === 0 || $http >= 500)){
+            return 'transport';
         }
 
         $msg = function_exists('mb_strtolower') ? mb_strtolower((string)($result['msg'] ?? '')) : strtolower((string)($result['msg'] ?? ''));
