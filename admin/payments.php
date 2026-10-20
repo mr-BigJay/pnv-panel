@@ -206,7 +206,7 @@ if(isset($_POST['tejarat_verify_save']) && function_exists('tejaratVerifyLoadCon
     $cfg['dry_run'] = isset($_POST['tejarat_dry_run']);
     $provider = strtolower(trim((string)($_POST['tejarat_provider'] ?? $cfg['provider'] ?? 'disabled')));
 
-    if(!in_array($provider, ['disabled', 'mock', 'api_stub'], true)){
+    if(!in_array($provider, ['disabled', 'mock', 'api_stub', 'browser_worker', 'arc_open_banking'], true)){
         $provider = 'disabled';
     }
 
@@ -892,7 +892,7 @@ if(is_array($tejaratSummary)){
 <label><input type="checkbox" name="tejarat_dry_run" <?php echo !empty($tejaratCfg['dry_run']) ? 'checked' : ''; ?>> حالت آزمایشی (بدون فعال‌سازی)</label>
 <label>Provider
 <select name="tejarat_provider">
-<?php foreach(['disabled' => 'خاموش', 'mock' => 'Mock', 'api_stub' => 'API (stub)'] as $pk => $pl){ ?>
+<?php foreach(['disabled' => 'خاموش', 'mock' => 'Mock', 'browser_worker' => 'Worker', 'arc_open_banking' => 'آرک', 'api_stub' => 'API (stub)'] as $pk => $pl){ ?>
 <option value="<?php echo htmlspecialchars($pk, ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($tejaratCfg['provider'] ?? '') === $pk) ? 'selected' : ''; ?>><?php echo htmlspecialchars($pl, ENT_QUOTES, 'UTF-8'); ?></option>
 <?php } ?>
 </select>

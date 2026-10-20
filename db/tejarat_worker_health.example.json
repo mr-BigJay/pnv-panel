@@ -1,0 +1,11 @@
+{
+  "updated_at": 0,
+  "session_status": "unknown",
+  "last_fetch_ok_at": 0,
+  "last_error": "",
+  "worker_version": "",
+  "stats": {
+    "pushes": 0,
+    "transactions_received": 0
+  }
+}

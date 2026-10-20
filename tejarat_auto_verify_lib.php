@@ -42,6 +42,9 @@ if(!function_exists('tejaratVerifyConfigPath')){
             'dry_run' => true,
             'destination_cards' => [],
             'max_deposit_age_seconds' => 86400,
+            'worker_ingest_secret' => '',
+            'worker_heartbeat_max_age_seconds' => 300,
+            'worker_ingest_url' => '',
             'notes' => 'بدون مجوز بانک provider را روی api_stub یا disabled نگه دارید.',
         ];
     }
@@ -57,6 +60,7 @@ if(!function_exists('tejaratVerifyConfigPath')){
                 'transactions_seen' => 0,
                 'matches_attempted' => 0,
                 'matches_confirmed' => 0,
+                'manual_review' => 0,
                 'errors' => 0,
             ],
         ];
@@ -148,6 +152,8 @@ if(!function_exists('tejaratVerifyConfigPath')){
         return match($provider){
             'mock' => 'آزمایشی (Mock)',
             'api_stub' => 'API بانک (غیرفعال)',
+            'browser_worker' => 'Worker مرورگر (فقط خواندن)',
+            'arc_open_banking' => 'آرک — بانکداری باز (قراردادی)',
             'disabled' => 'خاموش',
             default => $provider !== '' ? $provider : 'نامشخص',
         };
@@ -160,13 +166,26 @@ if(!function_exists('tejaratVerifyConfigPath')){
 
         $provider = strtolower(trim((string)($config['provider'] ?? 'disabled')));
 
-        return in_array($provider, ['mock', 'api_stub'], true);
+        return in_array($provider, ['mock', 'api_stub', 'browser_worker', 'arc_open_banking'], true);
     }
 
     function tejaratVerifyAllowsLiveProvisioning(array $config){
         $provider = strtolower(trim((string)($config['provider'] ?? 'disabled')));
 
-        return !in_array($provider, ['mock', 'api_stub', 'disabled', ''], true);
+        if(in_array($provider, ['mock', 'api_stub', 'disabled', ''], true)){
+            return false;
+        }
+
+        if($provider === 'browser_worker'){
+            return true;
+        }
+
+        if($provider === 'arc_open_banking'){
+            return trim((string)($config['arc_api_base_url'] ?? '')) !== ''
+                && trim((string)($config['arc_client_id'] ?? '')) !== '';
+        }
+
+        return true;
     }
 
     function tejaratVerifyTransactionEligible(array $tx){
@@ -187,6 +206,16 @@ if(!function_exists('tejaratVerifyConfigPath')){
             return tejaratVerifyMockFetch($config);
         }
 
+        if($provider === 'browser_worker'){
+            require_once __DIR__ . '/tejarat_worker_lib.php';
+
+            return tejaratWorkerFetchPendingTransactions($config);
+        }
+
+        if($provider === 'arc_open_banking'){
+            return tejaratVerifyArcOpenBankingFetch($config);
+        }
+
         if($provider === 'api_stub'){
             return [
                 'ok' => false,
@@ -203,6 +232,28 @@ if(!function_exists('tejaratVerifyConfigPath')){
             'transactions' => [],
             'code' => 'provider_disabled',
             'error' => 'provider غیرفعال است',
+        ];
+    }
+
+    function tejaratVerifyArcOpenBankingFetch(array $config){
+        $base = trim((string)($config['arc_api_base_url'] ?? ''));
+
+        if($base === ''){
+            return [
+                'ok' => false,
+                'connection_ok' => false,
+                'transactions' => [],
+                'code' => 'arc_not_configured',
+                'error' => 'سرویس آرک (بانکداری باز تجارت) پیکربندی نشده. از tejaratopenbanking.com درخواست دسترسی رسمی دهید.',
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'connection_ok' => false,
+            'transactions' => [],
+            'code' => 'arc_not_implemented',
+            'error' => 'اتصال Production به API آرک در این نسخه پیاده نشده؛ پس از دریافت sandbox از بانک پیکربندی کنید.',
         ];
     }
 
@@ -358,7 +409,10 @@ if(!function_exists('tejaratVerifyConfigPath')){
         $fetch = tejaratVerifyFetchTransactions($config);
 
         if(empty($fetch['ok'])){
-            $state['connection_status'] = 'error';
+            $fetchCode = (string)($fetch['code'] ?? '');
+            $state['connection_status'] = in_array($fetchCode, ['session_login_required', 'session_stale'], true)
+                ? 'session_expired'
+                : 'error';
             $state['last_error'] = (string)($fetch['error'] ?? 'خطای نامشخص');
             $state['stats']['errors'] = intval($state['stats']['errors'] ?? 0) + 1;
             tejaratVerifySaveState($state);
@@ -379,9 +433,12 @@ if(!function_exists('tejaratVerifyConfigPath')){
         $state['stats']['transactions_seen'] = intval($state['stats']['transactions_seen'] ?? 0) + count($transactions);
 
         $results = [];
+        $provider = strtolower(trim((string)($config['provider'] ?? '')));
+        $consumedTxIds = [];
 
         foreach($transactions as $tx){
             if(!tejaratVerifyTransactionEligible($tx)){
+                $state['stats']['manual_review'] = intval($state['stats']['manual_review'] ?? 0) + 1;
                 $results[] = [
                     'ok' => false,
                     'code' => 'incomplete_transaction',
@@ -401,9 +458,29 @@ if(!function_exists('tejaratVerifyConfigPath')){
             $match['transaction_id'] = $depositMeta['transaction_id'];
             $results[] = $match;
 
+            $matchCode = (string)($match['code'] ?? '');
+
+            if(in_array($matchCode, ['ambiguous_bank_fingerprint', 'missing_dedup_key'], true)){
+                $state['stats']['manual_review'] = intval($state['stats']['manual_review'] ?? 0) + 1;
+            }
+
             if(!empty($match['ok']) && empty($match['dry_run'])){
                 $state['stats']['matches_confirmed'] = intval($state['stats']['matches_confirmed'] ?? 0) + 1;
             }
+
+            if($provider === 'browser_worker'){
+                $shouldConsume = !empty($match['ok'])
+                    || in_array($matchCode, ['deposit_already_used', 'ambiguous_bank_fingerprint', 'missing_dedup_key'], true);
+
+                if($shouldConsume && $depositMeta['transaction_id'] !== ''){
+                    $consumedTxIds[] = $depositMeta['transaction_id'];
+                }
+            }
+        }
+
+        if($provider === 'browser_worker' && count($consumedTxIds) > 0){
+            require_once __DIR__ . '/tejarat_worker_lib.php';
+            tejaratWorkerMarkTransactionsConsumed($consumedTxIds);
         }
 
         tejaratVerifySaveState($state);
@@ -420,7 +497,7 @@ if(!function_exists('tejaratVerifyConfigPath')){
         $config = tejaratVerifyLoadConfig();
         $state = tejaratVerifyLoadState();
 
-        return [
+        $summary = [
             'enabled' => !empty($config['enabled']),
             'dry_run' => !empty($config['dry_run']),
             'provider' => tejaratVerifyProviderLabel($config['provider'] ?? ''),
@@ -433,6 +510,13 @@ if(!function_exists('tejaratVerifyConfigPath')){
             'stats' => $state['stats'] ?? tejaratVerifyDefaultState()['stats'],
             'android_sms_fallback_hint' => 'در صورت نبود API پایدار: پیامک واریز تجارت را روی اندروید بخوانید و به webhook امن (مشابه بله) بفرستید.',
         ];
+
+        if(strtolower(trim((string)($config['provider'] ?? ''))) === 'browser_worker'){
+            require_once __DIR__ . '/tejarat_worker_lib.php';
+            $summary['worker'] = tejaratWorkerAdminSnapshot($config);
+        }
+
+        return $summary;
     }
 
     function tejaratVerifyFormatTimestamp($ts){

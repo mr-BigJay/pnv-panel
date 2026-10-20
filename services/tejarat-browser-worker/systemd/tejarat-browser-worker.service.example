@@ -1,0 +1,22 @@
+[Unit]
+Description=PNV Tejarat browser worker (read-only)
+After=network-online.target
+
+[Service]
+Type=simple
+User=pnv
+Group=pnv
+WorkingDirectory=/var/www/html/services/tejarat-browser-worker
+EnvironmentFile=/etc/pnv/tejarat-worker.env
+ExecStart=/var/www/html/services/tejarat-browser-worker/.venv/bin/python -m worker.main
+Restart=on-failure
+RestartSec=20
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/pnv/tejarat-worker
+
+[Install]
+WantedBy=multi-user.target
