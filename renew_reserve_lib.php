@@ -312,21 +312,31 @@ if(!function_exists('renewReservePath')){
         ];
     }
 
-    function renewReserveDecideAction(array $runtime){
+    /**
+     * Choose by the PURCHASED plan duration, not the existing client's expiry.
+     * days=0: add purchased GB to the existing cap immediately (no queue).
+     * days>0: reserve until the current subscription expires OR exhausts quota.
+     * Keep the optional argument for older callers that only pass runtime.
+     */
+    function renewReserveDecideAction(array $runtime, $purchasedDays = null){
+        if($purchasedDays !== null && intval($purchasedDays) <= 0){
+            return 'immediate_unlimited';
+        }
+
         if(!empty($runtime['ambiguous'])){
             return 'ambiguous';
         }
 
-        // نامحدود زمانی + حجم باقی‌مانده → رزرو (تا اتمام حجم/زمان فعال شود).
+        if($purchasedDays !== null){
+            return !empty($runtime['should_activate_now']) ? 'activate_now' : 'reserve';
+        }
+
+        // Backwards-compatible rule for legacy callers without purchase metadata.
         if(($runtime['time_unlimited'] ?? null) === true){
             return !empty($runtime['volume_exhausted']) ? 'immediate_unlimited' : 'reserve';
         }
 
-        if(!empty($runtime['should_activate_now'])){
-            return 'activate_now';
-        }
-
-        return 'reserve';
+        return !empty($runtime['should_activate_now']) ? 'activate_now' : 'reserve';
     }
 
     function renewReserveEnqueue(array $entry){
