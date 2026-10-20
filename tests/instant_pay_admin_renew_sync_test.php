@@ -194,6 +194,63 @@ ipSyncAssert(empty($saveFail['ok']) && ($saveFail['code'] ?? '') === 'persist_fa
 $afterSaveFail = json_decode(file_get_contents($jsonPath), true);
 ipSyncAssert(is_array($afterSaveFail) && ($afterSaveFail[0]['status'] ?? '') === 'waiting', 'failed save leaves prior status intact');
 
+// Manual admin already confirmed the subscription but browser's JSON order is stale.
+// The next user status poll must recover the SAME paid order without provisioning again.
+file_put_contents($jsonPath, json_encode([$waitingItem], JSON_UNESCAPED_UNICODE));
+ipWriteCsv($csvPath, $csvRow);
+ipWriteProvision($locksDir, $csvRow, [
+    'state' => 'done',
+    'transaction_id' => xuiPaymentRowTransactionId($csvRow),
+    'result' => ['ok' => true, 'link' => $renewLink, 'renew_outcome' => 'renewed'],
+]);
+
+$recovered = instantPayRecoverConfirmedRenewStatus($waitingItem);
+ipSyncAssert(is_array($recovered) && ($recovered['id'] ?? '') === $orderId
+    && ($recovered['status'] ?? '') === 'paid', 'status poll recovers already-admin-confirmed renewal to step 3');
+$recoveredPersisted = instantPayGet($orderId);
+ipSyncAssert(($recoveredPersisted['status'] ?? '') === 'paid', 'poll recovery persists paid in JSON store');
+ipSyncAssert(($recovered['link'] ?? '') === $renewLink, 'poll recovery returns verified subscription link');
+ipSyncAssert(instantPayRecoverConfirmedRenewStatus($recoveredPersisted) === null,
+    'already paid polling does not reprovision or repeat recovery');
+
+// A later order may legitimately reuse the same four-digit payment code.
+// Only the creation-time-bound order can be synced.
+$otherCreated = array_merge($waitingItem, [
+    'id' => 'ord-renew-newer-same-code',
+    'created_at' => $created + 3600,
+    'expires_at' => $created + 5400,
+]);
+file_put_contents($jsonPath, json_encode([$waitingItem, $otherCreated], JSON_UNESCAPED_UNICODE));
+$oldPoll = instantPayRecoverConfirmedRenewStatus($waitingItem);
+$newPoll = instantPayRecoverConfirmedRenewStatus($otherCreated);
+ipSyncAssert(($oldPoll['id'] ?? '') === $orderId && ($oldPoll['status'] ?? '') === 'paid',
+    'confirmed earlier order matches its original timestamp');
+ipSyncAssert($newPoll === null, 'newer reused-code order does not inherit old confirmation');
+$allAfterCollision = instantPayLoad();
+ipSyncAssert(($allAfterCollision[1]['status'] ?? '') === 'waiting',
+    'newer reused-code order remains waiting');
+
+// A CSV confirmation without an XUI provision success record is not enough.
+@unlink(xuiRenewProvisionStorePath(xuiPaymentRowProvisionKey($csvRow)));
+file_put_contents($jsonPath, json_encode([$waitingItem], JSON_UNESCAPED_UNICODE));
+ipSyncAssert(instantPayRecoverConfirmedRenewStatus($waitingItem) === null,
+    'poll cannot falsely mark paid without provision evidence');
+ipSyncAssert((instantPayGet($orderId)['status'] ?? '') === 'waiting',
+    'status poll leaves unverified payment unchanged');
+
+// Browser contract: existing paid handler transitions directly to step 3;
+// public status API now calls the recovery path before responding.
+$apiSource = file_get_contents(__DIR__ . '/../instant-pay-api.php');
+$renewSource = file_get_contents(__DIR__ . '/../renew.php');
+$adminSource = file_get_contents(__DIR__ . '/../admin/renews.php');
+ipSyncAssert(strpos($apiSource, 'instantPayRecoverConfirmedRenewStatus($item)') !== false,
+    'status endpoint runs verified renewal reconciliation');
+ipSyncAssert(strpos($renewSource, "if(item.status === 'paid'){") !== false
+    && strpos($renewSource, 'showStep(3);') !== false,
+    'renew browser transitions to step 3 when poll returns paid');
+ipSyncAssert(strpos($adminSource, 'instantPaySyncPaidFromConfirmedCsv($index)') !== false,
+    'admin manually approved renew syncs JSON status');
+
 @exec('rm -rf ' . escapeshellarg($tmpDir));
 putenv('PNV_INSTANT_PAYMENTS_PATH');
 putenv('PNV_PAYMENTS_CSV_PATH');
