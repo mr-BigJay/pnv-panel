@@ -155,22 +155,43 @@ foreach($itemsCross as $it){
 
 ipSyncAssert($otherStatus === 'waiting', 'different order id stays waiting');
 
-// Save failure must not report success.
-if(is_dir($jsonPath)){
-    @exec('rm -rf ' . escapeshellarg($jsonPath));
-}
-
+// processing + result.ok is not final; must stay off paid until state=done.
 ipWriteCsv($csvPath, $csvRow);
+file_put_contents($jsonPath, json_encode([$waitingItem], JSON_UNESCAPED_UNICODE));
+ipWriteProvision($locksDir, $csvRow, [
+    'state' => 'processing',
+    'transaction_id' => xuiPaymentRowTransactionId($csvRow),
+    'result' => ['ok' => true, 'link' => $renewLink, 'renew_outcome' => 'renewed'],
+]);
+$processingOnly = instantPaySyncPaidFromConfirmedCsv(0);
+ipSyncAssert(!empty($processingOnly['processing']) && ($processingOnly['item']['status'] ?? '') === 'processing', 'processing provision does not mark paid');
+ipSyncAssert(($processingOnly['item']['status'] ?? '') !== 'paid', 'processing store never exposes paid');
+
+// Concurrent-style: paid must not be downgraded by a stale sync attempt.
+$paidItem = array_merge($waitingItem, [
+    'status' => 'paid',
+    'paid_at' => time(),
+    'link' => $renewLink,
+]);
+file_put_contents($jsonPath, json_encode([$paidItem], JSON_UNESCAPED_UNICODE));
+$stillPaid = instantPaySyncPaidFromConfirmedCsv(0);
+ipSyncAssert(!empty($stillPaid['already']) && ($stillPaid['item']['status'] ?? '') === 'paid', 'paid status not overwritten by concurrent sync');
+
+// Save failure must not report success (simulated interceptor).
 file_put_contents($jsonPath, json_encode([$waitingItem], JSON_UNESCAPED_UNICODE));
 ipWriteProvision($locksDir, $csvRow, [
     'state' => 'done',
     'transaction_id' => xuiPaymentRowTransactionId($csvRow),
     'result' => ['ok' => true, 'link' => $renewLink, 'renew_outcome' => 'renewed'],
 ]);
-@chmod($jsonPath, 0444);
+$GLOBALS['instantPayTestSaveInterceptor'] = static function(){
+    return false;
+};
 $saveFail = instantPaySyncPaidFromConfirmedCsv(0);
-@chmod($jsonPath, 0644);
+unset($GLOBALS['instantPayTestSaveInterceptor']);
 ipSyncAssert(empty($saveFail['ok']) && ($saveFail['code'] ?? '') === 'persist_failed', 'persist failure returns error not success');
+$afterSaveFail = json_decode(file_get_contents($jsonPath), true);
+ipSyncAssert(is_array($afterSaveFail) && ($afterSaveFail[0]['status'] ?? '') === 'waiting', 'failed save leaves prior status intact');
 
 @exec('rm -rf ' . escapeshellarg($tmpDir));
 putenv('PNV_INSTANT_PAYMENTS_PATH');
