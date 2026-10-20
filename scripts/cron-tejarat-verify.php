@@ -3,7 +3,7 @@
 
 /**
  * Cron: تأیید خودکار واریز تجارت
- * نمونه: */1 * * * * php /path/to/pnv-panel/scripts/cron-tejarat-verify.php
+ * نمونه crontab (هر دقیقه): php /path/to/pnv-panel/scripts/cron-tejarat-verify.php
  */
 
 if(PHP_SAPI !== 'cli'){

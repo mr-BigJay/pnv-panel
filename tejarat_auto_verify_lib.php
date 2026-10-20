@@ -163,6 +163,20 @@ if(!function_exists('tejaratVerifyConfigPath')){
         return in_array($provider, ['mock', 'api_stub'], true);
     }
 
+    function tejaratVerifyAllowsLiveProvisioning(array $config){
+        $provider = strtolower(trim((string)($config['provider'] ?? 'disabled')));
+
+        return !in_array($provider, ['mock', 'api_stub', 'disabled', ''], true);
+    }
+
+    function tejaratVerifyTransactionEligible(array $tx){
+        $amount = intval($tx['amount'] ?? 0);
+        $txId = trim((string)($tx['transaction_id'] ?? ''));
+        $card = tejaratVerifyNormalizeCard($tx['destination_card'] ?? '');
+
+        return $amount > 0 && $txId !== '' && $card !== '';
+    }
+
     /**
      * @return array{ok:bool,transactions:array<int,array>,connection_ok:bool,error?:string,code?:string}
      */
@@ -338,7 +352,9 @@ if(!function_exists('tejaratVerifyConfigPath')){
             ];
         }
 
-        $dryRun = !empty($opts['dry_run']) || !empty($config['dry_run']);
+        $dryRun = !empty($opts['dry_run'])
+            || !empty($config['dry_run'])
+            || !tejaratVerifyAllowsLiveProvisioning($config);
         $fetch = tejaratVerifyFetchTransactions($config);
 
         if(empty($fetch['ok'])){
@@ -365,11 +381,16 @@ if(!function_exists('tejaratVerifyConfigPath')){
         $results = [];
 
         foreach($transactions as $tx){
-            $amount = intval($tx['amount'] ?? 0);
-
-            if($amount <= 0){
+            if(!tejaratVerifyTransactionEligible($tx)){
+                $results[] = [
+                    'ok' => false,
+                    'code' => 'incomplete_transaction',
+                    'error' => 'تراکنش بدون شناسه یا کارت مقصد برای تأیید خودکار نادیده گرفته شد',
+                ];
                 continue;
             }
+
+            $amount = intval($tx['amount'] ?? 0);
 
             $state['stats']['matches_attempted'] = intval($state['stats']['matches_attempted'] ?? 0) + 1;
             $depositMeta = tejaratVerifyBuildDepositMeta($tx, $config);

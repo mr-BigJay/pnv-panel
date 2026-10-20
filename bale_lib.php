@@ -237,6 +237,20 @@ if(!function_exists('baleConfigPath')){
      * 9:47
      * مانده: 44,108,899 ريال
      */
+    function baleExtractDestinationCardDigits($text){
+        $text = baleNormalizeBankText($text);
+
+        if($text === ''){
+            return '';
+        }
+
+        if(preg_match('/واری[زز]\s*به\s*کارت\s*:\s*(\d{4,16})/u', $text, $m)){
+            return preg_replace('/\D+/', '', (string)($m[1] ?? ''));
+        }
+
+        return '';
+    }
+
     function baleExtractRialAmounts($text){
         $text = baleNormalizeBankText($text);
 

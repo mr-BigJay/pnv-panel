@@ -292,11 +292,15 @@ if(!function_exists('instantPayPath')){
 
             $jsonItem = instantPayFindJsonByTracking($row[0] ?? '', $row[3] ?? '');
 
-            if(is_array($jsonItem) && !instantPayDepositMatchesOrderCard($jsonItem, $depositMeta)){
+            if(!is_array($jsonItem)){
                 continue;
             }
 
-            if(is_array($jsonItem) && !instantPayDepositMatchesOrderBank($jsonItem, $depositMeta)){
+            if(!instantPayDepositMatchesOrderCard($jsonItem, $depositMeta)){
+                continue;
+            }
+
+            if(!instantPayDepositMatchesOrderBank($jsonItem, $depositMeta)){
                 continue;
             }
 
@@ -2160,18 +2164,42 @@ if(!function_exists('instantPayPath')){
             'source' => trim((string)($meta['source'] ?? 'bale')),
         ]);
 
-        if(
-            $depositMeta['source'] === 'bale'
-            && trim((string)($depositMeta['bank_id'] ?? '')) === ''
-            && function_exists('baleLooksLikePostBankNotice')
-            && baleLooksLikePostBankNotice((string)$text)
-        ){
-            $depositMeta['bank_id'] = 'post';
-        }
+        $depositMeta = instantPayEnrichBaleDepositMeta($depositMeta, (string)$text);
 
         return instantPayTryDepositMatch(intval($amount), $depositMeta, [
             'apply' => true,
         ]);
+    }
+
+    function instantPayAttachDepositDedupResult(array $result, array $depositMeta, $orderId){
+        if(empty($result['ok']) && empty($result['already'])){
+            return $result;
+        }
+
+        $amount = intval($depositMeta['amount'] ?? ($result['matched_amount'] ?? 0));
+        $depositMeta['amount'] = $amount;
+
+        if(!instantPayDepositHasDedupKey($depositMeta)){
+            return [
+                'ok' => false,
+                'code' => 'missing_dedup_key',
+                'error' => 'شناسه یکتای واریز برای تأیید خودکار کافی نیست',
+                'match_result' => $result,
+            ];
+        }
+
+        $usageKey = instantPayDepositUsageKey($depositMeta);
+
+        if(!instantPayMarkDepositUsed($usageKey, $orderId, $depositMeta)){
+            return [
+                'ok' => false,
+                'code' => 'dedup_persist_failed',
+                'error' => 'ثبت یکتایی واریز ناموفق بود؛ از تأیید تکراری جلوگیری شد',
+                'match_result' => $result,
+            ];
+        }
+
+        return $result;
     }
 
     function instantPayMatchDebugSnapshot($amounts = []){
@@ -2420,26 +2448,76 @@ if(!function_exists('instantPayPath')){
         ];
     }
 
+    function instantPayDepositDestinationMatchesOrderCard($orderCard, $destinationCard){
+        $orderCard = instantPayNormalizeCardNumber($orderCard);
+        $destinationCard = instantPayNormalizeCardNumber($destinationCard);
+
+        if($orderCard === '' || $destinationCard === ''){
+            return false;
+        }
+
+        if($orderCard === $destinationCard){
+            return true;
+        }
+
+        if(strlen($destinationCard) <= 8 && strlen($orderCard) >= strlen($destinationCard)){
+            return substr($orderCard, -strlen($destinationCard)) === $destinationCard;
+        }
+
+        return false;
+    }
+
+    function instantPayEnrichBaleDepositMeta(array $depositMeta, $text){
+        $text = trim((string)$text);
+        $depositMeta['text'] = $text !== '' ? $text : (string)($depositMeta['text'] ?? '');
+
+        if(
+            trim((string)($depositMeta['source'] ?? '')) === 'bale'
+            && trim((string)($depositMeta['bank_id'] ?? '')) === ''
+            && function_exists('baleLooksLikePostBankNotice')
+            && baleLooksLikePostBankNotice($text)
+        ){
+            $depositMeta['bank_id'] = 'post';
+        }
+
+        if(
+            trim((string)($depositMeta['destination_card'] ?? '')) === ''
+            && function_exists('baleExtractDestinationCardDigits')
+        ){
+            $hint = baleExtractDestinationCardDigits($text);
+
+            if($hint !== ''){
+                $depositMeta['destination_card'] = $hint;
+            }
+        }
+
+        return $depositMeta;
+    }
+
     function instantPayDepositMatchesOrderCard(array $item, array $depositMeta){
         $deposit = instantPayDepositMetaNormalized($depositMeta);
         $orderCard = instantPayNormalizeCardNumber($item['card'] ?? '');
 
         if($deposit['destination_card'] !== ''){
-            return $orderCard !== '' && $orderCard === $deposit['destination_card'];
+            return instantPayDepositDestinationMatchesOrderCard($orderCard, $deposit['destination_card']);
         }
 
         if($deposit['source'] === 'bale'){
-            return true;
+            return false;
         }
 
-        return $orderCard === '';
+        return false;
     }
 
     function instantPayDepositMatchesOrderBank(array $item, array $depositMeta){
         $deposit = instantPayDepositMetaNormalized($depositMeta);
 
         if($deposit['bank_id'] === ''){
-            return true;
+            if($deposit['source'] === 'bale'){
+                return false;
+            }
+
+            return $deposit['destination_card'] !== '';
         }
 
         $orderBank = instantPayResolveOrderBankId($item);
@@ -2581,7 +2659,24 @@ if(!function_exists('instantPayPath')){
                 . '|' . $deposit['occurred_at'];
         }
 
+        if($deposit['source'] === 'bale' && $deposit['text'] !== ''){
+            return 'bale|'
+                . $deposit['bank_id']
+                . '|'
+                . hash('sha256', $deposit['text']);
+        }
+
         return '';
+    }
+
+    function instantPayDepositHasDedupKey(array $depositMeta){
+        $amount = intval($depositMeta['amount'] ?? 0);
+
+        if($amount <= 0){
+            return false;
+        }
+
+        return instantPayDepositUsageKey(array_merge($depositMeta, ['amount' => $amount])) !== '';
     }
 
     function instantPayIsDepositUsed($usageKey){
@@ -2658,6 +2753,15 @@ if(!function_exists('instantPayPath')){
         $dryRun = !empty($opts['dry_run']);
 
         $depositMeta['amount'] = $amountRial;
+
+        if($apply && !$dryRun && !instantPayDepositHasDedupKey($depositMeta)){
+            return [
+                'ok' => false,
+                'code' => 'missing_dedup_key',
+                'error' => 'شناسه یکتای واریز برای تأیید خودکار کافی نیست',
+            ];
+        }
+
         $usageKey = instantPayDepositUsageKey($depositMeta);
 
         if($usageKey !== '' && instantPayIsDepositUsed($usageKey)){
@@ -2692,11 +2796,11 @@ if(!function_exists('instantPayPath')){
             $result['matched_amount'] = $amountRial;
             $result['matched_via'] = 'csv';
 
-            if(!empty($result['ok']) && $usageKey !== ''){
-                instantPayMarkDepositUsed($usageKey, $csvMatch['json_item']['id'] ?? '', $depositMeta);
-            }
-
-            return $result;
+            return instantPayAttachDepositDedupResult(
+                $result,
+                $depositMeta,
+                (string)($csvMatch['json_item']['id'] ?? '')
+            );
         }
 
         if($dryRun || !$apply){
@@ -2718,10 +2822,6 @@ if(!function_exists('instantPayPath')){
         $result['matched_amount'] = $amountRial;
         $result['matched_via'] = 'json';
 
-        if(!empty($result['ok']) && $usageKey !== ''){
-            instantPayMarkDepositUsed($usageKey, $item['id'], $depositMeta);
-        }
-
-        return $result;
+        return instantPayAttachDepositDedupResult($result, $depositMeta, (string)($item['id'] ?? ''));
     }
 }

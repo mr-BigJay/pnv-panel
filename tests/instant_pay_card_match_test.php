@@ -76,8 +76,23 @@ cardMatchAssert(is_array($hitTej) && ($hitTej['id'] ?? '') === 'ord-tej', 'tejar
 $postOnly = instantPayFindUniqueOrderForDeposit($amount, [
     'source' => 'bale',
     'bank_id' => 'post',
+    'destination_card' => '6156',
+    'text' => "پست بانک\nواريز به کارت: 6156\n+998,190",
 ]);
 cardMatchAssert(is_array($postOnly) && ($postOnly['id'] ?? '') === 'ord-post', 'postbank bale hint matches post order');
+
+$baleNoProof = instantPayFindUniqueOrderForDeposit($amount, [
+    'source' => 'bale',
+    'text' => 'واریز مبلغ',
+]);
+cardMatchAssert($baleNoProof === null, 'bale without bank/card proof does not match by amount alone');
+
+$baleWrongBank = instantPayFindUniqueOrderForDeposit($amount, [
+    'source' => 'bale',
+    'bank_id' => 'tejarat',
+    'destination_card' => $tejaratCard,
+]);
+cardMatchAssert(is_array($baleWrongBank) && ($baleWrongBank['id'] ?? '') === 'ord-tej', 'bale with tejarat proof matches tejarat only');
 
 // مبلغ تنها کافی نیست وقتی دو کارت فعال‌اند
 $ambiguous = instantPayFindUniqueOrderForDeposit($amount, [
