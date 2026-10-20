@@ -1015,10 +1015,23 @@ if(!function_exists('xuiConfigPath')){
             'reset' => 1,
         ];
 
-        foreach(['flow', 'security'] as $field){
-            if(isset($client[$field]) && $client[$field] !== ''){
+        // Newer 3x-ui clients/update is a full-row replacement, not a PATCH.
+        // Keep supported credentials/limits already present on the existing client.
+        // Do not pass _inbound_id or the numeric clientStats database-row id.
+        foreach([
+            'flow', 'security', 'password', 'auth', 'alterId',
+            'limitHwid', 'reverse', 'group_name', 'renewal',
+            'renewalPeriod', 'renewalInterval', 'renewalUsage',
+        ] as $field){
+            if(array_key_exists($field, $client) && $client[$field] !== null){
                 $payload[$field] = $client[$field];
             }
+        }
+
+        $clientId = trim((string)($client['id'] ?? ''));
+
+        if($clientId !== '' && !ctype_digit($clientId)){
+            $payload['id'] = $clientId;
         }
 
         return $payload;
