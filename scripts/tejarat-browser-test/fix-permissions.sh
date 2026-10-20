@@ -40,6 +40,11 @@ if ! sudo -u "${USER_NAME}" "${PY}" -c "import playwright" 2>/dev/null; then
   sudo -u "${USER_NAME}" env HOME="${TARGET}" "${PY}" -m pip install -q -r "${REQ}"
 fi
 
+if [[ -d "${BROWSERS}" ]]; then
+  echo "==> chmod chromium bundle for ${USER_NAME}"
+  find "${BROWSERS}" -type f \( -name chrome -o -name 'chrome_*' -o -name 'chromium*' \) -exec chmod a+rx {} \; 2>/dev/null || true
+fi
+
 echo "==> Ensuring Chromium for Playwright (PLAYWRIGHT_BROWSERS_PATH=${BROWSERS})"
 sudo -u "${USER_NAME}" env \
   HOME="${TARGET}" \

@@ -22,10 +22,13 @@ if [[ -z "${SRC_AUTH}" && -f /root/.Xauthority ]]; then
   SRC_AUTH=/root/.Xauthority
 fi
 if [[ -n "${SRC_AUTH}" && -f "${SRC_AUTH}" ]]; then
-  cp "${SRC_AUTH}" "${USER_HOME}/.Xauthority"
-  chown "${USER_NAME}:${USER_NAME}" "${USER_HOME}/.Xauthority"
-  chmod 600 "${USER_HOME}/.Xauthority"
-  echo "Copied Xauthority to ${USER_HOME}/.Xauthority"
+  for dest in "${USER_HOME}/.Xauthority" "/opt/tejarat-browser-test/.Xauthority"; do
+    install -d -m 0755 "$(dirname "${dest}")"
+    cp "${SRC_AUTH}" "${dest}"
+    chown "${USER_NAME}:${USER_NAME}" "${dest}"
+    chmod 600 "${dest}"
+  done
+  echo "Copied Xauthority to ${USER_HOME}/.Xauthority and /opt/tejarat-browser-test/.Xauthority"
 fi
 
 if command -v xdpyinfo >/dev/null 2>&1; then

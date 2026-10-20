@@ -28,7 +28,11 @@ def _env(name: str, default: str = "") -> str:
 
 
 def storage_state_path() -> Path:
-    base = Path(_env("PNV_WORKER_STORAGE", "/data/storage"))
+    storage = _env("PNV_WORKER_STORAGE")
+    if not storage:
+        test_root = _env("PNV_TEJARAT_TEST_ROOT", "/opt/tejarat-browser-test")
+        storage = str(Path(test_root) / "session")
+    base = Path(storage)
     base.mkdir(parents=True, exist_ok=True)
     return base / "playwright_storage.json"
 

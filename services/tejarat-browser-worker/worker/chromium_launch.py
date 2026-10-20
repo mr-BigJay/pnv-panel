@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 
@@ -38,7 +39,25 @@ def chromium_launch_kwargs(headless: bool) -> dict[str, Any]:
     return opts
 
 
+def _runtime_env() -> dict[str, str]:
+    """Writable HOME/TMP for system user (avoids crashpad/tmp issues under /tmp)."""
+    out = dict(os.environ)
+    test_root = env("PNV_TEJARAT_TEST_ROOT", "/opt/tejarat-browser-test")
+    storage = env("PNV_WORKER_STORAGE") or f"{test_root}/session"
+    base = Path(storage)
+    base.mkdir(parents=True, exist_ok=True)
+    tmp = base / "tmp"
+    tmp.mkdir(parents=True, exist_ok=True)
+    out["HOME"] = str(base.parent if base.name == "session" else base)
+    out["TMPDIR"] = str(tmp)
+    out["XDG_CACHE_HOME"] = str(base / "cache")
+    Path(out["XDG_CACHE_HOME"]).mkdir(parents=True, exist_ok=True)
+    return out
+
+
 def launch_chromium(playwright: Any, headless: bool | None = None):
     if headless is None:
         headless = env("TEJARAT_HEADLESS", "true").lower() in ("1", "true", "yes")
-    return playwright.chromium.launch(**chromium_launch_kwargs(headless))
+    opts = chromium_launch_kwargs(headless)
+    opts["env"] = _runtime_env()
+    return playwright.chromium.launch(**opts)
