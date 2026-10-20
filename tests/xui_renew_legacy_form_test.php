@@ -34,7 +34,7 @@ $GLOBALS['xuiTestApiRequest'] = static function() use (&$jsonCalls){
 };
 
 $good = xuiAdjustClientTrafficLegacy($server, $client, 5);
-legacyAssert('form success', !empty($good['ok']) && ($good['method'] ?? '') === 'updateClient_form');
+legacyAssert('form success', !empty($good['ok']) && ($good['method'] ?? '') === 'updateClient' && ($good['transport'] ?? '') === 'form');
 legacyAssert('no JSON replay on form success', $jsonCalls === 0);
 $sent = $forms[0] ?? [];
 $settings = json_decode($sent[2]['settings'] ?? '', true);
@@ -52,7 +52,7 @@ $GLOBALS['xuiTestApiRequest'] = static function() use (&$jsonCalls){
     return ['success' => true, 'http' => 200];
 };
 $fallback = xuiAdjustClientTrafficLegacy($server, $client, 5);
-legacyAssert('definite HTTP 404 tries JSON exactly once', !empty($fallback['ok']) && ($fallback['method'] ?? '') === 'updateClient_json' && count($forms) === 1 && $jsonCalls === 1);
+legacyAssert('definite HTTP 404 tries JSON exactly once', !empty($fallback['ok']) && ($fallback['method'] ?? '') === 'updateClient' && ($fallback['transport'] ?? '') === 'json' && count($forms) === 1 && $jsonCalls === 1);
 
 $forms = [];
 $jsonCalls = 0;
