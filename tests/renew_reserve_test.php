@@ -121,6 +121,72 @@ $unlimited = xuiProvisionRenew($rowUnlimited);
 unset($GLOBALS['renewReserveTestNow']);
 renewReserveAssert('unlimited-time existing renew immediate', ($unlimited['renew_outcome'] ?? '') === 'renewed' && $adjustCalls === 1);
 
+// Unlimited time + volume exhausted → add to cap (legacy), not absolute reset to plan size
+renewReserveResetStores($locksDir, $reservePath);
+$historyCsv();
+$absoluteCallsUnl = 0;
+$GLOBALS['xuiTestApplyRenewPlanAbsolute'] = static function() use (&$absoluteCallsUnl){
+    $absoluteCallsUnl++;
+
+    return ['ok' => false, 'error' => 'absolute must not run'];
+};
+$rowUnlEx = $baseRow;
+$rowUnlEx[2] = '50 گیگ - نامحدود زمان';
+$rowUnlEx[3] = 'AUTO-3104';
+$rowUnlEx[8] = 1700001104;
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'volume_exhausted' => true,
+    'should_activate_now' => true,
+];
+$GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $subId) => [
+    'status' => 'found',
+    'client' => [
+        'email' => 'u1',
+        'id' => 'cid1',
+        'subId' => $subId,
+        'totalGB' => xuiGbToBytes(120),
+        'up' => xuiGbToBytes(120),
+        'down' => 0,
+        'expiryTime' => 0,
+        '_inbound_id' => 1,
+    ],
+];
+$GLOBALS['xuiTestAdjustClientTraffic'] = static fn() => ['ok' => false, 'error' => 'bulkAdjust skipped'];
+$GLOBALS['xuiTestApiRequest'] = static function($server, $method, $path, $payload = null){
+    if($method === 'POST' && strpos($path, 'updateClient') !== false){
+        return ['success' => true];
+    }
+
+    return ['success' => false, 'msg' => 'mock'];
+};
+$unlEx = xuiProvisionRenew($rowUnlEx);
+renewReserveAssert(
+    'unlimited exhausted adds volume not absolute',
+    ($unlEx['renew_outcome'] ?? '') === 'renewed'
+    && $absoluteCallsUnl === 0
+    && (($unlEx['method'] ?? '') === 'updateClient' || ($unlEx['method'] ?? '') === 'incremental_unlimited')
+);
+unset($GLOBALS['xuiTestApiRequest']);
+$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustCalls){
+    $adjustCalls++;
+
+    return ['ok' => true, 'method' => 'test_adjust'];
+};
+$GLOBALS['xuiTestApplyRenewPlanAbsolute'] = static function() use (&$absoluteCalls){
+    $absoluteCalls++;
+
+    return ['ok' => true, 'method' => 'test_absolute'];
+};
+$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$createPosts){
+    if($method === 'POST'){
+        $createPosts++;
+    }
+
+    return ['success' => false, 'msg' => 'mock'];
+};
+
 // Recreate deleted sub
 renewReserveResetStores($locksDir, $reservePath);
 $historyCsv();

@@ -1775,6 +1775,7 @@ if(!function_exists('xuiConfigPath')){
         $currentTotal = xuiClientTotalBytes($client);
         $updated['totalGB'] = $currentTotal + $addBytes;
         $updated['enable'] = true;
+        $updated['reset'] = 1;
 
         if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
             $updated['subId'] = $client['subId'];
@@ -2969,6 +2970,10 @@ if(!function_exists('xuiConfigPath')){
             $runtime = xuiRenewAnalyzeRuntimeState($server, $client, $subLink);
             $action = renewReserveDecideAction($runtime);
 
+            if(empty($duration['time_unlimited']) && $days > 0 && !empty($runtime['time_expired'])){
+                $action = 'activate_now';
+            }
+
             if($action === 'ambiguous'){
                 return [
                     'ok' => false,
@@ -3027,6 +3032,103 @@ if(!function_exists('xuiConfigPath')){
                         'code' => 'persist_failed',
                         'recoverable' => true,
                         'renew_outcome' => 'reserved',
+                    ];
+                }
+
+                return $renewResult;
+            }
+
+            if($action === 'immediate_unlimited'){
+                $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
+                $anchorMs = intval($stored['activation_anchor_ms'] ?? 0);
+
+                if($anchorMs <= 0){
+                    $anchorMs = function_exists('renewReserveNowMs') ? renewReserveNowMs() : (int)(microtime(true) * 1000);
+                }
+
+                if(!xuiRenewProvisionStoreWrite($provisionKey, array_merge($stored, [
+                    'state' => 'processing',
+                    'phase' => 'renew_unlimited_add_started',
+                    'operation' => 'incremental',
+                    'started_at' => intval($stored['started_at'] ?? time()),
+                    'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
+                    'baseline' => xuiRenewClientSnapshot($client),
+                    'plan_gb' => $gb,
+                    'plan_days' => 0,
+                    'activation_anchor_ms' => $anchorMs,
+                ]))){
+                    return [
+                        'ok' => false,
+                        'error' => 'ذخیره وضعیت قبل از تمدید نامحدود زمانی ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                    ];
+                }
+
+                if(!empty($runtime['volume_exhausted']) && $days <= 0 && is_array($client)){
+                    $adjusted = xuiAdjustClientTrafficLegacy($server, $client, $gb);
+                }
+                else{
+                    $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
+                }
+
+                if(empty($adjusted['ok'])){
+                    $adjustCode = trim((string)($adjusted['code'] ?? ''));
+
+                    if($adjustCode === 'transport_error' && $days > 0){
+                        $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
+                        $baselineSnap = xuiRenewClientSnapshot($client);
+
+                        if(
+                            ($verifyLookup['status'] ?? '') === 'found'
+                            && is_array($verifyLookup['client'] ?? null)
+                            && xuiRenewVerifyIncrementalAdjust($baselineSnap, $verifyLookup['client'], $gb, $days, $anchorMs)
+                        ){
+                            $adjusted = ['ok' => true, 'method' => 'verify_after_transport'];
+                        }
+                    }
+
+                    if(empty($adjusted['ok'])){
+                        return $adjusted;
+                    }
+                }
+
+                if($days > 0){
+                    $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
+                    $baselineSnap = xuiRenewClientSnapshot($client);
+
+                    if(
+                        ($verifyLookup['status'] ?? '') !== 'found'
+                        || !is_array($verifyLookup['client'] ?? null)
+                        || !xuiRenewVerifyIncrementalAdjust($baselineSnap, $verifyLookup['client'], $gb, $days, $anchorMs)
+                    ){
+                        return [
+                            'ok' => false,
+                            'error' => 'حجم یا مدت تمدید روی سرور با پلن خریداری‌شده تطابق ندارد',
+                            'code' => 'ambiguous_provision',
+                        ];
+                    }
+                }
+
+                $renewResult = [
+                    'ok' => true,
+                    'link' => $link,
+                    'email' => $email,
+                    'sub_id' => $parsed['sub_id'],
+                    'server_id' => $server['id'] ?? '',
+                    'gb' => $gb,
+                    'renew_outcome' => 'renewed',
+                    'user_renew_message' => xuiRenewUserMessageRenewed(),
+                    'method' => $adjusted['method'] ?? 'incremental_unlimited',
+                ];
+
+                if(!xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult)){
+                    return [
+                        'ok' => false,
+                        'error' => 'تمدید انجام شد اما ذخیره نتیجه ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                        'link' => $link,
                     ];
                 }
 

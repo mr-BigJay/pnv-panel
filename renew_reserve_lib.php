@@ -317,12 +317,13 @@ if(!function_exists('renewReservePath')){
             return 'ambiguous';
         }
 
-        if(!empty($runtime['should_activate_now'])){
-            return 'activate_now';
+        // پلن نامحدود زمانی: همیشه افزایش حجم (حتی وقتی سقف تمام شده)، نه فعال‌سازی مطلق که سقف را به حجم پلن reset می‌کند.
+        if(($runtime['time_unlimited'] ?? null) === true){
+            return 'immediate_unlimited';
         }
 
-        if($runtime['time_unlimited'] === true){
-            return 'immediate_unlimited';
+        if(!empty($runtime['should_activate_now'])){
+            return 'activate_now';
         }
 
         return 'reserve';
