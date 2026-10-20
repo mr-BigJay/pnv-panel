@@ -183,24 +183,28 @@ if($detailLink === '' && isset($payments[$index][7])){
 $detailLink = trim((string)$payments[$index][7]);
 }
 
-if(
-    $detailLink === ''
-    && function_exists('instantPayMarkPaidFromCsv')
-    && function_exists('instantPayCsvRowPending')
-    && isset($payments[$index])
-    && instantPayCsvRowPending($payments[$index])
-){
-$sync = instantPayMarkPaidFromCsv($index, []);
+// The subscription link is normally present after successful XUI approval.
+// Sync the matching Instant Pay order regardless of link presence, otherwise
+// the customer's polling page stays on step 2 even after admin approval.
+// This sync only marks paid after checking CSV + provision evidence and cannot
+// run XUI provisioning for a second time.
+if(function_exists('instantPaySyncPaidFromConfirmedCsv')){
+    $sync = instantPaySyncPaidFromConfirmedCsv($index);
 
-if(!empty($sync['ok'])){
-if(is_array($sync['item'] ?? null)){
-$detailLink = trim((string)($sync['item']['link'] ?? ''));
-}
+    if(!empty($sync['ok']) && is_array($sync['item'] ?? null)){
+        $syncedLink = trim((string)($sync['item']['link'] ?? ''));
 
-if($detailLink === '' && is_array($sync['provision'] ?? null)){
-$detailLink = trim((string)($sync['provision']['link'] ?? ''));
-}
-}
+        if($syncedLink !== ''){
+            $detailLink = $syncedLink;
+        }
+    }
+    elseif(empty($sync['ok'])){
+        // XUI approval has already succeeded. Do not retry the renewal here:
+        // surface the status-sync problem; the customer's status poll can
+        // recover once the verified store is readable again.
+        $_SESSION['payment_error'] = 'تمدید روی 3x-ui تأیید شد، اما همگام‌سازی وضعیت صفحه کاربر ناموفق بود: '
+            . ($sync['error'] ?? 'خطا در به‌روزرسانی سفارش');
+    }
 }
 
 $renewOutcome = trim((string)($result['renew_outcome'] ?? ''));

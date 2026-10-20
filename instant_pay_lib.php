@@ -1191,6 +1191,87 @@ if(!function_exists('instantPayPath')){
         return true;
     }
 
+    /**
+     * Exact binding between one Instant Pay renewal order and one CSV row.
+     * The same user may receive the same 4-digit payment code on different days:
+     * tracking alone must never confirm a different/newer order.
+     */
+    function instantPayRenewOrderBindsCsv(array $item, array $row){
+        if(trim((string)($item['type'] ?? '')) !== 'تمدید'
+            || trim((string)($row[9] ?? '')) !== 'تمدید'
+            || !instantPayInstantOrderMatchesCsvRow($item, $row)){
+            return false;
+        }
+
+        $created = intval($item['created_at'] ?? 0);
+        $csvCreated = intval($row[8] ?? 0);
+        $code = intval($item['code'] ?? 0);
+        $csvCode = intval($row[13] ?? 0);
+        $amount = intval($item['amount'] ?? 0);
+        $csvAmount = instantPayCsvRowAmountRial($row);
+
+        if($created <= 0 || $csvCreated !== $created
+            || $code <= 0 || $csvCode !== $code
+            || $amount <= 0 || $csvAmount !== $amount){
+            return false;
+        }
+
+        $plan = trim((string)($item['plan'] ?? ''));
+        $csvPlan = trim((string)($row[2] ?? ''));
+
+        if($plan !== '' && $csvPlan !== '' && $plan !== $csvPlan){
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Restore a previously confirmed renewal for the authenticated status poll.
+     * Reads existing CSV + provision evidence; never calls a mutating XUI API.
+     * Returns a public paid item only when the order match is unique and verified.
+     */
+    function instantPayRecoverConfirmedRenewStatus(array $item){
+        $status = trim((string)($item['status'] ?? ''));
+
+        if($status === 'paid' || $status === 'payment_received_provision_failed'
+            || trim((string)($item['type'] ?? '')) !== 'تمدید'
+            || !function_exists('xuiLoadPayments')){
+            return null;
+        }
+
+        $payments = xuiLoadPayments();
+        $matches = [];
+
+        foreach($payments as $index => $row){
+            if(!is_array($row) || trim((string)($row[6] ?? '')) !== 'تایید شد'){
+                continue;
+            }
+
+            if(instantPayRenewOrderBindsCsv($item, $row)){
+                $matches[] = $index;
+
+                if(count($matches) > 1){
+                    return null;
+                }
+            }
+        }
+
+        if(count($matches) !== 1){
+            return null;
+        }
+
+        $sync = instantPaySyncPaidFromConfirmedCsv($matches[0]);
+
+        if(!empty($sync['ok'])
+            && is_array($sync['item'] ?? null)
+            && ($sync['item']['id'] ?? '') === ($item['id'] ?? '')){
+            return $sync['item'];
+        }
+
+        return null;
+    }
+
     function instantPayRenewProvisionEvidence(array $row, array $item){
         if(trim((string)($row[9] ?? '')) !== 'تمدید'){
             return [
@@ -1325,27 +1406,33 @@ if(!function_exists('instantPayPath')){
         }
 
         $row = $payments[$csvIndex];
-        $user = trim((string)($row[0] ?? ''));
-        $tracking = trim((string)($row[3] ?? ''));
-        $jsonItem = instantPayFindJsonByTracking($user, $tracking);
-
-        if(!is_array($jsonItem) || trim((string)($jsonItem['id'] ?? '')) === ''){
-            return ['ok' => true, 'skipped' => true];
-        }
-
-        $orderId = trim((string)($jsonItem['id'] ?? ''));
         $items = instantPayLoad();
-        $idx = -1;
+        $matches = [];
 
         foreach($items as $i => $item){
-            if(($item['id'] ?? '') === $orderId){
-                $idx = $i;
-                break;
+            if(is_array($item) && instantPayRenewOrderBindsCsv($item, $row)){
+                $matches[] = $i;
             }
         }
 
-        if($idx < 0){
+        // Legacy/manual CSV rows may have no Instant Pay order. Never invent one.
+        if(count($matches) === 0){
             return ['ok' => true, 'skipped' => true];
+        }
+
+        if(count($matches) !== 1){
+            return [
+                'ok' => false,
+                'code' => 'order_binding_mismatch',
+                'error' => 'بیش از یک سفارش مطابق با این پرداخت پیدا شد',
+            ];
+        }
+
+        $idx = $matches[0];
+        $orderId = trim((string)($items[$idx]['id'] ?? ''));
+
+        if($orderId === ''){
+            return ['ok' => false, 'code' => 'order_binding_mismatch', 'error' => 'شناسه سفارش معتبر نیست'];
         }
 
         $currentStatus = trim((string)($items[$idx]['status'] ?? ''));
