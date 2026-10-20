@@ -276,5 +276,25 @@ foreach($inbox['transactions'] as $row){
 }
 twAssert($par === 1, '9: duplicate worker push dedupes inbox');
 
+$resSynth = twIngest([
+    'health' => ['session_status' => 'logged_in', 'last_fetch_ok_at' => time()],
+    'transactions' => [[
+        'amount' => $amount,
+        'destination_card' => $card,
+        'transaction_id' => 'row-99-170000',
+        'occurred_at' => $now + 6,
+        'direction' => 'credit',
+    ]],
+]);
+twAssert(!empty($resSynth['ok']), 'ingest accepts payload');
+$inboxSynth = tejaratWorkerLoadInbox();
+$hasSynth = false;
+foreach($inboxSynth['transactions'] as $row){
+    if(is_array($row) && ($row['transaction_id'] ?? '') === 'row-99-170000'){
+        $hasSynth = true;
+    }
+}
+twAssert(!$hasSynth, 'parse: synthetic row-* transaction_id not queued');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);

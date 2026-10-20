@@ -159,12 +159,16 @@ if(!function_exists('tejaratWorkerInboxPath')){
 
         $txId = trim((string)($row['transaction_id'] ?? $row['id'] ?? $row['reference'] ?? ''));
 
-        if($txId === ''){
+        if($txId === '' || preg_match('/^(row-|tmp-|fake-)/i', $txId)){
             return null;
         }
 
         $card = preg_replace('/\D+/', '', (string)($row['destination_card'] ?? ($row['card'] ?? '')));
         $occurred = intval($row['occurred_at'] ?? $row['timestamp'] ?? 0);
+
+        if(strlen($card) < 4 || $occurred <= 0){
+            return null;
+        }
 
         return [
             'amount' => $amount,

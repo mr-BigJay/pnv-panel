@@ -12,3 +12,10 @@ export TEJARAT_FIXTURE_JSON=../../tests/fixtures/tejarat_worker_fixture.json
 export TEJARAT_RUN_ONCE=1
 python -m worker.main
 ```
+
+Parsing tests (no Playwright):
+
+```bash
+cd services/tejarat-browser-worker
+PYTHONPATH=. python -m unittest discover -s tests -p 'test_*.py'
+```

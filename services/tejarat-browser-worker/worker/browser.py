@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import time
 from pathlib import Path
 from typing import Any
+
+from worker.parse import build_credit_transaction, normalize_transaction_record
 
 log = logging.getLogger("tejarat_worker.browser")
 
@@ -38,12 +39,14 @@ def load_fixture_transactions() -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     data = json.loads(path.read_text(encoding="utf-8"))
-    return data if isinstance(data, list) else []
-
-
-def parse_amount_rial(raw: str) -> int:
-    digits = re.sub(r"[^\d]", "", raw or "")
-    return int(digits) if digits else 0
+    if not isinstance(data, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in data:
+        norm = normalize_transaction_record(item)
+        if norm:
+            out.append(norm)
+    return out
 
 
 def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -84,10 +87,27 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     ref_sel = selectors.get("reference_cell", "")
     amount_sel = selectors.get("amount_cell", "")
     date_sel = selectors.get("date_cell", "")
+    time_sel = selectors.get("time_cell", "")
 
-    if not row_sel:
+    missing = [
+        name
+        for name, val in (
+            ("row", row_sel),
+            ("reference_cell", ref_sel),
+            ("amount_cell", amount_sel),
+            ("date_cell", date_sel),
+        )
+        if not val
+    ]
+    if missing:
         health["session_status"] = "error"
-        health["last_error"] = "statement selectors not configured"
+        health["last_error"] = "required selectors missing: " + ",".join(missing)
+        return [], health
+
+    destination_card = _env("TEJARAT_DESTINATION_CARD", "")
+    if not destination_card:
+        health["session_status"] = "error"
+        health["last_error"] = "TEJARAT_DESTINATION_CARD not configured"
         return [], health
 
     state_file = storage_state_path()
@@ -123,24 +143,22 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
                     credit_text = line
                 if not any(h in credit_text for h in CREDIT_HINTS):
                     continue
-                ref = row.locator(ref_sel).inner_text().strip() if ref_sel else f"row-{i}-{int(time.time())}"
-                amount_raw = row.locator(amount_sel).inner_text() if amount_sel else credit_text
-                date_raw = row.locator(date_sel).inner_text().strip() if date_sel else ""
-                amount = parse_amount_rial(amount_raw)
-                if amount <= 0:
-                    continue
-                card = _env("TEJARAT_DESTINATION_CARD", "")
-                txs.append(
-                    {
-                        "amount": amount,
-                        "destination_card": card,
-                        "transaction_id": re.sub(r"\s+", "", ref)[:64],
-                        "occurred_at": int(time.time()),
-                        "description": date_raw[:120],
-                        "direction": "credit",
-                        "source_session_at": int(time.time()),
-                    }
+
+                ref_raw = row.locator(ref_sel).inner_text().strip()
+                amount_raw = row.locator(amount_sel).inner_text().strip()
+                date_raw = row.locator(date_sel).inner_text().strip()
+                time_raw = row.locator(time_sel).inner_text().strip() if time_sel else ""
+
+                parsed = build_credit_transaction(
+                    reference_raw=ref_raw,
+                    amount_raw=amount_raw,
+                    date_raw=date_raw,
+                    time_raw=time_raw,
+                    destination_card_raw=destination_card,
+                    description=date_raw,
                 )
+                if parsed:
+                    txs.append(parsed)
 
             context.storage_state(path=str(state_file))
             context.close()
@@ -164,7 +182,7 @@ def collect_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         health = {
             "session_status": "logged_in" if txs else "login_required",
             "last_fetch_ok_at": int(time.time()) if txs else 0,
-            "last_error": "" if txs else "fixture empty",
+            "last_error": "" if txs else "fixture empty or invalid",
             "worker_version": _env("PNV_WORKER_VERSION", "0.1.0"),
         }
         return txs, health
