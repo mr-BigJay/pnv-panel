@@ -19,3 +19,11 @@ Parsing tests (no Playwright):
 cd services/tejarat-browser-worker
 PYTHONPATH=. python -m unittest discover -s tests -p 'test_*.py'
 ```
+
+Manual bank login (save session, no OTP automation):
+
+```bash
+TEJARAT_HEADLESS=false DISPLAY=:99 python -m worker.manual_login
+```
+
+Isolated VPS dry run: `/docs/tejarat/ISOLATED_VPS_TEST.md`

@@ -30,12 +30,17 @@ TEJARAT_RUN_ONCE=1
 
 برای تست ingest بدون بانک: `TEJARAT_FIXTURE_JSON=/var/lib/pnv/tejarat-worker/fixture.json`
 
+## تست ایزوله VPS
+
+ر.ک. **`ISOLATED_VPS_TEST.md`** — نصب در `/opt/tejarat-browser-test` بدون دست زدن به Production.
+
 ## ورود اولیه (live)
 
 1. `TEJARAT_COLLECT_MODE=live`
-2. `TEJARAT_HEADLESS=false` و یک بار اجرای دستی برای login مدیر
-3. پس از ذخیره `playwright_storage.json` در `PNV_WORKER_STORAGE`، headless=true
+2. `python -m worker.manual_login` با `TEJARAT_HEADLESS=false` (OTP/CAPTCHA را خودتان در مرورگر وارد کنید)
+3. پس از ذخیره `playwright_storage.json` در `PNV_WORKER_STORAGE`، `TEJARAT_HEADLESS=true`
 4. `TEJARAT_STMT_SELECTORS_JSON` را با DevTools پر کنید (ردیف گردش، مبلغ، مرجع)
+5. در صورت نیاز منو: `TEJARAT_NAV_STEPS_JSON` (لیست `{ "click": "...", "wait_ms": 800 }`)
 
 ## Systemd
 

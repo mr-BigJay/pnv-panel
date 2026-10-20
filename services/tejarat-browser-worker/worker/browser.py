@@ -124,6 +124,26 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
             page.set_default_timeout(int(_env("TEJARAT_PAGE_TIMEOUT_MS", "30000")))
             page.goto(stmt_url, wait_until="domcontentloaded")
 
+            nav_raw = _env("TEJARAT_NAV_STEPS_JSON")
+            if nav_raw:
+                try:
+                    nav_steps = json.loads(nav_raw)
+                    if isinstance(nav_steps, list):
+                        for step in nav_steps:
+                            if not isinstance(step, dict):
+                                continue
+                            click_sel = str(step.get("click", "") or "").strip()
+                            wait_ms = int(step.get("wait_ms", 800))
+                            if click_sel:
+                                page.locator(click_sel).first.click(timeout=15000)
+                                page.wait_for_timeout(max(0, min(wait_ms, 15000)))
+                except json.JSONDecodeError:
+                    health["session_status"] = "error"
+                    health["last_error"] = "invalid TEJARAT_NAV_STEPS_JSON"
+                    context.close()
+                    browser.close()
+                    return [], health
+
             if _env("TEJARAT_LOGIN_PROBE_SELECTOR"):
                 if page.locator(_env("TEJARAT_LOGIN_PROBE_SELECTOR")).count() > 0:
                     health["session_status"] = "login_required"
