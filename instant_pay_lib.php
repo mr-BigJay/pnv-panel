@@ -1073,6 +1073,75 @@ if(!function_exists('instantPayPath')){
         return $items;
     }
 
+    function instantPaySyncPaidFromConfirmedCsv($csvIndex){
+        if(!function_exists('xuiLoadPayments')){
+            return ['ok' => false, 'error' => 'سیستم پرداخت در دسترس نیست'];
+        }
+
+        $csvIndex = intval($csvIndex);
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$csvIndex]) || !is_array($payments[$csvIndex])){
+            return ['ok' => false, 'error' => 'رد CSV پیدا نشد'];
+        }
+
+        $row = $payments[$csvIndex];
+        $status = trim((string)($row[6] ?? ''));
+
+        if($status !== 'تایید شد'){
+            return ['ok' => false, 'error' => 'رد CSV هنوز تأیید نشده است'];
+        }
+
+        $user = trim((string)($row[0] ?? ''));
+        $tracking = trim((string)($row[3] ?? ''));
+        $link = trim((string)($row[7] ?? ''));
+        $jsonItem = instantPayFindJsonByTracking($user, $tracking);
+
+        if(!is_array($jsonItem) || trim((string)($jsonItem['id'] ?? '')) === ''){
+            return ['ok' => true, 'skipped' => true];
+        }
+
+        $items = instantPayLoad();
+        $idx = -1;
+
+        foreach($items as $i => $item){
+            if(($item['id'] ?? '') === ($jsonItem['id'] ?? '')){
+                $idx = $i;
+                break;
+            }
+        }
+
+        if($idx < 0){
+            return ['ok' => true, 'skipped' => true];
+        }
+
+        if(($items[$idx]['status'] ?? '') === 'paid'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'item' => instantPayPublicView($items[$idx]),
+            ];
+        }
+
+        $items[$idx]['status'] = 'paid';
+        $items[$idx]['paid_at'] = intval($items[$idx]['paid_at'] ?? time());
+        $items[$idx]['csv_index'] = $csvIndex;
+        $items[$idx]['csv_purged'] = false;
+
+        if($link !== ''){
+            $items[$idx]['link'] = $link;
+        }
+
+        $items[$idx]['message'] = 'پرداخت تأیید شد';
+        instantPaySave($items);
+
+        return [
+            'ok' => true,
+            'item' => instantPayPublicView($items[$idx]),
+            'synced' => true,
+        ];
+    }
+
     function instantPayApplyRenewProvisionMeta(array &$item, array $result){
         if(trim((string)($item['type'] ?? '')) !== 'تمدید'){
             return;
@@ -1579,6 +1648,12 @@ if(!function_exists('instantPayPath')){
             $status = trim((string)($row[6] ?? ''));
 
             if($status === 'تایید شد'){
+                $sync = instantPaySyncPaidFromConfirmedCsv($csvIndex);
+
+                if(!empty($sync['ok']) && !empty($sync['item'])){
+                    return array_merge($sync, ['already' => true]);
+                }
+
                 $link = trim((string)($row[7] ?? ''));
                 return [
                     'ok' => true,

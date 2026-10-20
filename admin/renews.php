@@ -193,9 +193,9 @@ $xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig'
     ? xuiIsEnabled(xuiLoadConfig())
     : false;
 
-if($xuiEnabled && function_exists('xuiApprovePaymentIndex')){
+if($xuiEnabled && function_exists('instantPayMarkPaidFromCsv')){
 
-$result = xuiApprovePaymentIndex($index, 'تمدید');
+$result = instantPayMarkPaidFromCsv($index, []);
 
 if(empty($result['ok'])){
 $_SESSION['payment_error'] = 'تمدید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
@@ -203,8 +203,18 @@ header('Location: ' . renewsListUrl(1, $redirectStatus));
 exit;
 }
 
+$detailLink = '';
+
+if(is_array($result['item'] ?? null)){
+$detailLink = trim((string)($result['item']['link'] ?? ''));
+}
+
+if($detailLink === '' && is_array($result['provision'] ?? null)){
+$detailLink = trim((string)($result['provision']['link'] ?? ''));
+}
+
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
-$_SESSION['payment_message_detail'] = (string)($result['link'] ?? '');
+$_SESSION['payment_message_detail'] = $detailLink;
 header('Location: ' . renewsListUrl(1, $redirectStatus));
 exit;
 
@@ -224,6 +234,14 @@ fputcsv($fp,$p);
 }
 
 fclose($fp);
+
+if(function_exists('instantPaySyncPaidFromConfirmedCsv')){
+$sync = instantPaySyncPaidFromConfirmedCsv($index);
+
+if(!empty($sync['item']['link'])){
+$link = trim((string)$sync['item']['link']);
+}
+}
 
 $_SESSION['payment_message'] = 'تمدید تایید شد';
 $_SESSION['payment_message_detail'] = $link;
