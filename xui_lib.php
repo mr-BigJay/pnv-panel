@@ -2976,6 +2976,210 @@ if(!function_exists('xuiConfigPath')){
         return $up + $down;
     }
 
+    function xuiRenewUsageBytesTolerance(){
+        return 1048576;
+    }
+
+    function xuiClientTrafficStatBytes($value){
+        if($value === null || $value === ''){
+            return null;
+        }
+
+        if(!is_numeric($value)){
+            return null;
+        }
+
+        $n = floatval($value);
+
+        if(!is_finite($n) || $n < 0){
+            return null;
+        }
+
+        return $n;
+    }
+
+    function xuiClientHasExplicitExpiryField($client){
+        return is_array($client)
+            && (array_key_exists('expiryTime', $client) || array_key_exists('expiry_time', $client));
+    }
+
+    function xuiClientExpiryFieldNumericValid($client){
+        if(!xuiClientHasExplicitExpiryField($client)){
+            return false;
+        }
+
+        $raw = array_key_exists('expiryTime', $client) ? $client['expiryTime'] : $client['expiry_time'];
+
+        return is_numeric($raw);
+    }
+
+    function xuiClientUsageStatsValid($client){
+        if(!is_array($client)){
+            return false;
+        }
+
+        $hasUsed = array_key_exists('used', $client);
+        $hasUp = array_key_exists('up', $client) || array_key_exists('upload', $client);
+        $hasDown = array_key_exists('down', $client) || array_key_exists('download', $client);
+
+        if($hasUp xor $hasDown){
+            return false;
+        }
+
+        if($hasUsed && xuiClientTrafficStatBytes($client['used']) === null){
+            return false;
+        }
+
+        if($hasUp){
+            $upKey = array_key_exists('up', $client) ? 'up' : 'upload';
+            $downKey = array_key_exists('down', $client) ? 'down' : 'download';
+
+            if(
+                xuiClientTrafficStatBytes($client[$upKey]) === null
+                || xuiClientTrafficStatBytes($client[$downKey]) === null
+            ){
+                return false;
+            }
+        }
+
+        if(!$hasUsed && !($hasUp && $hasDown)){
+            return false;
+        }
+
+        if($hasUsed && $hasUp && $hasDown){
+            $used = xuiClientTrafficStatBytes($client['used']);
+            $upKey = array_key_exists('up', $client) ? 'up' : 'upload';
+            $downKey = array_key_exists('down', $client) ? 'down' : 'download';
+            $sum = xuiClientTrafficStatBytes($client[$upKey]) + xuiClientTrafficStatBytes($client[$downKey]);
+
+            if(abs($used - $sum) > xuiRenewUsageBytesTolerance()){
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function xuiClientResolveUsedBytesForRenew($client){
+        if(!is_array($client)){
+            return [
+                'ok' => false,
+                'code' => 'usage_stats_invalid',
+                'error' => 'آمار مصرف کلاینت از 3x-ui نامعتبر یا موجود نیست',
+            ];
+        }
+
+        $hasUsed = array_key_exists('used', $client);
+        $hasUp = array_key_exists('up', $client) || array_key_exists('upload', $client);
+        $hasDown = array_key_exists('down', $client) || array_key_exists('download', $client);
+        $tolerance = xuiRenewUsageBytesTolerance();
+
+        if($hasUp xor $hasDown){
+            return [
+                'ok' => false,
+                'code' => 'usage_stats_invalid',
+                'error' => 'آمار مصرف کلاینت از 3x-ui نامعتبر یا موجود نیست',
+            ];
+        }
+
+        if($hasUsed && $hasUp && $hasDown){
+            $used = xuiClientTrafficStatBytes($client['used']);
+            $upKey = array_key_exists('up', $client) ? 'up' : 'upload';
+            $downKey = array_key_exists('down', $client) ? 'down' : 'download';
+            $upBytes = xuiClientTrafficStatBytes($client[$upKey]);
+            $downBytes = xuiClientTrafficStatBytes($client[$downKey]);
+
+            if($used === null || $upBytes === null || $downBytes === null){
+                return [
+                    'ok' => false,
+                    'code' => 'usage_stats_invalid',
+                    'error' => 'آمار مصرف کلاینت از 3x-ui نامعتبر یا موجود نیست',
+                ];
+            }
+
+            $sum = $upBytes + $downBytes;
+
+            if(abs($used - $sum) > $tolerance){
+                return [
+                    'ok' => false,
+                    'code' => 'usage_stats_inconsistent',
+                    'error' => 'مقادیر used و up+down در 3x-ui با هم سازگار نیستند',
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'bytes' => intval(round($sum)),
+                'source' => 'up_down',
+            ];
+        }
+
+        if(!xuiClientUsageStatsValid($client)){
+            return [
+                'ok' => false,
+                'code' => 'usage_stats_invalid',
+                'error' => 'آمار مصرف کلاینت از 3x-ui نامعتبر یا موجود نیست',
+            ];
+        }
+
+        if($hasUsed){
+            return [
+                'ok' => true,
+                'bytes' => intval(round(xuiClientTrafficStatBytes($client['used']))),
+                'source' => 'used',
+            ];
+        }
+
+        $upKey = array_key_exists('up', $client) ? 'up' : 'upload';
+        $downKey = array_key_exists('down', $client) ? 'down' : 'download';
+        $sum = xuiClientTrafficStatBytes($client[$upKey]) + xuiClientTrafficStatBytes($client[$downKey]);
+
+        return [
+            'ok' => true,
+            'bytes' => intval(round($sum)),
+            'source' => 'up_down',
+        ];
+    }
+
+    function xuiRenewTimeUnlimitedVolumeBindingSnapshot($server, $client, $purchasedGb, array $extra = []){
+        $identity = xuiClientIdentitySnapshot($client);
+
+        return [
+            'provision_key' => trim((string)($extra['provision_key'] ?? '')),
+            'transaction_id' => trim((string)($extra['transaction_id'] ?? '')),
+            'server_id' => trim((string)($server['id'] ?? '')),
+            'client_id' => $identity['id'],
+            'email' => $identity['email'],
+            'sub_id' => $identity['subId'],
+            'plan_gb' => intval($purchasedGb),
+        ];
+    }
+
+    function xuiRenewTimeUnlimitedStoredBindingMatches(array $stored, array $expected){
+        foreach(['provision_key', 'transaction_id', 'server_id', 'client_id', 'email', 'sub_id'] as $key){
+            $want = trim((string)($expected[$key] ?? ''));
+
+            if($want === ''){
+                continue;
+            }
+
+            $have = trim((string)($stored[$key] ?? ''));
+
+            if($have === '' || $have !== $want){
+                return false;
+            }
+        }
+
+        $expectedGb = intval($expected['plan_gb'] ?? 0);
+        $storedGb = intval($stored['plan_gb'] ?? 0);
+
+        if($expectedGb > 0 && $storedGb !== $expectedGb){
+            return false;
+        }
+
+        return true;
+    }
+
     function xuiClientExpiryMs($client){
         if(!is_array($client)){
             return 0;
@@ -3103,27 +3307,15 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiClientIsTimeUnlimitedForRenew($client){
-        return is_array($client) && xuiClientExpiryMs($client) === 0;
+        if(!is_array($client) || !xuiClientExpiryFieldNumericValid($client)){
+            return false;
+        }
+
+        return xuiClientExpiryMs($client) === 0;
     }
 
     function xuiRenewShouldUseTimeUnlimitedVolumePack($client, $days){
         return max(0, intval($days)) <= 0 && xuiClientIsTimeUnlimitedForRenew($client);
-    }
-
-    function xuiClientUsageStatsValid($client){
-        if(!is_array($client)){
-            return false;
-        }
-
-        if(array_key_exists('used', $client) && is_numeric($client['used'])){
-            return true;
-        }
-
-        if(array_key_exists('up', $client) || array_key_exists('down', $client)){
-            return true;
-        }
-
-        return false;
     }
 
     function xuiRenewVerifyTimeUnlimitedVolumeTarget($liveClient, $targetTotalBytes, array $identityClient){
@@ -3145,6 +3337,13 @@ if(!function_exists('xuiConfigPath')){
     function xuiRenewPrepareTimeUnlimitedVolumeTarget($server, $client, $purchasedGb, array $options = []){
         $storedTarget = intval($options['target_total_bytes'] ?? 0);
         $purchasedBytes = xuiGbToBytes($purchasedGb);
+        $bindingExpected = xuiRenewTimeUnlimitedVolumeBindingSnapshot($server, $client, $purchasedGb, [
+            'provision_key' => trim((string)($options['provision_key'] ?? '')),
+            'transaction_id' => trim((string)($options['transaction_id'] ?? '')),
+        ]);
+        $bindingStored = is_array($options['stored_binding'] ?? null)
+            ? $options['stored_binding']
+            : [];
 
         if($purchasedBytes <= 0){
             return [
@@ -3155,12 +3354,32 @@ if(!function_exists('xuiConfigPath')){
         }
 
         if($storedTarget > 0){
-            return [
-                'ok' => true,
-                'target_total_bytes' => $storedTarget,
-                'used_bytes' => max(0, intval($options['used_bytes_at_order'] ?? 0)),
-                'reused_stored_target' => true,
-            ];
+            if($bindingStored === []){
+                return [
+                    'ok' => false,
+                    'code' => 'stored_target_binding_mismatch',
+                    'error' => 'هدف ذخیره‌شده بدون مرجع سفارش/کلاینت معتبر است',
+                ];
+            }
+
+            if(!xuiRenewTimeUnlimitedStoredBindingMatches($bindingStored, $bindingExpected)){
+                return [
+                    'ok' => false,
+                    'code' => 'stored_target_binding_mismatch',
+                    'error' => 'هدف ذخیره‌شده به سفارش یا کلاینت فعلی تعلق ندارد',
+                ];
+            }
+
+            $usedAtOrder = max(0, intval($options['used_bytes_at_order'] ?? 0));
+            $expectedTarget = $usedAtOrder + $purchasedBytes;
+
+            if($expectedTarget <= 0 || abs($storedTarget - $expectedTarget) > xuiRenewUsageBytesTolerance()){
+                return [
+                    'ok' => false,
+                    'code' => 'stored_target_invalid',
+                    'error' => 'هدف حجم ذخیره‌شده با پلن یا مصرف ثبت‌شده سازگار نیست',
+                ];
+            }
         }
 
         $live = xuiReloadClientForPlanVerify($server, $client);
@@ -3181,6 +3400,14 @@ if(!function_exists('xuiConfigPath')){
             ];
         }
 
+        if(!xuiClientExpiryFieldNumericValid($live)){
+            return [
+                'ok' => false,
+                'code' => 'expiry_not_confirmed',
+                'error' => 'انقضای کلاینت از 3x-ui برای تمدید نامحدود زمانی تأیید نشد',
+            ];
+        }
+
         if(!xuiClientIsTimeUnlimitedForRenew($live)){
             return [
                 'ok' => false,
@@ -3189,15 +3416,27 @@ if(!function_exists('xuiConfigPath')){
             ];
         }
 
-        if(!xuiClientUsageStatsValid($live)){
+        if($storedTarget > 0){
             return [
-                'ok' => false,
-                'code' => 'usage_stats_invalid',
-                'error' => 'آمار مصرف کلاینت از 3x-ui نامعتبر یا موجود نیست',
+                'ok' => true,
+                'target_total_bytes' => $storedTarget,
+                'used_bytes' => max(0, intval($options['used_bytes_at_order'] ?? 0)),
+                'reused_stored_target' => true,
+                'live' => $live,
             ];
         }
 
-        $usedBytes = xuiClientUsedBytes($live);
+        $usage = xuiClientResolveUsedBytesForRenew($live);
+
+        if(empty($usage['ok'])){
+            return [
+                'ok' => false,
+                'code' => $usage['code'] ?? 'usage_stats_invalid',
+                'error' => $usage['error'] ?? 'آمار مصرف کلاینت از 3x-ui نامعتبر یا موجود نیست',
+            ];
+        }
+
+        $usedBytes = intval($usage['bytes'] ?? 0);
         $targetTotalBytes = $usedBytes + $purchasedBytes;
 
         if($targetTotalBytes <= 0){
@@ -3213,6 +3452,7 @@ if(!function_exists('xuiConfigPath')){
             'target_total_bytes' => $targetTotalBytes,
             'used_bytes' => $usedBytes,
             'live' => $live,
+            'binding' => $bindingExpected,
         ];
     }
 
@@ -3234,9 +3474,23 @@ if(!function_exists('xuiConfigPath')){
         $targetTotalBytes = intval($prep['target_total_bytes'] ?? 0);
         $liveForSkip = is_array($prep['live'] ?? null) ? $prep['live'] : null;
 
+        if($liveForSkip === null){
+            $liveForSkip = xuiReloadClientForPlanVerify($server, $client);
+
+            if(
+                !is_array($liveForSkip)
+                || !xuiClientIdentityMatches(xuiClientIdentitySnapshot($client), $liveForSkip)
+            ){
+                return [
+                    'ok' => false,
+                    'code' => 'client_read_failed',
+                    'error' => 'خواندن وضعیت زنده کلاینت قبل از اعمال تمدید ناموفق بود',
+                ];
+            }
+        }
+
         if(
-            $liveForSkip !== null
-            && xuiRenewVerifyTimeUnlimitedVolumeTarget($liveForSkip, $targetTotalBytes, $client)
+            xuiRenewVerifyTimeUnlimitedVolumeTarget($liveForSkip, $targetTotalBytes, $client)
         ){
             return [
                 'ok' => true,
@@ -3285,9 +3539,25 @@ if(!function_exists('xuiConfigPath')){
 
     function xuiRenewProvisionTimeUnlimitedVolumePack($server, $client, $gb, $paymentRow, $provisionKey, array $parsed, $link, array $storePatch = []){
         $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
+        $bindingSnapshot = xuiRenewTimeUnlimitedVolumeBindingSnapshot($server, $client, $gb, [
+            'provision_key' => $provisionKey,
+            'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
+        ]);
+        $storedBinding = [
+            'provision_key' => trim((string)($stored['provision_key'] ?? $provisionKey)),
+            'transaction_id' => trim((string)($stored['transaction_id'] ?? xuiPaymentRowTransactionId($paymentRow))),
+            'server_id' => trim((string)($stored['server_id'] ?? ($server['id'] ?? ''))),
+            'client_id' => trim((string)($stored['client_id'] ?? ($bindingSnapshot['client_id'] ?? ''))),
+            'email' => trim((string)($stored['email'] ?? ($bindingSnapshot['email'] ?? ''))),
+            'sub_id' => trim((string)($stored['sub_id'] ?? ($bindingSnapshot['sub_id'] ?? ($parsed['sub_id'] ?? '')))),
+            'plan_gb' => intval($stored['plan_gb'] ?? $gb),
+        ];
         $prep = xuiRenewPrepareTimeUnlimitedVolumeTarget($server, $client, $gb, [
             'target_total_bytes' => intval($stored['target_total_bytes'] ?? 0),
             'used_bytes_at_order' => intval($stored['used_bytes_at_order'] ?? 0),
+            'stored_binding' => intval($stored['target_total_bytes'] ?? 0) > 0 ? $storedBinding : [],
+            'provision_key' => $provisionKey,
+            'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
         ]);
 
         if(empty($prep['ok'])){
@@ -3303,6 +3573,14 @@ if(!function_exists('xuiConfigPath')){
             'used_bytes_at_order' => intval($prep['used_bytes'] ?? 0),
             'operation' => 'time_unlimited_volume',
             'plan_gb' => intval($gb),
+            'provision_key' => $provisionKey,
+            'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
+            'server_id' => $bindingSnapshot['server_id'],
+            'client_id' => $bindingSnapshot['client_id'],
+            'email' => $bindingSnapshot['email'],
+            'sub_id' => $bindingSnapshot['sub_id'] !== ''
+                ? $bindingSnapshot['sub_id']
+                : trim((string)($parsed['sub_id'] ?? '')),
         ]);
 
         if(!xuiRenewProvisionStoreWrite($provisionKey, $writePayload)){
@@ -3317,6 +3595,11 @@ if(!function_exists('xuiConfigPath')){
         $applied = xuiApplyRenewTimeUnlimitedVolumePack($server, $client, $gb, [
             'target_total_bytes' => intval($prep['target_total_bytes'] ?? 0),
             'used_bytes_at_order' => intval($prep['used_bytes'] ?? 0),
+            'stored_binding' => intval($prep['target_total_bytes'] ?? 0) > 0
+                ? array_merge($storedBinding, ['plan_gb' => intval($gb)])
+                : [],
+            'provision_key' => $provisionKey,
+            'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
         ]);
 
         if(empty($applied['ok'])){

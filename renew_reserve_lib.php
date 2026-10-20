@@ -870,10 +870,26 @@ if(!function_exists('renewReservePath')){
                     }
                 }
 
-                $applied = xuiApplyRenewTimeUnlimitedVolumePack($server, $client, $gb, [
+                $applyOptions = [
                     'target_total_bytes' => $targetTotalBytes,
                     'used_bytes_at_order' => $usedAtOrder,
-                ]);
+                    'provision_key' => trim((string)($fresh['provision_key'] ?? '')),
+                    'transaction_id' => trim((string)($fresh['transaction_id'] ?? '')),
+                ];
+
+                if($targetTotalBytes > 0){
+                    $applyOptions['stored_binding'] = [
+                        'provision_key' => trim((string)($fresh['provision_key'] ?? '')),
+                        'transaction_id' => trim((string)($fresh['transaction_id'] ?? '')),
+                        'server_id' => trim((string)($fresh['server_id'] ?? ($server['id'] ?? ''))),
+                        'client_id' => trim((string)($client['id'] ?? '')),
+                        'email' => trim((string)($client['email'] ?? '')),
+                        'sub_id' => trim((string)($client['subId'] ?? ($fresh['sub_id'] ?? ''))),
+                        'plan_gb' => intval($gb),
+                    ];
+                }
+
+                $applied = xuiApplyRenewTimeUnlimitedVolumePack($server, $client, $gb, $applyOptions);
             }
             else{
                 $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days, $anchorMs);
