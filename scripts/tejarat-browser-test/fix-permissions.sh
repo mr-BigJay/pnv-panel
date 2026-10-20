@@ -35,9 +35,12 @@ fi
 
 install -d -o "${USER_NAME}" -g "${USER_NAME}" -m 0755 "${BROWSERS}"
 
-if ! sudo -u "${USER_NAME}" "${PY}" -c "import playwright" 2>/dev/null; then
-  echo "==> Installing Python deps in venv"
-  sudo -u "${USER_NAME}" env HOME="${TARGET}" "${PY}" -m pip install -q -r "${REQ}"
+echo "==> pip install -r requirements.txt as ${USER_NAME}"
+sudo -u "${USER_NAME}" env HOME="${TARGET}" "${PY}" -m pip install -q -r "${REQ}"
+
+if ! sudo -u "${USER_NAME}" "${PY}" -c "import playwright, requests" 2>/dev/null; then
+  echo "!! venv imports failed after pip" >&2
+  exit 1
 fi
 
 if [[ -d "${BROWSERS}" ]]; then
