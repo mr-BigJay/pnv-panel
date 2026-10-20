@@ -1,9 +1,10 @@
 <?php
 
 /**
- * Isolated E2E: server3 test client only — reserve, due, activate, no duplicate apply.
+ * Isolated E2E: allowlisted test client — reserve, due, activate, no duplicate apply.
  *
- * Writes only under PNV_E2E_WORKDIR. Reads XUI config source read-only.
+ * Resolves XUI server uniquely from PNV_E2E_SUB_LINK host (vip / vip2 / vip3 / vip4).
+ * Writes only under PNV_E2E_WORKDIR. Reads PNV_XUI_CONFIG_SOURCE read-only.
  */
 
 if(PHP_SAPI !== 'cli'){
@@ -14,8 +15,6 @@ if(PHP_SAPI !== 'cli'){
 $repoRoot = realpath(__DIR__ . '/../..') ?: (__DIR__ . '/../..');
 require_once $repoRoot . '/xui_lib.php';
 require_once $repoRoot . '/renew_reserve_lib.php';
-
-const E2E_SERVER_ID = 'server3';
 
 $step = 'help';
 
@@ -41,13 +40,17 @@ function e2eEnv($key, $default = ''){
 }
 
 function e2eWorkdir(){
-    $dir = e2eEnv('PNV_E2E_WORKDIR', '/tmp/pnv-e2e-server3');
+    $dir = e2eEnv('PNV_E2E_WORKDIR', '/tmp/pnv-e2e-renew-reserve');
 
     if(!is_dir($dir)){
         @mkdir($dir, 0750, true);
     }
 
     return rtrim($dir, '/');
+}
+
+function e2eIsolatedConfigPath(){
+    return e2eWorkdir() . '/xui_servers.e2e.json';
 }
 
 function e2eStatePath(){
@@ -70,23 +73,7 @@ function e2eSaveState(array $state){
     file_put_contents(e2eStatePath(), json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
 }
 
-function e2eBindIsolatedEnv(){
-    $wd = e2eWorkdir();
-    $locks = $wd . '/locks';
-    @mkdir($locks, 0750, true);
-    putenv('PNV_E2E_WORKDIR=' . $wd);
-    putenv('PNV_RENEW_RESERVE_PATH=' . $wd . '/renew_reservations.json');
-    putenv('PNV_LOCKS_DIR=' . $locks);
-    putenv('PNV_PAYMENTS_CSV_PATH=' . $wd . '/payments.csv');
-    putenv('PNV_XUI_CONFIG_PATH=' . $wd . '/xui_servers.server3.json');
-    putenv('PNV_PLANS_CATALOG_PATH=' . $wd . '/plans.json');
-
-    if(!is_file($wd . '/plans.json')){
-        file_put_contents($wd . '/plans.json', '[]');
-    }
-}
-
-function e2eExtractServer3Config(){
+function e2eLoadSourceConfig(){
     $source = e2eEnv('PNV_XUI_CONFIG_SOURCE');
 
     if($source === '' || !is_readable($source)){
@@ -99,37 +86,15 @@ function e2eExtractServer3Config(){
         e2eFail('invalid XUI config JSON at source');
     }
 
-    $picked = null;
-
-    foreach(($raw['servers'] ?? []) as $server){
-        if(($server['id'] ?? '') === E2E_SERVER_ID){
-            $picked = $server;
-            break;
-        }
-    }
-
-    if(!is_array($picked)){
-        e2eFail('server id not found in source config', 1, ['server_id' => E2E_SERVER_ID]);
-    }
-
-    $out = $raw;
-    $out['servers'] = [$picked];
-    $out['renew_server_ids'] = [E2E_SERVER_ID];
-    $out['buy_server_ids'] = [E2E_SERVER_ID];
-    $dest = e2eWorkdir() . '/xui_servers.server3.json';
-    file_put_contents($dest, json_encode($out, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
-
-    return $picked;
+    return $raw;
 }
 
-function e2eRequireTestTarget(){
+function e2eParseSubLinkOrFail(){
     $subLink = e2eEnv('PNV_E2E_SUB_LINK');
     $allowedSub = e2eEnv('PNV_E2E_ALLOWED_SUB_ID');
-    $allowedEmail = e2eEnv('PNV_E2E_ALLOWED_EMAIL');
-    $username = e2eEnv('PNV_E2E_USERNAME', 'pnv_e2e_user');
 
-    if($subLink === '' || $allowedSub === '' || $allowedEmail === ''){
-        e2eFail('set PNV_E2E_SUB_LINK, PNV_E2E_ALLOWED_SUB_ID, PNV_E2E_ALLOWED_EMAIL');
+    if($subLink === '' || $allowedSub === ''){
+        e2eFail('set PNV_E2E_SUB_LINK and PNV_E2E_ALLOWED_SUB_ID');
     }
 
     $parsed = xuiParseSubLink($subLink);
@@ -138,23 +103,189 @@ function e2eRequireTestTarget(){
         e2eFail('invalid PNV_E2E_SUB_LINK');
     }
 
-    if(trim((string)($parsed['sub_id'] ?? '')) !== $allowedSub){
+    $subId = trim((string)($parsed['sub_id'] ?? ''));
+
+    if($subId === '' || $subId !== $allowedSub){
         e2eFail('sub_id mismatch (refusing non-test client)', 1, [
-            'parsed_sub_id' => $parsed['sub_id'] ?? '',
+            'parsed_sub_id' => $subId,
             'allowed' => $allowedSub,
         ]);
     }
 
-    $server = xuiFindServerByHost($parsed['host'] ?? '', xuiLoadConfig());
+    $host = trim((string)($parsed['host'] ?? ''));
 
-    if(!$server || ($server['id'] ?? '') !== E2E_SERVER_ID){
-        e2eFail('sub link host is not server3', 1, ['host' => $parsed['host'] ?? '']);
+    if($host === ''){
+        e2eFail('sub link host missing');
     }
 
-    $lookup = xuiRenewLookupClient($server, $parsed['sub_id'], $subLink);
+    return [
+        'sub_link' => $subLink,
+        'parsed' => $parsed,
+        'sub_id' => $subId,
+        'host' => $host,
+    ];
+}
+
+function e2eFindUniqueServerForHost(array $raw, $host){
+    $hostNorm = strtolower(trim((string)$host));
+    $matches = [];
+
+    foreach(($raw['servers'] ?? []) as $server){
+        if(!is_array($server)){
+            continue;
+        }
+
+        if(strtolower(trim((string)($server['host'] ?? ''))) === $hostNorm){
+            $matches[] = $server;
+        }
+    }
+
+    if(count($matches) === 0){
+        e2eFail('no XUI server matches sub link host', 1, ['host' => $host]);
+    }
+
+    if(count($matches) > 1){
+        $ids = [];
+
+        foreach($matches as $server){
+            $ids[] = trim((string)($server['id'] ?? ''));
+        }
+
+        e2eFail('ambiguous XUI server for sub link host; fix config duplicates', 1, [
+            'host' => $host,
+            'server_ids' => $ids,
+        ]);
+    }
+
+    return $matches[0];
+}
+
+function e2eExtractServerFromSubLink(){
+    $linkInfo = e2eParseSubLinkOrFail();
+    $raw = e2eLoadSourceConfig();
+    $picked = e2eFindUniqueServerForHost($raw, $linkInfo['host']);
+    $serverId = trim((string)($picked['id'] ?? ''));
+
+    if($serverId === ''){
+        e2eFail('matched server has empty id', 1, ['host' => $linkInfo['host']]);
+    }
+
+    $out = $raw;
+    $out['servers'] = [$picked];
+    $out['renew_server_ids'] = [$serverId];
+    $out['buy_server_ids'] = [$serverId];
+    $dest = e2eIsolatedConfigPath();
+    file_put_contents($dest, json_encode($out, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+
+    return [
+        'server' => $picked,
+        'server_id' => $serverId,
+        'link' => $linkInfo,
+    ];
+}
+
+function e2eBindIsolatedEnv(){
+    $wd = e2eWorkdir();
+    $locks = $wd . '/locks';
+    @mkdir($locks, 0750, true);
+    putenv('PNV_E2E_WORKDIR=' . $wd);
+    putenv('PNV_RENEW_RESERVE_PATH=' . $wd . '/renew_reservations.json');
+    putenv('PNV_LOCKS_DIR=' . $locks);
+    putenv('PNV_PAYMENTS_CSV_PATH=' . $wd . '/payments.csv');
+    putenv('PNV_XUI_CONFIG_PATH=' . e2eIsolatedConfigPath());
+    putenv('PNV_PLANS_CATALOG_PATH=' . $wd . '/plans.json');
+
+    if(!is_file($wd . '/plans.json')){
+        file_put_contents($wd . '/plans.json', '[]');
+    }
+}
+
+function e2eEnsureIsolatedConfig($writeIfMissing = true){
+    $linkInfo = e2eParseSubLinkOrFail();
+    $raw = e2eLoadSourceConfig();
+    $picked = e2eFindUniqueServerForHost($raw, $linkInfo['host']);
+    $serverId = trim((string)($picked['id'] ?? ''));
+    $dest = e2eIsolatedConfigPath();
+
+    if($writeIfMissing && !is_file($dest)){
+        if($serverId === ''){
+            e2eFail('matched server has empty id', 1, ['host' => $linkInfo['host']]);
+        }
+
+        $out = $raw;
+        $out['servers'] = [$picked];
+        $out['renew_server_ids'] = [$serverId];
+        $out['buy_server_ids'] = [$serverId];
+        file_put_contents($dest, json_encode($out, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+    }
+    elseif(is_file($dest)){
+        $cached = json_decode((string)file_get_contents($dest), true);
+        $cachedId = trim((string)($cached['servers'][0]['id'] ?? ''));
+
+        if($cachedId !== '' && $cachedId !== $serverId){
+            e2eFail('sub link host resolves to different server than isolated config; run clean then init', 1, [
+                'resolved_server_id' => $serverId,
+                'cached_server_id' => $cachedId,
+            ]);
+        }
+    }
+    else{
+        e2eFail('isolated XUI config missing; run --step=init first');
+    }
+
+    return [
+        'server' => $picked,
+        'server_id' => $serverId,
+        'link' => $linkInfo,
+    ];
+}
+
+function e2eRequireTestTarget(){
+    $allowedEmail = e2eEnv('PNV_E2E_ALLOWED_EMAIL');
+    $username = e2eEnv('PNV_E2E_USERNAME', 'pnv_e2e_user');
+
+    if($allowedEmail === ''){
+        e2eFail('set PNV_E2E_ALLOWED_EMAIL');
+    }
+
+    e2eBindIsolatedEnv();
+    $resolved = e2eEnsureIsolatedConfig(false);
+    $linkInfo = $resolved['link'];
+    $subLink = $linkInfo['sub_link'];
+    $parsed = $linkInfo['parsed'];
+
+    $config = xuiLoadConfig();
+    $servers = array_values(array_filter($config['servers'] ?? [], 'is_array'));
+
+    if(count($servers) !== 1){
+        e2eFail('isolated XUI config must contain exactly one server', 1, ['count' => count($servers)]);
+    }
+
+    $server = $servers[0];
+
+    if(strtolower(trim((string)($server['host'] ?? ''))) !== strtolower($linkInfo['host'])){
+        e2eFail('isolated server host does not match sub link', 1, [
+            'link_host' => $linkInfo['host'],
+            'server_host' => $server['host'] ?? '',
+        ]);
+    }
+
+    $lookup = xuiRenewLookupClient($server, $linkInfo['sub_id'], $subLink);
 
     if(($lookup['status'] ?? '') !== 'found' || !is_array($lookup['client'] ?? null)){
-        e2eFail('test client not found on server3 XUI', 1, ['lookup' => $lookup['status'] ?? '']);
+        e2eFail('test client not found on resolved XUI server', 1, [
+            'lookup' => $lookup['status'] ?? '',
+            'server_id' => $server['id'] ?? '',
+        ]);
+    }
+
+    $clientSub = trim((string)($lookup['client']['subId'] ?? ''));
+
+    if($clientSub !== '' && $clientSub !== $linkInfo['sub_id']){
+        e2eFail('XUI client subId mismatch', 1, [
+            'xui_sub_id' => $clientSub,
+            'allowed' => $linkInfo['sub_id'],
+        ]);
     }
 
     $email = trim((string)($lookup['client']['email'] ?? ''));
@@ -171,6 +302,7 @@ function e2eRequireTestTarget(){
         'sub_link' => $subLink,
         'parsed' => $parsed,
         'server' => $server,
+        'server_id' => trim((string)($server['id'] ?? '')),
         'client' => $lookup['client'],
     ];
 }
@@ -214,11 +346,12 @@ function e2eWriteOwnershipCsv($username, $subLink){
 
 function e2eStepInit(){
     e2eBindIsolatedEnv();
-    $server = e2eExtractServer3Config();
+    @unlink(e2eIsolatedConfigPath());
+    $extracted = e2eEnsureIsolatedConfig(true);
     $target = e2eRequireTestTarget();
     $state = array_merge(e2eLoadState(), [
-        'server_id' => E2E_SERVER_ID,
-        'host' => $server['host'] ?? '',
+        'server_id' => $target['server_id'],
+        'host' => $target['server']['host'] ?? '',
         'sub_link' => $target['sub_link'],
         'sub_id' => $target['parsed']['sub_id'] ?? '',
         'username' => $target['username'],
@@ -230,8 +363,11 @@ function e2eStepInit(){
         'ok' => true,
         'step' => 'init',
         'workdir' => e2eWorkdir(),
+        'server_id' => $target['server_id'],
+        'host' => $target['server']['host'] ?? '',
         'client' => e2eClientFingerprint($target['client']),
         'runtime' => xuiRenewAnalyzeRuntimeState($target['server'], $target['client'], $target['sub_link']),
+        'resolved_from' => $extracted['link']['host'] ?? '',
     ]);
 }
 
@@ -244,11 +380,7 @@ function e2ePlanGbDays(){
 
 function e2eStepReserve(){
     e2eBindIsolatedEnv();
-
-    if(!is_file(e2eWorkdir() . '/xui_servers.server3.json')){
-        e2eExtractServer3Config();
-    }
-
+    e2eEnsureIsolatedConfig(false);
     $target = e2eRequireTestTarget();
     [$gb, $days] = e2ePlanGbDays();
     e2eWriteOwnershipCsv($target['username'], $target['sub_link']);
@@ -296,6 +428,7 @@ function e2eStepReserve(){
     }
 
     $state = array_merge(e2eLoadState(), [
+        'server_id' => $target['server_id'],
         'reserve_id' => $reserveId,
         'provision_key' => $provisionKey,
         'tracking' => $tracking,
@@ -309,6 +442,7 @@ function e2eStepReserve(){
     e2eOut([
         'ok' => true,
         'step' => 'reserve',
+        'server_id' => $target['server_id'],
         'reserve_id' => $reserveId,
         'renew_outcome' => 'reserved',
         'cron_summary' => $cronSkip,
@@ -408,6 +542,7 @@ function e2eStepActivate(){
     e2eOut([
         'ok' => true,
         'step' => 'activate',
+        'server_id' => $target['server_id'],
         'cron_first' => $s1,
         'cron_repeat' => [$s2, $s3],
         'reserve_status' => $st,
@@ -427,6 +562,7 @@ function e2eStepStatus(){
         'ok' => true,
         'step' => 'status',
         'workdir' => e2eWorkdir(),
+        'server_id' => $target['server_id'],
         'state' => e2eLoadState(),
         'client' => e2eClientFingerprint($target['client']),
         'runtime' => xuiRenewAnalyzeRuntimeState($target['server'], $target['client'], $target['sub_link']),
@@ -436,7 +572,7 @@ function e2eStepStatus(){
 
 function e2eStepClean(){
     $wd = e2eWorkdir();
-    foreach(['renew_reservations.json', 'payments.csv', 'e2e_state.json'] as $f){
+    foreach(['renew_reservations.json', 'payments.csv', 'e2e_state.json', 'xui_servers.e2e.json'] as $f){
         @unlink($wd . '/' . $f);
     }
 
