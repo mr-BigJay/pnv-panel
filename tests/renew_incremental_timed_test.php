@@ -95,9 +95,10 @@ incTimedAssert(
     'time-unlimited active sub reserves timed plan renew'
 );
 
-// 1b) volume exhausted on unlimited-time → immediate bulkAdjust + verify expiry
+// 1b) Purchased timed plan: if current quota is already exhausted, activate
+// the NEW timed plan absolutely (never increment volume onto the old plan).
 $row1b = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-1b', '', '', 'درحال بررسی', '', 1701001, 'تمدید', '', '', 1];
-$adjustPhase1b = 0;
+$absoluteCalls1b = 0;
 $GLOBALS['renewReserveTestNow'] = $anchorSec;
 $GLOBALS['xuiTestRenewRuntimeState'] = [
     'ambiguous' => false,
@@ -105,124 +106,92 @@ $GLOBALS['xuiTestRenewRuntimeState'] = [
     'volume_exhausted' => true,
     'should_activate_now' => true,
 ];
-$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustPhase1b){
-    $adjustPhase1b++;
-
-    return ['ok' => true, 'method' => 'bulkAdjust'];
+$GLOBALS['xuiTestApplyRenewPlanAbsolute'] = static function() use (&$absoluteCalls1b){
+    $absoluteCalls1b++;
+    return ['ok' => true, 'method' => 'absolute_test'];
 };
-$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustPhase1b, $anchorMs, $baseline){
-    $after = $adjustPhase1b > 0;
-
+$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$absoluteCalls1b, $anchorMs, $baseline){
+    $after = $absoluteCalls1b > 0;
     return [
         'status' => 'found',
         'client' => [
             'email' => 'u1',
             'subId' => $id,
-            'totalGB' => $after ? xuiGbToBytes(150) : $baseline['total_bytes'],
+            'totalGB' => $after ? xuiGbToBytes(50) : $baseline['total_bytes'],
             'expiryTime' => $after ? ($anchorMs + (86400000 * 30)) : 0,
         ],
     ];
 };
 $okRenew = xuiProvisionRenew($row1b);
-incTimedAssert(!empty($okRenew['ok']) && ($okRenew['renew_outcome'] ?? '') === 'renewed', 'time-unlimited exhausted applies timed plan on server');
+incTimedAssert(!empty($okRenew['ok']) && ($okRenew['renew_outcome'] ?? '') === 'renewed'
+    && $absoluteCalls1b === 1,
+    'purchased timed plan activates absolutely once when old quota exhausted');
 
-// 2) volume increased but duration missing -> ambiguous
+// 2) Absolute volume was updated, but new expiry was not set: fail closed.
 $row2 = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-2', '', '', 'درحال بررسی', '', 170101, 'تمدید', '', '', 1];
-$adjustPhase2 = 0;
-$GLOBALS['xuiTestRenewRuntimeState'] = [
-    'ambiguous' => false,
-    'time_unlimited' => true,
-    'volume_exhausted' => true,
-    'should_activate_now' => true,
-];
-$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustPhase2){
-    $adjustPhase2++;
-
-    return ['ok' => true, 'method' => 'bulkAdjust'];
+$absoluteCalls2 = 0;
+$GLOBALS['xuiTestApplyRenewPlanAbsolute'] = static function() use (&$absoluteCalls2){
+    $absoluteCalls2++;
+    return ['ok' => true, 'method' => 'absolute_test'];
 };
-$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustPhase2, $baseline){
-    $after = $adjustPhase2 > 0;
-
+$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$absoluteCalls2, $baseline){
     return [
         'status' => 'found',
         'client' => [
             'email' => 'u1',
             'subId' => $id,
-            'totalGB' => $after ? xuiGbToBytes(150) : $baseline['total_bytes'],
+            'totalGB' => $absoluteCalls2 > 0 ? xuiGbToBytes(50) : $baseline['total_bytes'],
             'expiryTime' => 0,
         ],
     ];
 };
 $partial = xuiProvisionRenew($row2);
-incTimedAssert(empty($partial['ok']) && ($partial['code'] ?? '') === 'ambiguous_provision', 'volume ok time missing returns ambiguous');
+incTimedAssert(empty($partial['ok']) && ($partial['code'] ?? '') === 'ambiguous_provision'
+    && $absoluteCalls2 === 1, 'timed activation refuses volume-only result without expiry');
 
-// 3) bulkAdjust transport timeout but both changes applied on server
-unset($GLOBALS['xuiTestAdjustClientTraffic']);
-$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path){
-    if($method === 'POST' && strpos($path, 'bulkAdjust') !== false){
-        return ['success' => false, 'msg' => 'Operation timed out'];
-    }
-
-    return ['success' => false, 'msg' => 'unexpected'];
-};
+// 3) A timeout may happen after 3x-ui applied the absolute plan.
+// Re-read the actual client; never send the timed plan twice.
 $row3 = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-3', '', '', 'درحال بررسی', '', 170102, 'تمدید', '', '', 1];
-$GLOBALS['xuiTestRenewRuntimeState'] = [
-    'ambiguous' => false,
-    'time_unlimited' => true,
-    'volume_exhausted' => true,
-    'should_activate_now' => true,
-];
-$transportLookups = 0;
-$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$transportLookups, $anchorMs, $baseline){
-    $transportLookups++;
-    $after = $transportLookups > 1;
-
+$absoluteCalls3 = 0;
+$GLOBALS['xuiTestApplyRenewPlanAbsolute'] = static function() use (&$absoluteCalls3){
+    $absoluteCalls3++;
+    return ['ok' => false, 'code' => 'transport_error', 'error' => 'timed out'];
+};
+$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$absoluteCalls3, $anchorMs, $baseline){
+    $after = $absoluteCalls3 > 0;
     return [
         'status' => 'found',
         'client' => [
             'email' => 'u1',
             'subId' => $id,
-            'totalGB' => $after ? xuiGbToBytes(150) : $baseline['total_bytes'],
+            'totalGB' => $after ? xuiGbToBytes(50) : $baseline['total_bytes'],
             'expiryTime' => $after ? ($anchorMs + (86400000 * 30)) : 0,
         ],
     ];
 };
 $transportOk = xuiProvisionRenew($row3);
-incTimedAssert(!empty($transportOk['ok']), 'bulkAdjust transport verifies volume and duration on server');
+incTimedAssert(!empty($transportOk['ok']) && $absoluteCalls3 === 1,
+    'timed absolute timeout verifies server state without duplicate mutation');
 
-// 4) legacy fallback blocked for timed plan (bulk API error, not transport)
-$legacyCalls = 0;
-$GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$legacyCalls){
-    if($method === 'POST' && strpos($path, 'bulkAdjust') !== false){
-        return ['success' => false, 'msg' => 'bad request invalid'];
-    }
-
-    if($method === 'POST' && strpos($path, 'updateClient') !== false){
-        $legacyCalls++;
-
-        return ['success' => true, 'msg' => 'ok'];
-    }
-
-    return ['success' => false, 'msg' => 'unexpected'];
-};
+// 4) Timed purchase cannot silently fall back to legacy volume-only API.
 $row4 = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-4', '', '', 'درحال بررسی', '', 170103, 'تمدید', '', '', 1];
-$GLOBALS['xuiTestRenewRuntimeState'] = [
-    'ambiguous' => false,
-    'time_unlimited' => true,
-    'volume_exhausted' => true,
-    'should_activate_now' => true,
-];
+$legacyCalls = 0;
+$absoluteCalls4 = 0;
+$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$legacyCalls){
+    $legacyCalls++;
+    return ['ok' => true, 'method' => 'forbidden_volume_only'];
+};
+$GLOBALS['xuiTestApplyRenewPlanAbsolute'] = static function() use (&$absoluteCalls4){
+    $absoluteCalls4++;
+    return ['ok' => false, 'code' => 'activation_failed', 'error' => 'API endpoint rejected'];
+};
 $GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $id) => [
     'status' => 'found',
     'client' => ['email' => 'u1', 'subId' => $id, 'totalGB' => xuiGbToBytes(100), 'expiryTime' => 0],
 ];
 $legacyBlock = xuiProvisionRenew($row4);
-incTimedAssert(
-    empty($legacyBlock['ok'])
-    && ($legacyBlock['code'] ?? '') === 'duration_not_applied'
-    && $legacyCalls === 0,
-    'timed plan does not succeed via legacy volume-only fallback'
-);
+incTimedAssert(empty($legacyBlock['ok']) && $legacyCalls === 0 && $absoluteCalls4 === 1,
+    'timed plan never uses legacy volume-only incremental fallback');
 
 // 5) retry recovery without second bulkAdjust
 unset($GLOBALS['xuiTestApiRequest']);
@@ -234,7 +203,7 @@ $GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustCalls){
 
     return ['ok' => true, 'method' => 'bulkAdjust'];
 };
-$GLOBALS['xuiTestRenewProvisionStoreWrite'] = static fn($k, $p) => ($p['phase'] ?? '') !== 'provision_complete';
+// Simulate an in-flight incremental operation created by the older version.
 $csv5 = fopen(getenv('PNV_PAYMENTS_CSV_PATH'), 'w');
 fwrite($csv5, $sampleCsv);
 fputcsv($csv5, $row5);
@@ -250,8 +219,7 @@ $GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustCal
         ],
     ];
 };
-xuiProvisionRenew($row5);
-unset($GLOBALS['xuiTestRenewProvisionStoreWrite']);
+// Stored operation below represents a legacy timed incremental pending recovery.
 xuiRenewProvisionStoreWrite($key5, [
     'state' => 'processing',
     'phase' => 'renew_adjust_started',
@@ -272,7 +240,7 @@ $GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $id) => [
     ],
 ];
 $approve5 = xuiApprovePaymentIndex(1, 'تمدید');
-incTimedAssert(!empty($approve5['ok']) && $adjustCalls === 1, 'retry finalize without second bulkAdjust');
+incTimedAssert(!empty($approve5['ok']) && $adjustCalls === 0, 'legacy timed incremental recovery finalizes without another API write');
 
 unset($GLOBALS['renewReserveTestNow'], $GLOBALS['xuiTestAdjustClientTraffic'], $GLOBALS['xuiTestRenewLookupClient'], $GLOBALS['xuiTestRenewRuntimeState']);
 
