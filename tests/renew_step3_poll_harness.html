@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>renew step3 poll harness</title>
+<style>
+.formStep{display:none}.formStep.is-active{display:block}
+.stepItem.is-active{font-weight:bold}
+#assertion{color:#0a0}
+#assertion.fail{color:#c00}
+</style>
+</head>
+<body>
+<div class="stepper">
+  <div class="stepItem is-active" id="stepTab1">1</div>
+  <div class="stepItem" id="stepTab2">2</div>
+  <div class="stepItem" id="stepTab3">3</div>
+</div>
+<div class="formStep is-active" id="step1">plan</div>
+<div class="formStep" id="step2">pay</div>
+<div class="formStep" id="step3">result <span id="resultLink"></span></div>
+<p id="assertion"></p>
+<script>
+const step1=document.getElementById('step1');
+const step2=document.getElementById('step2');
+const step3=document.getElementById('step3');
+const stepTab1=document.getElementById('stepTab1');
+const stepTab2=document.getElementById('stepTab2');
+const stepTab3=document.getElementById('stepTab3');
+const resultLink=document.getElementById('resultLink');
+const assertion=document.getElementById('assertion');
+let currentPay=null;
+function showStep(n){
+  [step1,step2,step3].forEach((el,i)=>el.classList.toggle('is-active',i===n-1));
+  [stepTab1,stepTab2,stepTab3].forEach((el,i)=>el.classList.toggle('is-active',i===n-1));
+}
+function fillResult(item){
+  resultLink.textContent=item.link||'';
+}
+function renderPay(item){
+  currentPay=item;
+  if(item.status==='processing'||item.status==='payment_received'){return;}
+  if(item.status==='payment_received_provision_failed'){return;}
+  if(item.status==='paid'){
+    fillResult(item);
+    showStep(3);
+  }
+}
+window.__renewHarnessPoll = function(payload){
+  if(payload&&payload.ok&&payload.item){renderPay(payload.item);}
+};
+showStep(2);
+window.__renewHarnessPoll({
+  ok:true,
+  item:{id:'demo',status:'paid',link:'https://vip3.boozhaan.ir/sub/demo-renewed',amount_text:'1'}
+});
+const ok=step3.classList.contains('is-active')&&resultLink.textContent.indexOf('demo-renewed')!==-1;
+assertion.textContent=ok?'PASS: poll paid advances to step 3':'FAIL: step 3 not active';
+assertion.className=ok?'':'fail';
+window.__renewHarnessResult=ok;
+</script>
+</body>
+</html>

@@ -1043,11 +1043,20 @@ function renderPay(item){
     instantPay.hidden = false;
     instantAmount.textContent = item.amount_text || '—';
     instantTimer.textContent = formatRemain(item.remaining);
-    if(item.status === 'processing'){
+    if(item.status === 'processing' || item.status === 'payment_received'){
         instantPayHead.textContent = 'در حال آماده‌سازی';
         instantStatus.hidden = false;
         instantStatus.textContent = 'واریز دیده شد؛ در حال تمدید اشتراک…';
         instantApproved.hidden = true; return;
+    }
+    if(item.status === 'payment_received_provision_failed'){
+        stopPayWatchers();
+        instantPayHead.textContent = 'خطا در تمدید';
+        instantTimer.textContent = '!';
+        instantStatus.hidden = false;
+        instantStatus.textContent = item.provision_error || item.message || 'واریز ثبت شد اما تمدید اشتراک انجام نشد. با پشتیبانی تماس بگیرید.';
+        instantApproved.hidden = true;
+        return;
     }
     if(item.status === 'paid'){
         stopPayWatchers();
