@@ -11,11 +11,6 @@
 #
 set -euo pipefail
 
-SCRIPT_SELF="${PNV_TEJARAT_INSTALL_SCRIPT:-}"
-if [[ -z "${SCRIPT_SELF}" ]]; then
-  SCRIPT_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-pnv-tejarat.sh"
-fi
-
 REPO_URL="${PNV_GIT_REPO:-https://github.com/mr-BigJay/pnv-panel.git}"
 BRANCH="${PNV_TEJARAT_GIT_BRANCH:-cursor/tejarat-browser-worker-cbea}"
 INSTALL_DIR="${PNV_TEJARAT_INSTALL_DIR:-/root/pnv-panel-tejarat}"
@@ -45,6 +40,7 @@ main() {
   export PNV_TEJARAT_SOURCE="${INSTALL_DIR}"
   export PNV_TEJARAT_CONFIRM_SERVICES="${CONFIRM}"
   bash "${INSTALL_DIR}/scripts/tejarat-browser-test/setup-isolated.sh"
+  bash "${INSTALL_DIR}/scripts/tejarat-browser-test/fix-permissions.sh"
 
   if [[ -n "${PANEL}" ]]; then
     log "افزودن ماژول به پنل: ${PANEL}"

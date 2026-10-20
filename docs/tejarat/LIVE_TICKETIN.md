@@ -37,6 +37,12 @@ Cron:
 
 ---
 
+## اگر `Permission denied` روی venv یا `playwright not installed`
+
+```bash
+sudo bash /root/pnv-panel-tejarat/scripts/tejarat-browser-test/fix-permissions.sh
+```
+
 ## مرحله B — ورود بانک (شما)
 
 VNC را باز کنید، سپس:

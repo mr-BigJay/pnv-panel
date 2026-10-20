@@ -40,6 +40,17 @@ fi
 
 chown "${USER_NAME}:${USER_NAME}" "${SESSION_DIR}" || true
 
+fix_worker_tree_permissions() {
+  for name in venv .venv browsers vnc session; do
+    [[ -e "${TARGET}/${name}" ]] || continue
+    chown -R "${USER_NAME}:${USER_NAME}" "${TARGET}/${name}"
+  done
+  chmod 700 "${SESSION_DIR}" 2>/dev/null || true
+  if [[ -f "${TARGET}/venv/bin/python" ]]; then
+    chmod u+rx "${TARGET}/venv/bin/python" 2>/dev/null || true
+  fi
+}
+
 RSYNC_PROTECT=(
   --exclude '.git/'
   --exclude 'node_modules/'
@@ -193,8 +204,23 @@ resolve_venv_python() {
   return 1
 }
 
+fix_worker_tree_permissions
+
 if VPY="$(resolve_venv_python)"; then
   log "Using existing venv: ${VPY}"
+  if ! sudo -u "${USER_NAME}" test -x "${VPY}" 2>/dev/null; then
+    warn "venv not executable as ${USER_NAME} — re-running fix_worker_tree_permissions"
+    fix_worker_tree_permissions
+  fi
+  if ! sudo -u "${USER_NAME}" "${VPY}" -c "import playwright" 2>/dev/null; then
+    log "playwright missing — pip install as ${USER_NAME}"
+    sudo -u "${USER_NAME}" env HOME="${TARGET}" "${VPY}" -m pip install -q \
+      -r "${TARGET}/services/tejarat-browser-worker/requirements.txt"
+    if [[ -d "${TARGET}/browsers" ]]; then
+      sudo -u "${USER_NAME}" env HOME="${TARGET}" PLAYWRIGHT_BROWSERS_PATH="${TARGET}/browsers" \
+        "${VPY}" -m playwright install chromium 2>/dev/null || true
+    fi
+  fi
   if [[ "${PNV_TEJARAT_PIP_SYNC:-0}" == "1" ]]; then
     sudo -u "${USER_NAME}" env DISPLAY="${DISPLAY_NUM}" HOME="${TARGET}" \
       bash -lc "'${VPY}' -m pip install -q -r '${TARGET}/services/tejarat-browser-worker/requirements.txt'"
