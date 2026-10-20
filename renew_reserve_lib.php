@@ -317,12 +317,13 @@ if(!function_exists('renewReservePath')){
             return 'ambiguous';
         }
 
-        if(!empty($runtime['should_activate_now'])){
-            return 'activate_now';
+        // نامحدود زمانی + حجم باقی‌مانده → رزرو (تا اتمام حجم/زمان فعال شود).
+        if(($runtime['time_unlimited'] ?? null) === true){
+            return !empty($runtime['volume_exhausted']) ? 'immediate_unlimited' : 'reserve';
         }
 
-        if($runtime['time_unlimited'] === true){
-            return 'immediate_unlimited';
+        if(!empty($runtime['should_activate_now'])){
+            return 'activate_now';
         }
 
         return 'reserve';
@@ -841,6 +842,9 @@ if(!function_exists('renewReservePath')){
             }
 
             $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days, $anchorMs);
+            $applyDiag = function_exists('xuiApplyRenewDiagSummary')
+                ? xuiApplyRenewDiagSummary($applied)
+                : trim((string)($applied['error'] ?? ''));
 
             if(empty($applied['ok'])){
                 $code = trim((string)($applied['code'] ?? ''));
@@ -867,12 +871,17 @@ if(!function_exists('renewReservePath')){
 
                         renewReserveUpdateById($id, [
                             'status' => 'reserved',
-                            'last_error' => '',
+                            'last_error' => $applyDiag !== '' ? $applyDiag : 'updateClient failed; XUI unchanged after transport',
                             'last_check_at' => renewReserveNow(),
                             'last_check_note' => 'transport_no_change',
                         ]);
 
-                        return ['ok' => false, 'code' => 'api_error', 'error' => 'تغییر اعمال نشده؛ retry امن'];
+                        return [
+                            'ok' => false,
+                            'code' => 'api_error',
+                            'error' => 'تغییر اعمال نشده؛ retry امن',
+                            'apply_diag' => $applied['attempts'] ?? [],
+                        ];
                     }
 
                     renewReserveUpdateById($id, [
@@ -886,7 +895,7 @@ if(!function_exists('renewReservePath')){
 
                 renewReserveUpdateById($id, [
                     'status' => 'activation_failed',
-                    'last_error' => $applied['error'] ?? 'فعال‌سازی ناموفق',
+                    'last_error' => $applyDiag !== '' ? $applyDiag : ($applied['error'] ?? 'فعال‌سازی ناموفق'),
                     'last_check_at' => renewReserveNow(),
                 ]);
 
