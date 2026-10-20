@@ -68,11 +68,152 @@ if(!function_exists('baleConfigPath')){
         $ids = baleAdminChatIds($config);
 
         if(count($ids) === 0){
-            // تا وقتی chat_id ست نشده، اولین پیام‌ها برای bootstrap پذیرفته می‌شوند
-            return true;
+            return false;
         }
 
         return in_array($chatId, $ids, true);
+    }
+
+    function baleEnsureWebhookSecret(array &$config){
+        $secret = trim((string)($config['webhook_secret'] ?? ''));
+
+        if($secret !== ''){
+            return $secret;
+        }
+
+        try{
+            $secret = bin2hex(random_bytes(16));
+        }
+        catch(Throwable $e){
+            $secret = sha1(uniqid('bale_wh_', true));
+        }
+
+        $config['webhook_secret'] = $secret;
+
+        return $secret;
+    }
+
+    function baleVerifyWebhookRequest($config = null){
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        $secret = trim((string)($config['webhook_secret'] ?? ''));
+
+        if($secret === ''){
+            return [
+                'ok' => false,
+                'code' => 'webhook_secret_missing',
+                'error' => 'webhook_secret در تنظیمات بله تنظیم نشده است',
+            ];
+        }
+
+        $provided = '';
+
+        foreach([
+            'HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN',
+            'HTTP_X_BALE_WEBHOOK_SECRET',
+        ] as $headerKey){
+            if(!empty($_SERVER[$headerKey]) && is_string($_SERVER[$headerKey])){
+                $provided = trim($_SERVER[$headerKey]);
+                break;
+            }
+        }
+
+        if($provided === '' || !hash_equals($secret, $provided)){
+            return [
+                'ok' => false,
+                'code' => 'webhook_unauthorized',
+                'error' => 'منشأ Webhook معتبر نیست',
+            ];
+        }
+
+        return ['ok' => true];
+    }
+
+    function baleAppendAdminChatId($chatId, $config = null){
+        $chatId = trim((string)$chatId);
+
+        if($chatId === '' || !preg_match('/^-?\d+$/', $chatId)){
+            return false;
+        }
+
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        $ids = baleAdminChatIds($config);
+
+        if(in_array($chatId, $ids, true)){
+            return true;
+        }
+
+        $ids[] = $chatId;
+        $config['admin_chat_ids'] = implode(',', $ids);
+        baleSaveConfig($config);
+
+        return true;
+    }
+
+    function baleNormalizeBotUsername($username){
+        return strtolower(ltrim(trim((string)$username), '@'));
+    }
+
+    function baleTrustedPostbankBotUsernames(){
+        return ['postbank_bot'];
+    }
+
+    function baleMessageForwardUsername(array $message){
+        if(!empty($message['forward_origin']) && is_array($message['forward_origin'])){
+            $origin = $message['forward_origin'];
+            $type = strtolower(trim((string)($origin['type'] ?? '')));
+
+            if($type === 'user' && !empty($origin['sender_user']) && is_array($origin['sender_user'])){
+                return (string)($origin['sender_user']['username'] ?? '');
+            }
+
+            if($type === 'chat' && !empty($origin['sender_chat']) && is_array($origin['sender_chat'])){
+                return (string)($origin['sender_chat']['username'] ?? '');
+            }
+        }
+
+        if(!empty($message['forward_from']) && is_array($message['forward_from'])){
+            return (string)($message['forward_from']['username'] ?? '');
+        }
+
+        if(!empty($message['forward_from_chat']) && is_array($message['forward_from_chat'])){
+            return (string)($message['forward_from_chat']['username'] ?? '');
+        }
+
+        return '';
+    }
+
+    function baleMessageIsForward(array $message){
+        if(!empty($message['forward_date'])){
+            return true;
+        }
+
+        foreach(['forward_from', 'forward_origin', 'forward_from_message', 'forward_from_chat'] as $key){
+            if(!empty($message[$key])){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function baleMessageIsTrustedPostbankDeposit(array $message){
+        if(!baleMessageIsForward($message)){
+            return false;
+        }
+
+        $forwardUser = baleNormalizeBotUsername(baleMessageForwardUsername($message));
+
+        if($forwardUser !== ''){
+            return in_array($forwardUser, baleTrustedPostbankBotUsernames(), true);
+        }
+
+        return false;
     }
 
     function baleApiRequest($method, $params = [], $config = null){
@@ -128,7 +269,18 @@ if(!function_exists('baleConfigPath')){
     }
 
     function baleSetWebhook($url, $config = null){
-        return baleApiRequest('setWebhook', ['url' => $url], $config);
+        if($config === null){
+            $config = baleLoadConfig();
+        }
+
+        $params = ['url' => $url];
+        $secret = trim((string)($config['webhook_secret'] ?? ''));
+
+        if($secret !== ''){
+            $params['secret_token'] = $secret;
+        }
+
+        return baleApiRequest('setWebhook', $params, $config);
     }
 
     function baleDeleteWebhook($config = null){

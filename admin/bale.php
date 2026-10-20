@@ -36,9 +36,13 @@ if(isset($_POST['save'])){
         'bot_username' => trim((string)($_POST['bot_username'] ?? 'Jay24x7Pusbank_bot')),
         'pay_window_seconds' => max(60, intval($_POST['pay_window_seconds'] ?? 1800)),
         'match_grace_seconds' => max(0, intval($_POST['match_grace_seconds'] ?? 0)),
-        'webhook_secret' => $config['webhook_secret'] ?? '',
+        'webhook_secret' => trim((string)($config['webhook_secret'] ?? '')),
         'forward_hint' => $config['forward_hint'] ?? ''
     ];
+
+    if($config['webhook_secret'] === '' && function_exists('baleEnsureWebhookSecret')){
+        baleEnsureWebhookSecret($config);
+    }
 
     baleSaveConfig($config);
     $message = 'تنظیمات بله ذخیره شد.';
@@ -192,7 +196,9 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <input class="ltr" type="number" id="match_grace_seconds" name="match_grace_seconds" min="0" value="<?php echo intval($config['match_grace_seconds'] ?? 0); ?>">
 <div class="hint">۰ = خودکار (حداقل ۳۰ دقیقه یا دوبرابر مهلت پرداخت). اگر کاربر دیر واریز کرد، در این بازه هنوز تأیید خودکار کار می‌کند.</div>
 
-<div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></div>
+<div class="hint">آدرس Webhook (پرداخت):<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code><br>
+ثبت chat_id (setup): <code><?php echo htmlspecialchars($webhookUrl . '?mode=setup', ENT_QUOTES, 'UTF-8'); ?></code><br>
+هدر امنیتی: <code>X-Telegram-Bot-Api-Secret-Token</code> = مقدار webhook_secret</div>
 
 <button type="submit" name="save">ذخیره تنظیمات</button>
 <button type="submit" name="fetch_chat" class="test">خواندن شناسه چت از بله</button>

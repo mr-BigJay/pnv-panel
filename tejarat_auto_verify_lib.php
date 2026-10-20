@@ -288,12 +288,12 @@ if(!function_exists('tejaratVerifyConfigPath')){
         $allowed = array_map('tejaratVerifyNormalizeCard', (array)($config['destination_cards'] ?? []));
         $allowed = array_values(array_filter($allowed, static fn($c) => $c !== ''));
 
-        if($destination !== '' && count($allowed) > 0 && !in_array($destination, $allowed, true)){
+        if($destination === ''){
             return null;
         }
 
-        if($destination === '' && count($allowed) === 1){
-            $destination = $allowed[0];
+        if(count($allowed) > 0 && !in_array($destination, $allowed, true)){
+            return null;
         }
 
         $txId = trim((string)($row['transaction_id'] ?? $row['id'] ?? ''));

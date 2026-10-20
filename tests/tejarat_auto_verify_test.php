@@ -93,6 +93,14 @@ putenv('PNV_TEJARAT_MOCK_TRANSACTIONS_JSON=' . json_encode([[
 $resIncomplete = tejaratVerifyPollOnce();
 tvAssert(($resIncomplete['results'][0]['code'] ?? '') === 'incomplete_transaction', 'missing transaction id skipped');
 
+putenv('PNV_TEJARAT_MOCK_TRANSACTIONS_JSON=' . json_encode([[
+    'amount' => $amount,
+    'transaction_id' => 'TJ-NODST',
+    'occurred_at' => $now + 5,
+]]));
+$resNoCard = tejaratVerifyPollOnce();
+tvAssert(intval($resNoCard['transactions'] ?? 0) === 0, 'missing destination card not inferred from config');
+
 // --- valid deposit dry-run ---
 instantPaySave([]);
 tvSeedOrder('ord-valid', $tejaratCard, 'tejarat', $amount, $code);

@@ -101,5 +101,48 @@ secAssert(!empty($res['dry_run']), 'mock provider forces dry_run even when confi
 $items = instantPayLoad();
 secAssert(($items[0]['status'] ?? '') === 'waiting', 'mock poll does not live-provision subscription');
 
+// Atomic claim / reserve
+$metaClaim = [
+    'source' => 'tejarat',
+    'bank_id' => 'tejarat',
+    'destination_card' => $card,
+    'transaction_id' => 'TX-CLAIM-1',
+    'occurred_at' => $now + 3,
+    'amount' => $amount,
+];
+$claimKey = instantPayDepositUsageKey($metaClaim);
+$claim1 = instantPayClaimDepositUsage($claimKey, 'ord-claim', $metaClaim);
+secAssert(!empty($claim1['ok']), 'first claim succeeds');
+$claim2 = instantPayClaimDepositUsage($claimKey, 'ord-other', $metaClaim);
+secAssert(empty($claim2['ok']) && ($claim2['code'] ?? '') === 'deposit_already_used', 'parallel claim for other order blocked');
+secAssert(instantPayReleaseDepositClaim($claimKey, 'ord-claim'), 'release processing claim');
+$claim3 = instantPayClaimDepositUsage($claimKey, 'ord-claim', $metaClaim);
+secAssert(!empty($claim3['ok']), 'claim after release succeeds');
+secAssert(instantPayCompleteDepositClaim($claimKey, 'ord-claim'), 'complete claim persists');
+$dup = instantPayClaimDepositUsage($claimKey, 'ord-claim', $metaClaim);
+secAssert(empty($dup['ok']) && ($dup['code'] ?? '') === 'deposit_already_used', 'completed claim blocks reuse');
+
+// شکست persist claim
+$badUsedDir = $tmpDir . '/used_ro_dir';
+mkdir($badUsedDir, 0755, true);
+$badUsedPath = $badUsedDir . '/used.json';
+file_put_contents($badUsedPath, '[]');
+chmod($badUsedDir, 0555);
+putenv('PNV_USED_DEPOSITS_PATH=' . $badUsedPath);
+$metaFail = $metaClaim;
+$metaFail['transaction_id'] = 'TX-CLAIM-FAIL';
+$failKey = instantPayDepositUsageKey($metaFail);
+$failClaim = instantPayClaimDepositUsage($failKey, 'ord-fail', $metaFail);
+secAssert(empty($failClaim['ok']) && ($failClaim['code'] ?? '') === 'dedup_persist_failed', 'claim persist failure is fail-closed');
+chmod($badUsedPath, 0644);
+putenv('PNV_USED_DEPOSITS_PATH=' . $tmpDir . '/used.json');
+
+// tejarat tx بدون کارت مقصد در normalize حذف می‌شود
+$normMissing = tejaratVerifyNormalizeTransaction([
+    'amount' => $amount,
+    'transaction_id' => 'TJ-NOCARD',
+], ['destination_cards' => [$card]]);
+secAssert($normMissing === null, 'tejarat normalize rejects missing destination card');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);
