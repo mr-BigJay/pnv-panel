@@ -935,8 +935,15 @@ if(!function_exists('xuiConfigPath')){
             $msg = 'API error (redacted)';
         }
 
+        // Keep email/UUID out of admin messages and diagnostic logs.
+        $safePath = preg_replace(
+            '~(/panel/api/(?:clients/update|inbounds/updateClient)/)[^\\s()]+~',
+            '$1{client}',
+            (string)$apiPath
+        );
+
         return [
-            'api_path' => (string)$apiPath,
+            'api_path' => $safePath,
             'http_status' => intval($result['http'] ?? 0),
             'api_success' => !empty($result['success']),
             'api_msg' => $msg !== '' ? $msg : 'no message',
@@ -1979,48 +1986,76 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiAdjustClientTrafficLegacy($server, $client, $addGb){
-        $email = trim((string)($client['email'] ?? ''));
-        $clientId = trim((string)($client['id'] ?? ''));
         $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
+        $normalized = xuiNormalizeClientRecord($client, $inboundId > 0 ? $inboundId : null);
+
+        if(!is_array($normalized)){
+            return ['ok' => false, 'error' => 'اطلاعات کلاینت برای تمدید قدیمی نامعتبر است'];
+        }
+
+        $email = trim((string)($normalized['email'] ?? ''));
+        $clientId = trim((string)($normalized['id'] ?? ''));
+        $inboundId = intval($normalized['_inbound_id'] ?? $inboundId);
         $addBytes = xuiGbToBytes($addGb);
 
-        if($email === '' || $clientId === '' || $inboundId <= 0){
+        // clientStats.id is sometimes a numeric database row ID, not a 3x-ui UUID.
+        // Refuse a mutating update until the actual client UUID is available.
+        if($email === '' || $clientId === '' || ctype_digit($clientId) || $inboundId <= 0){
             return [
                 'ok' => false,
-                'error' => 'اطلاعات کلاینت برای تمدید قدیمی ناقص است'
+                'error' => 'شناسه UUID یا inbound کلاینت برای updateClient معتبر نیست',
+                'code' => 'invalid_client_identity',
             ];
         }
 
-        $updated = $client;
+        $updated = $normalized;
         unset($updated['_inbound_id']);
 
-        $currentTotal = xuiClientTotalBytes($client);
-        $updated['totalGB'] = $currentTotal + $addBytes;
+        $updated['totalGB'] = xuiClientTotalBytes($normalized) + $addBytes;
         $updated['enable'] = true;
         $updated['reset'] = 1;
 
-        if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
-            $updated['subId'] = $client['subId'];
+        $path = '/panel/api/inbounds/updateClient/' . rawurlencode($clientId);
+        $settings = json_encode(['clients' => [$updated]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        // Legacy 3x-ui generally expects form-urlencoded id/settings.
+        $formResult = xuiApiRequestForm($server, 'POST', $path, [
+            'id' => (string)$inboundId,
+            'settings' => $settings,
+        ]);
+        $attempts = [xuiApiAttemptDiag($path . ' (form)', $formResult)];
+
+        if(!empty($formResult['success'])){
+            return ['ok' => true, 'raw' => $formResult, 'method' => 'updateClient', 'transport' => 'form'];
         }
 
-        $result = xuiApiRequest($server, 'POST', '/panel/api/inbounds/updateClient/' . rawurlencode($clientId), [
-            'id' => $inboundId,
-            'settings' => json_encode([
-                'clients' => [$updated]
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        ]);
+        // Never replay a mutation after a timeout/5xx/ambiguous response.
+        $status = intval($formResult['http'] ?? 0);
 
-        if(empty($result['success'])){
+        if(!in_array($status, [400, 404, 405, 415], true)){
             return [
                 'ok' => false,
-                'error' => $result['msg'] ?? 'افزایش ترافیک با updateClient ناموفق بود'
+                'error' => 'updateClient form failed | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
+                'attempts' => $attempts,
+                'code' => 'ambiguous_update_response',
             ];
         }
 
+        $jsonResult = xuiApiRequest($server, 'POST', $path, [
+            'id' => $inboundId,
+            'settings' => $settings,
+        ]);
+        $attempts[] = xuiApiAttemptDiag($path . ' (json)', $jsonResult);
+
+        if(!empty($jsonResult['success'])){
+            return ['ok' => true, 'raw' => $jsonResult, 'method' => 'updateClient', 'transport' => 'json'];
+        }
+
         return [
-            'ok' => true,
-            'raw' => $result,
-            'method' => 'updateClient'
+            'ok' => false,
+            'error' => 'updateClient failed | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
+            'attempts' => $attempts,
+            'code' => 'update_client_failed',
         ];
     }
 
@@ -2188,7 +2223,7 @@ if(!function_exists('xuiConfigPath')){
 
         return [
             'ok' => false,
-            'error' => $last['msg'] ?? 'فعال‌سازی مطلق پلن ناموفق بود',
+            'error' => 'فعال‌سازی مطلق پلن در 3x-ui ناموفق بود | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
             'code' => $code,
             'attempts' => $attempts,
         ];
