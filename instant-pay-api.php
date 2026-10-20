@@ -38,9 +38,25 @@ if($action === 'status'){
         exit;
     }
 
+    $publicItem = instantPayPublicView($item);
+
+    // Manual admin approval updates the CSV/provision store before the user's
+    // existing Instant Pay JSON can be marked paid. Recover the SAME order from
+    // verified provision evidence (no XUI writes or new payment confirmation).
+    if(function_exists('instantPayRecoverConfirmedRenewStatus')){
+        $recovered = instantPayRecoverConfirmedRenewStatus($item);
+
+        if(is_array($recovered)
+            && ($recovered['id'] ?? '') === $id
+            && ($recovered['status'] ?? '') === 'paid'){
+            $publicItem = $recovered;
+        }
+    }
+
+    header('Cache-Control: no-store, max-age=0');
     echo json_encode([
         'ok' => true,
-        'item' => instantPayPublicView($item)
+        'item' => $publicItem
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
