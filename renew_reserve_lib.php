@@ -317,9 +317,9 @@ if(!function_exists('renewReservePath')){
             return 'ambiguous';
         }
 
-        // پلن نامحدود زمانی: همیشه افزایش حجم (حتی وقتی سقف تمام شده)، نه فعال‌سازی مطلق که سقف را به حجم پلن reset می‌کند.
+        // نامحدود زمانی + حجم باقی‌مانده → رزرو (تا اتمام حجم/زمان فعال شود).
         if(($runtime['time_unlimited'] ?? null) === true){
-            return 'immediate_unlimited';
+            return !empty($runtime['volume_exhausted']) ? 'immediate_unlimited' : 'reserve';
         }
 
         if(!empty($runtime['should_activate_now'])){

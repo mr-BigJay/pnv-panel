@@ -2435,6 +2435,94 @@ if(!function_exists('xuiConfigPath')){
         ];
     }
 
+    /**
+     * CSV «تایید شد» ولی provision ناقص/نامشخص — بدون اعمال تکراری روی 3x-ui در صورت امکان.
+     *
+     * @return array|null null = ادامه مسیر provision عادی
+     */
+    function xuiRenewResolveAlreadyConfirmedRenew($index, array $row, $provisionKey){
+        $type = trim((string)($row[9] ?? ''));
+
+        if($type !== 'تمدید'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'link' => $row[7] ?? '',
+            ];
+        }
+
+        if(!function_exists('renewReserveFindByProvisionKey')){
+            require_once __DIR__ . '/renew_reserve_lib.php';
+        }
+
+        $stored = xuiRenewProvisionStoreRead($provisionKey);
+
+        if(is_array($stored) && ($stored['state'] ?? '') === 'done' && is_array($stored['result'] ?? null)){
+            return array_merge($stored['result'], [
+                'ok' => true,
+                'already' => true,
+            ]);
+        }
+
+        if(is_array($stored) && ($stored['state'] ?? '') === 'processing'){
+            if(is_array($stored['result'] ?? null)){
+                return xuiRenewApproveFinalizeFromResult($index, $row, $provisionKey, $stored['result'], true);
+            }
+
+            $recover = xuiRenewRecoverProcessingRenew($row, $stored);
+
+            if(($recover['action'] ?? '') === 'finalize'){
+                return xuiRenewApproveFinalizeFromResult($index, $row, $provisionKey, $recover['result'], true);
+            }
+
+            if(($recover['action'] ?? '') === 'in_progress'){
+                return [
+                    'ok' => false,
+                    'error' => $recover['error'] ?? 'فعال‌سازی در حال انجام است',
+                    'code' => $recover['code'] ?? 'provision_in_progress',
+                ];
+            }
+
+            if(($recover['action'] ?? '') === 'ambiguous'){
+                return [
+                    'ok' => false,
+                    'error' => $recover['error'] ?? 'وضعیت فعال‌سازی نامشخص است',
+                    'code' => 'ambiguous_provision',
+                    'recoverable' => true,
+                ];
+            }
+        }
+
+        $reservation = renewReserveFindByProvisionKey($provisionKey);
+
+        if(is_array($reservation)){
+            $subLink = xuiResolveRenewPaymentRowLink($row);
+
+            if($subLink === ''){
+                $subLink = trim((string)($row[7] ?? ''));
+            }
+
+            return array_merge(renewReserveBuildPaymentSuccess($reservation, $subLink), [
+                'ok' => true,
+                'already' => true,
+            ]);
+        }
+
+        if(is_array($stored) && in_array($stored['state'] ?? '', ['failed', 'ambiguous_provision'], true)){
+            return null;
+        }
+
+        if(!is_array($stored) || trim((string)($stored['state'] ?? '')) === ''){
+            return null;
+        }
+
+        return [
+            'ok' => true,
+            'already' => true,
+            'link' => $row[7] ?? '',
+        ];
+    }
+
     function xuiRenewApproveFinalizeFromResult($index, array $row, $provisionKey, array $result, $already = true){
         $payments = xuiLoadPayments();
 
@@ -3093,21 +3181,19 @@ if(!function_exists('xuiConfigPath')){
                     }
                 }
 
-                if($days > 0){
-                    $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
-                    $baselineSnap = xuiRenewClientSnapshot($client);
+                $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
+                $baselineSnap = xuiRenewClientSnapshot($client);
 
-                    if(
-                        ($verifyLookup['status'] ?? '') !== 'found'
-                        || !is_array($verifyLookup['client'] ?? null)
-                        || !xuiRenewVerifyIncrementalAdjust($baselineSnap, $verifyLookup['client'], $gb, $days, $anchorMs)
-                    ){
-                        return [
-                            'ok' => false,
-                            'error' => 'حجم یا مدت تمدید روی سرور با پلن خریداری‌شده تطابق ندارد',
-                            'code' => 'ambiguous_provision',
-                        ];
-                    }
+                if(
+                    ($verifyLookup['status'] ?? '') !== 'found'
+                    || !is_array($verifyLookup['client'] ?? null)
+                    || !xuiRenewVerifyIncrementalAdjust($baselineSnap, $verifyLookup['client'], $gb, $days, $anchorMs)
+                ){
+                    return [
+                        'ok' => false,
+                        'error' => 'حجم یا مدت تمدید روی سرور با پلن خریداری‌شده تطابق ندارد',
+                        'code' => 'ambiguous_provision',
+                    ];
                 }
 
                 $renewResult = [
@@ -3184,6 +3270,20 @@ if(!function_exists('xuiConfigPath')){
                     else{
                         return $applied;
                     }
+                }
+
+                $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $subLink);
+
+                if(
+                    ($verifyLookup['status'] ?? '') !== 'found'
+                    || !is_array($verifyLookup['client'] ?? null)
+                    || !xuiRenewVerifyAbsolutePlan($verifyLookup['client'], $gb, $days, $anchorMs)
+                ){
+                    return [
+                        'ok' => false,
+                        'error' => 'پس از فعال‌سازی، حجم یا تاریخ انقضا روی 3x-ui با پلن تطابق ندارد',
+                        'code' => 'ambiguous_provision',
+                    ];
                 }
 
                 $renewResult = [
@@ -3404,15 +3504,16 @@ if(!function_exists('xuiConfigPath')){
         $type = trim((string)($row[9] ?? $typeHint));
         $status = trim((string)($row[6] ?? ''));
 
+        $provisionKey = xuiPaymentRowProvisionKey($row);
+
         if($status === 'تایید شد'){
-            return [
-                'ok' => true,
-                'already' => true,
-                'link' => $row[7] ?? '',
-            ];
+            $confirmed = xuiRenewResolveAlreadyConfirmedRenew($index, $row, $provisionKey);
+
+            if($confirmed !== null){
+                return $confirmed;
+            }
         }
 
-        $provisionKey = xuiPaymentRowProvisionKey($row);
         $stored = xuiRenewProvisionStoreRead($provisionKey);
 
         if(is_array($stored) && ($stored['state'] ?? '') === 'ambiguous_provision'){

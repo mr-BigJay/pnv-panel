@@ -203,8 +203,19 @@ $detailLink = trim((string)($sync['provision']['link'] ?? ''));
 }
 }
 
+$renewOutcome = trim((string)($result['renew_outcome'] ?? ''));
+
+if($renewOutcome === 'reserved'){
+$_SESSION['payment_message'] = 'پرداخت تایید شد؛ پلن تمدید در صف رزرو ثبت شد و پس از اتمام زمان/حجم فعلی روی 3x-ui اعمال می‌شود';
+$_SESSION['payment_message_detail'] = function_exists('renewReserveUserMessageReserved')
+    ? renewReserveUserMessageReserved()
+    : 'رزرو تمدید';
+}
+else{
 $_SESSION['payment_message'] = 'تمدید تایید و اعمال شد';
 $_SESSION['payment_message_detail'] = $detailLink;
+}
+
 header('Location: ' . pnvAdminUrl('index.php?page=renews'));
 exit;
 

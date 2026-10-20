@@ -74,7 +74,12 @@ $key2 = xuiPaymentRowProvisionKey($row2);
 $hard2AnchorSec = 1800000001;
 $hard2AnchorMs = $hard2AnchorSec * 1000;
 $GLOBALS['renewReserveTestNow'] = $hard2AnchorSec;
-$GLOBALS['xuiTestRenewRuntimeState'] = ['ambiguous' => false, 'time_unlimited' => true, 'should_activate_now' => false];
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'volume_exhausted' => true,
+    'should_activate_now' => true,
+];
 $GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustCalls, $hard2AnchorMs){
     $after = $adjustCalls > 0;
 
@@ -268,12 +273,14 @@ hardAssert($provBad === false && $provBefore === $provAfter, 'provision json_enc
 // 8) persist_failed preserves provision fields via approve patch (no state wipe)
 $row8 = ['ownerUser', $link, '10 گیگ - 30 روز', 'H-8', '', '', 'درحال بررسی', '', 170018, 'تمدید', '', '', 1];
 $key8 = xuiPaymentRowProvisionKey($row8);
+$anchor8Ms = 1800000002 * 1000;
+$GLOBALS['renewReserveTestNow'] = intdiv($anchor8Ms, 1000);
 xuiRenewProvisionStoreWrite($key8, [
     'state' => 'processing',
     'phase' => 'renew_absolute_started',
     'operation' => 'absolute',
     'baseline' => ['total_bytes' => 1, 'used_bytes' => 0, 'expiry_ms' => 0, 'email' => 'u1', 'sub_id' => 'abc1234567890ab'],
-    'activation_anchor_ms' => 12345,
+    'activation_anchor_ms' => $anchor8Ms,
     'plan_gb' => 10,
     'plan_days' => 30,
     'started_at' => time() - 200,
@@ -282,10 +289,15 @@ $csv8 = fopen(getenv('PNV_PAYMENTS_CSV_PATH'), 'w');
 fputcsv($csv8, ['ownerUser', $link, '10 گیگ - 30 روز', 'HIST', '', '', 'تایید شد', $link, 1, 'تمدید', '', '', 1]);
 fputcsv($csv8, $row8);
 fclose($csv8);
-$GLOBALS['xuiTestRenewRuntimeState'] = ['should_activate_now' => true];
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => false,
+    'time_expired' => true,
+    'should_activate_now' => true,
+];
 $GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $id) => [
     'status' => 'found',
-    'client' => ['email' => 'u1', 'subId' => $id, 'totalGB' => xuiGbToBytes(10), 'expiryTime' => 12345 + 86400000 * 30],
+    'client' => ['email' => 'u1', 'subId' => $id, 'totalGB' => xuiGbToBytes(10), 'expiryTime' => $anchor8Ms + 86400000 * 30],
 ];
 $GLOBALS['xuiTestApplyRenewPlanAbsolute'] = static fn() => ['ok' => true, 'method' => 'mock'];
 $GLOBALS['xuiTestRenewProvisionStoreWrite'] = static function($k, $payload){
@@ -297,7 +309,7 @@ $stored8 = xuiRenewProvisionStoreRead($key8);
 hardAssert(
     ($failProv8['code'] ?? '') === 'persist_failed'
     && ($stored8['state'] ?? '') === 'processing'
-    && intval($stored8['activation_anchor_ms'] ?? 0) === 12345
+    && intval($stored8['activation_anchor_ms'] ?? 0) === $anchor8Ms
     && is_array($stored8['baseline'] ?? null),
     'persist_failed retains anchor baseline operation'
 );

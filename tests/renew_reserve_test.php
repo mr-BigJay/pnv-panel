@@ -119,7 +119,10 @@ $GLOBALS['xuiTestRenewLookupClient'] = static function($s, $subId) use (&$adjust
 };
 $unlimited = xuiProvisionRenew($rowUnlimited);
 unset($GLOBALS['renewReserveTestNow']);
-renewReserveAssert('unlimited-time existing renew immediate', ($unlimited['renew_outcome'] ?? '') === 'renewed' && $adjustCalls === 1);
+renewReserveAssert(
+    'unlimited-time active sub renew reserved',
+    ($unlimited['renew_outcome'] ?? '') === 'reserved' && $adjustCalls === 0 && $absoluteCalls === 0
+);
 
 // Unlimited time + volume exhausted → add to cap (legacy), not absolute reset to plan size
 renewReserveResetStores($locksDir, $reservePath);
@@ -140,19 +143,25 @@ $GLOBALS['xuiTestRenewRuntimeState'] = [
     'volume_exhausted' => true,
     'should_activate_now' => true,
 ];
-$GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $subId) => [
-    'status' => 'found',
-    'client' => [
-        'email' => 'u1',
-        'id' => 'cid1',
-        'subId' => $subId,
-        'totalGB' => xuiGbToBytes(120),
-        'up' => xuiGbToBytes(120),
-        'down' => 0,
-        'expiryTime' => 0,
-        '_inbound_id' => 1,
-    ],
-];
+$unlExLookups = 0;
+$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $subId) use (&$unlExLookups){
+    $unlExLookups++;
+    $after = $unlExLookups > 1;
+
+    return [
+        'status' => 'found',
+        'client' => [
+            'email' => 'u1',
+            'id' => 'cid1',
+            'subId' => $subId,
+            'totalGB' => xuiGbToBytes($after ? 170 : 120),
+            'up' => $after ? 0 : xuiGbToBytes(120),
+            'down' => 0,
+            'expiryTime' => 0,
+            '_inbound_id' => 1,
+        ],
+    ];
+};
 $GLOBALS['xuiTestAdjustClientTraffic'] = static fn() => ['ok' => false, 'error' => 'bulkAdjust skipped'];
 $GLOBALS['xuiTestApiRequest'] = static function($server, $method, $path, $payload = null){
     if($method === 'POST' && strpos($path, 'updateClient') !== false){

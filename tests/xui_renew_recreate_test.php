@@ -145,7 +145,12 @@ $GLOBALS['xuiTestRenewRuntimeState'] = [
 
 $renewExisting = xuiProvisionRenew($row);
 unset($GLOBALS['renewReserveTestNow']);
-renewRecAssert(!empty($renewExisting['ok']) && ($renewExisting['renew_outcome'] ?? '') === 'renewed', 'existing client renew path');
+renewRecAssert(
+    !empty($renewExisting['ok'])
+    && ($renewExisting['renew_outcome'] ?? '') === 'reserved'
+    && $existingAdjustPhase === 0,
+    'existing client renew path reserves while time-unlimited volume remains'
+);
 
 $GLOBALS['xuiTestRenewLookupClient'] = static function(){
     return ['status' => 'api_error', 'error' => 'timeout'];
@@ -283,7 +288,8 @@ $renewApproveKey = xuiPaymentRowProvisionKey($renewApproveRow);
 $GLOBALS['xuiTestRenewRuntimeState'] = [
     'ambiguous' => false,
     'time_unlimited' => true,
-    'should_activate_now' => false,
+    'volume_exhausted' => true,
+    'should_activate_now' => true,
 ];
 $adjustAnchorSec = 1700000200;
 $adjustAnchorMs = $adjustAnchorSec * 1000;
@@ -332,13 +338,13 @@ renewRecAssert(
     empty($renewDirect['ok'])
     && ($renewDirect['code'] ?? '') === 'persist_failed'
     && $adjustCount === 1,
-    'renew adjust runs once before simulated crash'
+    'renew apply runs once before simulated crash'
 );
 
 unset($GLOBALS['xuiTestRenewProvisionStoreWrite']);
 xuiRenewProvisionStoreWrite($renewApproveKey, [
     'state' => 'processing',
-    'phase' => 'renew_adjust_started',
+    'phase' => 'renew_unlimited_add_started',
     'operation' => 'incremental',
     'baseline' => ['total_bytes' => xuiGbToBytes(20), 'used_bytes' => 0, 'expiry_ms' => 0, 'email' => 'owner_1234', 'sub_id' => 'abc1234567890ab'],
     'plan_gb' => 10,
