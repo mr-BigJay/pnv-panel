@@ -66,5 +66,5 @@ if ! grep -q '^PNV_TEJARAT_TEST_ROOT=' /etc/pnv/tejarat-worker-test.env 2>/dev/n
 fi
 
 echo "==> Verify"
-sudo -u "${USER_NAME}" "${PY}" -c "import playwright; print('playwright OK')"
+sudo -u "${USER_NAME}" "${PY}" -c "import playwright, requests; print('playwright OK'); print('requests OK')"
 sudo -u "${USER_NAME}" test -x "${PY}" && echo "python executable OK"

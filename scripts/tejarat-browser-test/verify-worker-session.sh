@@ -41,5 +41,5 @@ with sync_playwright() as p:
 \"
 "
 
-echo "==> Optional one-shot ingest (needs TEJARAT_STMT_SELECTORS_JSON + TEJARAT_DESTINATION_CARD in env)"
-echo "sudo -u ${USER_NAME} TEJARAT_RUN_ONCE=1 TEJARAT_COLLECT_MODE=live bash -lc 'source /etc/pnv/tejarat-worker-test.env; cd ${WORKER}; PYTHONPATH=. ${PY} -m worker.main'"
+echo "==> One-shot worker (use wrapper — do not break quoting):"
+echo "sudo -u ${USER_NAME} bash ${WORKER}/scripts/run-worker-once.sh"

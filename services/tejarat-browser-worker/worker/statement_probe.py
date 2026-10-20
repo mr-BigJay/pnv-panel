@@ -45,8 +45,35 @@ def main() -> int:
         browser = launch_chromium(p, headless=headless)
         context = browser.new_context(locale="fa-IR", storage_state=str(state))
         page = context.new_page()
-        page.goto(stmt_url, wait_until="networkidle", timeout=60000)
+        page.goto(stmt_url, wait_until="domcontentloaded", timeout=90000)
+        wait_sel = env("TEJARAT_STMT_WAIT_SELECTOR")
+        if wait_sel:
+            try:
+                page.wait_for_selector(wait_sel, timeout=60000)
+            except Exception:
+                pass
+        else:
+            page.wait_for_timeout(3000)
+
+        nav_raw = env("TEJARAT_NAV_STEPS_JSON")
+        if nav_raw:
+            import json
+
+            try:
+                for step in json.loads(nav_raw):
+                    if not isinstance(step, dict):
+                        continue
+                    click_sel = str(step.get("click", "") or "").strip()
+                    wait_ms = int(step.get("wait_ms", 800))
+                    if click_sel:
+                        page.locator(click_sel).first.click(timeout=20000)
+                        page.wait_for_timeout(max(0, min(wait_ms, 15000)))
+            except Exception:
+                pass
+
         page.screenshot(path=str(out_png), full_page=False)
+        final_url = page.url
+        body_preview = page.locator("body").inner_text()[:800].replace("\n", " | ")
 
         rows = page.locator(row_sel)
         count = rows.count()
@@ -61,11 +88,18 @@ def main() -> int:
                 "text_preview": text[:400].replace("\n", " | "),
             })
 
+        login_hint = any(
+            x in (page.title() + body_preview)
+            for x in ("ورود", "login", "رمز", "OTP", "همراه بانک")
+        )
         probe = {
             "url": stmt_url,
+            "final_url": final_url,
             "title": page.title(),
             "row_selector": row_sel,
             "row_count": count,
+            "likely_needs_login_or_nav": login_hint and count == 0,
+            "body_preview": body_preview,
             "samples": samples,
         }
         out_json.write_text(json.dumps(probe, ensure_ascii=False, indent=2), encoding="utf-8")
