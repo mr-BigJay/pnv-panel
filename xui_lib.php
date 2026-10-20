@@ -1985,6 +1985,19 @@ if(!function_exists('xuiConfigPath')){
         return $expiry;
     }
 
+    /**
+     * HTTP 400/404/405/415 is a definite request rejection suitable for trying
+     * another encoding/endpoint. Timeout, 5xx, 2xx-success:false and missing
+     * status are ambiguous for a mutating request; never replay them.
+     */
+    function xuiApiDefinitivelyRejectedMutation($result){
+        if(!is_array($result) || !empty($result['success'])){
+            return false;
+        }
+
+        return in_array(intval($result['http'] ?? 0), [400, 404, 405, 415], true);
+    }
+
     function xuiAdjustClientTrafficLegacy($server, $client, $addGb){
         $inboundId = intval($client['_inbound_id'] ?? ($server['inbound_id'] ?? 0));
         $normalized = xuiNormalizeClientRecord($client, $inboundId > 0 ? $inboundId : null);
@@ -2030,9 +2043,7 @@ if(!function_exists('xuiConfigPath')){
         }
 
         // Never replay a mutation after a timeout/5xx/ambiguous response.
-        $status = intval($formResult['http'] ?? 0);
-
-        if(!in_array($status, [400, 404, 405, 415], true)){
+        if(!xuiApiDefinitivelyRejectedMutation($formResult)){
             return [
                 'ok' => false,
                 'error' => 'updateClient form failed | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
@@ -2162,6 +2173,9 @@ if(!function_exists('xuiConfigPath')){
 
         $last = ['success' => false, 'msg' => 'هیچ مسیر API برای فعال‌سازی مطلق در دسترس نبود', 'http' => 0];
 
+        // Prefer new clients API, fall back only if endpoint explicitly rejects the request.
+        // 0/5xx/200-with-success:false may represent an applied but unconfirmed mutation.
+        // Do not send another POST in those cases; the caller must re-read the client.
         if($email !== ''){
             $modernPath = '/panel/api/clients/update/' . rawurlencode($email);
             $modernResult = xuiApiRequest($server, 'POST', $modernPath, xuiModernClientUpdatePayload($client, $targetBytes, $expiryMs));
@@ -2172,6 +2186,15 @@ if(!function_exists('xuiConfigPath')){
                 return [
                     'ok' => true,
                     'method' => 'clients_update',
+                    'attempts' => $attempts,
+                ];
+            }
+
+            if(!xuiApiDefinitivelyRejectedMutation($modernResult)){
+                return [
+                    'ok' => false,
+                    'error' => '3x-ui clients/update: نتیجه تغییر قطعی نیست | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
+                    'code' => 'transport_error',
                     'attempts' => $attempts,
                 ];
             }
@@ -2191,6 +2214,15 @@ if(!function_exists('xuiConfigPath')){
                 return [
                     'ok' => true,
                     'method' => 'updateClient_absolute_form',
+                    'attempts' => $attempts,
+                ];
+            }
+
+            if(!xuiApiDefinitivelyRejectedMutation($formResult)){
+                return [
+                    'ok' => false,
+                    'error' => '3x-ui updateClient form: نتیجه تغییر قطعی نیست | ' . xuiApplyRenewDiagSummary(['attempts' => $attempts]),
+                    'code' => 'transport_error',
                     'attempts' => $attempts,
                 ];
             }
@@ -2217,7 +2249,7 @@ if(!function_exists('xuiConfigPath')){
 
         $code = 'activation_failed';
 
-        if(function_exists('xuiApiFailureKind') && xuiApiFailureKind($last) === 'transport'){
+        if(!xuiApiDefinitivelyRejectedMutation($last)){
             $code = 'transport_error';
         }
 
@@ -2378,6 +2410,14 @@ if(!function_exists('xuiConfigPath')){
 
         if(!empty($result['success'])){
             return 'ok';
+        }
+
+        // A mutating request may have reached 3x-ui even when its HTTP response
+        // was lost or failed. Require a read-back before considering any retry.
+        $http = intval($result['http'] ?? 0);
+
+        if($http === 0 || $http >= 500){
+            return 'transport';
         }
 
         $msg = function_exists('mb_strtolower') ? mb_strtolower((string)($result['msg'] ?? '')) : strtolower((string)($result['msg'] ?? ''));
