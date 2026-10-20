@@ -45,6 +45,11 @@ if [[ -d "${BROWSERS}" ]]; then
   find "${BROWSERS}" -type f \( -name chrome -o -name 'chrome_*' -o -name 'chromium*' \) -exec chmod a+rx {} \; 2>/dev/null || true
 fi
 
+if [[ "${PNV_TEJARAT_REINSTALL_CHROMIUM:-0}" == "1" ]]; then
+  echo "==> Reinstall Chromium bundle (PNV_TEJARAT_REINSTALL_CHROMIUM=1)"
+  rm -rf "${BROWSERS}"/chromium-* 2>/dev/null || true
+fi
+
 echo "==> Ensuring Chromium for Playwright (PLAYWRIGHT_BROWSERS_PATH=${BROWSERS})"
 sudo -u "${USER_NAME}" env \
   HOME="${TARGET}" \

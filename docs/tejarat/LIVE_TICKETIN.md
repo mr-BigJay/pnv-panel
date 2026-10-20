@@ -37,6 +37,23 @@ Cron:
 
 ---
 
+## ورود بانک: root + adopt (اگر tejarat-browser با پنجره crash کرد)
+
+```bash
+sudo bash -lc '
+  set -a; source /etc/pnv/tejarat-worker-test.env; set +a
+  export TEJARAT_HEADLESS=false DISPLAY=:91
+  export TEJARAT_STATEMENT_URL=https://hb.tejaratbank.ir/account/log
+  cd /opt/tejarat-browser-test/services/tejarat-browser-worker
+  export PYTHONPATH=$PWD
+  /opt/tejarat-browser-test/venv/bin/python -m worker.manual_login
+'
+sudo bash /root/pnv-panel-tejarat/scripts/tejarat-browser-test/adopt-bank-session.sh
+sudo bash /root/pnv-panel-tejarat/scripts/tejarat-browser-test/verify-worker-session.sh
+```
+
+Worker همیشه **headless** است؛ فقط تمدید نشست گاهی با VNC + root لازم است.
+
 ## اگر `Permission denied` روی venv یا `playwright not installed`
 
 ```bash
