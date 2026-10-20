@@ -29,6 +29,17 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPaySave($items){
+        if(
+            !empty($GLOBALS['instantPayTestSaveInterceptor'])
+            && is_callable($GLOBALS['instantPayTestSaveInterceptor'])
+        ){
+            $decision = $GLOBALS['instantPayTestSaveInterceptor']($items);
+
+            if($decision === false){
+                return false;
+            }
+        }
+
         if(!is_dir(__DIR__ . '/db')){
             @mkdir(__DIR__ . '/db', 0755, true);
         }
@@ -42,6 +53,114 @@ if(!function_exists('instantPayPath')){
         $written = file_put_contents(instantPayPath(), $json, LOCK_EX);
 
         return $written !== false && $written >= strlen($json);
+    }
+
+    function instantPayStoreLockPath(){
+        $override = getenv('PNV_LOCKS_DIR');
+
+        if(is_string($override) && trim($override) !== ''){
+            return rtrim(trim($override), '/') . '/instant_pay_store.lock';
+        }
+
+        $base = dirname(instantPayPath());
+
+        if($base === '' || $base === '.'){
+            $base = __DIR__ . '/db';
+        }
+
+        return rtrim($base, '/') . '/instant_pay_store.lock';
+    }
+
+    function instantPayWithStoreLock(callable $work){
+        static $depth = 0;
+
+        if($depth > 0){
+            return $work();
+        }
+
+        $lockPath = instantPayStoreLockPath();
+        $dir = dirname($lockPath);
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0755, true);
+        }
+
+        $fp = fopen($lockPath, 'c');
+
+        if($fp === false){
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'قفل ذخیره سفارش Instant Pay در دسترس نیست',
+            ];
+        }
+
+        if(!flock($fp, LOCK_EX)){
+            fclose($fp);
+
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'ذخیره سفارش Instant Pay در حال انجام است',
+            ];
+        }
+
+        $depth++;
+
+        try{
+            return $work();
+        }
+        finally{
+            $depth--;
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+
+    function instantPayItemStatusRank($status){
+        $status = trim((string)$status);
+
+        switch($status){
+            case 'paid':
+                return 100;
+            case 'processing':
+                return 80;
+            case 'payment_received':
+                return 70;
+            case 'payment_received_provision_failed':
+                return 60;
+            case 'waiting':
+                return 20;
+            case 'expired':
+            case 'failed':
+                return 10;
+            case 'cancelled':
+                return 0;
+            default:
+                return 0;
+        }
+    }
+
+    function instantPayShouldApplyStatus($currentStatus, $nextStatus){
+        $currentStatus = trim((string)$currentStatus);
+        $nextStatus = trim((string)$nextStatus);
+
+        if($currentStatus === $nextStatus){
+            return true;
+        }
+
+        if($currentStatus === 'paid'){
+            return false;
+        }
+
+        if(
+            $currentStatus === 'payment_received_provision_failed'
+            && $nextStatus !== 'payment_received_provision_failed'
+        ){
+            return false;
+        }
+
+        return instantPayItemStatusRank($nextStatus) >= instantPayItemStatusRank($currentStatus);
     }
 
     function instantPayWindowSeconds($config = null){
@@ -1205,7 +1324,7 @@ if(!function_exists('instantPayPath')){
             ];
         }
 
-        if($state === 'processing' && $result === null){
+        if($state === 'processing'){
             return [
                 'ok' => false,
                 'code' => 'provision_in_progress',
@@ -1213,13 +1332,13 @@ if(!function_exists('instantPayPath')){
             ];
         }
 
-        $verified = ($state === 'done' || $state === 'processing') && is_array($result) && !empty($result['ok']);
+        $verified = $state === 'done' && is_array($result) && !empty($result['ok']);
 
         if(!$verified){
             return [
                 'ok' => false,
                 'code' => 'provision_not_verified',
-                'error' => 'موفقیت تمدید برای این سفارش تأیید نشده است',
+                'error' => 'موفقیت نهایی تمدید برای این سفارش تأیید نشده است',
             ];
         }
 
@@ -1242,6 +1361,12 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPaySyncPaidFromConfirmedCsv($csvIndex){
+        return instantPayWithStoreLock(static function() use ($csvIndex){
+            return instantPaySyncPaidFromConfirmedCsvLocked($csvIndex);
+        });
+    }
+
+    function instantPaySyncPaidFromConfirmedCsvLocked($csvIndex){
         if(!function_exists('xuiLoadPayments')){
             return ['ok' => false, 'error' => 'سیستم پرداخت در دسترس نیست'];
         }
@@ -1301,7 +1426,7 @@ if(!function_exists('instantPayPath')){
         if(empty($evidence['ok'])){
             $code = trim((string)($evidence['code'] ?? 'provision_not_verified'));
 
-            if($code === 'provision_in_progress' && in_array($currentStatus, ['waiting', 'expired', 'failed'], true)){
+            if($code === 'provision_in_progress' && instantPayShouldApplyStatus($currentStatus, 'processing')){
                 $items[$idx]['status'] = 'processing';
                 $items[$idx]['message'] = 'در حال تمدید اشتراک…';
                 $items[$idx]['csv_index'] = $csvIndex;
@@ -1323,6 +1448,14 @@ if(!function_exists('instantPayPath')){
             }
 
             return $evidence;
+        }
+
+        if(!instantPayShouldApplyStatus($currentStatus, 'paid')){
+            return [
+                'ok' => true,
+                'already' => true,
+                'item' => instantPayPublicView($items[$idx]),
+            ];
         }
 
         $link = trim((string)($evidence['link'] ?? ''));
@@ -1678,6 +1811,12 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayMarkPaid($id, $meta = [], $opts = []){
+        return instantPayWithStoreLock(static function() use ($id, $meta, $opts){
+            return instantPayMarkPaidLocked($id, $meta, $opts);
+        });
+    }
+
+    function instantPayMarkPaidLocked($id, $meta = [], $opts = []){
         $force = !empty($opts['force']);
         $items = instantPayExpireDue();
         $id = trim((string)$id);
