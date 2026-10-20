@@ -68,7 +68,7 @@ hardAssert(($recover1['action'] ?? '') === 'finalize', 'XUI done crash finalizes
 
 // 2) persist_failed retry without duplicate adjust
 $adjustCalls = 0;
-$row2 = ['ownerUser', $link, '10 گیگ - 30 روز', 'H-2', '', '', 'درحال بررسی', '', 170011, 'تمدید', '', '', 1];
+$row2 = ['ownerUser', $link, '10 گیگ - نامحدود زمان', 'H-2', '', '', 'درحال بررسی', '', 170011, 'تمدید', '', '', 1];
 $key2 = xuiPaymentRowProvisionKey($row2);
 @unlink(xuiRenewProvisionStorePath($key2));
 $hard2AnchorSec = 1800000001;
@@ -89,7 +89,7 @@ $GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustCal
             'email' => 'u1',
             'subId' => $id,
             'totalGB' => xuiGbToBytes($after ? 30 : 20),
-            'expiryTime' => $after ? ($hard2AnchorMs + (86400000 * 30)) : 0,
+            'expiryTime' => 0,
         ],
     ];
 };
