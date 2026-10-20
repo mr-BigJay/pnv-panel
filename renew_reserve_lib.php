@@ -840,7 +840,44 @@ if(!function_exists('renewReservePath')){
                 return ['ok' => false, 'error' => 'ثبت وضعیت activating ناموفق بود', 'code' => 'persist_failed'];
             }
 
-            $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days, $anchorMs);
+            if(function_exists('xuiRenewShouldUseTimeUnlimitedVolumePack') && xuiRenewShouldUseTimeUnlimitedVolumePack($client, $days)){
+                $targetTotalBytes = intval($fresh['target_total_bytes'] ?? 0);
+                $usedAtOrder = intval($fresh['used_bytes_at_order'] ?? 0);
+
+                if($targetTotalBytes <= 0){
+                    $prep = xuiRenewPrepareTimeUnlimitedVolumeTarget($server, $client, $gb);
+
+                    if(empty($prep['ok'])){
+                        renewReserveUpdateById($id, [
+                            'status' => 'ambiguous',
+                            'last_error' => $prep['error'] ?? 'usage_stats_invalid',
+                            'last_check_at' => renewReserveNow(),
+                        ]);
+
+                        return ['ok' => false, 'code' => $prep['code'] ?? 'usage_stats_invalid', 'error' => $prep['error'] ?? 'آمار مصرف نامعتبر است'];
+                    }
+
+                    $targetTotalBytes = intval($prep['target_total_bytes'] ?? 0);
+                    $usedAtOrder = intval($prep['used_bytes'] ?? 0);
+                    $fresh = renewReserveUpdateById($id, [
+                        'target_total_bytes' => $targetTotalBytes,
+                        'used_bytes_at_order' => $usedAtOrder,
+                        'activation_op_id' => $opId,
+                    ]);
+
+                    if(!is_array($fresh)){
+                        return ['ok' => false, 'error' => 'ذخیره هدف فعال‌سازی ناموفق بود', 'code' => 'persist_failed'];
+                    }
+                }
+
+                $applied = xuiApplyRenewTimeUnlimitedVolumePack($server, $client, $gb, [
+                    'target_total_bytes' => $targetTotalBytes,
+                    'used_bytes_at_order' => $usedAtOrder,
+                ]);
+            }
+            else{
+                $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days, $anchorMs);
+            }
 
             if(empty($applied['ok'])){
                 $code = trim((string)($applied['code'] ?? ''));
