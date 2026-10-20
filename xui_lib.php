@@ -2429,7 +2429,7 @@ if(!function_exists('xuiConfigPath')){
         // was lost or failed. Require a read-back before considering any retry.
         $http = intval($result['http'] ?? 0);
 
-        if($http === 0 || $http >= 500){
+        if(array_key_exists('http', $result) && ($http === 0 || $http >= 500)){
             return 'transport';
         }
 
