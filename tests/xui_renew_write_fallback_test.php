@@ -89,7 +89,7 @@ $json=['success'=>false,'http'=>404,'msg'=>'route not found'];
 $out=$run();
 $diag=xuiApplyRenewDiagSummary($out);
 xuiFallbackAssert('triple 404 gives safe API route diagnostics', empty($out['ok']) && ($out['code']??'')==='activation_failed'
- && count($calls)===3 && substr_count($diag,'HTTP 404')===3
+ && count($calls)===3 && substr_count((string)($out['error']??''),'HTTP 404')===3
  && strpos($diag,'test@example.invalid')===false);
 
 $modern=['success'=>true,'http'=>200,'msg'=>'ok'];
