@@ -49,7 +49,9 @@ def patch_xui(live, source):
             return abs(intval($snap['expiry_ms'] ?? 0) - intval($baseline['expiry_ms'] ?? 0)) <= 180000;
         }"""
     fn = function_block(live, "xuiRenewVerifyIncrementalAdjust")
-    live = replace_exact(live, fn, replace_exact(fn, old, new, "volume verification"), "volume verifier function")
+    patched_fn = replace_exact(fn, old, new, "volume verification")
+    if patched_fn != fn:
+        live = replace_exact(live, fn, patched_fn, "volume verifier function")
 
     old = """            $runtime = xuiRenewAnalyzeRuntimeState($server, $client, $subLink);
             $action = renewReserveDecideAction($runtime);
