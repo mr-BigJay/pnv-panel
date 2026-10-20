@@ -795,6 +795,228 @@ if(!function_exists('xuiConfigPath')){
         return $last;
     }
 
+    function xuiApiRequestRawForm($server, $method, $path, array $fields, $authMode){
+        $base = rtrim((string)($server['base_url'] ?? ''), '/');
+
+        if($base === ''){
+            return ['success' => false, 'msg' => 'آدرس سرور 3x-ui خالی است'];
+        }
+
+        if(!function_exists('curl_init')){
+            return ['success' => false, 'msg' => 'افزونه cURL فعال نیست'];
+        }
+
+        $url = $base . '/' . ltrim($path, '/');
+        $headers = ['Accept: application/json'];
+        $session = null;
+
+        if($authMode === 'token'){
+            $token = trim((string)($server['api_token'] ?? ''));
+
+            if($token === ''){
+                return ['success' => false, 'msg' => 'API Token تنظیم نشده است'];
+            }
+
+            $headers[] = 'Authorization: Bearer ' . $token;
+        }
+        else{
+            $session = xuiEnsureSession($server);
+
+            if(!is_array($session)){
+                return ['success' => false, 'msg' => 'ورود session به 3x-ui انجام نشد'];
+            }
+
+            $headers[] = 'Cookie: ' . $session['cookie'];
+
+            if(
+                strtoupper($method) !== 'GET'
+                && trim((string)($session['csrf'] ?? '')) !== ''
+            ){
+                $headers[] = 'X-CSRF-Token: ' . $session['csrf'];
+            }
+        }
+
+        $curl = curl_init($url);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 15);
+        curl_setopt($curl, CURLOPT_TIMEOUT, 45);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+
+        if(count($fields) > 0){
+            $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+            curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($fields, '', '&', PHP_QUERY_RFC3986));
+        }
+
+        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+
+        $raw = curl_exec($curl);
+        $error = curl_error($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        if($raw === false || $error !== ''){
+            return ['success' => false, 'msg' => 'خطا در ارتباط با 3x-ui: ' . $error, 'http' => $status];
+        }
+
+        $json = json_decode($raw, true);
+
+        if(!is_array($json)){
+            return ['success' => false, 'msg' => 'پاسخ نامعتبر از 3x-ui (HTTP ' . $status . ')', 'http' => $status];
+        }
+
+        $json['http'] = $status;
+
+        return $json;
+    }
+
+    function xuiApiRequestForm($server, $method, $path, array $fields){
+        if(!empty($GLOBALS['xuiTestApiRequestForm']) && is_callable($GLOBALS['xuiTestApiRequestForm'])){
+            return $GLOBALS['xuiTestApiRequestForm']($server, $method, $path, $fields);
+        }
+
+        if(!empty($GLOBALS['xuiTestApiRequest']) && is_callable($GLOBALS['xuiTestApiRequest'])){
+            return $GLOBALS['xuiTestApiRequest']($server, $method, $path, $fields);
+        }
+
+        $modes = [];
+
+        if(xuiServerHasToken($server)){
+            $modes[] = 'token';
+        }
+
+        if(xuiServerHasSessionCredentials($server)){
+            $modes[] = 'session';
+        }
+
+        if(count($modes) === 0){
+            return ['success' => false, 'msg' => 'تنظیمات سرور ناقص است (Token یا نام کاربری/رمز)'];
+        }
+
+        $last = ['success' => false, 'msg' => 'اتصال به 3x-ui ناموفق بود'];
+
+        foreach($modes as $mode){
+            $last = xuiApiRequestRawForm($server, $method, $path, $fields, $mode);
+
+            if(!empty($last['success'])){
+                return $last;
+            }
+
+            if($mode === 'session'){
+                $id = trim((string)($server['id'] ?? ''));
+
+                if($id !== ''){
+                    $state = xuiLoadState();
+
+                    if(isset($state['sessions'][$id])){
+                        unset($state['sessions'][$id]);
+                        xuiSaveState($state);
+                    }
+                }
+
+                if(xuiLoginSession($server)){
+                    $last = xuiApiRequestRawForm($server, $method, $path, $fields, 'session');
+
+                    if(!empty($last['success'])){
+                        return $last;
+                    }
+                }
+            }
+        }
+
+        return $last;
+    }
+
+    function xuiApiAttemptDiag($apiPath, $result){
+        $msg = trim((string)($result['msg'] ?? ''));
+
+        if($msg !== '' && preg_match('/(token|password|secret|session|csrf|authorization)/iu', $msg)){
+            $msg = 'API error (redacted)';
+        }
+
+        return [
+            'api_path' => (string)$apiPath,
+            'http_status' => intval($result['http'] ?? 0),
+            'api_success' => !empty($result['success']),
+            'api_msg' => $msg !== '' ? $msg : 'no message',
+        ];
+    }
+
+    function xuiApplyRenewDiagSummary($applied){
+        if(!is_array($applied)){
+            return '';
+        }
+
+        $parts = [];
+
+        if(!empty($applied['error'])){
+            $parts[] = trim((string)$applied['error']);
+        }
+
+        foreach($applied['attempts'] ?? [] as $attempt){
+            if(!is_array($attempt)){
+                continue;
+            }
+
+            $parts[] = trim((string)($attempt['api_path'] ?? ''))
+                . ' HTTP ' . intval($attempt['http_status'] ?? 0)
+                . ': ' . trim((string)($attempt['api_msg'] ?? ''));
+        }
+
+        return implode(' | ', array_filter($parts, static fn($p) => $p !== ''));
+    }
+
+    function xuiInboundClientForAbsoluteUpdate(array $client, $targetBytes, $expiryMs){
+        $id = trim((string)($client['id'] ?? $client['uuid'] ?? ''));
+
+        if($id !== '' && ctype_digit($id) && !empty($client['uuid'])){
+            $id = trim((string)$client['uuid']);
+        }
+
+        $out = [
+            'id' => $id,
+            'email' => trim((string)($client['email'] ?? '')),
+            'enable' => true,
+            'expiryTime' => intval($expiryMs),
+            'totalGB' => intval($targetBytes),
+            'limitIp' => intval($client['limitIp'] ?? 0),
+            'subId' => trim((string)($client['subId'] ?? '')),
+            'tgId' => $client['tgId'] ?? 0,
+            'comment' => (string)($client['comment'] ?? ''),
+            'flow' => (string)($client['flow'] ?? ''),
+            'reset' => 1,
+        ];
+
+        if(isset($client['alterId'])){
+            $out['alterId'] = intval($client['alterId']);
+        }
+
+        return $out;
+    }
+
+    function xuiModernClientUpdatePayload(array $client, $targetBytes, $expiryMs){
+        $payload = [
+            'email' => trim((string)($client['email'] ?? '')),
+            'enable' => true,
+            'expiryTime' => intval($expiryMs),
+            'totalGB' => intval($targetBytes),
+            'limitIp' => intval($client['limitIp'] ?? 0),
+            'subId' => trim((string)($client['subId'] ?? '')),
+            'tgId' => intval($client['tgId'] ?? 0),
+            'comment' => (string)($client['comment'] ?? ''),
+            'reset' => 1,
+        ];
+
+        foreach(['flow', 'security'] as $field){
+            if(isset($client[$field]) && $client[$field] !== ''){
+                $payload[$field] = $client[$field];
+            }
+        }
+
+        return $payload;
+    }
+
     function xuiTestServer($server){
         $result = xuiApiRequest($server, 'GET', '/panel/api/inbounds/options');
 
@@ -1881,6 +2103,7 @@ if(!function_exists('xuiConfigPath')){
         $targetBytes = xuiGbToBytes($gb);
         $days = max(0, intval($days));
         $expiryMs = 0;
+        $attempts = [];
 
         if($days > 0){
             if($anchorMs === null){
@@ -1892,47 +2115,82 @@ if(!function_exists('xuiConfigPath')){
             $expiryMs = intval($anchorMs) + ($days * 86400000);
         }
 
-        if($email === '' || $clientId === '' || $inboundId <= 0){
-            return ['ok' => false, 'error' => 'اطلاعات کلاینت برای فعال‌سازی مطلق ناقص است'];
+        if($email === ''){
+            return ['ok' => false, 'error' => 'email کلاینت برای فعال‌سازی مطلق خالی است', 'attempts' => $attempts];
         }
 
-        $updated = $client;
-        unset($updated['_inbound_id']);
-        $updated['totalGB'] = $targetBytes;
-        $updated['expiryTime'] = $expiryMs;
-        $updated['enable'] = true;
-        $updated['reset'] = 1;
+        $inboundClient = xuiInboundClientForAbsoluteUpdate($client, $targetBytes, $expiryMs);
 
-        if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
-            $updated['subId'] = $client['subId'];
+        if($clientId === ''){
+            $clientId = trim((string)($inboundClient['id'] ?? ''));
         }
 
-        $result = xuiApiRequest($server, 'POST', '/panel/api/inbounds/updateClient/' . rawurlencode($clientId), [
-            'id' => $inboundId,
-            'settings' => json_encode([
-                'clients' => [$updated],
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ]);
+        $last = ['success' => false, 'msg' => 'هیچ مسیر API برای فعال‌سازی مطلق در دسترس نبود', 'http' => 0];
 
-        if(!empty($result['success'])){
-            return [
-                'ok' => true,
-                'method' => 'updateClient_absolute',
-                'raw' => $result,
-            ];
+        if($email !== ''){
+            $modernPath = '/panel/api/clients/update/' . rawurlencode($email);
+            $modernResult = xuiApiRequest($server, 'POST', $modernPath, xuiModernClientUpdatePayload($client, $targetBytes, $expiryMs));
+            $attempts[] = xuiApiAttemptDiag($modernPath, $modernResult);
+            $last = $modernResult;
+
+            if(!empty($modernResult['success'])){
+                return [
+                    'ok' => true,
+                    'method' => 'clients_update',
+                    'attempts' => $attempts,
+                ];
+            }
+        }
+
+        if($clientId !== '' && $inboundId > 0){
+            $legacyPath = '/panel/api/inbounds/updateClient/' . rawurlencode($clientId);
+            $settingsJson = json_encode(['clients' => [$inboundClient]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $formResult = xuiApiRequestForm($server, 'POST', $legacyPath, [
+                'id' => (string)$inboundId,
+                'settings' => $settingsJson,
+            ]);
+            $attempts[] = xuiApiAttemptDiag($legacyPath, $formResult);
+            $last = $formResult;
+
+            if(!empty($formResult['success'])){
+                return [
+                    'ok' => true,
+                    'method' => 'updateClient_absolute_form',
+                    'attempts' => $attempts,
+                ];
+            }
+
+            $jsonResult = xuiApiRequest($server, 'POST', $legacyPath, [
+                'id' => $inboundId,
+                'settings' => $settingsJson,
+            ]);
+            $attempts[] = xuiApiAttemptDiag($legacyPath . ' (json)', $jsonResult);
+            $last = $jsonResult;
+
+            if(!empty($jsonResult['success'])){
+                return [
+                    'ok' => true,
+                    'method' => 'updateClient_absolute_json',
+                    'attempts' => $attempts,
+                ];
+            }
+        }
+        elseif($email === ''){
+            $last = ['success' => false, 'msg' => 'اطلاعات کلاینت برای فعال‌سازی مطلق ناقص است', 'http' => 0];
+            $attempts[] = xuiApiAttemptDiag('inbounds/updateClient', $last);
         }
 
         $code = 'activation_failed';
 
-        if(function_exists('xuiApiFailureKind') && xuiApiFailureKind($result) === 'transport'){
+        if(function_exists('xuiApiFailureKind') && xuiApiFailureKind($last) === 'transport'){
             $code = 'transport_error';
         }
 
         return [
             'ok' => false,
-            'error' => $result['msg'] ?? 'فعال‌سازی مطلق پلن ناموفق بود',
+            'error' => $last['msg'] ?? 'فعال‌سازی مطلق پلن ناموفق بود',
             'code' => $code,
-            'raw' => $result,
+            'attempts' => $attempts,
         ];
     }
 
