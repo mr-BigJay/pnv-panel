@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from worker.parse import build_credit_transaction, normalize_transaction_record
+from worker.chromium_launch import launch_chromium
 from worker.playwright_env import apply_playwright_env
 
 log = logging.getLogger("tejarat_worker.browser")
@@ -119,7 +120,7 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=headless)
+            browser = launch_chromium(p, headless=headless)
             context_kwargs: dict[str, Any] = {"locale": "fa-IR"}
             if state_file.is_file():
                 context_kwargs["storage_state"] = str(state_file)

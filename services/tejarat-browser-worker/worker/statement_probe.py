@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from worker.browser import storage_state_path
+from worker.chromium_launch import launch_chromium
 from worker.playwright_env import apply_playwright_env
 
 
@@ -41,7 +42,7 @@ def main() -> int:
     headless = env("TEJARAT_HEADLESS", "true").lower() in ("1", "true", "yes")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
+        browser = launch_chromium(p, headless=headless)
         context = browser.new_context(locale="fa-IR", storage_state=str(state))
         page = context.new_page()
         page.goto(stmt_url, wait_until="networkidle", timeout=60000)

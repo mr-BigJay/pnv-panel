@@ -15,6 +15,7 @@ import sys
 import time
 
 from worker.browser import storage_state_path
+from worker.chromium_launch import launch_chromium
 from worker.playwright_env import apply_playwright_env
 
 
@@ -43,9 +44,21 @@ def main() -> int:
     print(f"Storage will be saved to: {state_file}")
     print(f"Open bank URL, complete login + OTP yourself, then navigate to statement if needed.")
     print(f"Statement URL hint: {stmt_url}")
+    disp = env("DISPLAY")
+    if not headless:
+        print(f"DISPLAY={disp or '(unset)'} — if browser crashes, run: sudo bash .../prepare-x11.sh")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
+        try:
+            browser = launch_chromium(p, headless=headless)
+        except Exception as exc:
+            print(f"Chromium launch failed: {exc.__class__.__name__}", file=sys.stderr)
+            if not headless:
+                print(
+                    "Try: sudo DISPLAY=:91 bash /root/pnv-panel-tejarat/scripts/tejarat-browser-test/prepare-x11.sh",
+                    file=sys.stderr,
+                )
+            raise
         context_kwargs: dict = {"locale": "fa-IR"}
         if state_file.is_file():
             context_kwargs["storage_state"] = str(state_file)

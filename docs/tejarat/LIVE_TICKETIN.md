@@ -45,7 +45,20 @@ sudo bash /root/pnv-panel-tejarat/scripts/tejarat-browser-test/fix-permissions.s
 
 ## مرحله B — ورود بانک (شما)
 
-VNC را باز کنید، سپس:
+VNC را باز کنید، سپس **دسترسی X11 برای worker user**:
+
+```bash
+sudo DISPLAY=:91 bash /root/pnv-panel-tejarat/scripts/tejarat-browser-test/prepare-x11.sh
+```
+
+اعمال env پیشنهادی (PLAYWRIGHT_BROWSERS_PATH):
+
+```bash
+sudo PNV_TEJARAT_SOURCE=/root/pnv-panel-tejarat PNV_TEJARAT_CONFIRM_SERVICES=1 \
+  bash /root/pnv-panel-tejarat/scripts/tejarat-browser-test/setup-isolated.sh
+```
+
+ورود دستی:
 
 ```bash
 sudo -u tejarat-browser bash -lc '
