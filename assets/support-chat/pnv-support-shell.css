@@ -1,0 +1,268 @@
+/* Support admin — conversation list mobile UI (safe overlay; no routing/nginx) */
+
+.supportPage.pnv-chat {
+  --pnv-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", tahoma, sans-serif;
+  --pnv-dialog-pad-x: 0.5rem;
+  --pnv-border: rgba(255, 255, 255, 0.06);
+  --pnv-bg: #0e1621;
+  --pnv-surface: #17212b;
+  --pnv-surface-elevated: #232e3c;
+  --pnv-text: #f5f5f5;
+  --pnv-text-secondary: #708499;
+  --pnv-accent: #3390ec;
+  --pnv-transition-panel: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: var(--pnv-font);
+}
+
+.supportPage.pnv-chat .msgSidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--pnv-surface);
+}
+
+.supportPage.pnv-chat .msgSidebarHead {
+  padding: 0.625rem var(--pnv-dialog-pad-x) 0.5rem;
+  border-bottom: 1px solid var(--pnv-border);
+  flex-shrink: 0;
+  background: var(--pnv-surface);
+}
+
+.supportPage.pnv-chat .msgSidebarHeadRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+}
+
+.supportPage.pnv-chat .msgSidebarTitle,
+.supportPage.pnv-chat .msgSidebarHeadRow h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.supportPage.pnv-chat .msgSidebarControls {
+  padding-top: 0.375rem;
+}
+
+.supportPage.pnv-chat .msgMobileDashBack {
+  border: none;
+  background: var(--pnv-surface-elevated);
+  color: var(--pnv-accent);
+  font-family: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  max-width: 2.25rem;
+  padding: 0;
+  border-radius: 0.625rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 2.25rem;
+  box-sizing: border-box;
+}
+
+.supportPage.pnv-chat .msgMobileDashBackIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.supportPage.pnv-chat .msgMobileDashBackLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.supportPage.pnv-chat .pnv-chat-theme-toggle {
+  border: none;
+  background: var(--pnv-surface-elevated);
+  color: var(--pnv-accent);
+  border-radius: 999px;
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.supportPage.pnv-chat .msgSearchWrap {
+  position: relative;
+  padding: 0;
+  width: 100%;
+}
+
+.supportPage.pnv-chat .msgSearch {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 1.375rem;
+  padding: 0.5625rem 0.875rem;
+  background: var(--pnv-bg);
+  color: var(--pnv-text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  outline: none;
+}
+
+.supportPage.pnv-chat .msgSearch::placeholder {
+  color: var(--pnv-text-secondary);
+}
+
+.supportPage.pnv-chat .msgList {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .supportPage.pnv-chat.supportPage {
+    flex-direction: column;
+  }
+
+  .supportPage.pnv-chat .msgSidebar {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    flex: 1;
+  }
+
+  .supportPage.pnv-chat.supportPage:not(.chat-active) .supportChatbox {
+    display: none;
+  }
+
+  .supportPage.pnv-chat.supportPage.chat-active .msgSidebar {
+    display: none;
+  }
+
+  .supportPage.pnv-chat.supportPage.chat-active .supportChatbox {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  body.adminPageSupport .content-support {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .supportPage.pnv-chat .msgSidebarHead {
+    padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 0.75rem 0.625rem;
+  }
+
+  .supportPage.pnv-chat .msgSidebarHeadRow {
+    min-height: 2.5rem;
+  }
+
+  .supportPage.pnv-chat .msgSidebarTitle,
+  .supportPage.pnv-chat .msgSidebarHeadRow h2 {
+    font-size: 1.0625rem;
+  }
+
+  .supportPage.pnv-chat .msgMobileDashBack {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    min-width: 2.25rem !important;
+    max-width: 2.25rem !important;
+    flex: 0 0 2.25rem !important;
+    font-size: 1.375rem;
+  }
+
+  .supportPage.pnv-chat .msgMobileDashBackLabel {
+    display: none;
+  }
+
+  .supportPage.pnv-chat .msgSidebarControls {
+    padding-top: 0.625rem;
+  }
+
+  .supportPage.pnv-chat .msgSearch {
+    height: 2.625rem;
+    font-size: 0.875rem;
+  }
+
+  .supportPage.pnv-chat .pnv-chat-theme-toggle {
+    padding: 0.3125rem 0.625rem !important;
+    font-size: 0.75rem !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 7.5rem !important;
+    white-space: nowrap;
+  }
+
+  body.adminPageSupport .content-support .supportPage.pnv-chat .msgSidebarHead .msgMobileDashBack,
+  .content-support .supportPage.pnv-chat.supportEmbedded .msgSidebarHead .msgMobileDashBack {
+    width: 2.25rem !important;
+    min-width: 2.25rem !important;
+    max-width: 2.25rem !important;
+    height: 2.25rem !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.adminPageSupport .content-support .supportPage.pnv-chat .msgSidebarHead .pnv-chat-theme-toggle,
+  .content-support .supportPage.pnv-chat.supportEmbedded .msgSidebarHead .pnv-chat-theme-toggle {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0.3125rem 0.625rem !important;
+  }
+
+  body.adminPageSupport .content-support .supportPage.pnv-chat .msgSidebarHead .msgSearch,
+  .content-support .supportPage.pnv-chat.supportEmbedded .msgSidebarHead .msgSearch {
+    width: 100% !important;
+    max-width: none !important;
+    box-sizing: border-box;
+  }
+
+  .supportPage.pnv-chat .msgList {
+    padding: 0;
+  }
+
+  .supportPage.pnv-chat .msgList .msgConv {
+    min-height: 0;
+    margin: 0;
+    padding: 0.8125rem 0.875rem;
+    gap: 0.625rem;
+    border-radius: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .supportPage.pnv-chat .msgList .msgConv:last-child {
+    border-bottom: none;
+  }
+
+  .supportPage.pnv-chat .msgList .msgConv:hover,
+  .supportPage.pnv-chat .msgList .msgConv.active {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .supportPage.pnv-chat .msgList .msgAvatar {
+    width: 3rem;
+    height: 3rem;
+    font-size: 1rem;
+  }
+
+  .supportPage.pnv-chat .msgConvPreview {
+    margin-top: 0.0625rem;
+    font-size: 0.8125rem;
+  }
+
+  .supportPage.pnv-chat .msgConvName {
+    font-size: 0.9375rem;
+  }
+}
