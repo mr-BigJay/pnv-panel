@@ -4,32 +4,30 @@
 
 روی VPS شما از قبل وجود دارد: Playwright، Chromium، `venv/`، `browsers/`، `vnc/`، Xvfb با **`DISPLAY=:91`**.
 
-## پیش‌نیاز: شاخه PR #34 روی VPS
+## نصب یک‌مرحله‌ای (پیشنهادی — بدون انتخاب «الف/ب»)
 
-اسکریپت `setup-isolated.sh` **روی `main` نیست** — فقط روی `cursor/tejarat-browser-worker-cbea`.
+روی **server3 به‌عنوان root** فقط این را بزنید؛ خودش repo PR #34 را clone/pull می‌کند و `setup-isolated` را اجرا می‌کند (`/var/www/html` دست نخورده):
 
 ```bash
-cd ~/pnv-panel
-git fetch origin cursor/tejarat-browser-worker-cbea
-git checkout cursor/tejarat-browser-worker-cbea
-git pull origin cursor/tejarat-browser-worker-cbea
-test -f scripts/tejarat-browser-test/setup-isolated.sh && echo OK || echo "هنوز فایل نیست — مسیر repo را چک کنید"
+curl -fsSL "https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/tejarat-browser-worker-cbea/scripts/tejarat-browser-test/bootstrap-vps.sh" | sudo bash
 ```
 
-اگر `~/pnv-panel` همان Production است، **checkout نکنید**؛ clone جدا بزنید:
+اعمال systemd/env بعد از بررسی بکاپ:
 
 ```bash
-git clone -b cursor/tejarat-browser-worker-cbea --depth 1 \
-  https://github.com/mr-BigJay/pnv-panel.git ~/pnv-panel-tejarat
-cd ~/pnv-panel-tejarat
+curl -fsSL "https://raw.githubusercontent.com/mr-BigJay/pnv-panel/cursor/tejarat-browser-worker-cbea/scripts/tejarat-browser-test/bootstrap-vps.sh" | sudo PNV_TEJARAT_CONFIRM_SERVICES=1 bash
 ```
 
-## نصب امن (غیرمخرب، قابل تکرار)
+Repo پیش‌فرض: `/root/pnv-panel-tejarat` — override: `PNV_TEJARAT_INSTALL_DIR=...`
 
-از همان clone (نه از `/var/www/html`):
+---
+
+## نصب دستی (اختیاری)
+
+اسکریپت `setup-isolated.sh` **روی `main` نیست** — فقط شاخه `cursor/tejarat-browser-worker-cbea`.
 
 ```bash
-cd ~/pnv-panel-tejarat   # یا ~/pnv-panel بعد از checkout شاخه بالا
+cd ~/pnv-panel-tejarat   # بعد از bootstrap یا clone دستی
 
 # مرحله ۱ — فقط sync کد + بکاپ؛ venv/browsers/vnc/session/db حفظ می‌شوند
 sudo PNV_TEJARAT_USER=tejarat-browser \
