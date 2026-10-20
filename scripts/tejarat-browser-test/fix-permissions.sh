@@ -34,9 +34,23 @@ if [[ -z "${PY}" ]]; then
 fi
 
 install -d -o "${USER_NAME}" -g "${USER_NAME}" -m 0755 "${BROWSERS}"
+PIP_CACHE="${TARGET}/session/pip-cache"
+install -d -o "${USER_NAME}" -g "${USER_NAME}" -m 0700 "${PIP_CACHE}"
+# Root-owned pip cache from old runs breaks tejarat-browser pip
+if [[ -d "${TARGET}/.cache" ]]; then
+  chown -R "${USER_NAME}:${USER_NAME}" "${TARGET}/.cache" 2>/dev/null || rm -rf "${TARGET}/.cache"
+fi
 
-echo "==> pip install -r requirements.txt as ${USER_NAME}"
-sudo -u "${USER_NAME}" env HOME="${TARGET}" "${PY}" -m pip install -q -r "${REQ}"
+pip_as_user() {
+  sudo -u "${USER_NAME}" env \
+    HOME="${TARGET}" \
+    PIP_CACHE_DIR="${PIP_CACHE}" \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    "${PY}" -m pip install --no-cache-dir -q "$@"
+}
+
+echo "==> pip install -r requirements.txt as ${USER_NAME} (no cache dir)"
+pip_as_user -r "${REQ}"
 
 if ! sudo -u "${USER_NAME}" "${PY}" -c "import playwright, requests" 2>/dev/null; then
   echo "!! venv imports failed after pip" >&2
