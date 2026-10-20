@@ -840,7 +840,60 @@ if(!function_exists('renewReservePath')){
                 return ['ok' => false, 'error' => 'ثبت وضعیت activating ناموفق بود', 'code' => 'persist_failed'];
             }
 
-            $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days, $anchorMs);
+            if(function_exists('xuiRenewShouldUseTimeUnlimitedVolumePack') && xuiRenewShouldUseTimeUnlimitedVolumePack($client, $days)){
+                $targetTotalBytes = intval($fresh['target_total_bytes'] ?? 0);
+                $usedAtOrder = intval($fresh['used_bytes_at_order'] ?? 0);
+
+                if($targetTotalBytes <= 0){
+                    $prep = xuiRenewPrepareTimeUnlimitedVolumeTarget($server, $client, $gb);
+
+                    if(empty($prep['ok'])){
+                        renewReserveUpdateById($id, [
+                            'status' => 'ambiguous',
+                            'last_error' => $prep['error'] ?? 'usage_stats_invalid',
+                            'last_check_at' => renewReserveNow(),
+                        ]);
+
+                        return ['ok' => false, 'code' => $prep['code'] ?? 'usage_stats_invalid', 'error' => $prep['error'] ?? 'آمار مصرف نامعتبر است'];
+                    }
+
+                    $targetTotalBytes = intval($prep['target_total_bytes'] ?? 0);
+                    $usedAtOrder = intval($prep['used_bytes'] ?? 0);
+                    $fresh = renewReserveUpdateById($id, [
+                        'target_total_bytes' => $targetTotalBytes,
+                        'used_bytes_at_order' => $usedAtOrder,
+                        'activation_op_id' => $opId,
+                    ]);
+
+                    if(!is_array($fresh)){
+                        return ['ok' => false, 'error' => 'ذخیره هدف فعال‌سازی ناموفق بود', 'code' => 'persist_failed'];
+                    }
+                }
+
+                $applyOptions = [
+                    'target_total_bytes' => $targetTotalBytes,
+                    'used_bytes_at_order' => $usedAtOrder,
+                    'provision_key' => trim((string)($fresh['provision_key'] ?? '')),
+                    'transaction_id' => trim((string)($fresh['transaction_id'] ?? '')),
+                ];
+
+                if($targetTotalBytes > 0){
+                    $applyOptions['stored_binding'] = [
+                        'provision_key' => trim((string)($fresh['provision_key'] ?? '')),
+                        'transaction_id' => trim((string)($fresh['transaction_id'] ?? '')),
+                        'server_id' => trim((string)($fresh['server_id'] ?? ($server['id'] ?? ''))),
+                        'client_id' => trim((string)($client['id'] ?? '')),
+                        'email' => trim((string)($client['email'] ?? '')),
+                        'sub_id' => trim((string)($client['subId'] ?? ($fresh['sub_id'] ?? ''))),
+                        'plan_gb' => intval($gb),
+                    ];
+                }
+
+                $applied = xuiApplyRenewTimeUnlimitedVolumePack($server, $client, $gb, $applyOptions);
+            }
+            else{
+                $applied = xuiApplyRenewPlanAbsolute($server, $client, $gb, $days, $anchorMs);
+            }
 
             if(empty($applied['ok'])){
                 $code = trim((string)($applied['code'] ?? ''));
