@@ -111,7 +111,8 @@ $again = instantPaySyncPaidFromConfirmedCsv(0);
 ipSyncAssert(!empty($again['already']), 'second sync is idempotent');
 
 // CSV confirmed but no provision store -> no false paid.
-$csvRowNoStore = ipMakeCsvRow($user, $tracking, $code, $created + 1, $renewLink);
+$csvRowNoStore = ipMakeCsvRow($user, $tracking, $code, $created, $renewLink);
+@unlink(xuiRenewProvisionStorePath(xuiPaymentRowProvisionKey($csvRowNoStore)));
 ipWriteCsv($csvPath, $csvRowNoStore);
 file_put_contents($jsonPath, json_encode([$waitingItem], JSON_UNESCAPED_UNICODE));
 $noStore = instantPaySyncPaidFromConfirmedCsv(0);
