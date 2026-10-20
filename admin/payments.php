@@ -78,6 +78,10 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+if (is_file(__DIR__ . '/../tejarat_auto_verify_lib.php')) {
+    require_once __DIR__ . '/../tejarat_auto_verify_lib.php';
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -195,6 +199,30 @@ if(isset($_SESSION['payment_error'])){
 $allowedPerPage = [20, 50, 100];
 
 // ==================== عملیات POST ====================
+
+if(isset($_POST['tejarat_verify_save']) && function_exists('tejaratVerifyLoadConfig')){
+    $cfg = tejaratVerifyLoadConfig();
+    $cfg['enabled'] = isset($_POST['tejarat_enabled']);
+    $cfg['dry_run'] = isset($_POST['tejarat_dry_run']);
+    $provider = strtolower(trim((string)($_POST['tejarat_provider'] ?? $cfg['provider'] ?? 'disabled')));
+
+    if(!in_array($provider, ['disabled', 'mock', 'api_stub'], true)){
+        $provider = 'disabled';
+    }
+
+    $cfg['provider'] = $provider;
+    $cfg['poll_interval_seconds'] = max(15, intval($_POST['tejarat_poll_interval'] ?? $cfg['poll_interval_seconds'] ?? 60));
+
+    if(function_exists('tejaratVerifySaveConfig') && tejaratVerifySaveConfig($cfg)){
+        $_SESSION['payment_message'] = 'تنظیمات تأیید خودکار تجارت ذخیره شد.';
+    }
+    else{
+        $_SESSION['payment_error'] = 'ذخیره تنظیمات تجارت ناموفق بود (دسترسی فایل config).';
+    }
+
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . intval($_POST['per'] ?? $_GET['per'] ?? 20)));
+    exit;
+}
 
 if(isset($_POST['approve_payment'])){
 
@@ -833,6 +861,47 @@ flex:0 0 20px;
 <?php } ?>
 <?php if($paymentError !== ''){ ?>
 <div class="payAlertErr"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
+<?php } ?>
+
+<?php
+$tejaratSummary = function_exists('tejaratVerifyAdminSummary') ? tejaratVerifyAdminSummary() : null;
+$tejaratCfg = function_exists('tejaratVerifyLoadConfig') ? tejaratVerifyLoadConfig() : [];
+if(is_array($tejaratSummary)){
+    $tConn = (string)($tejaratSummary['connection_status'] ?? 'disabled');
+    $tConnLabel = match($tConn){
+        'ok' => 'متصل',
+        'error' => 'خطا',
+        default => 'غیرفعال',
+    };
+?>
+<details class="tejaratVerifyPanel" style="margin:0 0 16px;padding:12px 14px;border-radius:12px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;line-height:1.7;">
+<summary style="cursor:pointer;font-weight:600;">بانک تجارت — تأیید خودکار <span style="font-size:11px;opacity:.75;">(<?php echo htmlspecialchars($tConnLabel, ENT_QUOTES, 'UTF-8'); ?>)</span></summary>
+<div style="margin-top:10px;font-size:13px;">
+<p style="margin:0 0 8px;">Provider: <?php echo htmlspecialchars((string)$tejaratSummary['provider'], ENT_QUOTES, 'UTF-8'); ?>
+· بررسی‌شده: <?php echo intval($tejaratSummary['stats']['transactions_seen'] ?? 0); ?>
+· تأییدشده: <?php echo intval($tejaratSummary['stats']['matches_confirmed'] ?? 0); ?></p>
+<p style="margin:0 0 8px;">آخرین بررسی موفق: <?php echo htmlspecialchars(function_exists('tejaratVerifyFormatTimestamp') ? tejaratVerifyFormatTimestamp($tejaratSummary['last_success_at']) : '—', ENT_QUOTES, 'UTF-8'); ?></p>
+<?php if(trim((string)($tejaratSummary['last_error'] ?? '')) !== ''){ ?>
+<p style="margin:0 0 8px;color:#fecaca;">خطا: <?php echo htmlspecialchars((string)$tejaratSummary['last_error'], ENT_QUOTES, 'UTF-8'); ?></p>
+<?php } ?>
+<p style="margin:0 0 10px;opacity:.85;font-size:12px;"><?php echo htmlspecialchars((string)$tejaratSummary['android_sms_fallback_hint'], ENT_QUOTES, 'UTF-8'); ?></p>
+<form method="post" style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;">
+<input type="hidden" name="tejarat_verify_save" value="1">
+<input type="hidden" name="per" value="<?php echo intval($per ?? 20); ?>">
+<label><input type="checkbox" name="tejarat_enabled" <?php echo !empty($tejaratCfg['enabled']) ? 'checked' : ''; ?>> فعال</label>
+<label><input type="checkbox" name="tejarat_dry_run" <?php echo !empty($tejaratCfg['dry_run']) ? 'checked' : ''; ?>> حالت آزمایشی (بدون فعال‌سازی)</label>
+<label>Provider
+<select name="tejarat_provider">
+<?php foreach(['disabled' => 'خاموش', 'mock' => 'Mock', 'api_stub' => 'API (stub)'] as $pk => $pl){ ?>
+<option value="<?php echo htmlspecialchars($pk, ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($tejaratCfg['provider'] ?? '') === $pk) ? 'selected' : ''; ?>><?php echo htmlspecialchars($pl, ENT_QUOTES, 'UTF-8'); ?></option>
+<?php } ?>
+</select>
+</label>
+<label>بازه (ثانیه) <input type="number" name="tejarat_poll_interval" min="15" max="3600" value="<?php echo intval($tejaratCfg['poll_interval_seconds'] ?? 60); ?>" style="width:72px;"></label>
+<button type="submit" class="menuBtn" style="width:auto;padding:6px 12px;height:auto;">ذخیره</button>
+</form>
+</div>
+</details>
 <?php } ?>
 
 <div class="payList">

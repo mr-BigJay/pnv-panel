@@ -1,0 +1,10 @@
+{
+    "enabled": false,
+    "provider": "disabled",
+    "poll_interval_seconds": 60,
+    "dry_run": true,
+    "destination_cards": [],
+    "max_deposit_age_seconds": 86400,
+    "mock_transactions": [],
+    "notes": "کپی به tejarat_verify.json روی سرور. رمز بانک، OTP یا توکن نشست را اینجا قرار ندهید."
+}
