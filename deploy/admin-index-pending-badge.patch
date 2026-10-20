@@ -1,0 +1,62 @@
+--- a/admin/index.php
++++ b/admin/index.php
+@@ -386,44 +386,31 @@ $pendingRenewsCount = 0;
+ 
+ foreach($payments as $pay){
+ 
+-$status =
+-trim($pay[6] ?? '');
+-
+-$type =
+-trim($pay[9] ?? '');
+-
+-if(
+-($type == 'خرید' || $type == '')
+-&&
+-$status != 'تایید شد'
+-&&
+-$status != 'رد شد'
+-){
+-
+ if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
+     continue;
+ }
+ 
+-$hasNewPayments = true;
+-$pendingPaymentsCount++;
++$type = trim($pay[9] ?? '');
+ 
++if(function_exists('instantPayAdminRowListBucket')){
++    $bucket = instantPayAdminRowListBucket($pay);
++}
++else{
++    $status = trim($pay[6] ?? '');
++    $bucket = ($status === 'تایید شد' || $status === 'رد شد') ? null : 'pending';
+ }
+ 
+-if(
+-$type == 'تمدید'
+-&&
+-$status != 'تایید شد'
+-&&
+-$status != 'رد شد'
+-){
+-
+-if(function_exists('instantPayAdminRowVisible') && !instantPayAdminRowVisible($pay)){
++if($bucket !== 'pending'){
+     continue;
+ }
+ 
+-$hasNewRenews = true;
+-$pendingRenewsCount++;
+-
++if($type === 'تمدید'){
++    $hasNewRenews = true;
++    $pendingRenewsCount++;
++}
++elseif($type === 'خرید' || $type === ''){
++    $hasNewPayments = true;
++    $pendingPaymentsCount++;
+ }
+ 
+ }

@@ -8,6 +8,12 @@ require_once __DIR__ . '/pnv_date_bootstrap.php';
 if(!function_exists('instantPayPath')){
 
     function instantPayPath(){
+        $override = getenv('PNV_INSTANT_PAYMENTS_PATH');
+
+        if(is_string($override) && trim($override) !== ''){
+            return trim($override);
+        }
+
         return __DIR__ . '/db/instant_payments.json';
     }
 
@@ -23,15 +29,138 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPaySave($items){
+        if(
+            !empty($GLOBALS['instantPayTestSaveInterceptor'])
+            && is_callable($GLOBALS['instantPayTestSaveInterceptor'])
+        ){
+            $decision = $GLOBALS['instantPayTestSaveInterceptor']($items);
+
+            if($decision === false){
+                return false;
+            }
+        }
+
         if(!is_dir(__DIR__ . '/db')){
             @mkdir(__DIR__ . '/db', 0755, true);
         }
 
-        file_put_contents(
-            instantPayPath(),
-            json_encode(array_values($items), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-            LOCK_EX
-        );
+        $json = json_encode(array_values($items), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        if($json === false){
+            return false;
+        }
+
+        $written = file_put_contents(instantPayPath(), $json, LOCK_EX);
+
+        return $written !== false && $written >= strlen($json);
+    }
+
+    function instantPayStoreLockPath(){
+        $override = getenv('PNV_LOCKS_DIR');
+
+        if(is_string($override) && trim($override) !== ''){
+            return rtrim(trim($override), '/') . '/instant_pay_store.lock';
+        }
+
+        $base = dirname(instantPayPath());
+
+        if($base === '' || $base === '.'){
+            $base = __DIR__ . '/db';
+        }
+
+        return rtrim($base, '/') . '/instant_pay_store.lock';
+    }
+
+    function instantPayWithStoreLock(callable $work){
+        static $depth = 0;
+
+        if($depth > 0){
+            return $work();
+        }
+
+        $lockPath = instantPayStoreLockPath();
+        $dir = dirname($lockPath);
+
+        if(!is_dir($dir)){
+            @mkdir($dir, 0755, true);
+        }
+
+        $fp = fopen($lockPath, 'c');
+
+        if($fp === false){
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'قفل ذخیره سفارش Instant Pay در دسترس نیست',
+            ];
+        }
+
+        if(!flock($fp, LOCK_EX)){
+            fclose($fp);
+
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'ذخیره سفارش Instant Pay در حال انجام است',
+            ];
+        }
+
+        $depth++;
+
+        try{
+            return $work();
+        }
+        finally{
+            $depth--;
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    }
+
+    function instantPayItemStatusRank($status){
+        $status = trim((string)$status);
+
+        switch($status){
+            case 'paid':
+                return 100;
+            case 'processing':
+                return 80;
+            case 'payment_received':
+                return 70;
+            case 'payment_received_provision_failed':
+                return 60;
+            case 'waiting':
+                return 20;
+            case 'expired':
+            case 'failed':
+                return 10;
+            case 'cancelled':
+                return 0;
+            default:
+                return 0;
+        }
+    }
+
+    function instantPayShouldApplyStatus($currentStatus, $nextStatus){
+        $currentStatus = trim((string)$currentStatus);
+        $nextStatus = trim((string)$nextStatus);
+
+        if($currentStatus === $nextStatus){
+            return true;
+        }
+
+        if($currentStatus === 'paid'){
+            return false;
+        }
+
+        if(
+            $currentStatus === 'payment_received_provision_failed'
+            && $nextStatus !== 'payment_received_provision_failed'
+        ){
+            return false;
+        }
+
+        return instantPayItemStatusRank($nextStatus) >= instantPayItemStatusRank($currentStatus);
     }
 
     function instantPayWindowSeconds($config = null){
@@ -217,7 +346,15 @@ if(!function_exists('instantPayPath')){
             return instantPayWithinMatchGrace($item, $now);
         }
 
+        if($status === 'payment_received_provision_failed'){
+            return false;
+        }
+
         return false;
+    }
+
+    function instantPayDepositConfirmedStatuses(){
+        return ['payment_received', 'processing', 'payment_received_provision_failed', 'paid'];
     }
 
     function instantPayResolveCsvIndex($item){
@@ -542,7 +679,7 @@ if(!function_exists('instantPayPath')){
         foreach($items as $item){
             $st = (string)($item['status'] ?? '');
 
-            if(!in_array($st, ['waiting', 'processing', 'paid', 'expired', 'failed'], true)){
+            if(!in_array($st, ['waiting', 'processing', 'paid', 'expired', 'failed', 'payment_received', 'payment_received_provision_failed'], true)){
                 continue;
             }
 
@@ -636,6 +773,35 @@ if(!function_exists('instantPayPath')){
 
     function instantPayAdminRowStatusMeta($row){
         $status = trim((string)($row[6] ?? ''));
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if($status !== 'تایید شد' && function_exists('instantPayAdminRowBucket') && instantPayAdminRowBucket($row) === 'cancelled'){
+            return ['title' => 'کنسل شده', 'class' => 'statusDot--red'];
+        }
+
+        if(strpos($tracking, 'AUTO-') === 0){
+            $item = null;
+
+            if(function_exists('instantPayFindJsonForCsvRow')){
+                $item = instantPayFindJsonForCsvRow($row);
+            }
+
+            if(!is_array($item)){
+                $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            }
+
+            if(is_array($item) && ($item['status'] ?? '') === 'payment_received_provision_failed'){
+                return [
+                    'title' => 'واریز تأیید شد — فعال‌سازی ناموفق',
+                    'class' => 'statusDot--red',
+                    'detail' => instantPayAdminProvisionFailureDetail($row, $item),
+                ];
+            }
+
+            if(is_array($item) && ($item['status'] ?? '') === 'payment_received'){
+                return ['title' => 'واریز تأیید شد', 'class' => 'statusDot--blue'];
+            }
+        }
 
         if($status === 'تایید شد'){
             return ['title' => 'تایید شد', 'class' => 'statusDot--green'];
@@ -646,8 +812,6 @@ if(!function_exists('instantPayPath')){
         }
 
         if(instantPayAdminRowIsInProgress($row)){
-            $tracking = trim((string)($row[3] ?? ''));
-
             if(strpos($tracking, 'AUTO-') === 0){
                 $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
 
@@ -662,11 +826,50 @@ if(!function_exists('instantPayPath')){
         return ['title' => 'در حال بررسی', 'class' => 'statusDot--yellow'];
     }
 
+    function instantPayAdminProvisionFailureDetail($row, $item = null){
+        if(!is_array($row)){
+            return '';
+        }
+
+        $tracking = trim((string)($row[3] ?? ''));
+
+        if(strpos($tracking, 'AUTO-') !== 0){
+            return '';
+        }
+
+        if(!is_array($item)){
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+        }
+
+        if(!is_array($item) || ($item['status'] ?? '') !== 'payment_received_provision_failed'){
+            return '';
+        }
+
+        $user = trim((string)($row[0] ?? ($item['user'] ?? '')));
+        $sub = trim((string)($item['sub'] ?? ($row[1] ?? '')));
+        $amountRial = intval($item['matched_amount'] ?? ($row[12] ?? 0));
+        $amountText = $amountRial > 0 ? (number_format($amountRial) . ' ریال') : '—';
+        $error = trim((string)($item['provision_error'] ?? ($item['message'] ?? '')));
+
+        if($error === ''){
+            $error = 'خطای نامشخص فعال‌سازی';
+        }
+
+        return 'کاربر: ' . ($user !== '' ? $user : '—')
+            . ' | اشتراک: ' . ($sub !== '' ? $sub : '—')
+            . ' | مبلغ: ' . $amountText
+            . ' | خطا: ' . $error;
+    }
+
     /**
      * آیا این ردیف CSV در لیست ادمین نمایش داده شود؟
      * سفارش AUTOِ درحال‌انجام تا پایان مهلت پرداخت + ۱۰ دقیقه دیده می‌شود.
      */
     function instantPayAdminRowVisible($row){
+        if(function_exists('instantPayAdminRowVisibleForTabs')){
+            return instantPayAdminRowVisibleForTabs($row);
+        }
+
         if(!is_array($row)){
             return false;
         }
@@ -684,6 +887,12 @@ if(!function_exists('instantPayPath')){
         }
 
         if(in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true)){
+            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+
+            if(is_array($item) && ($item['status'] ?? '') === 'payment_received_provision_failed'){
+                return true;
+            }
+
             return instantPayAdminRowIsInProgress($row);
         }
 
@@ -938,6 +1147,334 @@ if(!function_exists('instantPayPath')){
         return $items;
     }
 
+    function instantPayLooksLikeSubscriptionLink($link){
+        $link = trim((string)$link);
+
+        if($link === '' || !filter_var($link, FILTER_VALIDATE_URL)){
+            return false;
+        }
+
+        return preg_match('#^https?://#i', $link) === 1;
+    }
+
+    function instantPayInstantOrderMatchesCsvRow(array $item, array $row){
+        $userItem = strtolower(trim((string)($item['user'] ?? '')));
+        $userRow = strtolower(trim((string)($row[0] ?? '')));
+
+        if($userItem === '' || $userRow === '' || $userItem !== $userRow){
+            return false;
+        }
+
+        $trackingRow = instantPayNormalizeTracking(trim((string)($row[3] ?? '')));
+        $trackingItem = instantPayNormalizeTracking(instantPayTrackingCode($item));
+
+        if($trackingRow === '' || $trackingItem === '' || $trackingRow !== $trackingItem){
+            return false;
+        }
+
+        $typeRow = trim((string)($row[9] ?? ''));
+        $typeItem = trim((string)($item['type'] ?? ''));
+
+        if($typeRow !== '' && $typeItem !== '' && $typeRow !== $typeItem){
+            return false;
+        }
+
+        $codeRow = intval($row[13] ?? 0);
+        $codeItem = intval($item['code'] ?? 0);
+
+        if($codeRow > 0 && $codeItem > 0 && $codeRow !== $codeItem){
+            return false;
+        }
+
+        $amountRow = function_exists('instantPayCsvRowAmountRial') ? instantPayCsvRowAmountRial($row) : intval($row[12] ?? 0);
+        $amountItem = intval($item['amount'] ?? 0);
+
+        if($amountRow > 0 && $amountItem > 0 && $amountRow !== $amountItem){
+            return false;
+        }
+
+        return true;
+    }
+
+    function instantPayRenewProvisionEvidence(array $row, array $item){
+        if(trim((string)($row[9] ?? '')) !== 'تمدید'){
+            return [
+                'ok' => false,
+                'code' => 'provision_not_verified',
+                'error' => 'این مسیر فقط برای سفارش تمدید است',
+            ];
+        }
+
+        if(!instantPayInstantOrderMatchesCsvRow($item, $row)){
+            return [
+                'ok' => false,
+                'code' => 'order_binding_mismatch',
+                'error' => 'شناسه سفارش Instant Pay با ردیف CSV تطابق ندارد',
+            ];
+        }
+
+        if(trim((string)($row[6] ?? '')) !== 'تایید شد'){
+            return [
+                'ok' => false,
+                'code' => 'provision_not_verified',
+                'error' => 'رد CSV هنوز تأیید نهایی نشده است',
+            ];
+        }
+
+        $csvLink = trim((string)($row[7] ?? ''));
+
+        if(!instantPayLooksLikeSubscriptionLink($csvLink)){
+            return [
+                'ok' => false,
+                'code' => 'provision_not_verified',
+                'error' => 'لینک معتبر پس از تمدید در CSV موجود نیست',
+            ];
+        }
+
+        if(!function_exists('xuiPaymentRowProvisionKey') || !function_exists('xuiRenewProvisionStoreRead')){
+            return [
+                'ok' => false,
+                'code' => 'provision_not_verified',
+                'error' => 'شواهد فعال‌سازی تمدید قابل بررسی نیست',
+            ];
+        }
+
+        $provisionKey = xuiPaymentRowProvisionKey($row);
+        $stored = xuiRenewProvisionStoreRead($provisionKey);
+
+        if(!is_array($stored)){
+            return [
+                'ok' => false,
+                'code' => 'provision_not_verified',
+                'error' => 'شواهد موفقیت تمدید برای این سفارش یافت نشد',
+            ];
+        }
+
+        $storedTxn = trim((string)($stored['transaction_id'] ?? ''));
+
+        if($storedTxn !== '' && function_exists('xuiPaymentRowTransactionId')){
+            $rowTxn = xuiPaymentRowTransactionId($row);
+
+            if($storedTxn !== $rowTxn){
+                return [
+                    'ok' => false,
+                    'code' => 'order_binding_mismatch',
+                    'error' => 'شناسه تراکنش provision با سفارش CSV یکی نیست',
+                ];
+            }
+        }
+
+        $state = trim((string)($stored['state'] ?? ''));
+        $result = is_array($stored['result'] ?? null) ? $stored['result'] : null;
+
+        if($state === 'ambiguous_provision' || ($result !== null && empty($result['ok']))){
+            return [
+                'ok' => false,
+                'code' => 'provision_failed',
+                'error' => trim((string)($stored['error'] ?? ($result['error'] ?? 'تمدید اشتراک ناموفق بود'))),
+            ];
+        }
+
+        if($state === 'processing'){
+            return [
+                'ok' => false,
+                'code' => 'provision_in_progress',
+                'error' => 'تمدید این سفارش هنوز در حال انجام است',
+            ];
+        }
+
+        $verified = $state === 'done' && is_array($result) && !empty($result['ok']);
+
+        if(!$verified){
+            return [
+                'ok' => false,
+                'code' => 'provision_not_verified',
+                'error' => 'موفقیت نهایی تمدید برای این سفارش تأیید نشده است',
+            ];
+        }
+
+        $resultLink = trim((string)($result['link'] ?? ''));
+
+        if($resultLink !== '' && $resultLink !== $csvLink){
+            return [
+                'ok' => false,
+                'code' => 'order_binding_mismatch',
+                'error' => 'لینک نتیجه تمدید با ردیف CSV سازگار نیست',
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'link' => $resultLink !== '' ? $resultLink : $csvLink,
+            'result' => $result,
+            'provision_key' => $provisionKey,
+        ];
+    }
+
+    function instantPaySyncPaidFromConfirmedCsv($csvIndex){
+        return instantPayWithStoreLock(static function() use ($csvIndex){
+            return instantPaySyncPaidFromConfirmedCsvLocked($csvIndex);
+        });
+    }
+
+    function instantPaySyncPaidFromConfirmedCsvLocked($csvIndex){
+        if(!function_exists('xuiLoadPayments')){
+            return ['ok' => false, 'error' => 'سیستم پرداخت در دسترس نیست'];
+        }
+
+        $csvIndex = intval($csvIndex);
+        $payments = xuiLoadPayments();
+
+        if(!isset($payments[$csvIndex]) || !is_array($payments[$csvIndex])){
+            return ['ok' => false, 'error' => 'رد CSV پیدا نشد'];
+        }
+
+        $row = $payments[$csvIndex];
+        $user = trim((string)($row[0] ?? ''));
+        $tracking = trim((string)($row[3] ?? ''));
+        $jsonItem = instantPayFindJsonByTracking($user, $tracking);
+
+        if(!is_array($jsonItem) || trim((string)($jsonItem['id'] ?? '')) === ''){
+            return ['ok' => true, 'skipped' => true];
+        }
+
+        $orderId = trim((string)($jsonItem['id'] ?? ''));
+        $items = instantPayLoad();
+        $idx = -1;
+
+        foreach($items as $i => $item){
+            if(($item['id'] ?? '') === $orderId){
+                $idx = $i;
+                break;
+            }
+        }
+
+        if($idx < 0){
+            return ['ok' => true, 'skipped' => true];
+        }
+
+        $currentStatus = trim((string)($items[$idx]['status'] ?? ''));
+
+        if($currentStatus === 'paid'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'item' => instantPayPublicView($items[$idx]),
+            ];
+        }
+
+        if($currentStatus === 'payment_received_provision_failed'){
+            return [
+                'ok' => false,
+                'code' => 'provision_failed',
+                'error' => trim((string)($items[$idx]['provision_error'] ?? 'تمدید اشتراک ناموفق بود')),
+                'item' => instantPayPublicView($items[$idx]),
+            ];
+        }
+
+        $evidence = instantPayRenewProvisionEvidence($row, $items[$idx]);
+
+        if(empty($evidence['ok'])){
+            $code = trim((string)($evidence['code'] ?? 'provision_not_verified'));
+
+            if($code === 'provision_in_progress' && instantPayShouldApplyStatus($currentStatus, 'processing')){
+                $items[$idx]['status'] = 'processing';
+                $items[$idx]['message'] = 'در حال تمدید اشتراک…';
+                $items[$idx]['csv_index'] = $csvIndex;
+                $items[$idx]['csv_purged'] = false;
+
+                if(!instantPaySave($items)){
+                    return [
+                        'ok' => false,
+                        'code' => 'persist_failed',
+                        'error' => 'ذخیره وضعیت processing ناموفق بود',
+                    ];
+                }
+
+                return [
+                    'ok' => true,
+                    'processing' => true,
+                    'item' => instantPayPublicView($items[$idx]),
+                ];
+            }
+
+            return $evidence;
+        }
+
+        if(!instantPayShouldApplyStatus($currentStatus, 'paid')){
+            return [
+                'ok' => true,
+                'already' => true,
+                'item' => instantPayPublicView($items[$idx]),
+            ];
+        }
+
+        $link = trim((string)($evidence['link'] ?? ''));
+        $items[$idx]['status'] = 'paid';
+        $items[$idx]['paid_at'] = intval($items[$idx]['paid_at'] ?? time());
+        $items[$idx]['csv_index'] = $csvIndex;
+        $items[$idx]['csv_purged'] = false;
+        $items[$idx]['link'] = $link;
+        $items[$idx]['message'] = 'پرداخت تأیید شد';
+        $items[$idx]['provision_synced_at'] = time();
+        instantPayApplyRenewProvisionMeta($items[$idx], is_array($evidence['result'] ?? null) ? $evidence['result'] : []);
+
+        if(!instantPaySave($items)){
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'ذخیره وضعیت paid پس از تأیید تمدید ناموفق بود',
+            ];
+        }
+
+        $items = instantPayLoad();
+
+        foreach($items as $i => $item){
+            if(($item['id'] ?? '') === $orderId){
+                $idx = $i;
+                break;
+            }
+        }
+
+        if($idx < 0 || !isset($items[$idx])){
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'سفارش پس از ذخیره paid یافت نشد',
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'item' => instantPayPublicView($items[$idx]),
+            'synced' => true,
+        ];
+    }
+
+    function instantPayApplyRenewProvisionMeta(array &$item, array $result){
+        if(trim((string)($item['type'] ?? '')) !== 'تمدید'){
+            return;
+        }
+
+        $message = trim((string)($result['user_renew_message'] ?? ''));
+
+        if($message !== ''){
+            $item['user_renew_message'] = $message;
+        }
+
+        $outcome = trim((string)($result['renew_outcome'] ?? ''));
+
+        if($outcome !== ''){
+            $item['renew_outcome'] = $outcome;
+        }
+
+        $reserveId = trim((string)($result['renew_reserve_id'] ?? ''));
+
+        if($reserveId !== ''){
+            $item['renew_reserve_id'] = $reserveId;
+        }
+    }
+
     function instantPayPublicView($item){
         if(!is_array($item)){
             return null;
@@ -995,7 +1532,15 @@ if(!function_exists('instantPayPath')){
             'expires_at' => $expires,
             'remaining' => $remaining,
             'link' => $item['link'] ?? '',
-            'message' => $item['message'] ?? ''
+            'message' => $item['message'] ?? '',
+            'user_renew_message' => $item['user_renew_message'] ?? '',
+            'renew_outcome' => $item['renew_outcome'] ?? '',
+            'renew_reserve_id' => $item['renew_reserve_id'] ?? '',
+            'payment_received_at' => intval($item['payment_received_at'] ?? 0),
+            'provision_failed_at' => intval($item['provision_failed_at'] ?? 0),
+            'provision_error' => $item['provision_error'] ?? '',
+            'provision_code' => $item['provision_code'] ?? '',
+            'matched_amount' => intval($item['matched_amount'] ?? 0),
         ];
     }
 
@@ -1217,6 +1762,12 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayMarkPaid($id, $meta = [], $opts = []){
+        return instantPayWithStoreLock(static function() use ($id, $meta, $opts){
+            return instantPayMarkPaidLocked($id, $meta, $opts);
+        });
+    }
+
+    function instantPayMarkPaidLocked($id, $meta = [], $opts = []){
         $force = !empty($opts['force']);
         $items = instantPayExpireDue();
         $id = trim((string)$id);
@@ -1239,6 +1790,90 @@ if(!function_exists('instantPayPath')){
             return ['ok' => true, 'already' => true, 'item' => instantPayPublicView($found)];
         }
 
+        $csvIndexPrecheck = instantPayResolveCsvIndex($found);
+
+        if($csvIndexPrecheck >= 0 && function_exists('xuiLoadPayments')){
+            $paymentsPrecheck = xuiLoadPayments();
+
+            if(isset($paymentsPrecheck[$csvIndexPrecheck]) && trim((string)($paymentsPrecheck[$csvIndexPrecheck][6] ?? '')) === 'تایید شد'){
+                $syncPrecheck = instantPaySyncPaidFromConfirmedCsv($csvIndexPrecheck);
+
+                if(!empty($syncPrecheck['ok']) && !empty($syncPrecheck['item']) && ($syncPrecheck['item']['status'] ?? '') === 'paid'){
+                    return [
+                        'ok' => true,
+                        'already' => true,
+                        'item' => $syncPrecheck['item'],
+                        'synced' => !empty($syncPrecheck['synced']),
+                    ];
+                }
+
+                if(!empty($syncPrecheck['processing']) && ($syncPrecheck['item']['status'] ?? '') === 'processing'){
+                    return [
+                        'ok' => false,
+                        'code' => 'provision_in_progress',
+                        'error' => $syncPrecheck['error'] ?? 'تمدید این سفارش هنوز در حال انجام است',
+                        'item' => $syncPrecheck['item'],
+                    ];
+                }
+            }
+        }
+
+        if(($found['status'] ?? '') === 'processing' || ($found['status'] ?? '') === 'payment_received'){
+            if(!$force){
+                return [
+                    'ok' => false,
+                    'code' => 'provision_in_progress',
+                    'error' => 'تمدید این سفارش در حال انجام است',
+                    'item' => instantPayPublicView($found),
+                ];
+            }
+
+            if($csvIndexPrecheck >= 0){
+                $syncActive = instantPaySyncPaidFromConfirmedCsv($csvIndexPrecheck);
+
+                if(!empty($syncActive['ok']) && !empty($syncActive['item'])){
+                    if(($syncActive['item']['status'] ?? '') === 'paid'){
+                        return [
+                            'ok' => true,
+                            'already' => true,
+                            'item' => $syncActive['item'],
+                            'synced' => !empty($syncActive['synced']),
+                        ];
+                    }
+
+                    if(!empty($syncActive['processing'])){
+                        return [
+                            'ok' => false,
+                            'code' => 'provision_in_progress',
+                            'error' => $syncActive['error'] ?? 'تمدید این سفارش هنوز در حال انجام است',
+                            'item' => $syncActive['item'],
+                        ];
+                    }
+                }
+
+                if(($syncActive['code'] ?? '') === 'provision_failed'){
+                    return $syncActive;
+                }
+            }
+
+            return [
+                'ok' => false,
+                'code' => 'provision_in_progress',
+                'error' => 'تمدید این سفارش در حال انجام است؛ اجرای مجدد متوقف شد',
+                'item' => instantPayPublicView($found),
+            ];
+        }
+
+        if(($found['status'] ?? '') === 'payment_received_provision_failed'){
+            if(!$force){
+                return [
+                    'ok' => false,
+                    'error' => 'واریز ثبت شده است؛ برای تلاش مجدد فعال‌سازی از مسیر پشتیبانی/ادمین استفاده کنید',
+                    'code' => 'provision_retry_required',
+                ];
+            }
+        }
+
         if(!$force && !instantPayItemMatchable($found)){
             return ['ok' => false, 'error' => 'سفارش قابل تأیید نیست (' . ($found['status'] ?? '') . ')'];
         }
@@ -1254,7 +1889,15 @@ if(!function_exists('instantPayPath')){
             $items[$idx]['message'] = 'بازیابی برای تأیید واریز';
             $items[$idx]['csv_index'] = $csvIndexCheck;
             $items[$idx]['csv_purged'] = false;
-            instantPaySave($items);
+
+            if(!instantPaySave($items)){
+                return [
+                    'ok' => false,
+                    'code' => 'persist_failed',
+                    'error' => 'ذخیره بازیابی سفارش لغوشده ناموفق بود',
+                ];
+            }
+
             $found = $items[$idx];
         }
 
@@ -1274,10 +1917,31 @@ if(!function_exists('instantPayPath')){
             xuiSavePayments($payments);
         }
 
-        // اول وضعیت را روی processing بگذار تا UI هنوز «تأیید شد» نگوید
+        $matchedAmount = intval($meta['amount'] ?? 0);
+        $items[$idx]['status'] = 'payment_received';
+        $items[$idx]['payment_received_at'] = time();
+        $items[$idx]['matched_amount'] = $matchedAmount;
+        $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
+        $items[$idx]['message'] = 'واریز تأیید شد؛ در حال فعال‌سازی اشتراک…';
+
+        if(!instantPaySave($items)){
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'ذخیره وضعیت payment_received ناموفق بود',
+            ];
+        }
+
         $items[$idx]['status'] = 'processing';
         $items[$idx]['message'] = 'در حال صدور اشتراک…';
-        instantPaySave($items);
+
+        if(!instantPaySave($items)){
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'ذخیره وضعیت processing ناموفق بود',
+            ];
+        }
 
         $result = xuiApprovePaymentIndex($csvIndex, $found['type'] ?? 'خرید');
 
@@ -1295,20 +1959,73 @@ if(!function_exists('instantPayPath')){
         }
 
         if(empty($result['ok'])){
-            $items[$idx]['status'] = 'failed';
-            $items[$idx]['message'] = $result['error'] ?? 'تأیید ناموفق';
-            instantPaySave($items);
-            return $result;
+            $provisionCode = trim((string)($result['code'] ?? ''));
+
+            if($provisionCode === 'persist_failed' && !empty($result['recoverable'])){
+                $items[$idx]['status'] = 'payment_received';
+                $items[$idx]['message'] = 'واریز ثبت شد؛ ذخیره نهایی سفارش ناقص بود و با تلاش مجدد تکمیل می‌شود';
+                $items[$idx]['provision_code'] = $provisionCode;
+                $items[$idx]['provision_error'] = $result['error'] ?? '';
+
+                if(!instantPaySave($items)){
+                    return [
+                        'ok' => false,
+                        'code' => 'persist_failed',
+                        'error' => 'ذخیره وضعیت recoverable ناموفق بود',
+                    ];
+                }
+
+                return $result;
+            }
+
+            $items[$idx]['status'] = 'payment_received_provision_failed';
+            $items[$idx]['provision_failed_at'] = time();
+            $items[$idx]['provision_error'] = $result['error'] ?? 'فعال‌سازی اشتراک ناموفق بود';
+            $items[$idx]['provision_code'] = $provisionCode;
+            $items[$idx]['message'] = 'واریز شما ثبت شد اما فعال‌سازی اشتراک انجام نشد. نیازی به پرداخت مجدد نیست.';
+            if($matchedAmount <= 0){
+                $items[$idx]['matched_amount'] = intval($items[$idx]['matched_amount'] ?? 0);
+            }
+
+            if(!instantPaySave($items)){
+                return [
+                    'ok' => false,
+                    'code' => 'persist_failed',
+                    'error' => 'ذخیره خطای provision ناموفق بود',
+                ];
+            }
+
+            return array_merge($result, [
+                'item' => instantPayPublicView($items[$idx]),
+            ]);
         }
 
         // فقط وقتی کانفیگ آماده است «paid» می‌شود
+        if(($items[$idx]['status'] ?? '') === 'paid'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'item' => instantPayPublicView($items[$idx]),
+                'provision' => $result,
+            ];
+        }
+
         $items[$idx]['status'] = 'paid';
         $items[$idx]['paid_at'] = time();
         $items[$idx]['link'] = $result['link'] ?? ($found['sub'] ?? '');
         $items[$idx]['message'] = 'پرداخت تأیید شد';
+        instantPayApplyRenewProvisionMeta($items[$idx], is_array($result) ? $result : []);
         $items[$idx]['matched_amount'] = intval($meta['amount'] ?? 0);
         $items[$idx]['matched_text'] = substr((string)($meta['text'] ?? ''), 0, 500);
-        instantPaySave($items);
+
+        if(!instantPaySave($items)){
+            return [
+                'ok' => false,
+                'code' => 'persist_failed',
+                'error' => 'ذخیره وضعیت paid ناموفق بود',
+                'provision' => $result,
+            ];
+        }
 
         if(!empty($found['coupon_code']) || !empty($found['discount_source'])){
             if(!function_exists('checkoutMarkDiscountPaid')){
@@ -1375,18 +2092,16 @@ if(!function_exists('instantPayPath')){
             $status = trim((string)($row[6] ?? ''));
 
             if($status === 'تایید شد'){
-                $link = trim((string)($row[7] ?? ''));
+                $sync = instantPaySyncPaidFromConfirmedCsv($csvIndex);
+
+                if(!empty($sync['ok'])){
+                    return array_merge($sync, ['already' => true]);
+                }
+
                 return [
-                    'ok' => true,
-                    'already' => true,
-                    'item' => [
-                        'status' => 'paid',
-                        'ready' => true,
-                        'link' => $link,
-                        'amount_text' => number_format(instantPayCsvRowAmountRial($row)) . ' ریال',
-                        'plan' => trim((string)($row[2] ?? '')),
-                        'code' => preg_replace('/^AUTO-/i', '', trim((string)($row[3] ?? ''))),
-                    ],
+                    'ok' => false,
+                    'error' => $sync['error'] ?? 'همگام‌سازی سفارش Instant Pay با تأیید CSV ناموفق بود',
+                    'code' => $sync['code'] ?? 'provision_not_verified',
                 ];
             }
 
@@ -1756,4 +2471,8 @@ if(!function_exists('instantPayPath')){
 
         return null;
     }
+}
+
+if(is_file(__DIR__ . '/instant_pay_admin_tabs_lib.php')){
+    require_once __DIR__ . '/instant_pay_admin_tabs_lib.php';
 }

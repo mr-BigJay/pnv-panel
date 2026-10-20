@@ -78,6 +78,10 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+if (is_file(__DIR__ . '/../instant_pay_admin_tabs_lib.php')) {
+    require_once __DIR__ . '/../instant_pay_admin_tabs_lib.php';
+}
+
 $paymentsFile = dirname(__DIR__) . '/invoices/payments.csv';
 $usersFile = dirname(__DIR__) . '/db/users.json';
 if (!is_file($paymentsFile) && is_file(__DIR__ . '/../invoices/payments.csv')) {
@@ -193,6 +197,33 @@ if(isset($_SESSION['payment_error'])){
 }
 
 $allowedPerPage = [20, 50, 100];
+$paymentsStatusOptions = function_exists('instantPayAdminListStatusKeys')
+    ? instantPayAdminListStatusKeys()
+    : ['approved', 'pending', 'expired', 'rejected', 'cancelled'];
+$paymentsStatusLabels = function_exists('instantPayAdminListStatusLabels')
+    ? instantPayAdminListStatusLabels()
+    : [
+        'approved' => 'تایید شده',
+        'pending' => 'درحال انتظار',
+        'expired' => 'منقضی',
+        'rejected' => 'رد شده',
+        'cancelled' => 'کنسل شده',
+    ];
+
+function paymentsNormalizeStatusFilter($status){
+    if(function_exists('instantPayNormalizeAdminListStatus')){
+        return instantPayNormalizeAdminListStatus($status);
+    }
+
+    $status = trim((string)$status);
+    $allowed = ['approved', 'pending', 'expired', 'rejected', 'cancelled'];
+
+    return in_array($status, $allowed, true) ? $status : 'approved';
+}
+
+function paymentsRedirectStatus(){
+    return paymentsNormalizeStatusFilter($_POST['status'] ?? $_GET['status'] ?? 'approved');
+}
 
 // ==================== عملیات POST ====================
 
@@ -202,9 +233,17 @@ if(isset($_POST['approve_payment'])){
 
     $link = trim($_POST['approve_link'] ?? '');
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
+    $redirectStatus = paymentsRedirectStatus();
 
     if(!in_array($redirectPer, $allowedPerPage, true)){
         $redirectPer = 20;
+    }
+
+    if(isset($payments[$index]) && function_exists('instantPayAdminPaymentRowIsActionable')
+        && !instantPayAdminPaymentRowIsActionable($payments[$index])){
+        $_SESSION['payment_error'] = 'این ردیف فقط برای مشاهده تاریخچه است و قابل تأیید/رد نیست.';
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
+        exit;
     }
 
     $xuiConfig = xuiLoadConfig();
@@ -215,19 +254,19 @@ if(isset($_POST['approve_payment'])){
 
         if(empty($result['ok'])){
             $_SESSION['payment_error'] = 'تایید خودکار ناموفق: ' . ($result['error'] ?? 'خطای نامشخص');
-            header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+            header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
             exit;
         }
 
         $_SESSION['payment_message'] = 'پرداخت تایید و اشتراک ساخته شد: ' . ($result['link'] ?? '');
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
         exit;
 
     }
 
     if(!isValidSubscriptionLink($link)){
         $_SESSION['payment_error'] = 'برای تایید پرداخت، وارد کردن لینک اشتراک معتبر الزامی است';
-        header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
         exit;
     }
 
@@ -250,7 +289,7 @@ if(isset($_POST['approve_payment'])){
     fclose($fp);
 
     $_SESSION['payment_message'] = 'پرداخت با موفقیت تایید شد';
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
 
     exit;
 
@@ -262,9 +301,17 @@ if(isset($_POST['reject_payment'])){
 
     $reason = trim($_POST['reject_reason']);
     $redirectPer = intval($_POST['per'] ?? $_GET['per'] ?? 20);
+    $redirectStatus = paymentsRedirectStatus();
 
     if(!in_array($redirectPer, $allowedPerPage, true)){
         $redirectPer = 20;
+    }
+
+    if(isset($payments[$index]) && function_exists('instantPayAdminPaymentRowIsActionable')
+        && !instantPayAdminPaymentRowIsActionable($payments[$index])){
+        $_SESSION['payment_error'] = 'این ردیف فقط برای مشاهده تاریخچه است و قابل تأیید/رد نیست.';
+        header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
+        exit;
     }
 
     if(isset($payments[$index])){
@@ -285,7 +332,7 @@ if(isset($_POST['reject_payment'])){
 
     fclose($fp);
 
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . $redirectPer));
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($redirectStatus) . '&per=' . $redirectPer));
 
     exit;
 
@@ -313,7 +360,9 @@ if(isset($_GET['deletepayment'])){
 
     fclose($fp);
 
-    header('Location: ' . pnvAdminUrl('index.php?page=payments&per=' . intval($_GET['per'] ?? 20)));
+    $deleteStatus = paymentsNormalizeStatusFilter($_GET['status'] ?? 'approved');
+
+    header('Location: ' . pnvAdminUrl('index.php?page=payments&status=' . rawurlencode($deleteStatus) . '&per=' . intval($_GET['per'] ?? 20)));
 
     exit;
 
@@ -333,11 +382,24 @@ foreach($payments as $index => $pay){
             continue;
         }
 
+        // Use the transaction creation time, not the CSV row position.
+        // Older records may only have a Jalali date/time in columns 4 and 5.
+        $sortTimestamp = intval($pay[8] ?? 0);
+        if($sortTimestamp <= 0 && function_exists('pnvParseDateTimeToTimestamp')){
+            $date = trim((string)($pay[4] ?? ''));
+            $time = trim((string)($pay[5] ?? ''));
+            if($date !== ''){
+                $sortTimestamp = pnvParseDateTimeToTimestamp(trim($date . ' ' . $time));
+            }
+        }
+
         $buyPayments[] = [
 
             'index' => $index,
 
-            'data' => $pay
+            'data' => $pay,
+
+            'sort_timestamp' => $sortTimestamp
 
         ];
 
@@ -345,7 +407,57 @@ foreach($payments as $index => $pay){
 
 }
 
-$buyPayments = array_reverse($buyPayments);
+// Sort the complete list before pagination. Keep the original CSV index for
+// approve/reject/delete operations, and break equal-date ties deterministically.
+usort($buyPayments, static function($a, $b){
+    $byDate = $b['sort_timestamp'] <=> $a['sort_timestamp'];
+    return $byDate !== 0 ? $byDate : ($b['index'] <=> $a['index']);
+});
+
+$statusFilter = paymentsNormalizeStatusFilter($_GET['status'] ?? 'approved');
+$paymentsStatusCounts = array_fill_keys($paymentsStatusOptions, 0);
+$buyCancelledArchive = function_exists('instantPayAdminCancelledHistory')
+    ? instantPayAdminCancelledHistory($payments, 'خرید')
+    : [];
+
+if(isset($paymentsStatusCounts['cancelled'])){
+    $paymentsStatusCounts['cancelled'] = count($buyCancelledArchive);
+}
+
+if(function_exists('instantPayAdminRowListBucket')){
+    foreach($buyPayments as $row){
+        $pay = $row['data'] ?? [];
+
+        if(!is_array($pay)){
+            continue;
+        }
+
+        $bucket = instantPayAdminRowListBucket($pay);
+
+        if($bucket === 'cancelled'){
+            continue;
+        }
+
+        if(isset($paymentsStatusCounts[$bucket])){
+            $paymentsStatusCounts[$bucket]++;
+        }
+    }
+
+    if($statusFilter === 'cancelled'){
+        $buyPayments = $buyCancelledArchive;
+    }
+    else{
+        $buyPayments = array_values(array_filter($buyPayments, static function($row) use ($statusFilter){
+            $pay = $row['data'] ?? [];
+
+            if(!is_array($pay)){
+                return false;
+            }
+
+            return instantPayAdminRowListBucket($pay) === $statusFilter;
+        }));
+    }
+}
 
 $currentPage = intval($_GET['p'] ?? 1);
 
@@ -371,10 +483,12 @@ $start = ($currentPage - 1) * $perPage;
 
 $buyPaymentsPage = array_slice($buyPayments, $start, $perPage);
 
-function paymentsListUrl($page, $per){
+function paymentsListUrl($page, $per, $status = 'approved'){
+
+    $status = paymentsNormalizeStatusFilter($status);
 
     return pnvAdminUrl(
-        'index.php?page=payments&p=' . intval($page) . '&per=' . intval($per)
+        'index.php?page=payments&status=' . rawurlencode($status) . '&p=' . intval($page) . '&per=' . intval($per)
     );
 
 }
@@ -804,6 +918,39 @@ flex:0 0 20px;
 .statusIcon svg{width:11px;height:11px}
 }
 
+.payViewTabs{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+justify-content:flex-end;
+margin:-6px 0 16px;
+}
+
+.payViewTab{
+display:inline-flex;
+align-items:center;
+gap:6px;
+padding:8px 14px;
+border-radius:999px;
+border:1px solid rgba(148,163,184,.22);
+background:#1e293b;
+color:#cbd5e1;
+font-size:13px;
+text-decoration:none;
+transition:background .15s,border-color .15s,color .15s;
+}
+
+.payViewTabCount{
+font-size:11px;
+opacity:.85;
+}
+
+.payViewTab.is-active{
+background:#2563eb;
+border-color:#2563eb;
+color:#fff;
+}
+
 </style>
 
 <div class="box paymentsPage" data-payments-ui="cards">
@@ -817,6 +964,19 @@ flex:0 0 20px;
 <div class="payAlertErr"><?php echo htmlspecialchars($paymentError, ENT_QUOTES, 'UTF-8'); ?></div>
 <?php } ?>
 
+<div class="payViewTabs" role="tablist" aria-label="فیلتر وضعیت خرید">
+<?php foreach($paymentsStatusLabels as $statusKey => $statusLabel){
+    $active = $statusFilter === $statusKey ? ' is-active' : '';
+    $href = paymentsListUrl(1, $perPage, $statusKey);
+    $count = intval($paymentsStatusCounts[$statusKey] ?? 0);
+    ?>
+<a class="payViewTab<?php echo $active; ?>" role="tab" aria-selected="<?php echo $statusFilter === $statusKey ? 'true' : 'false'; ?>" href="<?php echo htmlspecialchars($href, ENT_QUOTES, 'UTF-8'); ?>">
+<span><?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+<span class="payViewTabCount">(<?php echo $count; ?>)</span>
+</a>
+<?php } ?>
+</div>
+
 <div class="payList">
 
 <?php if($totalItems === 0){ ?>
@@ -825,8 +985,9 @@ flex:0 0 20px;
 
 <?php foreach($buyPaymentsPage as $row){
 
-$i = $row['index'];
+$i = $row['index'] ?? null;
 $p = $row['data'];
+$payRowMenuId = ($i !== null && $i !== '') ? ('m' . (int)$i) : ('march' . md5(json_encode($p)));
 
 $status = trim((string)($p[6] ?? ''));
 if($status === ''){
@@ -835,6 +996,7 @@ $status = 'درحال بررسی';
 
 $statusClass = 'is-pending';
 $statusTitle = 'درحال بررسی';
+$payStatusMeta = [];
 if(function_exists('instantPayAdminRowStatusMeta')){
     $payStatusMeta = instantPayAdminRowStatusMeta($p);
     $statusTitle = $payStatusMeta['title'] ?? $statusTitle;
@@ -874,6 +1036,10 @@ $configName = '—';
 }
 $planLine = paymentsFormatPlanLine($p[2] ?? '');
 $payWhen = pnvFormatPaymentRowDateTime($p);
+$provisionDetail = function_exists('instantPayAdminProvisionFailureDetail') ? instantPayAdminProvisionFailureDetail($p) : '';
+if($provisionDetail === '' && !empty($payStatusMeta['detail'] ?? '')){
+    $provisionDetail = (string)$payStatusMeta['detail'];
+}
 
 ?>
 
@@ -887,6 +1053,13 @@ $payWhen = pnvFormatPaymentRowDateTime($p);
 <div class="payColPlan">
 <span class="payConfigName"><?php echo htmlspecialchars($configName, ENT_QUOTES, 'UTF-8'); ?></span>
 <span class="payPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php if($statusFilter === 'cancelled'){ ?>
+<span class="payPlanLine">کد: <?php echo htmlspecialchars((string)($p[3] ?? '—'), ENT_QUOTES, 'UTF-8'); ?> | مبلغ: <?php echo number_format(intval($p[12] ?? 0)); ?> ریال</span>
+<span class="payPlanLine"><?php echo htmlspecialchars((string)($p[7] ?? 'لغو شده'), ENT_QUOTES, 'UTF-8'); ?></span>
+<?php } ?>
+<?php if($provisionDetail !== ''){ ?>
+<span class="payPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php } ?>
 </div>
 
 <div class="payActions">
@@ -905,15 +1078,16 @@ $payWhen = pnvFormatPaymentRowDateTime($p);
 </span>
 <?php } ?>
 
+<?php if($statusFilter !== 'cancelled'){ ?>
 <button
 class="menuBtn"
 type="button"
 aria-label="منو"
-onclick="openMenu(event,'m<?php echo $i; ?>')">
+onclick="openMenu(event,'<?php echo htmlspecialchars($payRowMenuId, ENT_QUOTES, 'UTF-8'); ?>')">
 ⋮
 </button>
 
-<div class="dropdown" id="m<?php echo $i; ?>" onclick="event.stopPropagation()">
+<div class="dropdown" id="<?php echo htmlspecialchars($payRowMenuId, ENT_QUOTES, 'UTF-8'); ?>" onclick="event.stopPropagation()">
 <button type="button" onclick='showConfig(
 <?php echo json_encode($p[0] ?? ""); ?>,
 <?php echo json_encode($mobile); ?>,
@@ -945,6 +1119,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 <?php echo json_encode($p[1] ?? ""); ?>
 )'>حذف</button>
 </div>
+<?php } ?>
 
 </div>
 
@@ -958,7 +1133,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 <div class="pagination">
 <?php for($x = 1; $x <= $totalPages; $x++){ ?>
 <a
-href="<?php echo htmlspecialchars(paymentsListUrl($x, $perPage), ENT_QUOTES, 'UTF-8'); ?>"
+href="<?php echo htmlspecialchars(paymentsListUrl($x, $perPage, $statusFilter), ENT_QUOTES, 'UTF-8'); ?>"
 class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 <?php echo $x; ?>
 </a>
@@ -976,6 +1151,7 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 
 const paymentsListBase = <?php echo json_encode(pnvAdminUrl('index.php?page=payments'), JSON_UNESCAPED_UNICODE); ?>;
 const paymentsPerPage = <?php echo (int)$perPage; ?>;
+const paymentsListStatus = <?php echo json_encode($statusFilter, JSON_UNESCAPED_UNICODE); ?>;
 
 function closeMenus(){
 document.querySelectorAll('.dropdown.active').forEach(function(el){
@@ -1094,6 +1270,7 @@ else{
 content=
 '<form method="POST">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="status" value="'+paymentsListStatus+'">'+
 '<input type="hidden" name="approve_index" value="'+id+'">'+
 '<input type="text" name="approve_link" id="approveLink" placeholder="لینک اشتراک">'+
 '<div class="modalBtns">'+
@@ -1103,6 +1280,7 @@ content=
 '<hr style="margin:20px 0;border-color:#334155;">'+
 '<form method="POST">'+
 '<input type="hidden" name="per" value="'+paymentsPerPage+'">'+
+'<input type="hidden" name="status" value="'+paymentsListStatus+'">'+
 '<input type="hidden" name="reject_index" value="'+id+'">'+
 '<select name="reject_reason">'+
 '<option value="اطلاعات پرداخت اشتباه است">اطلاعات پرداخت اشتباه است</option>'+
@@ -1141,7 +1319,7 @@ openModal(
 
 function confirmDelete(id){
 if(confirm('مطمئن هستید؟')){
-location.href=paymentsListBase+'&deletepayment='+id+'&per='+paymentsPerPage;
+location.href=paymentsListBase+'&deletepayment='+id+'&per='+paymentsPerPage+'&status='+encodeURIComponent(paymentsListStatus);
 }
 }
 
