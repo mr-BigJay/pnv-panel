@@ -1,0 +1,13 @@
+{
+    "enabled": false,
+    "provider": "disabled",
+    "poll_interval_seconds": 60,
+    "dry_run": true,
+    "destination_cards": [],
+    "max_deposit_age_seconds": 86400,
+    "worker_ingest_secret": "",
+    "worker_heartbeat_max_age_seconds": 300,
+    "worker_ingest_url": "",
+    "mock_transactions": [],
+    "notes": "کپی به tejarat_verify.json. worker_ingest_secret و رمز بانک را commit نکنید."
+}

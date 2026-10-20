@@ -272,7 +272,7 @@ if(!function_exists('instantPayPath')){
         return null;
     }
 
-    function instantPayFindCsvMatchByAmount($amountRial){
+    function instantPayFindCsvMatchByAmount($amountRial, array $depositMeta = []){
         $amountRial = intval($amountRial);
 
         if($amountRial <= 0 || !function_exists('xuiLoadPayments')){
@@ -291,11 +291,7 @@ if(!function_exists('instantPayPath')){
 
             $rowAmount = instantPayCsvRowAmountRial($row);
 
-            if($rowAmount <= 0){
-                continue;
-            }
-
-            if($rowAmount !== $amountRial && intdiv($rowAmount, 10) !== $amountRial){
+            if($rowAmount <= 0 || !instantPayItemAmountMatchesDeposit(['amount' => $rowAmount, 'currency' => 'rial'], $amountRial)){
                 continue;
             }
 
@@ -305,21 +301,28 @@ if(!function_exists('instantPayPath')){
                 continue;
             }
 
+            $jsonItem = instantPayFindJsonByTracking($row[0] ?? '', $row[3] ?? '');
+
+            if(!is_array($jsonItem)){
+                continue;
+            }
+
+            if(!instantPayDepositMatchesOrderCard($jsonItem, $depositMeta)){
+                continue;
+            }
+
+            if(!instantPayDepositMatchesOrderBank($jsonItem, $depositMeta)){
+                continue;
+            }
+
             $matches[] = [
                 'csv_index' => $i,
                 'row' => $row,
+                'json_item' => $jsonItem,
             ];
         }
 
         if(count($matches) === 1){
-            return $matches[0];
-        }
-
-        if(count($matches) > 1){
-            usort($matches, static function($a, $b){
-                return intval($b['row'][8] ?? 0) <=> intval($a['row'][8] ?? 0);
-            });
-
             return $matches[0];
         }
 
@@ -1707,6 +1710,7 @@ if(!function_exists('instantPayPath')){
             'plan_value' => $planValue,
             'card' => $card,
             'card_name' => $cardName,
+            'card_bank' => instantPayResolveOrderCardBank($card, $cardName),
             'amount' => $amount,
             'base_amount' => $baseRial,
             'plan_toman' => $baseToman,
@@ -2186,48 +2190,17 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayTryDepositAmount($amount, $text, $meta = []){
-        $amount = intval($amount);
+        $depositMeta = array_merge(is_array($meta) ? $meta : [], [
+            'amount' => intval($amount),
+            'text' => (string)$text,
+            'source' => trim((string)($meta['source'] ?? 'bale')),
+        ]);
 
-        if($amount <= 0){
-            return null;
-        }
+        $depositMeta = instantPayEnrichBaleDepositMeta($depositMeta, (string)$text);
 
-        $payload = [
-            'amount' => $amount,
-            'text' => $text,
-            'date' => $meta['date'] ?? '',
-            'time' => $meta['time'] ?? '',
-        ];
-
-        $item = instantPayMatchAmountExact($amount);
-
-        if(!$item){
-            $item = instantPayMatchAmount($amount);
-        }
-
-        if(is_array($item) && !empty($item['id'])){
-            $result = instantPayMarkPaid($item['id'], $payload);
-            $result['matched_amount'] = $amount;
-            $result['matched_via'] = 'json';
-
-            if(!empty($result['ok'])){
-                return $result;
-            }
-        }
-
-        $csvMatch = instantPayFindCsvMatchByAmount($amount);
-
-        if(!is_array($csvMatch)){
-            return null;
-        }
-
-        $result = instantPayMarkPaidFromCsv($csvMatch['csv_index'], $payload);
-        $result['matched_amount'] = $amount;
-        if(empty($result['matched_via'])){
-            $result['matched_via'] = 'csv';
-        }
-
-        return $result;
+        return instantPayTryDepositMatch(intval($amount), $depositMeta, [
+            'apply' => true,
+        ]);
     }
 
     function instantPayMatchDebugSnapshot($amounts = []){
@@ -2277,44 +2250,8 @@ if(!function_exists('instantPayPath')){
         return $itemAmount;
     }
 
-    function instantPayMatchAmount($amountRial){
-        $amountRial = intval($amountRial);
-
-        if($amountRial <= 0){
-            return null;
-        }
-
-        $items = instantPayExpireDue();
-        $code = str_pad((string)($amountRial % 10000), 4, '0', STR_PAD_LEFT);
-        $now = time();
-        $candidates = [];
-
-        foreach($items as $item){
-            if(!instantPayItemMatchable($item, $now)){
-                continue;
-            }
-
-            $itemAmount = instantPayNormalizeItemAmountRial($item);
-
-            if($itemAmount === $amountRial){
-                return $item;
-            }
-
-            // اگر پیام مبلغ را به تومان آورده (بدون تبدیل)
-            if($itemAmount > 0 && intdiv($itemAmount, 10) === $amountRial){
-                return $item;
-            }
-
-            if(str_pad((string)intval($item['code'] ?? 0), 4, '0', STR_PAD_LEFT) === $code){
-                $candidates[] = $item;
-            }
-        }
-
-        if(count($candidates) === 1){
-            return $candidates[0];
-        }
-
-        return null;
+    function instantPayMatchAmount($amountRial, array $depositMeta = []){
+        return instantPayFindUniqueOrderForDeposit(intval($amountRial), $depositMeta);
     }
 
     /**
@@ -2371,10 +2308,10 @@ if(!function_exists('instantPayPath')){
         $candidates = instantPayExpandAmountCandidates($amounts, ['rial_only' => $rialOnly]);
 
         foreach($candidates as $amount){
-            $result = instantPayTryDepositAmount($amount, $text, [
+            $result = instantPayTryDepositAmount($amount, $text, array_merge(is_array($meta) ? $meta : [], [
                 'date' => $meta['date'] ?? '',
                 'time' => $meta['time'] ?? '',
-            ]);
+            ]));
 
             if(!is_array($result)){
                 continue;
@@ -2438,7 +2375,210 @@ if(!function_exists('instantPayPath')){
         return 'سفارش بازی با این مبلغ پیدا نشد';
     }
 
-    function instantPayMatchAmountExact($amountRial){
+    function instantPayMatchAmountExact($amountRial, array $depositMeta = []){
+        return instantPayFindUniqueOrderForDeposit(intval($amountRial), $depositMeta);
+    }
+
+    function instantPayNormalizeCardNumber($card){
+        return preg_replace('/\D+/', '', (string)$card);
+    }
+
+    function instantPayResolveOrderCardBank($card, $cardName = ''){
+        $cardName = trim((string)$cardName);
+        $bank = '';
+
+        if($cardName !== '' && function_exists('pnvGuessBankIdFromText')){
+            $bank = pnvGuessBankIdFromText($cardName);
+        }
+
+        if($bank === '' && function_exists('pnvCardsForUi')){
+            $cardsPath = __DIR__ . '/db/cards.json';
+
+            if(is_file($cardsPath)){
+                $cards = json_decode((string)file_get_contents($cardsPath), true);
+                $want = instantPayNormalizeCardNumber($card);
+
+                if(is_array($cards) && $want !== ''){
+                    foreach($cards as $row){
+                        if(!is_array($row)){
+                            continue;
+                        }
+
+                        if(instantPayNormalizeCardNumber($row['card'] ?? '') !== $want){
+                            continue;
+                        }
+
+                        $normalized = function_exists('pnvNormalizeCardRecord')
+                            ? pnvNormalizeCardRecord($row)
+                            : $row;
+                        $bank = trim((string)($normalized['bank'] ?? ''));
+
+                        if($bank !== ''){
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        return strtolower(trim($bank));
+    }
+
+    function instantPayResolveOrderBankId(array $item){
+        $bank = strtolower(trim((string)($item['card_bank'] ?? '')));
+
+        if($bank !== ''){
+            return $bank;
+        }
+
+        if(function_exists('pnvGuessBankIdFromText')){
+            return strtolower(trim((string)pnvGuessBankIdFromText($item['card_name'] ?? '')));
+        }
+
+        return '';
+    }
+
+    function instantPayDepositMetaNormalized(array $depositMeta){
+        return [
+            'source' => strtolower(trim((string)($depositMeta['source'] ?? 'unknown'))),
+            'bank_id' => strtolower(trim((string)($depositMeta['bank_id'] ?? ''))),
+            'destination_card' => instantPayNormalizeCardNumber($depositMeta['destination_card'] ?? ($depositMeta['card'] ?? '')),
+            'transaction_id' => trim((string)($depositMeta['transaction_id'] ?? '')),
+            'occurred_at' => intval($depositMeta['occurred_at'] ?? 0),
+            'text' => trim((string)($depositMeta['text'] ?? '')),
+        ];
+    }
+
+    function instantPayDepositDestinationMatchesOrderCard($orderCard, $destinationCard){
+        $orderCard = instantPayNormalizeCardNumber($orderCard);
+        $destinationCard = instantPayNormalizeCardNumber($destinationCard);
+
+        if($orderCard === '' || $destinationCard === ''){
+            return false;
+        }
+
+        if($orderCard === $destinationCard){
+            return true;
+        }
+
+        if(strlen($destinationCard) <= 8 && strlen($orderCard) >= strlen($destinationCard)){
+            return substr($orderCard, -strlen($destinationCard)) === $destinationCard;
+        }
+
+        return false;
+    }
+
+    function instantPayEnrichBaleDepositMeta(array $depositMeta, $text){
+        $text = trim((string)$text);
+        $depositMeta['text'] = $text !== '' ? $text : (string)($depositMeta['text'] ?? '');
+
+        if(
+            trim((string)($depositMeta['source'] ?? '')) === 'bale'
+            && trim((string)($depositMeta['bank_id'] ?? '')) === ''
+            && function_exists('baleLooksLikePostBankNotice')
+            && baleLooksLikePostBankNotice($text)
+        ){
+            $depositMeta['bank_id'] = 'post';
+        }
+
+        if(
+            trim((string)($depositMeta['destination_card'] ?? '')) === ''
+            && function_exists('baleExtractDestinationCardDigits')
+        ){
+            $hint = baleExtractDestinationCardDigits($text);
+
+            if($hint !== ''){
+                $depositMeta['destination_card'] = $hint;
+            }
+        }
+
+        if(function_exists('baleBuildPostbankDepositUsageKey')){
+            $amountRial = intval($depositMeta['amount'] ?? 0);
+            $fp = baleBuildPostbankDepositUsageKey($text, $amountRial);
+
+            if(!empty($fp['ok']) && trim((string)($fp['key'] ?? '')) !== ''){
+                $depositMeta['bank_usage_key'] = trim((string)$fp['key']);
+                $depositMeta['bank_reference'] = $depositMeta['bank_usage_key'];
+            }
+            elseif(($fp['code'] ?? '') === 'ambiguous_bank_fingerprint'){
+                $depositMeta['bank_fingerprint_ambiguous'] = true;
+            }
+        }
+
+        return $depositMeta;
+    }
+
+    function instantPayDepositMatchesOrderCard(array $item, array $depositMeta){
+        $deposit = instantPayDepositMetaNormalized($depositMeta);
+        $orderCard = instantPayNormalizeCardNumber($item['card'] ?? '');
+
+        if($deposit['destination_card'] !== ''){
+            return instantPayDepositDestinationMatchesOrderCard($orderCard, $deposit['destination_card']);
+        }
+
+        if($deposit['source'] === 'bale'){
+            return false;
+        }
+
+        return false;
+    }
+
+    function instantPayDepositMatchesOrderBank(array $item, array $depositMeta){
+        $deposit = instantPayDepositMetaNormalized($depositMeta);
+
+        if($deposit['bank_id'] === ''){
+            if($deposit['source'] === 'bale'){
+                return false;
+            }
+
+            return $deposit['destination_card'] !== '';
+        }
+
+        $orderBank = instantPayResolveOrderBankId($item);
+
+        return $orderBank !== '' && $orderBank === $deposit['bank_id'];
+    }
+
+    function instantPayItemAmountMatchesDeposit(array $item, $amountRial){
+        $amountRial = intval($amountRial);
+        $itemAmount = instantPayNormalizeItemAmountRial($item);
+
+        if($itemAmount === $amountRial){
+            return true;
+        }
+
+        return $itemAmount > 0 && intdiv($itemAmount, 10) === $amountRial;
+    }
+
+    function instantPayDepositOccurredValidForItem(array $item, array $depositMeta, array $opts = []){
+        $deposit = instantPayDepositMetaNormalized($depositMeta);
+        $occurred = intval($deposit['occurred_at'] ?? 0);
+
+        if($occurred <= 0){
+            return true;
+        }
+
+        $created = intval($item['created_at'] ?? 0);
+        $slack = intval($opts['created_slack_seconds'] ?? ($depositMeta['created_slack_seconds'] ?? 300));
+
+        if($created > 0 && $occurred < ($created - $slack)){
+            return false;
+        }
+
+        $maxAge = intval($opts['max_deposit_age_seconds'] ?? ($depositMeta['max_deposit_age_seconds'] ?? 0));
+
+        if($maxAge > 0){
+            $now = intval($opts['now'] ?? time());
+
+            if(($now - $occurred) > $maxAge){
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function instantPayFindUniqueOrderForDeposit($amountRial, array $depositMeta = []){
         $amountRial = intval($amountRial);
 
         if($amountRial <= 0){
@@ -2447,23 +2587,520 @@ if(!function_exists('instantPayPath')){
 
         $items = instantPayExpireDue();
         $now = time();
+        $matches = [];
 
         foreach($items as $item){
             if(!instantPayItemMatchable($item, $now)){
                 continue;
             }
 
-            $itemAmount = instantPayNormalizeItemAmountRial($item);
-
-            if($itemAmount === $amountRial){
-                return $item;
+            if(!instantPayItemAmountMatchesDeposit($item, $amountRial)){
+                continue;
             }
 
-            if($itemAmount > 0 && intdiv($itemAmount, 10) === $amountRial){
-                return $item;
+            if(!instantPayDepositMatchesOrderCard($item, $depositMeta)){
+                continue;
+            }
+
+            if(!instantPayDepositMatchesOrderBank($item, $depositMeta)){
+                continue;
+            }
+
+            if(!instantPayDepositOccurredValidForItem($item, $depositMeta)){
+                continue;
+            }
+
+            $matches[] = $item;
+        }
+
+        if(count($matches) === 1){
+            return $matches[0];
+        }
+
+        return null;
+    }
+
+    function instantPayUsedDepositsPath(){
+        $override = getenv('PNV_USED_DEPOSITS_PATH');
+
+        if(is_string($override) && trim($override) !== ''){
+            return trim($override);
+        }
+
+        return __DIR__ . '/db/instant_pay_used_deposits.json';
+    }
+
+    function instantPayLoadUsedDeposits(){
+        $path = instantPayUsedDepositsPath();
+
+        if(!is_file($path)){
+            return [];
+        }
+
+        $data = json_decode((string)file_get_contents($path), true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    function instantPaySaveUsedDeposits(array $rows){
+        if(!is_dir(__DIR__ . '/db')){
+            @mkdir(__DIR__ . '/db', 0755, true);
+        }
+
+        $json = json_encode(array_values($rows), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        if($json === false){
+            return false;
+        }
+
+        $written = file_put_contents(instantPayUsedDepositsPath(), $json, LOCK_EX);
+
+        return $written !== false && $written >= strlen($json);
+    }
+
+    function instantPayDepositUsageKey(array $depositMeta){
+        $deposit = instantPayDepositMetaNormalized($depositMeta);
+        $bankUsageKey = trim((string)($depositMeta['bank_usage_key'] ?? ''));
+
+        if($bankUsageKey !== ''){
+            return $bankUsageKey;
+        }
+
+        $bankReference = trim((string)($depositMeta['bank_reference'] ?? ''));
+
+        if($bankReference !== ''){
+            return $bankReference;
+        }
+
+        if($deposit['transaction_id'] !== ''){
+            return $deposit['source'] . '|' . $deposit['bank_id'] . '|' . $deposit['transaction_id'];
+        }
+
+        if($deposit['occurred_at'] > 0 && $deposit['destination_card'] !== ''){
+            return $deposit['source']
+                . '|' . $deposit['bank_id']
+                . '|' . $deposit['destination_card']
+                . '|' . intval($depositMeta['amount'] ?? 0)
+                . '|' . $deposit['occurred_at'];
+        }
+
+        return '';
+    }
+
+    function instantPayDepositClaimStatus($row){
+        $status = strtolower(trim((string)($row['status'] ?? '')));
+
+        if($status === ''){
+            return 'completed';
+        }
+
+        return $status;
+    }
+
+    function instantPayFindDepositClaimRow($usageKey){
+        $usageKey = trim((string)$usageKey);
+
+        if($usageKey === ''){
+            return null;
+        }
+
+        foreach(instantPayLoadUsedDeposits() as $row){
+            if(trim((string)($row['key'] ?? '')) === $usageKey){
+                return $row;
             }
         }
 
         return null;
+    }
+
+    function instantPayDepositClaimBlocksReuse($row, $orderId){
+        if(!is_array($row)){
+            return false;
+        }
+
+        $status = instantPayDepositClaimStatus($row);
+        $claimedOrder = trim((string)($row['order_id'] ?? ''));
+
+        if($status === 'released'){
+            return false;
+        }
+
+        if($status === 'processing' && $claimedOrder !== '' && $claimedOrder === trim((string)$orderId)){
+            return false;
+        }
+
+        return in_array($status, ['processing', 'completed'], true);
+    }
+
+    function instantPayDepositHasDedupKey(array $depositMeta){
+        $amount = intval($depositMeta['amount'] ?? 0);
+
+        if($amount <= 0){
+            return false;
+        }
+
+        return instantPayDepositUsageKey(array_merge($depositMeta, ['amount' => $amount])) !== '';
+    }
+
+    function instantPayIsDepositUsed($usageKey, $orderId = ''){
+        $row = instantPayFindDepositClaimRow($usageKey);
+
+        return instantPayDepositClaimBlocksReuse($row, $orderId);
+    }
+
+    function instantPayClaimDepositUsage($usageKey, $orderId, array $depositMeta = []){
+        return instantPayWithStoreLock(static function() use ($usageKey, $orderId, $depositMeta){
+            return instantPayClaimDepositUsageUnlocked($usageKey, $orderId, $depositMeta);
+        });
+    }
+
+    function instantPayClaimDepositUsageUnlocked($usageKey, $orderId, array $depositMeta = []){
+        $usageKey = trim((string)$usageKey);
+        $orderId = trim((string)$orderId);
+
+        if($usageKey === '' || $orderId === ''){
+            return [
+                'ok' => false,
+                'code' => 'missing_dedup_key',
+                'error' => 'شناسه یکتای واریز برای claim کافی نیست',
+            ];
+        }
+
+        $existing = instantPayFindDepositClaimRow($usageKey);
+
+        if(is_array($existing)){
+            $status = instantPayDepositClaimStatus($existing);
+            $claimedOrder = trim((string)($existing['order_id'] ?? ''));
+
+            if($status === 'completed'){
+                return [
+                    'ok' => false,
+                    'code' => 'deposit_already_used',
+                    'error' => 'این تراکنش قبلاً مصرف شده است',
+                ];
+            }
+
+            if($status === 'processing'){
+                if($claimedOrder === $orderId){
+                    return ['ok' => true, 'resume' => true];
+                }
+
+                return [
+                    'ok' => false,
+                    'code' => 'deposit_already_used',
+                    'error' => 'این تراکنش در حال پردازش سفارش دیگری است',
+                ];
+            }
+        }
+
+        $deposit = instantPayDepositMetaNormalized($depositMeta);
+        $rows = instantPayLoadUsedDeposits();
+        $rows[] = [
+            'key' => $usageKey,
+            'order_id' => $orderId,
+            'source' => $deposit['source'],
+            'bank_id' => $deposit['bank_id'],
+            'status' => 'processing',
+            'claimed_at' => time(),
+            'used_at' => time(),
+        ];
+
+        if(!instantPaySaveUsedDeposits($rows)){
+            return [
+                'ok' => false,
+                'code' => 'dedup_persist_failed',
+                'error' => 'ثبت claim واریز ناموفق بود',
+            ];
+        }
+
+        return ['ok' => true, 'claimed' => true];
+    }
+
+    function instantPayCompleteDepositClaim($usageKey, $orderId = ''){
+        return instantPayWithStoreLock(static function() use ($usageKey, $orderId){
+            return instantPayCompleteDepositClaimUnlocked($usageKey, $orderId);
+        });
+    }
+
+    function instantPayCompleteDepositClaimUnlocked($usageKey, $orderId = ''){
+        $usageKey = trim((string)$usageKey);
+        $orderId = trim((string)$orderId);
+        $rows = instantPayLoadUsedDeposits();
+        $found = false;
+
+        foreach($rows as $i => $row){
+            if(trim((string)($row['key'] ?? '')) !== $usageKey){
+                continue;
+            }
+
+            if($orderId !== '' && trim((string)($row['order_id'] ?? '')) !== $orderId){
+                continue;
+            }
+
+            $rows[$i]['status'] = 'completed';
+            $rows[$i]['completed_at'] = time();
+            $rows[$i]['used_at'] = time();
+            $found = true;
+            break;
+        }
+
+        if(!$found){
+            $rows[] = [
+                'key' => $usageKey,
+                'order_id' => $orderId,
+                'status' => 'completed',
+                'claimed_at' => time(),
+                'completed_at' => time(),
+                'used_at' => time(),
+            ];
+        }
+
+        return instantPaySaveUsedDeposits($rows);
+    }
+
+    function instantPayReleaseDepositClaim($usageKey, $orderId = ''){
+        return instantPayWithStoreLock(static function() use ($usageKey, $orderId){
+            return instantPayReleaseDepositClaimUnlocked($usageKey, $orderId);
+        });
+    }
+
+    function instantPayReleaseDepositClaimUnlocked($usageKey, $orderId = ''){
+        $usageKey = trim((string)$usageKey);
+        $orderId = trim((string)$orderId);
+        $rows = instantPayLoadUsedDeposits();
+        $changed = false;
+
+        foreach($rows as $i => $row){
+            if(trim((string)($row['key'] ?? '')) !== $usageKey){
+                continue;
+            }
+
+            if($orderId !== '' && trim((string)($row['order_id'] ?? '')) !== $orderId){
+                continue;
+            }
+
+            if(instantPayDepositClaimStatus($row) !== 'processing'){
+                continue;
+            }
+
+            unset($rows[$i]);
+            $changed = true;
+            break;
+        }
+
+        if(!$changed){
+            return true;
+        }
+
+        return instantPaySaveUsedDeposits(array_values($rows));
+    }
+
+    function instantPayMarkDepositUsed($usageKey, $orderId, array $depositMeta = []){
+        $claim = instantPayClaimDepositUsage($usageKey, $orderId, $depositMeta);
+
+        if(empty($claim['ok'])){
+            return false;
+        }
+
+        return instantPayCompleteDepositClaim($usageKey, $orderId);
+    }
+
+    function instantPayDepositClaimShouldComplete(array $result){
+        if(!empty($result['ok']) || !empty($result['already'])){
+            return true;
+        }
+
+        $code = trim((string)($result['code'] ?? ''));
+
+        if(in_array($code, ['provision_in_progress', 'provision_retry_required'], true)){
+            return true;
+        }
+
+        $item = $result['item'] ?? null;
+
+        if(is_array($item)){
+            $status = (string)($item['status'] ?? '');
+
+            if(in_array($status, ['payment_received', 'processing', 'payment_received_provision_failed', 'paid'], true)){
+                return true;
+            }
+        }
+
+        if(!empty($result['processing'])){
+            return true;
+        }
+
+        if($code === 'persist_failed' && !empty($result['recoverable'])){
+            return true;
+        }
+
+        return false;
+    }
+
+    function instantPayFinalizeDepositClaimAfterMatch($usageKey, $orderId, array $result){
+        if(instantPayDepositClaimShouldComplete($result)){
+            if(!instantPayCompleteDepositClaim($usageKey, $orderId)){
+                return [
+                    'ok' => false,
+                    'code' => 'dedup_persist_failed',
+                    'error' => 'ثبت نهایی claim واریز ناموفق بود',
+                    'match_result' => $result,
+                ];
+            }
+
+            return $result;
+        }
+
+        instantPayReleaseDepositClaim($usageKey, $orderId);
+
+        return $result;
+    }
+
+    function instantPayApplyDepositMatchWithClaim($usageKey, $orderId, array $depositMeta, callable $markFn){
+        $claim = instantPayClaimDepositUsage($usageKey, $orderId, $depositMeta);
+
+        if(empty($claim['ok'])){
+            return [
+                'ok' => false,
+                'code' => $claim['code'] ?? 'deposit_claim_failed',
+                'error' => $claim['error'] ?? 'claim واریز ناموفق بود',
+            ];
+        }
+
+        $result = $markFn();
+
+        return instantPayFinalizeDepositClaimAfterMatch($usageKey, $orderId, is_array($result) ? $result : [
+            'ok' => false,
+            'error' => 'نتیجه نامعتبر فعال‌سازی',
+        ]);
+    }
+
+    function instantPayTryDepositMatch($amountRial, array $depositMeta, array $opts = []){
+        $amountRial = intval($amountRial);
+        $apply = !array_key_exists('apply', $opts) || !empty($opts['apply']);
+        $dryRun = !empty($opts['dry_run']);
+
+        if($amountRial <= 0){
+            return ['ok' => false, 'code' => 'invalid_amount', 'error' => 'مبلغ نامعتبر است'];
+        }
+
+        $runner = static function() use ($amountRial, $depositMeta, $apply, $dryRun){
+            return instantPayTryDepositMatchUnlocked($amountRial, $depositMeta, [
+                'apply' => $apply,
+                'dry_run' => $dryRun,
+            ]);
+        };
+
+        if($apply && !$dryRun){
+            return instantPayWithStoreLock($runner);
+        }
+
+        return $runner();
+    }
+
+    function instantPayTryDepositMatchUnlocked($amountRial, array $depositMeta, array $opts = []){
+        $amountRial = intval($amountRial);
+        $apply = !array_key_exists('apply', $opts) || !empty($opts['apply']);
+        $dryRun = !empty($opts['dry_run']);
+
+        $depositMeta['amount'] = $amountRial;
+
+        if($apply && !$dryRun && !empty($depositMeta['bank_fingerprint_ambiguous'])){
+            return [
+                'ok' => false,
+                'code' => 'ambiguous_bank_fingerprint',
+                'error' => 'اثر انگشت واریز بانکی یکتا نیست؛ بررسی دستی لازم است',
+            ];
+        }
+
+        if($apply && !$dryRun && !instantPayDepositHasDedupKey($depositMeta)){
+            return [
+                'ok' => false,
+                'code' => 'missing_dedup_key',
+                'error' => 'شناسه یکتای واریز برای تأیید خودکار کافی نیست',
+            ];
+        }
+
+        $usageKey = instantPayDepositUsageKey($depositMeta);
+
+        $item = instantPayFindUniqueOrderForDeposit($amountRial, $depositMeta);
+
+        if(!is_array($item)){
+            $csvMatch = instantPayFindCsvMatchByAmount($amountRial, $depositMeta);
+
+            if(!is_array($csvMatch)){
+                return ['ok' => false, 'code' => 'no_match', 'error' => instantPayDepositNoMatchError([$amountRial])];
+            }
+
+            $orderId = (string)($csvMatch['json_item']['id'] ?? '');
+
+            if($usageKey !== '' && instantPayIsDepositUsed($usageKey, $orderId)){
+                return ['ok' => false, 'code' => 'deposit_already_used', 'error' => 'این تراکنش قبلاً مصرف شده است'];
+            }
+
+            if($dryRun || !$apply){
+                return [
+                    'ok' => true,
+                    'dry_run' => true,
+                    'matched_via' => 'csv',
+                    'csv_index' => intval($csvMatch['csv_index'] ?? 0),
+                ];
+            }
+
+            $payload = [
+                'amount' => $amountRial,
+                'text' => $depositMeta['text'] ?? '',
+                'date' => $depositMeta['date'] ?? '',
+                'time' => $depositMeta['time'] ?? '',
+            ];
+
+            return instantPayApplyDepositMatchWithClaim(
+                $usageKey,
+                $orderId,
+                $depositMeta,
+                static function() use ($csvMatch, $payload, $amountRial){
+                    $result = instantPayMarkPaidFromCsv(intval($csvMatch['csv_index']), $payload);
+                    $result['matched_amount'] = $amountRial;
+                    $result['matched_via'] = 'csv';
+
+                    return $result;
+                }
+            );
+        }
+
+        $orderId = (string)($item['id'] ?? '');
+
+        if($usageKey !== '' && instantPayIsDepositUsed($usageKey, $orderId)){
+            return ['ok' => false, 'code' => 'deposit_already_used', 'error' => 'این تراکنش قبلاً مصرف شده است'];
+        }
+
+        if($dryRun || !$apply){
+            return [
+                'ok' => true,
+                'dry_run' => true,
+                'matched_via' => 'json',
+                'item' => instantPayPublicView($item),
+            ];
+        }
+
+        $payload = [
+            'amount' => $amountRial,
+            'text' => $depositMeta['text'] ?? '',
+            'date' => $depositMeta['date'] ?? '',
+            'time' => $depositMeta['time'] ?? '',
+        ];
+
+        return instantPayApplyDepositMatchWithClaim(
+            $usageKey,
+            $orderId,
+            $depositMeta,
+            static function() use ($item, $payload, $amountRial){
+                $result = instantPayMarkPaid($item['id'], $payload);
+                $result['matched_amount'] = $amountRial;
+                $result['matched_via'] = 'json';
+
+                return $result;
+            }
+        );
     }
 }

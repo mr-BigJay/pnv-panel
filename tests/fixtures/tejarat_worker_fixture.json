@@ -1,0 +1,10 @@
+[
+  {
+    "amount": 1497890,
+    "destination_card": "5859831111222233",
+    "transaction_id": "FIX-TJ-001",
+    "occurred_at": 1700000100,
+    "description": "fixture deposit",
+    "direction": "credit"
+  }
+]

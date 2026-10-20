@@ -29,19 +29,27 @@ if(isset($_POST['save'])){
         $token = $config['bot_token'];
     }
 
-    $config = [
+    $saved = baleLoadConfig();
+    $config = array_merge($saved, [
         'enabled' => isset($_POST['enabled']),
         'bot_token' => $token,
         'admin_chat_ids' => trim((string)($_POST['admin_chat_ids'] ?? '')),
         'bot_username' => trim((string)($_POST['bot_username'] ?? 'Jay24x7Pusbank_bot')),
         'pay_window_seconds' => max(60, intval($_POST['pay_window_seconds'] ?? 1800)),
         'match_grace_seconds' => max(0, intval($_POST['match_grace_seconds'] ?? 0)),
-        'webhook_secret' => $config['webhook_secret'] ?? '',
-        'forward_hint' => $config['forward_hint'] ?? ''
-    ];
+        'postbank_forward_bot_id' => trim((string)($_POST['postbank_forward_bot_id'] ?? ($saved['postbank_forward_bot_id'] ?? ''))),
+        'forward_hint' => $saved['forward_hint'] ?? '',
+    ]);
 
     baleSaveConfig($config);
-    $message = 'تنظیمات بله ذخیره شد.';
+    $message = 'تنظیمات بله ذخیره شد (Secret و enforcement بدون تغییر ماند).';
+}
+
+if(isset($_POST['prepare_webhook_secret'])){
+    $config = baleLoadConfig();
+    $secret = balePrepareWebhookSecret($config);
+    baleSaveConfig($config);
+    $message = 'Secret موقت (pending) تولید شد. مرحله بعد: «ثبت Webhook با Secret» — هنوز enforcement فعال نیست.';
 }
 
 if(isset($_POST['set_webhook'])){
@@ -49,10 +57,59 @@ if(isset($_POST['set_webhook'])){
     $result = baleSetWebhook($webhookUrl, $config);
 
     if(!empty($result['ok'])){
-        $message = 'Webhook با موفقیت روی بله ثبت شد.';
+        $config['webhook_registered_at'] = time();
+        baleSaveConfig($config);
+        $message = 'Webhook با secret_token (در صورت وجود pending/active) روی بله ثبت شد. تا «فعال‌سازی enforcement» درخواست‌های فعلی بدون هدر هم پذیرفته می‌شوند.';
     }
     else{
         $error = $result['description'] ?? 'ثبت Webhook ناموفق بود';
+    }
+}
+
+if(isset($_POST['activate_webhook_secret'])){
+    $config = baleLoadConfig();
+
+    if(trim((string)baleWebhookActiveSecret($config)) === ''){
+        $error = 'ابتدا Secret تولید و Webhook را در بله ثبت کنید.';
+    }
+    elseif(intval($config['webhook_last_validated_at'] ?? 0) <= 0){
+        $error = 'هنوز درخواست Webhook معتبر با Secret دریافت نشده. یک پیام تست به بازو بفرستید یا getWebhookInfo را بررسی کنید، سپس دوباره تلاش کنید.';
+    }
+    elseif(!baleActivateWebhookSecretEnforcement($config)){
+        $error = 'فعال‌سازی enforcement ناموفق بود (secret خالی است).';
+    }
+    else{
+        baleSaveConfig($config);
+        $message = 'Enforcement Secret فعال شد. از این پس Webhook بدون هدر X-Telegram-Bot-Api-Secret-Token رد می‌شود.';
+    }
+}
+
+if(isset($_POST['rollback_webhook_secret'])){
+    $config = baleLoadConfig();
+    baleRollbackWebhookSecretEnforcement($config);
+    baleSaveConfig($config);
+    $message = 'Enforcement Secret غیرفعال شد (Secret در فایل باقی می‌ماند؛ تأیید پرداخت همچنان فقط از مسیر admin+postbank).';
+}
+
+if(isset($_POST['webhook_info'])){
+    $config = baleLoadConfig();
+    $info = baleGetWebhookInfo($config);
+
+    if(empty($info['ok'])){
+        $error = $info['description'] ?? 'getWebhookInfo ناموفق بود';
+    }
+    else{
+        $result = $info['result'] ?? [];
+        $url = (string)($result['url'] ?? '');
+        $pending = trim((string)($config['webhook_secret_pending'] ?? ''));
+        $active = trim((string)($config['webhook_secret'] ?? ''));
+        $enforced = !empty($config['webhook_secret_enforced']);
+        $validated = intval($config['webhook_last_validated_at'] ?? 0);
+        $message = 'Webhook بله: ' . ($url !== '' ? $url : '(خالی)')
+            . ' | pending: ' . ($pending !== '' ? 'بله' : 'خیر')
+            . ' | active secret: ' . ($active !== '' ? 'بله' : 'خیر')
+            . ' | enforced: ' . ($enforced ? 'بله' : 'خیر')
+            . ' | آخرین درخواست معتبر: ' . ($validated > 0 ? date('Y-m-d H:i:s', $validated) : '—');
     }
 }
 
@@ -192,11 +249,24 @@ button,.back{display:block;width:100%;border:0;border-radius:12px;padding:15px;b
 <input class="ltr" type="number" id="match_grace_seconds" name="match_grace_seconds" min="0" value="<?php echo intval($config['match_grace_seconds'] ?? 0); ?>">
 <div class="hint">۰ = خودکار (حداقل ۳۰ دقیقه یا دوبرابر مهلت پرداخت). اگر کاربر دیر واریز کرد، در این بازه هنوز تأیید خودکار کار می‌کند.</div>
 
-<div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code></div>
+<label for="postbank_forward_bot_id">شناسه عددی @postbank_bot (اختیاری، سخت‌گیرانه‌تر)</label>
+<input class="ltr" type="text" id="postbank_forward_bot_id" name="postbank_forward_bot_id" value="<?php echo htmlspecialchars($config['postbank_forward_bot_id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" placeholder="خالی = اعتماد به is_bot در فوروارد">
+
+<div class="hint">آدرس Webhook:<br><code><?php echo htmlspecialchars($webhookUrl, ENT_QUOTES, 'UTF-8'); ?></code><br>
+Migration Secret: ۱) تولید pending ۲) ثبت Webhook در بله ۳) یک درخواست معتبر ۴) فعال‌سازی enforcement<br>
+هدر (فقط بعد از enforcement): <code>X-Telegram-Bot-Api-Secret-Token</code><br>
+Enforced: <?php echo !empty($config['webhook_secret_enforced']) ? 'بله' : 'خیر'; ?>
+ | Pending: <?php echo trim((string)($config['webhook_secret_pending'] ?? '')) !== '' ? 'بله' : 'خیر'; ?>
+ | آخرین validate: <?php $v = intval($config['webhook_last_validated_at'] ?? 0); echo $v > 0 ? htmlspecialchars(date('Y-m-d H:i', $v), ENT_QUOTES, 'UTF-8') : '—'; ?>
+</div>
 
 <button type="submit" name="save">ذخیره تنظیمات</button>
 <button type="submit" name="fetch_chat" class="test">خواندن شناسه چت از بله</button>
-<button type="submit" name="set_webhook" class="hook">ثبت Webhook در بله</button>
+<button type="submit" name="prepare_webhook_secret" class="hook">۱ — تولید Secret (pending)</button>
+<button type="submit" name="set_webhook" class="hook">۲ — ثبت Webhook در بله</button>
+<button type="submit" name="webhook_info" class="test">بررسی getWebhookInfo</button>
+<button type="submit" name="activate_webhook_secret" class="hook">۳ — فعال‌سازی enforcement</button>
+<button type="submit" name="rollback_webhook_secret" class="test">Rollback enforcement</button>
 <button type="submit" name="test" class="test">تست ارتباط و ارسال پیام</button>
 </form>
 
