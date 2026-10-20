@@ -2026,7 +2026,7 @@ if(!function_exists('xuiConfigPath')){
         $attempts = [xuiApiAttemptDiag($path . ' (form)', $formResult)];
 
         if(!empty($formResult['success'])){
-            return ['ok' => true, 'raw' => $formResult, 'method' => 'updateClient_form'];
+            return ['ok' => true, 'raw' => $formResult, 'method' => 'updateClient', 'transport' => 'form'];
         }
 
         // Never replay a mutation after a timeout/5xx/ambiguous response.
@@ -2048,7 +2048,7 @@ if(!function_exists('xuiConfigPath')){
         $attempts[] = xuiApiAttemptDiag($path . ' (json)', $jsonResult);
 
         if(!empty($jsonResult['success'])){
-            return ['ok' => true, 'raw' => $jsonResult, 'method' => 'updateClient_json'];
+            return ['ok' => true, 'raw' => $jsonResult, 'method' => 'updateClient', 'transport' => 'json'];
         }
 
         return [
