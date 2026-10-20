@@ -106,7 +106,7 @@ $rowC = testCsvRow([
 ]);
 testAssert('C expired expiry => expired', instantPayAdminRowListBucket($rowC) === 'expired');
 
-// D) rejected/cancelled => rejected
+// D) rejected vs cancelled
 $rowD = testCsvRow([
     3 => 'MANUAL-1',
     6 => 'رد شد',
@@ -118,6 +118,7 @@ instantPaySave([
         'user' => 'bucket_user',
         'code' => 4,
         'status' => 'cancelled',
+        'created_at' => $now,
         'expires_at' => $now + 600,
     ],
 ]);
@@ -126,7 +127,7 @@ $rowD2 = testCsvRow([
     6 => 'درحال بررسی',
     8 => (string)$now,
 ]);
-testAssert('D json cancelled => rejected', instantPayAdminRowListBucket($rowD2) === 'rejected');
+testAssert('D json cancelled => cancelled', instantPayAdminRowListBucket($rowD2) === 'cancelled');
 
 // E) page filter simulation — buckets are disjoint per status
 $mix = [
