@@ -65,12 +65,13 @@ incTimedAssert(
     'unlimited baseline + 50GB/30d verifies with anchor expiry'
 );
 
-// 1) time-unlimited + 50GB/30d provision success when bulk applies both
+// 1) time-unlimited + quota remaining → reserve (no immediate bulkAdjust)
 $row = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-1', '', '', 'درحال بررسی', '', 170100, 'تمدید', '', '', 1];
 $adjustPhase = 0;
 $GLOBALS['xuiTestRenewRuntimeState'] = [
     'ambiguous' => false,
     'time_unlimited' => true,
+    'volume_exhausted' => false,
     'should_activate_now' => false,
 ];
 $GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustPhase){
@@ -78,8 +79,39 @@ $GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustPhase){
 
     return ['ok' => true, 'method' => 'bulkAdjust'];
 };
-$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustPhase, $anchorMs, $baseline){
-    $after = $adjustPhase > 0;
+$GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $id) => [
+    'status' => 'found',
+    'client' => [
+        'email' => 'u1',
+        'subId' => $id,
+        'totalGB' => $baseline['total_bytes'],
+        'expiryTime' => 0,
+    ],
+];
+$GLOBALS['xuiTestRenewApiProbe'] = static fn() => ['ok' => true];
+$reservedRenew = xuiProvisionRenew($row);
+incTimedAssert(
+    !empty($reservedRenew['ok']) && ($reservedRenew['renew_outcome'] ?? '') === 'reserved' && $adjustPhase === 0,
+    'time-unlimited active sub reserves timed plan renew'
+);
+
+// 1b) volume exhausted on unlimited-time → immediate bulkAdjust + verify expiry
+$row1b = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-1b', '', '', 'درحال بررسی', '', 1701001, 'تمدید', '', '', 1];
+$adjustPhase1b = 0;
+$GLOBALS['renewReserveTestNow'] = $anchorSec;
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'volume_exhausted' => true,
+    'should_activate_now' => true,
+];
+$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustPhase1b){
+    $adjustPhase1b++;
+
+    return ['ok' => true, 'method' => 'bulkAdjust'];
+};
+$GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustPhase1b, $anchorMs, $baseline){
+    $after = $adjustPhase1b > 0;
 
     return [
         'status' => 'found',
@@ -91,12 +123,18 @@ $GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$adjustPha
         ],
     ];
 };
-$okRenew = xuiProvisionRenew($row);
-incTimedAssert(!empty($okRenew['ok']), 'time-unlimited timed plan renew succeeds when volume and expiry match');
+$okRenew = xuiProvisionRenew($row1b);
+incTimedAssert(!empty($okRenew['ok']) && ($okRenew['renew_outcome'] ?? '') === 'renewed', 'time-unlimited exhausted applies timed plan on server');
 
 // 2) volume increased but duration missing -> ambiguous
 $row2 = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-2', '', '', 'درحال بررسی', '', 170101, 'تمدید', '', '', 1];
 $adjustPhase2 = 0;
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'volume_exhausted' => true,
+    'should_activate_now' => true,
+];
 $GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustPhase2){
     $adjustPhase2++;
 
@@ -128,6 +166,12 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path){
     return ['success' => false, 'msg' => 'unexpected'];
 };
 $row3 = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-3', '', '', 'درحال بررسی', '', 170102, 'تمدید', '', '', 1];
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'volume_exhausted' => true,
+    'should_activate_now' => true,
+];
 $transportLookups = 0;
 $GLOBALS['xuiTestRenewLookupClient'] = static function($s, $id) use (&$transportLookups, $anchorMs, $baseline){
     $transportLookups++;
@@ -162,6 +206,12 @@ $GLOBALS['xuiTestApiRequest'] = static function($srv, $method, $path) use (&$leg
     return ['success' => false, 'msg' => 'unexpected'];
 };
 $row4 = ['ownerUser', $link, '50 گیگ - 30 روز', 'INC-4', '', '', 'درحال بررسی', '', 170103, 'تمدید', '', '', 1];
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'volume_exhausted' => true,
+    'should_activate_now' => true,
+];
 $GLOBALS['xuiTestRenewLookupClient'] = static fn($s, $id) => [
     'status' => 'found',
     'client' => ['email' => 'u1', 'subId' => $id, 'totalGB' => xuiGbToBytes(100), 'expiryTime' => 0],

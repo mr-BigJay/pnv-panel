@@ -795,6 +795,228 @@ if(!function_exists('xuiConfigPath')){
         return $last;
     }
 
+    function xuiApiRequestRawForm($server, $method, $path, array $fields, $authMode){
+        $base = rtrim((string)($server['base_url'] ?? ''), '/');
+
+        if($base === ''){
+            return ['success' => false, 'msg' => 'آدرس سرور 3x-ui خالی است'];
+        }
+
+        if(!function_exists('curl_init')){
+            return ['success' => false, 'msg' => 'افزونه cURL فعال نیست'];
+        }
+
+        $url = $base . '/' . ltrim($path, '/');
+        $headers = ['Accept: application/json'];
+        $session = null;
+
+        if($authMode === 'token'){
+            $token = trim((string)($server['api_token'] ?? ''));
+
+            if($token === ''){
+                return ['success' => false, 'msg' => 'API Token تنظیم نشده است'];
+            }
+
+            $headers[] = 'Authorization: Bearer ' . $token;
+        }
+        else{
+            $session = xuiEnsureSession($server);
+
+            if(!is_array($session)){
+                return ['success' => false, 'msg' => 'ورود session به 3x-ui انجام نشد'];
+            }
+
+            $headers[] = 'Cookie: ' . $session['cookie'];
+
+            if(
+                strtoupper($method) !== 'GET'
+                && trim((string)($session['csrf'] ?? '')) !== ''
+            ){
+                $headers[] = 'X-CSRF-Token: ' . $session['csrf'];
+            }
+        }
+
+        $curl = curl_init($url);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 15);
+        curl_setopt($curl, CURLOPT_TIMEOUT, 45);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+
+        if(count($fields) > 0){
+            $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+            curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($fields, '', '&', PHP_QUERY_RFC3986));
+        }
+
+        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+
+        $raw = curl_exec($curl);
+        $error = curl_error($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        if($raw === false || $error !== ''){
+            return ['success' => false, 'msg' => 'خطا در ارتباط با 3x-ui: ' . $error, 'http' => $status];
+        }
+
+        $json = json_decode($raw, true);
+
+        if(!is_array($json)){
+            return ['success' => false, 'msg' => 'پاسخ نامعتبر از 3x-ui (HTTP ' . $status . ')', 'http' => $status];
+        }
+
+        $json['http'] = $status;
+
+        return $json;
+    }
+
+    function xuiApiRequestForm($server, $method, $path, array $fields){
+        if(!empty($GLOBALS['xuiTestApiRequestForm']) && is_callable($GLOBALS['xuiTestApiRequestForm'])){
+            return $GLOBALS['xuiTestApiRequestForm']($server, $method, $path, $fields);
+        }
+
+        if(!empty($GLOBALS['xuiTestApiRequest']) && is_callable($GLOBALS['xuiTestApiRequest'])){
+            return $GLOBALS['xuiTestApiRequest']($server, $method, $path, $fields);
+        }
+
+        $modes = [];
+
+        if(xuiServerHasToken($server)){
+            $modes[] = 'token';
+        }
+
+        if(xuiServerHasSessionCredentials($server)){
+            $modes[] = 'session';
+        }
+
+        if(count($modes) === 0){
+            return ['success' => false, 'msg' => 'تنظیمات سرور ناقص است (Token یا نام کاربری/رمز)'];
+        }
+
+        $last = ['success' => false, 'msg' => 'اتصال به 3x-ui ناموفق بود'];
+
+        foreach($modes as $mode){
+            $last = xuiApiRequestRawForm($server, $method, $path, $fields, $mode);
+
+            if(!empty($last['success'])){
+                return $last;
+            }
+
+            if($mode === 'session'){
+                $id = trim((string)($server['id'] ?? ''));
+
+                if($id !== ''){
+                    $state = xuiLoadState();
+
+                    if(isset($state['sessions'][$id])){
+                        unset($state['sessions'][$id]);
+                        xuiSaveState($state);
+                    }
+                }
+
+                if(xuiLoginSession($server)){
+                    $last = xuiApiRequestRawForm($server, $method, $path, $fields, 'session');
+
+                    if(!empty($last['success'])){
+                        return $last;
+                    }
+                }
+            }
+        }
+
+        return $last;
+    }
+
+    function xuiApiAttemptDiag($apiPath, $result){
+        $msg = trim((string)($result['msg'] ?? ''));
+
+        if($msg !== '' && preg_match('/(token|password|secret|session|csrf|authorization)/iu', $msg)){
+            $msg = 'API error (redacted)';
+        }
+
+        return [
+            'api_path' => (string)$apiPath,
+            'http_status' => intval($result['http'] ?? 0),
+            'api_success' => !empty($result['success']),
+            'api_msg' => $msg !== '' ? $msg : 'no message',
+        ];
+    }
+
+    function xuiApplyRenewDiagSummary($applied){
+        if(!is_array($applied)){
+            return '';
+        }
+
+        $parts = [];
+
+        if(!empty($applied['error'])){
+            $parts[] = trim((string)$applied['error']);
+        }
+
+        foreach($applied['attempts'] ?? [] as $attempt){
+            if(!is_array($attempt)){
+                continue;
+            }
+
+            $parts[] = trim((string)($attempt['api_path'] ?? ''))
+                . ' HTTP ' . intval($attempt['http_status'] ?? 0)
+                . ': ' . trim((string)($attempt['api_msg'] ?? ''));
+        }
+
+        return implode(' | ', array_filter($parts, static fn($p) => $p !== ''));
+    }
+
+    function xuiInboundClientForAbsoluteUpdate(array $client, $targetBytes, $expiryMs){
+        $id = trim((string)($client['id'] ?? $client['uuid'] ?? ''));
+
+        if($id !== '' && ctype_digit($id) && !empty($client['uuid'])){
+            $id = trim((string)$client['uuid']);
+        }
+
+        $out = [
+            'id' => $id,
+            'email' => trim((string)($client['email'] ?? '')),
+            'enable' => true,
+            'expiryTime' => intval($expiryMs),
+            'totalGB' => intval($targetBytes),
+            'limitIp' => intval($client['limitIp'] ?? 0),
+            'subId' => trim((string)($client['subId'] ?? '')),
+            'tgId' => $client['tgId'] ?? 0,
+            'comment' => (string)($client['comment'] ?? ''),
+            'flow' => (string)($client['flow'] ?? ''),
+            'reset' => 1,
+        ];
+
+        if(isset($client['alterId'])){
+            $out['alterId'] = intval($client['alterId']);
+        }
+
+        return $out;
+    }
+
+    function xuiModernClientUpdatePayload(array $client, $targetBytes, $expiryMs){
+        $payload = [
+            'email' => trim((string)($client['email'] ?? '')),
+            'enable' => true,
+            'expiryTime' => intval($expiryMs),
+            'totalGB' => intval($targetBytes),
+            'limitIp' => intval($client['limitIp'] ?? 0),
+            'subId' => trim((string)($client['subId'] ?? '')),
+            'tgId' => intval($client['tgId'] ?? 0),
+            'comment' => (string)($client['comment'] ?? ''),
+            'reset' => 1,
+        ];
+
+        foreach(['flow', 'security'] as $field){
+            if(isset($client[$field]) && $client[$field] !== ''){
+                $payload[$field] = $client[$field];
+            }
+        }
+
+        return $payload;
+    }
+
     function xuiTestServer($server){
         $result = xuiApiRequest($server, 'GET', '/panel/api/inbounds/options');
 
@@ -1775,6 +1997,7 @@ if(!function_exists('xuiConfigPath')){
         $currentTotal = xuiClientTotalBytes($client);
         $updated['totalGB'] = $currentTotal + $addBytes;
         $updated['enable'] = true;
+        $updated['reset'] = 1;
 
         if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
             $updated['subId'] = $client['subId'];
@@ -1880,6 +2103,7 @@ if(!function_exists('xuiConfigPath')){
         $targetBytes = xuiGbToBytes($gb);
         $days = max(0, intval($days));
         $expiryMs = 0;
+        $attempts = [];
 
         if($days > 0){
             if($anchorMs === null){
@@ -1891,47 +2115,82 @@ if(!function_exists('xuiConfigPath')){
             $expiryMs = intval($anchorMs) + ($days * 86400000);
         }
 
-        if($email === '' || $clientId === '' || $inboundId <= 0){
-            return ['ok' => false, 'error' => 'اطلاعات کلاینت برای فعال‌سازی مطلق ناقص است'];
+        if($email === ''){
+            return ['ok' => false, 'error' => 'email کلاینت برای فعال‌سازی مطلق خالی است', 'attempts' => $attempts];
         }
 
-        $updated = $client;
-        unset($updated['_inbound_id']);
-        $updated['totalGB'] = $targetBytes;
-        $updated['expiryTime'] = $expiryMs;
-        $updated['enable'] = true;
-        $updated['reset'] = 1;
+        $inboundClient = xuiInboundClientForAbsoluteUpdate($client, $targetBytes, $expiryMs);
 
-        if(($updated['subId'] ?? '') === '' && ($client['subId'] ?? '') !== ''){
-            $updated['subId'] = $client['subId'];
+        if($clientId === ''){
+            $clientId = trim((string)($inboundClient['id'] ?? ''));
         }
 
-        $result = xuiApiRequest($server, 'POST', '/panel/api/inbounds/updateClient/' . rawurlencode($clientId), [
-            'id' => $inboundId,
-            'settings' => json_encode([
-                'clients' => [$updated],
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ]);
+        $last = ['success' => false, 'msg' => 'هیچ مسیر API برای فعال‌سازی مطلق در دسترس نبود', 'http' => 0];
 
-        if(!empty($result['success'])){
-            return [
-                'ok' => true,
-                'method' => 'updateClient_absolute',
-                'raw' => $result,
-            ];
+        if($email !== ''){
+            $modernPath = '/panel/api/clients/update/' . rawurlencode($email);
+            $modernResult = xuiApiRequest($server, 'POST', $modernPath, xuiModernClientUpdatePayload($client, $targetBytes, $expiryMs));
+            $attempts[] = xuiApiAttemptDiag($modernPath, $modernResult);
+            $last = $modernResult;
+
+            if(!empty($modernResult['success'])){
+                return [
+                    'ok' => true,
+                    'method' => 'clients_update',
+                    'attempts' => $attempts,
+                ];
+            }
+        }
+
+        if($clientId !== '' && $inboundId > 0){
+            $legacyPath = '/panel/api/inbounds/updateClient/' . rawurlencode($clientId);
+            $settingsJson = json_encode(['clients' => [$inboundClient]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $formResult = xuiApiRequestForm($server, 'POST', $legacyPath, [
+                'id' => (string)$inboundId,
+                'settings' => $settingsJson,
+            ]);
+            $attempts[] = xuiApiAttemptDiag($legacyPath, $formResult);
+            $last = $formResult;
+
+            if(!empty($formResult['success'])){
+                return [
+                    'ok' => true,
+                    'method' => 'updateClient_absolute_form',
+                    'attempts' => $attempts,
+                ];
+            }
+
+            $jsonResult = xuiApiRequest($server, 'POST', $legacyPath, [
+                'id' => $inboundId,
+                'settings' => $settingsJson,
+            ]);
+            $attempts[] = xuiApiAttemptDiag($legacyPath . ' (json)', $jsonResult);
+            $last = $jsonResult;
+
+            if(!empty($jsonResult['success'])){
+                return [
+                    'ok' => true,
+                    'method' => 'updateClient_absolute_json',
+                    'attempts' => $attempts,
+                ];
+            }
+        }
+        elseif($email === ''){
+            $last = ['success' => false, 'msg' => 'اطلاعات کلاینت برای فعال‌سازی مطلق ناقص است', 'http' => 0];
+            $attempts[] = xuiApiAttemptDiag('inbounds/updateClient', $last);
         }
 
         $code = 'activation_failed';
 
-        if(function_exists('xuiApiFailureKind') && xuiApiFailureKind($result) === 'transport'){
+        if(function_exists('xuiApiFailureKind') && xuiApiFailureKind($last) === 'transport'){
             $code = 'transport_error';
         }
 
         return [
             'ok' => false,
-            'error' => $result['msg'] ?? 'فعال‌سازی مطلق پلن ناموفق بود',
+            'error' => $last['msg'] ?? 'فعال‌سازی مطلق پلن ناموفق بود',
             'code' => $code,
-            'raw' => $result,
+            'attempts' => $attempts,
         ];
     }
 
@@ -2431,6 +2690,94 @@ if(!function_exists('xuiConfigPath')){
                 'user_renew_message' => $userMessage,
                 'method' => $method,
             ],
+        ];
+    }
+
+    /**
+     * CSV «تایید شد» ولی provision ناقص/نامشخص — بدون اعمال تکراری روی 3x-ui در صورت امکان.
+     *
+     * @return array|null null = ادامه مسیر provision عادی
+     */
+    function xuiRenewResolveAlreadyConfirmedRenew($index, array $row, $provisionKey){
+        $type = trim((string)($row[9] ?? ''));
+
+        if($type !== 'تمدید'){
+            return [
+                'ok' => true,
+                'already' => true,
+                'link' => $row[7] ?? '',
+            ];
+        }
+
+        if(!function_exists('renewReserveFindByProvisionKey')){
+            require_once __DIR__ . '/renew_reserve_lib.php';
+        }
+
+        $stored = xuiRenewProvisionStoreRead($provisionKey);
+
+        if(is_array($stored) && ($stored['state'] ?? '') === 'done' && is_array($stored['result'] ?? null)){
+            return array_merge($stored['result'], [
+                'ok' => true,
+                'already' => true,
+            ]);
+        }
+
+        if(is_array($stored) && ($stored['state'] ?? '') === 'processing'){
+            if(is_array($stored['result'] ?? null)){
+                return xuiRenewApproveFinalizeFromResult($index, $row, $provisionKey, $stored['result'], true);
+            }
+
+            $recover = xuiRenewRecoverProcessingRenew($row, $stored);
+
+            if(($recover['action'] ?? '') === 'finalize'){
+                return xuiRenewApproveFinalizeFromResult($index, $row, $provisionKey, $recover['result'], true);
+            }
+
+            if(($recover['action'] ?? '') === 'in_progress'){
+                return [
+                    'ok' => false,
+                    'error' => $recover['error'] ?? 'فعال‌سازی در حال انجام است',
+                    'code' => $recover['code'] ?? 'provision_in_progress',
+                ];
+            }
+
+            if(($recover['action'] ?? '') === 'ambiguous'){
+                return [
+                    'ok' => false,
+                    'error' => $recover['error'] ?? 'وضعیت فعال‌سازی نامشخص است',
+                    'code' => 'ambiguous_provision',
+                    'recoverable' => true,
+                ];
+            }
+        }
+
+        $reservation = renewReserveFindByProvisionKey($provisionKey);
+
+        if(is_array($reservation)){
+            $subLink = xuiResolveRenewPaymentRowLink($row);
+
+            if($subLink === ''){
+                $subLink = trim((string)($row[7] ?? ''));
+            }
+
+            return array_merge(renewReserveBuildPaymentSuccess($reservation, $subLink), [
+                'ok' => true,
+                'already' => true,
+            ]);
+        }
+
+        if(is_array($stored) && in_array($stored['state'] ?? '', ['failed', 'ambiguous_provision'], true)){
+            return null;
+        }
+
+        if(!is_array($stored) || trim((string)($stored['state'] ?? '')) === ''){
+            return null;
+        }
+
+        return [
+            'ok' => true,
+            'already' => true,
+            'link' => $row[7] ?? '',
         ];
     }
 
@@ -2969,6 +3316,10 @@ if(!function_exists('xuiConfigPath')){
             $runtime = xuiRenewAnalyzeRuntimeState($server, $client, $subLink);
             $action = renewReserveDecideAction($runtime);
 
+            if(empty($duration['time_unlimited']) && $days > 0 && !empty($runtime['time_expired'])){
+                $action = 'activate_now';
+            }
+
             if($action === 'ambiguous'){
                 return [
                     'ok' => false,
@@ -3033,6 +3384,101 @@ if(!function_exists('xuiConfigPath')){
                 return $renewResult;
             }
 
+            if($action === 'immediate_unlimited'){
+                $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
+                $anchorMs = intval($stored['activation_anchor_ms'] ?? 0);
+
+                if($anchorMs <= 0){
+                    $anchorMs = function_exists('renewReserveNowMs') ? renewReserveNowMs() : (int)(microtime(true) * 1000);
+                }
+
+                if(!xuiRenewProvisionStoreWrite($provisionKey, array_merge($stored, [
+                    'state' => 'processing',
+                    'phase' => 'renew_unlimited_add_started',
+                    'operation' => 'incremental',
+                    'started_at' => intval($stored['started_at'] ?? time()),
+                    'transaction_id' => xuiPaymentRowTransactionId($paymentRow),
+                    'baseline' => xuiRenewClientSnapshot($client),
+                    'plan_gb' => $gb,
+                    'plan_days' => 0,
+                    'activation_anchor_ms' => $anchorMs,
+                ]))){
+                    return [
+                        'ok' => false,
+                        'error' => 'ذخیره وضعیت قبل از تمدید نامحدود زمانی ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                    ];
+                }
+
+                if(!empty($runtime['volume_exhausted']) && $days <= 0 && is_array($client)){
+                    $adjusted = xuiAdjustClientTrafficLegacy($server, $client, $gb);
+                }
+                else{
+                    $adjusted = xuiAdjustClientTraffic($server, $email, $gb, $client, $days);
+                }
+
+                if(empty($adjusted['ok'])){
+                    $adjustCode = trim((string)($adjusted['code'] ?? ''));
+
+                    if($adjustCode === 'transport_error' && $days > 0){
+                        $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
+                        $baselineSnap = xuiRenewClientSnapshot($client);
+
+                        if(
+                            ($verifyLookup['status'] ?? '') === 'found'
+                            && is_array($verifyLookup['client'] ?? null)
+                            && xuiRenewVerifyIncrementalAdjust($baselineSnap, $verifyLookup['client'], $gb, $days, $anchorMs)
+                        ){
+                            $adjusted = ['ok' => true, 'method' => 'verify_after_transport'];
+                        }
+                    }
+
+                    if(empty($adjusted['ok'])){
+                        return $adjusted;
+                    }
+                }
+
+                $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
+                $baselineSnap = xuiRenewClientSnapshot($client);
+
+                if(
+                    ($verifyLookup['status'] ?? '') !== 'found'
+                    || !is_array($verifyLookup['client'] ?? null)
+                    || !xuiRenewVerifyIncrementalAdjust($baselineSnap, $verifyLookup['client'], $gb, $days, $anchorMs)
+                ){
+                    return [
+                        'ok' => false,
+                        'error' => 'حجم یا مدت تمدید روی سرور با پلن خریداری‌شده تطابق ندارد',
+                        'code' => 'ambiguous_provision',
+                    ];
+                }
+
+                $renewResult = [
+                    'ok' => true,
+                    'link' => $link,
+                    'email' => $email,
+                    'sub_id' => $parsed['sub_id'],
+                    'server_id' => $server['id'] ?? '',
+                    'gb' => $gb,
+                    'renew_outcome' => 'renewed',
+                    'user_renew_message' => xuiRenewUserMessageRenewed(),
+                    'method' => $adjusted['method'] ?? 'incremental_unlimited',
+                ];
+
+                if(!xuiRenewProvisionStoreMarkComplete($paymentRow, $renewResult)){
+                    return [
+                        'ok' => false,
+                        'error' => 'تمدید انجام شد اما ذخیره نتیجه ناموفق بود',
+                        'code' => 'persist_failed',
+                        'recoverable' => true,
+                        'link' => $link,
+                    ];
+                }
+
+                return $renewResult;
+            }
+
             if($action === 'activate_now'){
                 $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
                 $anchorMs = intval($stored['activation_anchor_ms'] ?? 0);
@@ -3082,6 +3528,20 @@ if(!function_exists('xuiConfigPath')){
                     else{
                         return $applied;
                     }
+                }
+
+                $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $subLink);
+
+                if(
+                    ($verifyLookup['status'] ?? '') !== 'found'
+                    || !is_array($verifyLookup['client'] ?? null)
+                    || !xuiRenewVerifyAbsolutePlan($verifyLookup['client'], $gb, $days, $anchorMs)
+                ){
+                    return [
+                        'ok' => false,
+                        'error' => 'پس از فعال‌سازی، حجم یا تاریخ انقضا روی 3x-ui با پلن تطابق ندارد',
+                        'code' => 'ambiguous_provision',
+                    ];
                 }
 
                 $renewResult = [
@@ -3302,15 +3762,16 @@ if(!function_exists('xuiConfigPath')){
         $type = trim((string)($row[9] ?? $typeHint));
         $status = trim((string)($row[6] ?? ''));
 
+        $provisionKey = xuiPaymentRowProvisionKey($row);
+
         if($status === 'تایید شد'){
-            return [
-                'ok' => true,
-                'already' => true,
-                'link' => $row[7] ?? '',
-            ];
+            $confirmed = xuiRenewResolveAlreadyConfirmedRenew($index, $row, $provisionKey);
+
+            if($confirmed !== null){
+                return $confirmed;
+            }
         }
 
-        $provisionKey = xuiPaymentRowProvisionKey($row);
         $stored = xuiRenewProvisionStoreRead($provisionKey);
 
         if(is_array($stored) && ($stored['state'] ?? '') === 'ambiguous_provision'){

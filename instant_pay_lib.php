@@ -226,6 +226,17 @@ if(!function_exists('instantPayPath')){
         return in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true);
     }
 
+    /** ردیف CSV در انتظار تأیید دستی ادمین (شامل پرداخت کارت‌به‌کارت بدون AUTO). */
+    function instantPayCsvRowAdminAwaitingApproval($row){
+        if(!is_array($row)){
+            return false;
+        }
+
+        $status = trim((string)($row[6] ?? ''));
+
+        return in_array($status, ['', 'درحال بررسی', 'در حال بررسی'], true);
+    }
+
     function instantPayCsvRowAmountRial($row){
         if(!is_array($row)){
             return 0;
@@ -2065,6 +2076,27 @@ if(!function_exists('instantPayPath')){
                     'ok' => false,
                     'error' => $sync['error'] ?? 'همگام‌سازی سفارش Instant Pay با تأیید CSV ناموفق بود',
                     'code' => $sync['code'] ?? 'provision_not_verified',
+                ];
+            }
+
+            if(instantPayCsvRowAdminAwaitingApproval($row) && function_exists('xuiApprovePaymentIndex')){
+                if(isset($payments[$csvIndex])){
+                    $nowParts = pnvNowParts();
+                    $payments[$csvIndex][4] = $meta['date'] ?? $nowParts['date'];
+                    $payments[$csvIndex][5] = $meta['time'] ?? $nowParts['time'];
+                    xuiSavePayments($payments);
+                }
+
+                $result = xuiApprovePaymentIndex($csvIndex, trim((string)($row[9] ?? 'خرید')));
+
+                if(empty($result['ok'])){
+                    return $result;
+                }
+
+                return [
+                    'ok' => true,
+                    'provision' => $result,
+                    'link' => $result['link'] ?? '',
                 ];
             }
 

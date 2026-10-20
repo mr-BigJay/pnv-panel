@@ -28,3 +28,5 @@ Reservations persist in `db/renew_reservations.json` (override in tests with `PN
 
 - Worker uses file locks (`db/locks/renew_reserve_*.lock` and `renew_reserve_cron.lock`) to avoid duplicate activation.
 - If XUI is unreachable, reservations remain `reserved` and are retried on the next run.
+- Read-only check against live 3x-ui: `php scripts/renew_reserve_inspect.php` (optionally `--pending` or `--id=...`).
+- Safe end-to-end test on a real panel (test client only, no production deploy): see [RENEW_RESERVE_REAL_SERVER_TEST.md](./RENEW_RESERVE_REAL_SERVER_TEST.md).
