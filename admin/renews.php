@@ -235,14 +235,6 @@ fputcsv($fp,$p);
 
 fclose($fp);
 
-if(function_exists('instantPaySyncPaidFromConfirmedCsv')){
-$sync = instantPaySyncPaidFromConfirmedCsv($index);
-
-if(!empty($sync['item']['link'])){
-$link = trim((string)$sync['item']['link']);
-}
-}
-
 $_SESSION['payment_message'] = 'تمدید تایید شد';
 $_SESSION['payment_message_detail'] = $link;
 header('Location: ' . renewsListUrl(1, $redirectStatus));
