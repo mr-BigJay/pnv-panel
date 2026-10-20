@@ -742,6 +742,16 @@ if(!function_exists('xuiConfigPath')){
         return $json;
     }
 
+    /** Only authenticated reads and rejected 401/403 writes may try another auth mode. */
+    function xuiApiCanRetryAuth($method, $response){
+        if(in_array(strtoupper((string)$method), ['GET', 'HEAD', 'OPTIONS'], true)){
+            return true;
+        }
+
+        return is_array($response)
+            && in_array(intval($response['http'] ?? 0), [401, 403], true);
+    }
+
     function xuiApiRequest($server, $method, $path, $body = null){
         if(!empty($GLOBALS['xuiTestApiRequest']) && is_callable($GLOBALS['xuiTestApiRequest'])){
             return $GLOBALS['xuiTestApiRequest']($server, $method, $path, $body);
@@ -767,6 +777,12 @@ if(!function_exists('xuiConfigPath')){
             $last = xuiApiRequestRaw($server, $method, $path, $body, $mode);
 
             if(!empty($last['success'])){
+                return $last;
+            }
+
+            // A write may already have been applied despite a timeout/5xx.
+            // Only a definite authentication rejection permits re-auth/retry.
+            if(!xuiApiCanRetryAuth($method, $last)){
                 return $last;
             }
 
@@ -900,6 +916,12 @@ if(!function_exists('xuiConfigPath')){
             $last = xuiApiRequestRawForm($server, $method, $path, $fields, $mode);
 
             if(!empty($last['success'])){
+                return $last;
+            }
+
+            // A write may already have been applied despite a timeout/5xx.
+            // Only a definite authentication rejection permits re-auth/retry.
+            if(!xuiApiCanRetryAuth($method, $last)){
                 return $last;
             }
 
