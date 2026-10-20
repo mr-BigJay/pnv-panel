@@ -60,27 +60,26 @@ init_json_from_example "db/tejarat_worker_health.example.json" "${PANEL}/db/teja
 
 # پیکربندی اولیه verify (بدون خاموش کردن dry_run)
 if [[ -f "${SESSION_SECRET}" ]] && [[ -f "${PANEL}/db/tejarat_verify.json" ]]; then
-  php <<'PHP' "${PANEL}/db/tejarat_verify.json" "${SESSION_SECRET}" "${PUBLIC_URL}"
-<?php
+  php -r '
 $path = $argv[1];
 $secretFile = $argv[2];
-$public = rtrim((string)($argv[3] ?? ''), '/');
-$secret = trim(@file_get_contents($secretFile) ?: '');
+$public = rtrim((string)($argv[3] ?? ""), "/");
+$secret = trim(@file_get_contents($secretFile) ?: "");
 $data = json_decode(file_get_contents($path), true) ?: [];
-if ($secret !== '' && trim((string)($data['worker_ingest_secret'] ?? '')) === '') {
-    $data['worker_ingest_secret'] = $secret;
+if ($secret !== "" && trim((string)($data["worker_ingest_secret"] ?? "")) === "") {
+    $data["worker_ingest_secret"] = $secret;
 }
-if ($public !== '') {
-    $data['worker_ingest_url'] = $public . '/tejarat-worker-ingest.php';
+if ($public !== "") {
+    $data["worker_ingest_url"] = $public . "/tejarat-worker-ingest.php";
 }
-$data['provider'] = $data['provider'] ?? 'browser_worker';
-if (!isset($data['enabled'])) {
-    $data['enabled'] = true;
+$data["provider"] = $data["provider"] ?? "browser_worker";
+if (!array_key_exists("enabled", $data)) {
+    $data["enabled"] = true;
 }
-$data['dry_run'] = true;
+$data["dry_run"] = true;
 file_put_contents($path, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
-echo "tejarat_verify.json merged (dry_run=true preserved)\n";
-PHP
+echo "tejarat_verify.json merged (dry_run=true)\n";
+' "${PANEL}/db/tejarat_verify.json" "${SESSION_SECRET}" "${PUBLIC_URL}"
 fi
 
 log "Deploy تمام. بکاپ: ${BACKUP}"
