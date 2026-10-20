@@ -124,6 +124,120 @@ renewReserveAssert(
     ($unlimited['renew_outcome'] ?? '') === 'reserved' && $adjustCalls === 0 && $absoluteCalls === 0
 );
 
+// Purchased time-unlimited plan must immediately add GB even while the
+// EXISTING subscription is active with quota remaining.
+renewReserveResetStores($locksDir, $reservePath);
+$historyCsv();
+$adjustCalls = 0;
+$absoluteCalls = 0;
+$rowUnlimitedQuota = $baseRow;
+$rowUnlimitedQuota[2] = '25 گیگ - نامحدود زمان';
+$rowUnlimitedQuota[3] = 'AUTO-3101-UNL';
+$rowUnlimitedQuota[8] = 1700001105;
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => true,
+    'volume_exhausted' => false,
+    'should_activate_now' => false,
+];
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $id) use (&$adjustCalls){
+    return ['status'=>'found', 'client'=>[
+        'email'=>'u1', 'subId'=>$id,
+        'totalGB'=>xuiGbToBytes($adjustCalls ? 125 : 100),
+        'up'=>xuiGbToBytes(10), 'down'=>0, 'expiryTime'=>0,
+    ]];
+};
+$GLOBALS['xuiTestAdjustClientTraffic'] = static function() use (&$adjustCalls){
+    $adjustCalls++;
+    return ['ok'=>true, 'method'=>'test_add_only'];
+};
+$unlimitedQuotaResult = xuiProvisionRenew($rowUnlimitedQuota);
+renewReserveAssert('purchased unlimited immediately adds GB with active remaining quota',
+    !empty($unlimitedQuotaResult['ok'])
+    && ($unlimitedQuotaResult['renew_outcome'] ?? '') === 'renewed'
+    && $adjustCalls === 1 && $absoluteCalls === 0
+    && count(renewReserveLoad()) === 0);
+
+// Purchase duration, not the current expiry type, determines the policy.
+renewReserveResetStores($locksDir, $reservePath);
+$historyCsv();
+$adjustCalls = 0;
+$rowUnlimitedOnTimed = $baseRow;
+$rowUnlimitedOnTimed[2] = '15 گیگ - نامحدود زمان';
+$rowUnlimitedOnTimed[3] = 'AUTO-3101-MIX';
+$rowUnlimitedOnTimed[8] = 1700001106;
+$oldExpiry = (renewReserveNow() + 3600) * 1000;
+$GLOBALS['xuiTestRenewRuntimeState'] = [
+    'ambiguous' => false,
+    'time_unlimited' => false,
+    'time_remaining_sec' => 3600,
+    'volume_exhausted' => false,
+    'should_activate_now' => false,
+];
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $id) use (&$adjustCalls, $oldExpiry){
+    return ['status'=>'found', 'client'=>[
+        'email'=>'u1', 'subId'=>$id,
+        'totalGB'=>xuiGbToBytes($adjustCalls ? 115 : 100),
+        'up'=>0, 'down'=>0, 'expiryTime'=>$oldExpiry,
+    ]];
+};
+$unlimitedOnTimed = xuiProvisionRenew($rowUnlimitedOnTimed);
+renewReserveAssert('unlimited purchase adds GB to existing timed client immediately without changing expiry',
+    !empty($unlimitedOnTimed['ok'])
+    && ($unlimitedOnTimed['renew_outcome'] ?? '') === 'renewed'
+    && $adjustCalls === 1 && count(renewReserveLoad()) === 0);
+
+// No silent success when quota changes but XUI unexpectedly alters expiry.
+renewReserveResetStores($locksDir, $reservePath);
+$historyCsv();
+$adjustCalls = 0;
+$rowAlteredExpiry = $rowUnlimitedOnTimed;
+$rowAlteredExpiry[3] = 'AUTO-3101-EXPIRE';
+$rowAlteredExpiry[8] = 1700001107;
+$GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $id) use (&$adjustCalls, $oldExpiry){
+    return ['status'=>'found', 'client'=>[
+        'email'=>'u1', 'subId'=>$id,
+        'totalGB'=>xuiGbToBytes($adjustCalls ? 115 : 100),
+        'up'=>0, 'down'=>0,
+        'expiryTime'=>$adjustCalls ? 0 : $oldExpiry,
+    ]];
+};
+$badExpiry = xuiProvisionRenew($rowAlteredExpiry);
+renewReserveAssert('unlimited volume add refuses read-back if expiry changed',
+    empty($badExpiry['ok']) && ($badExpiry['code'] ?? '') === 'ambiguous_provision');
+
+// Quota 0 in XUI means unlimited total traffic; never turn it into a finite cap.
+renewReserveResetStores($locksDir, $reservePath);
+$historyCsv();
+$adjustCalls = 0;
+$rowNoBaseline = $rowUnlimitedQuota;
+$rowNoBaseline[3] = 'AUTO-3101-ZERO';
+$rowNoBaseline[8] = 1700001108;
+$GLOBALS['xuiTestRenewLookupClient'] = static fn($srv, $id) => [
+    'status'=>'found', 'client'=>['email'=>'u1','subId'=>$id,'totalGB'=>0,'expiryTime'=>0],
+];
+$noBaseline = xuiProvisionRenew($rowNoBaseline);
+renewReserveAssert('unlimited zero-quota baseline fails without mutation',
+    empty($noBaseline['ok'])
+    && ($noBaseline['code'] ?? '') === 'invalid_quota_baseline'
+    && $adjustCalls === 0 && count(renewReserveLoad()) === 0);
+
+renewReserveAssert('purchased timed policy waits when quota and expiry remain',
+    renewReserveDecideAction([
+        'ambiguous'=>false,'time_unlimited'=>true,
+        'should_activate_now'=>false,'volume_exhausted'=>false,
+    ], 30) === 'reserve');
+renewReserveAssert('purchased timed policy activates on volume depletion',
+    renewReserveDecideAction([
+        'ambiguous'=>false,'time_unlimited'=>true,
+        'should_activate_now'=>true,'volume_exhausted'=>true,
+    ], 30) === 'activate_now');
+renewReserveAssert('purchased timed policy activates on expiry',
+    renewReserveDecideAction([
+        'ambiguous'=>false,'time_unlimited'=>false,
+        'should_activate_now'=>true,'time_expired'=>true,
+    ], 30) === 'activate_now');
+
 // Unlimited time + volume exhausted → add to cap (legacy), not absolute reset to plan size
 renewReserveResetStores($locksDir, $reservePath);
 $historyCsv();
