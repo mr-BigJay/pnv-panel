@@ -79,6 +79,10 @@ if (is_file(__DIR__ . '/../instant_pay_lib.php')) {
     require_once __DIR__ . '/../instant_pay_lib.php';
 }
 
+if (is_file(__DIR__ . '/../instant_pay_admin_tabs_lib.php')) {
+    require_once __DIR__ . '/../instant_pay_admin_tabs_lib.php';
+}
+
 if (is_file(__DIR__ . '/../renew_reserve_lib.php')) {
     require_once __DIR__ . '/../renew_reserve_lib.php';
 }
@@ -158,17 +162,26 @@ $paymentError = $_SESSION['payment_error'];
 unset($_SESSION['payment_error']);
 }
 
-$renewsStatusOptions = ['approved', 'pending', 'expired', 'rejected'];
-$renewsStatusLabels = [
-    'approved' => 'تایید شده',
-    'pending' => 'درحال انتظار',
-    'expired' => 'منقضی',
-    'rejected' => 'رد شده',
-];
+$renewsStatusOptions = function_exists('instantPayAdminListStatusKeys')
+    ? instantPayAdminListStatusKeys()
+    : ['approved', 'pending', 'expired', 'rejected', 'cancelled'];
+$renewsStatusLabels = function_exists('instantPayAdminListStatusLabels')
+    ? instantPayAdminListStatusLabels()
+    : [
+        'approved' => 'تایید شده',
+        'pending' => 'درحال انتظار',
+        'expired' => 'منقضی',
+        'rejected' => 'رد شده',
+        'cancelled' => 'کنسل شده',
+    ];
 
 function renewsNormalizeStatusFilter($status){
+    if(function_exists('instantPayNormalizeAdminListStatus')){
+        return instantPayNormalizeAdminListStatus($status);
+    }
+
     $status = trim((string)$status);
-    $allowed = ['approved', 'pending', 'expired', 'rejected'];
+    $allowed = ['approved', 'pending', 'expired', 'rejected', 'cancelled'];
 
     return in_array($status, $allowed, true) ? $status : 'approved';
 }
@@ -188,6 +201,13 @@ if(isset($_POST['approve_payment'])){
 $index=intval($_POST['approve_index']);
 $link=trim($_POST['approve_link'] ?? '');
 $redirectStatus = renewsRedirectStatus();
+
+if(isset($payments[$index]) && function_exists('instantPayAdminPaymentRowIsActionable')
+    && !instantPayAdminPaymentRowIsActionable($payments[$index])){
+$_SESSION['payment_error'] = 'این ردیف فقط برای مشاهده تاریخچه است و قابل تأیید/رد نیست.';
+header('Location: ' . renewsListUrl(1, $redirectStatus));
+exit;
+}
 
 $xuiEnabled = function_exists('xuiIsEnabled') && function_exists('xuiLoadConfig')
     ? xuiIsEnabled(xuiLoadConfig())
@@ -248,6 +268,13 @@ $index=intval($_POST['reject_index']);
 $reason=trim($_POST['reject_reason']);
 $redirectStatus = renewsRedirectStatus();
 
+if(isset($payments[$index]) && function_exists('instantPayAdminPaymentRowIsActionable')
+    && !instantPayAdminPaymentRowIsActionable($payments[$index])){
+$_SESSION['payment_error'] = 'این ردیف فقط برای مشاهده تاریخچه است و قابل تأیید/رد نیست.';
+header('Location: ' . renewsListUrl(1, $redirectStatus));
+exit;
+}
+
 if(isset($payments[$index])){
 
 $payments[$index][6]='رد شد';
@@ -273,6 +300,7 @@ exit;
 if(isset($_GET['deletepayment'])){
 
 $id=intval($_GET['deletepayment']);
+$deleteStatus = renewsNormalizeStatusFilter($_GET['status'] ?? 'approved');
 
 if(isset($payments[$id])){
 
@@ -289,8 +317,6 @@ fputcsv($fp,$p);
 }
 
 fclose($fp);
-
-$deleteStatus = renewsNormalizeStatusFilter($_GET['status'] ?? 'approved');
 
 header('Location: ' . renewsListUrl(1, $deleteStatus));
 exit;
@@ -321,8 +347,14 @@ $renews[]=[
 $renews=array_reverse($renews);
 
 $statusFilter = renewsNormalizeStatusFilter($_GET['status'] ?? 'approved');
-
 $renewsStatusCounts = array_fill_keys($renewsStatusOptions, 0);
+$renewCancelledArchive = function_exists('instantPayAdminCancelledHistory')
+    ? instantPayAdminCancelledHistory($payments, 'تمدید')
+    : [];
+
+if(isset($renewsStatusCounts['cancelled'])){
+    $renewsStatusCounts['cancelled'] = count($renewCancelledArchive);
+}
 
 if(function_exists('instantPayAdminRowListBucket')){
     foreach($renews as $row){
@@ -334,20 +366,29 @@ if(function_exists('instantPayAdminRowListBucket')){
 
         $bucket = instantPayAdminRowListBucket($pay);
 
+        if($bucket === 'cancelled'){
+            continue;
+        }
+
         if(isset($renewsStatusCounts[$bucket])){
             $renewsStatusCounts[$bucket]++;
         }
     }
 
-    $renews = array_values(array_filter($renews, static function($row) use ($statusFilter){
-        $pay = $row['data'] ?? [];
+    if($statusFilter === 'cancelled'){
+        $renews = $renewCancelledArchive;
+    }
+    else{
+        $renews = array_values(array_filter($renews, static function($row) use ($statusFilter){
+            $pay = $row['data'] ?? [];
 
-        if(!is_array($pay)){
-            return false;
-        }
+            if(!is_array($pay)){
+                return false;
+            }
 
-        return instantPayAdminRowListBucket($pay) === $statusFilter;
-    }));
+            return instantPayAdminRowListBucket($pay) === $statusFilter;
+        }));
+    }
 }
 
 $perPage = 20;
@@ -794,6 +835,36 @@ background:#22c55e;
 border-color:transparent;
 }
 
+@media(max-width:560px){
+.content > .box.renewsPage{
+padding:16px 12px 14px;
+border-radius:22px;
+}
+.renewCard{
+grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr) max-content;
+gap:10px;
+padding:14px 12px;
+}
+.renewUserName{font-size:13px}
+.renewUserMobile{font-size:11px}
+.subCopyBtn,
+.renewPlanFallback{font-size:11.5px}
+.renewPlanLine{font-size:11px}
+.menuBtn{
+width:28px !important;
+height:28px;
+min-width:28px;
+flex:0 0 28px;
+}
+.statusIcon{
+width:20px !important;
+height:20px;
+min-width:20px;
+flex:0 0 20px;
+}
+.statusIcon svg{width:11px;height:11px}
+}
+
 .payViewTabs{
 display:flex;
 flex-wrap:wrap;
@@ -827,66 +898,6 @@ border-color:#2563eb;
 color:#fff;
 }
 
-@media(max-width:560px){
-.content > .box.renewsPage{
-padding:16px 12px 14px;
-border-radius:22px;
-}
-.renewCard{
-grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr) max-content;
-gap:10px;
-padding:14px 12px;
-}
-.renewUserName{font-size:13px}
-.renewUserMobile{font-size:11px}
-.subCopyBtn,
-.renewPlanFallback{font-size:11.5px}
-.renewPlanLine{font-size:11px}
-.menuBtn{
-width:28px !important;
-height:28px;
-min-width:28px;
-flex:0 0 28px;
-}
-.statusIcon{
-width:20px !important;
-height:20px;
-min-width:20px;
-flex:0 0 20px;
-}
-.statusIcon svg{width:11px;height:11px}
-.payViewTabs{
-display:grid;
-grid-template-columns:repeat(4,minmax(0,1fr));
-gap:6px;
-width:100%;
-margin:0 0 14px;
-flex-wrap:nowrap;
-}
-.payViewTab{
-min-width:0;
-width:100%;
-padding:8px 3px;
-font-size:11px;
-justify-content:center;
-white-space:nowrap;
-box-sizing:border-box;
-}
-.payViewTabCount{
-font-size:10px;
-}
-}
-
-@media(max-width:360px){
-.payViewTab{
-padding:7px 2px;
-font-size:10px;
-}
-.payViewTabCount{
-font-size:9px;
-}
-}
-
 </style>
 
 <div class="box renewsPage">
@@ -914,8 +925,9 @@ font-size:9px;
 
 <?php foreach($renewsPage as $r){
 
-$i=$r['index'];
+$i=$r['index'] ?? null;
 $p=$r['data'];
+$renewRowMenuId = ($i !== null && $i !== '') ? ('m' . (int)$i) : ('march' . md5(json_encode($p)));
 
 $status=trim((string)($p[6] ?? ''));
 if($status === ''){
@@ -998,6 +1010,10 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 <?php } ?>
 
 <span class="renewPlanLine"><?php echo htmlspecialchars($planLine, ENT_QUOTES, 'UTF-8'); ?></span>
+<?php if($statusFilter === 'cancelled'){ ?>
+<span class="renewPlanLine">کد: <?php echo htmlspecialchars((string)($p[3] ?? '—'), ENT_QUOTES, 'UTF-8'); ?> | مبلغ: <?php echo number_format(intval($p[12] ?? 0)); ?> ریال</span>
+<span class="renewPlanLine"><?php echo htmlspecialchars((string)($p[7] ?? 'لغو شده'), ENT_QUOTES, 'UTF-8'); ?></span>
+<?php } ?>
 <?php if($provisionDetail !== ''){ ?>
 <span class="renewPlanLine" style="color:#b91c1c;margin-top:4px;display:block"><?php echo htmlspecialchars($provisionDetail, ENT_QUOTES, 'UTF-8'); ?></span>
 <?php } ?>
@@ -1019,16 +1035,17 @@ data-subid="<?php echo htmlspecialchars($targetSubId, ENT_QUOTES, 'UTF-8'); ?>">
 </span>
 <?php } ?>
 
+<?php if($statusFilter !== 'cancelled'){ ?>
 <button
 class="menuBtn"
 type="button"
 aria-label="منو"
 aria-expanded="false"
-onclick="openMenu(event,'m<?php echo $i; ?>')">
+onclick="openMenu(event,'<?php echo htmlspecialchars($renewRowMenuId, ENT_QUOTES, 'UTF-8'); ?>')">
 ⋮
 </button>
 
-<div class="dropdown" id="m<?php echo $i; ?>" onclick="event.stopPropagation()">
+<div class="dropdown" id="<?php echo htmlspecialchars($renewRowMenuId, ENT_QUOTES, 'UTF-8'); ?>" onclick="event.stopPropagation()">
 <button type="button" onclick="openDetails(
 '<?php echo htmlspecialchars($p[0] ?? '-',ENT_QUOTES); ?>',
 '<?php echo htmlspecialchars($mobile,ENT_QUOTES); ?>',
@@ -1046,6 +1063,7 @@ onclick="openMenu(event,'m<?php echo $i; ?>')">
 )">عملیات</button>
 <button type="button" class="red" onclick="deleteItem('<?php echo $i; ?>')">حذف</button>
 </div>
+<?php } ?>
 
 </div>
 
@@ -1078,7 +1096,7 @@ class="<?php echo ($currentPage === $x) ? 'active' : ''; ?>">
 var renewResultMessage = <?php echo json_encode($paymentMessage, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultDetail = <?php echo json_encode($paymentMessageDetail, JSON_UNESCAPED_UNICODE); ?>;
 var renewResultError = <?php echo json_encode($paymentError, JSON_UNESCAPED_UNICODE); ?>;
-var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews&status=' . rawurlencode($statusFilter)), JSON_UNESCAPED_UNICODE); ?>;
+var renewsPageUrl = <?php echo json_encode(pnvAdminUrl('index.php?page=renews'), JSON_UNESCAPED_UNICODE); ?>;
 var renewsListStatus = <?php echo json_encode($statusFilter, JSON_UNESCAPED_UNICODE); ?>;
 
 function closeMenus(){
@@ -1230,7 +1248,7 @@ openModal(
 
 function deleteItem(id){
 if(confirm('حذف شود؟')){
-location.href = renewsPageUrl + (renewsPageUrl.indexOf('?') >= 0 ? '&' : '?') + 'deletepayment=' + encodeURIComponent(id);
+location.href = renewsPageUrl + (renewsPageUrl.indexOf('?') >= 0 ? '&' : '?') + 'deletepayment=' + encodeURIComponent(id) + '&status=' + encodeURIComponent(renewsListStatus);
 }
 }
 

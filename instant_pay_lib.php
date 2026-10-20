@@ -775,8 +775,20 @@ if(!function_exists('instantPayPath')){
         $status = trim((string)($row[6] ?? ''));
         $tracking = trim((string)($row[3] ?? ''));
 
+        if($status !== 'تایید شد' && function_exists('instantPayAdminRowBucket') && instantPayAdminRowBucket($row) === 'cancelled'){
+            return ['title' => 'کنسل شده', 'class' => 'statusDot--red'];
+        }
+
         if(strpos($tracking, 'AUTO-') === 0){
-            $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            $item = null;
+
+            if(function_exists('instantPayFindJsonForCsvRow')){
+                $item = instantPayFindJsonForCsvRow($row);
+            }
+
+            if(!is_array($item)){
+                $item = instantPayFindJsonByTracking($row[0] ?? '', $tracking);
+            }
 
             if(is_array($item) && ($item['status'] ?? '') === 'payment_received_provision_failed'){
                 return [
@@ -854,6 +866,10 @@ if(!function_exists('instantPayPath')){
      * سفارش AUTOِ درحال‌انجام تا پایان مهلت پرداخت + ۱۰ دقیقه دیده می‌شود.
      */
     function instantPayAdminRowVisible($row){
+        if(function_exists('instantPayAdminRowVisibleForTabs')){
+            return instantPayAdminRowVisibleForTabs($row);
+        }
+
         if(!is_array($row)){
             return false;
         }
@@ -2520,4 +2536,8 @@ if(!function_exists('instantPayPath')){
 
         return null;
     }
+}
+
+if(is_file(__DIR__ . '/instant_pay_admin_tabs_lib.php')){
+    require_once __DIR__ . '/instant_pay_admin_tabs_lib.php';
 }

@@ -114,7 +114,7 @@ assertTrue(($meta['title'] ?? '') === 'در حال بررسی', 'in-progress sta
 
 $oldRow = $csvRow;
 $oldRow[8] = time() - instantPayAdminVisibilitySeconds() - 60;
-assertTrue(!instantPayAdminRowVisible($oldRow), 'auto pending outside admin window hidden');
+assertTrue(instantPayAdminRowVisible($oldRow), 'stale auto pending stays in admin history lists');
 
 $cancelRow = $csvRow;
 $cancelRow[8] = time();
@@ -127,7 +127,7 @@ instantPaySave([[
     'expires_at' => time() + 600,
     'csv_index' => 0,
 ]]);
-assertTrue(!instantPayAdminRowVisible($cancelRow), 'cancelled json hides admin row');
+assertTrue(instantPayAdminRowVisible($cancelRow), 'cancelled rows stay visible (cancelled tab/archive)');
 
 $items = [[
     'id' => 't1',
