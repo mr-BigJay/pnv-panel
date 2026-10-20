@@ -2326,7 +2326,8 @@ if(!function_exists('xuiConfigPath')){
         }
 
         if($addDays <= 0){
-            return true;
+            // A volume-only renewal must not silently change subscription expiry.
+            return abs(intval($snap['expiry_ms'] ?? 0) - intval($baseline['expiry_ms'] ?? 0)) <= 180000;
         }
 
         $baseExpiry = intval($baseline['expiry_ms'] ?? 0);
@@ -3424,11 +3425,8 @@ if(!function_exists('xuiConfigPath')){
             }
 
             $runtime = xuiRenewAnalyzeRuntimeState($server, $client, $subLink);
-            $action = renewReserveDecideAction($runtime);
-
-            if(empty($duration['time_unlimited']) && $days > 0 && !empty($runtime['time_expired'])){
-                $action = 'activate_now';
-            }
+            // The policy depends on the purchased plan, not the current client's duration.
+            $action = renewReserveDecideAction($runtime, $days);
 
             if($action === 'ambiguous'){
                 return [
@@ -3495,6 +3493,16 @@ if(!function_exists('xuiConfigPath')){
             }
 
             if($action === 'immediate_unlimited'){
+                // 0 in 3x-ui means unlimited traffic or an incomplete client record.
+                // Adding a finite cap would reduce that entitlement. Fail safely.
+                if(xuiClientTotalBytes($client) <= 0){
+                    return [
+                        'ok' => false,
+                        'error' => 'حجم فعلی اشتراک معتبر نیست؛ افزایش حجم بدون محدودسازی اشتراک ممکن نیست',
+                        'code' => 'invalid_quota_baseline',
+                    ];
+                }
+
                 $stored = xuiRenewProvisionStoreRead($provisionKey) ?? [];
                 $anchorMs = intval($stored['activation_anchor_ms'] ?? 0);
 
@@ -3531,7 +3539,9 @@ if(!function_exists('xuiConfigPath')){
                 if(empty($adjusted['ok'])){
                     $adjustCode = trim((string)($adjusted['code'] ?? ''));
 
-                    if($adjustCode === 'transport_error' && $days > 0){
+                    if($adjustCode === 'transport_error'){
+                        // An XUI timeout may occur AFTER quota was updated.
+                        // Read back and verify first; never send the mutation again.
                         $verifyLookup = xuiRenewLookupClient($server, $parsed['sub_id'], $link);
                         $baselineSnap = xuiRenewClientSnapshot($client);
 

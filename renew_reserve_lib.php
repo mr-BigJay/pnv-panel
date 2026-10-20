@@ -312,21 +312,31 @@ if(!function_exists('renewReservePath')){
         ];
     }
 
-    function renewReserveDecideAction(array $runtime){
+    /**
+     * Choose by the PURCHASED plan duration, not the existing client's expiry.
+     * days=0: add purchased GB to the existing cap immediately (no queue).
+     * days>0: reserve until the current subscription expires OR exhausts quota.
+     * Keep the optional argument for older callers that only pass runtime.
+     */
+    function renewReserveDecideAction(array $runtime, $purchasedDays = null){
+        if($purchasedDays !== null && intval($purchasedDays) <= 0){
+            return 'immediate_unlimited';
+        }
+
         if(!empty($runtime['ambiguous'])){
             return 'ambiguous';
         }
 
-        // نامحدود زمانی + حجم باقی‌مانده → رزرو (تا اتمام حجم/زمان فعال شود).
+        if($purchasedDays !== null){
+            return !empty($runtime['should_activate_now']) ? 'activate_now' : 'reserve';
+        }
+
+        // Backwards-compatible rule for legacy callers without purchase metadata.
         if(($runtime['time_unlimited'] ?? null) === true){
             return !empty($runtime['volume_exhausted']) ? 'immediate_unlimited' : 'reserve';
         }
 
-        if(!empty($runtime['should_activate_now'])){
-            return 'activate_now';
-        }
-
-        return 'reserve';
+        return !empty($runtime['should_activate_now']) ? 'activate_now' : 'reserve';
     }
 
     function renewReserveEnqueue(array $entry){
@@ -600,6 +610,32 @@ if(!function_exists('renewReservePath')){
 
         $client = $lookup['client'];
 
+        // Legacy time-unlimited reservations are additive, never absolute.
+        // If the worker crashed, verify the saved baseline without another POST.
+        if($days === 0 && ($fresh['activation_operation'] ?? '') === 'incremental_unlimited'){
+            $baseline = $fresh['activation_baseline'] ?? null;
+            $verified = is_array($baseline) && xuiRenewVerifyIncrementalAdjust($baseline, $client, $gb, 0);
+
+            if($verified){
+                $done = renewReserveUpdateById($id, [
+                    'status' => 'activated',
+                    'activated_at' => renewReserveNow(),
+                    'last_check_at' => renewReserveNow(),
+                    'last_check_note' => 'recovered_additive_volume',
+                ]);
+                return is_array($done)
+                    ? ['ok' => true, 'reserve_id' => $id, 'method' => 'recover_incremental_unlimited']
+                    : ['ok' => false, 'code' => 'persist_failed', 'error' => 'ذخیره فعال‌سازی ناموفق بود'];
+            }
+
+            renewReserveUpdateById($id, [
+                'status' => 'ambiguous',
+                'last_check_at' => renewReserveNow(),
+                'last_error' => 'وضعیت افزایش حجم قبلی قابل اثبات نیست؛ درخواست تکرار نشد',
+            ]);
+            return ['ok' => false, 'code' => 'ambiguous', 'error' => 'نیاز به بررسی دستی افزایش حجم'];
+        }
+
         if(xuiRenewVerifyAbsolutePlan($client, $gb, $days, $anchorMs)){
             $done = renewReserveUpdateById($id, [
                 'status' => 'activated',
@@ -695,6 +731,86 @@ if(!function_exists('renewReservePath')){
             'renew_reserve_id' => trim((string)($reservation['id'] ?? '')),
             'user_renew_message' => renewReserveUserMessageReserved(),
             'method' => 'renew_reserve',
+        ];
+    }
+
+    /**
+     * Previously queued time-unlimited purchases must add volume immediately,
+     * NOT reset the client's cap to the purchased GB. Runs under the reserve lock.
+     */
+    function renewReserveActivateQueuedUnlimited(array $fresh, $server, array $client, $subLink){
+        $id = trim((string)($fresh['id'] ?? ''));
+        $gb = intval($fresh['plan_gb'] ?? 0);
+        $subId = trim((string)($fresh['sub_id'] ?? ''));
+        $email = trim((string)($client['email'] ?? ''));
+        $baseline = xuiRenewClientSnapshot($client);
+
+        if($gb <= 0 || $email === '' || intval($baseline['total_bytes'] ?? 0) <= 0){
+            renewReserveUpdateById($id, [
+                'status' => 'ambiguous',
+                'last_error' => 'اطلاعات حجم/کلاینت برای افزایش امن حجم نامعتبر است',
+                'last_check_at' => renewReserveNow(),
+            ]);
+            return ['ok' => false, 'code' => 'ambiguous', 'error' => 'اطلاعات افزایش حجم ناقص است'];
+        }
+
+        $anchorMs = intval($fresh['activation_anchor_ms'] ?? 0);
+        if($anchorMs <= 0){
+            $anchorMs = renewReserveNowMs();
+        }
+
+        $opId = hash('sha256', $id . '|add_volume|' . $anchorMs);
+        $activating = renewReserveUpdateById($id, [
+            'status' => 'activating',
+            'activating_at' => renewReserveNow(),
+            'activation_anchor_ms' => $anchorMs,
+            'activation_op_id' => $opId,
+            'activation_operation' => 'incremental_unlimited',
+            'activation_baseline' => $baseline,
+        ]);
+
+        if(!is_array($activating)){
+            return ['ok' => false, 'code' => 'persist_failed', 'error' => 'ثبت عملیات افزایش حجم ناموفق بود'];
+        }
+
+        $usedBytes = intval($baseline['used_bytes'] ?? 0);
+        $totalBytes = intval($baseline['total_bytes'] ?? 0);
+        if($usedBytes >= $totalBytes){
+            $applied = xuiAdjustClientTrafficLegacy($server, $client, $gb);
+        }
+        else{
+            $applied = xuiAdjustClientTraffic($server, $email, $gb, $client, 0);
+        }
+
+        // Never resend a POST after a timeout or an ambiguous response.
+        $lookup = xuiRenewLookupClient($server, $subId, $subLink);
+        $verified = ($lookup['status'] ?? '') === 'found'
+            && is_array($lookup['client'] ?? null)
+            && xuiRenewVerifyIncrementalAdjust($baseline, $lookup['client'], $gb, 0);
+
+        if($verified){
+            $done = renewReserveUpdateById($id, [
+                'status' => 'activated',
+                'activated_at' => renewReserveNow(),
+                'last_check_at' => renewReserveNow(),
+                'last_check_note' => 'unlimited_volume_added',
+            ]);
+            return is_array($done)
+                ? ['ok' => true, 'reserve_id' => $id, 'method' => $applied['method'] ?? 'verified_additive_volume']
+                : ['ok' => false, 'code' => 'persist_failed', 'error' => 'افزایش حجم تأیید شد اما ذخیره ناموفق بود'];
+        }
+
+        // Even a nominal 2xx response does not prove the volume actually changed.
+        // Keep the record for manual inspection without automatic replay.
+        renewReserveUpdateById($id, [
+            'status' => 'ambiguous',
+            'last_error' => 'نتیجه افزایش حجم با اطلاعات سرور تطبیق ندارد؛ درخواست مجدد ارسال نشد',
+            'last_check_at' => renewReserveNow(),
+        ]);
+        return [
+            'ok' => false,
+            'code' => 'ambiguous',
+            'error' => $applied['error'] ?? 'نتیجه افزایش حجم تأیید نشد',
         ];
     }
 
@@ -799,6 +915,15 @@ if(!function_exists('renewReservePath')){
             }
 
             $client = $lookup['client'] ?? null;
+
+            // Existing reservations created under the old policy: settle their
+            // time-unlimited purchases immediately by additive volume only.
+            if(is_array($client)
+                && array_key_exists('plan_days', $fresh)
+                && intval($fresh['plan_days']) === 0){
+                return renewReserveActivateQueuedUnlimited($fresh, $server, $client, $subLink);
+            }
+
             $runtime = xuiRenewAnalyzeRuntimeState($server, $client, $subLink);
 
             if(!empty($runtime['ambiguous'])){

@@ -279,6 +279,7 @@ unset($GLOBALS['renewReserveTestNow']);
 
 $adjustCount = 0;
 $renewApproveRow = $recreateRow;
+$renewApproveRow[2] = '10 گیگ - نامحدود زمان';
 $renewApproveRow[3] = 'AUTO-2002';
 $renewApproveRow[6] = 'درحال بررسی';
 $renewApproveRow[8] = 1700000100;
@@ -288,15 +289,15 @@ $renewApproveKey = xuiPaymentRowProvisionKey($renewApproveRow);
 $GLOBALS['xuiTestRenewRuntimeState'] = [
     'ambiguous' => false,
     'time_unlimited' => true,
-    'volume_exhausted' => true,
-    'should_activate_now' => true,
+    'volume_exhausted' => false,
+    'should_activate_now' => false,
 ];
 $adjustAnchorSec = 1700000200;
 $adjustAnchorMs = $adjustAnchorSec * 1000;
 $GLOBALS['renewReserveTestNow'] = $adjustAnchorSec;
 $GLOBALS['xuiTestRenewLookupClient'] = static function($srv, $subId) use (&$adjustCount, $adjustAnchorMs){
     $bytes = $adjustCount > 0 ? xuiGbToBytes(30) : xuiGbToBytes(20);
-    $expiry = $adjustCount > 0 ? ($adjustAnchorMs + (86400000 * 30)) : 0;
+    $expiry = 0;
 
     return ['status' => 'found', 'client' => ['email' => 'owner_1234', 'subId' => $subId, 'totalGB' => $bytes, 'expiryTime' => $expiry]];
 };
@@ -348,7 +349,7 @@ xuiRenewProvisionStoreWrite($renewApproveKey, [
     'operation' => 'incremental',
     'baseline' => ['total_bytes' => xuiGbToBytes(20), 'used_bytes' => 0, 'expiry_ms' => 0, 'email' => 'owner_1234', 'sub_id' => 'abc1234567890ab'],
     'plan_gb' => 10,
-    'plan_days' => 30,
+    'plan_days' => 0,
     'activation_anchor_ms' => $adjustAnchorMs,
     'started_at' => time() - 200,
 ]);

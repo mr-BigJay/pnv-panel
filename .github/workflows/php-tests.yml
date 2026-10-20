@@ -23,3 +23,4 @@ jobs:
             php "$test"
           done
           python3 tests/renew_step3_deploy_safety_test.py
+          python3 tests/renew_policy_deploy_safety_test.py
