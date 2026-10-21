@@ -16,6 +16,11 @@ import tempfile
 FILES = ("bank_connection_lib.php", "bank-transaction-webhook.php",
          "admin/bank-connection.php")
 BANK_MENU = """<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=banks'), ENT_QUOTES, 'UTF-8'); ?>">
+اتصال بانک
+</a>
+
+"""
+OLD_BANKS_MENU = """<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=banks'), ENT_QUOTES, 'UTF-8'); ?>">
 بانک‌ها
 </a>
 
@@ -43,6 +48,10 @@ def patch_index(content: str) -> str:
         if content.count(OLD_BANK_MENU) != 1:
             raise RuntimeError("STOP duplicate old bank menu")
         content = content.replace(OLD_BANK_MENU, BANK_MENU, 1)
+    elif OLD_BANKS_MENU in content:
+        if content.count(OLD_BANKS_MENU) != 1:
+            raise RuntimeError("STOP duplicate previous banks menu")
+        content = content.replace(OLD_BANKS_MENU, BANK_MENU, 1)
     elif BANK_MENU not in content:
         if content.count(menu) != 1:
             raise RuntimeError("STOP custom navigation anchor differs; no changes")
