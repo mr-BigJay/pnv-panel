@@ -17,6 +17,7 @@ import time
 from worker.browser import storage_state_path
 from worker.chromium_launch import launch_chromium
 from worker.playwright_env import apply_playwright_env
+from worker.control_server import classify, _persist_session
 
 
 def env(name: str, default: str = "") -> str:
@@ -86,12 +87,19 @@ def main() -> int:
                 print("Login page detected — complete authentication in the browser window.")
             input("When logged in and on the statement page, press Enter here… ")
 
-        context.storage_state(path=str(state_file))
-        state_file.chmod(0o600)
+        # A prompt/selector alone never proves authenticated banking access.
+        page.wait_for_timeout(1200)
+        verified = classify(page.url, page.locator("body").inner_text(timeout=5000)[:18000])
+        if verified != "session_verified":
+            context.close()
+            browser.close()
+            print("LOGIN_NOT_VERIFIED: authenticated statement UI missing; session not overwritten.", file=sys.stderr)
+            return 1
+        _persist_session(context, state_file)
         context.close()
         browser.close()
 
-    print("Session saved. Set TEJARAT_COLLECT_MODE=live and TEJARAT_HEADLESS=true for the worker.")
+    print("SESSION_VERIFIED_AND_SAVED: authenticated statement interface visible.")
     return 0
 
 

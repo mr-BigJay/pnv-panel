@@ -52,6 +52,13 @@ def _runtime_env() -> dict[str, str]:
     out["TMPDIR"] = str(tmp)
     out["XDG_CACHE_HOME"] = str(base / "cache")
     Path(out["XDG_CACHE_HOME"]).mkdir(parents=True, exist_ok=True)
+    # Chromium crashpad requires a writable XDG_CONFIG_HOME on this VPS.
+    config = Path(out.get("XDG_CONFIG_HOME") or (base / "chromium-config"))
+    if config.is_symlink():
+        raise RuntimeError("unsafe Chromium config symlink")
+    config.mkdir(mode=0o700, parents=True, exist_ok=True)
+    config.chmod(0o700)
+    out["XDG_CONFIG_HOME"] = str(config)
     return out
 
 

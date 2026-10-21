@@ -44,6 +44,10 @@ testBankWizard('credential save works', pnvBankSaveTejaratCredentials('demo-only
 $default = bankWizardRender();
 testBankWizard('configured bank lands on SMS onboarding step two',
     strpos($default,'مرحله ۲ از ۳') !== false);
+testBankWizard('step two exposes real worker command buttons',
+    strpos($default,'name="action" value="start_login"') !== false &&
+    strpos($default,'name="action" value="check_session"') !== false &&
+    strpos($default,'سرویس کنترل بانک نصب یا روشن نیست') !== false);
 testBankWizard('SMS step uses official bank, not password reflection',
     strpos($default,'https://hb.tejaratbank.ir/') !== false &&
     strpos($default,'never-print-me') === false);
@@ -58,6 +62,12 @@ $readiness = bankWizardRender(3,'POST',['csrf'=>$csrf,'action'=>'check_readiness
 testBankWizard('readiness is a read-only local check',
     strpos($readiness,'بررسی محلی تنظیمات انجام شد') !== false &&
     strpos($readiness,'بدون اتصال به بانک') !== false);
+$badStart = bankWizardRender(2, 'POST', ['csrf'=>'invalid', 'action'=>'start_login']);
+testBankWizard('start connection protected by admin CSRF',
+    strpos($badStart,'نشست امنیتی معتبر نیست') !== false);
+$startOffline = bankWizardRender(2, 'POST', ['csrf'=>$csrf, 'action'=>'start_login']);
+testBankWizard('offline controller never claims a successful bank connection',
+    strpos($startOffline,'سرویس کنترل بانک نصب یا روشن نیست') !== false);
 testBankWizard('no bank transactions fabricated', !file_exists($base . '/ledger.json'));
 testBankWizard('password stays out of rendered stage three',strpos($step3,'never-print-me')===false);
 @unlink($base . '/credentials.json');

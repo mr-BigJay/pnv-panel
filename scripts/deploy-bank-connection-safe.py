@@ -14,7 +14,7 @@ import sys
 import tempfile
 
 FILES = ("bank_connection_lib.php", "bank-transaction-webhook.php",
-         "admin/bank-connection.php")
+         "bank_control_lib.php", "admin/bank-connection.php")
 BANK_MENU = """<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=banks'), ENT_QUOTES, 'UTF-8'); ?>">
 اتصال بانک
 </a>
@@ -142,7 +142,7 @@ def main():
         php_lint(idx)
         if subprocess.run(["php", "-r", "exit(function_exists('sodium_crypto_secretbox') ? 0 : 1);"], capture_output=True).returncode:
             raise RuntimeError("STOP PHP sodium extension required for encrypted banking credentials")
-        print("PHP LINT PASS (4 files)")
+        print("PHP LINT PASS (5 files)")
         changed = [f for f in FILES if original_files[f] != new_files[f]]
         if original_index != new_index:
             changed.append("admin/index.php")
