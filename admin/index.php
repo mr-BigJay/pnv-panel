@@ -1037,6 +1037,12 @@ class="supportMenu">
 
 </a>
 
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=bank'), ENT_QUOTES, 'UTF-8'); ?>">
+
+اتصال بانک
+
+</a>
+
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('xui-servers.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 سرورهای 3x-ui
@@ -1086,6 +1092,10 @@ pnvAdminInclude('support.php');
 
 <?php pnvAdminInclude('renews.php'); ?>
 
+<?php } ?>
+
+<?php if($page==='bank'){ ?>
+<?php pnvAdminInclude('bank_connection.php'); ?>
 <?php } ?>
 
 <?php if($page=='cards'){ ?>
