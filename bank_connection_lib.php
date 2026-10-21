@@ -92,7 +92,8 @@ if (!function_exists('pnvBankConfigPath')) {
         if (!function_exists('sodium_crypto_secretbox') ||
             !function_exists('sodium_crypto_secretbox_open')) return null;
         $path = pnvBankCredentialKeyPath();
-        if (!pnvBankCredentialPrivatePath($path) || !is_file($path)) return null;
+        if (!pnvBankCredentialPrivatePath($path) || !is_file($path) ||
+            ((@fileperms($path) & 0077) !== 0)) return null;
         $hex = trim((string)@file_get_contents($path));
         if (!preg_match('/^[a-f0-9]{64}$/D', $hex)) return null;
         $key = hex2bin($hex);
