@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory(prefix="pnv-bank-deploy-test-") as td:
     root = Path(td)
     (root / "admin").mkdir()
     target = root / "admin/index.php"
-    original = ("<?php // CUSTOM LIVE SENTINEL ?>\n" + menu + "\n" + cards + "\n").encode()
+    original = ("<?php // CUSTOM LIVE SENTINEL ?>\n" + menu + "\n" + cards + "\n<?php } ?>\n").encode()
     target.write_bytes(original)
     cmd = [sys.executable,str(script),"--source",str(repo),"--root",str(root),"--no-reload"]
     good = subprocess.run(cmd, text=True, capture_output=True)
