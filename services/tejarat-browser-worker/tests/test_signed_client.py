@@ -50,6 +50,20 @@ class SignedFeedTest(unittest.TestCase):
             self.assertNotIn("password",data)
             self.assertFalse(args.kwargs["allow_redirects"])
 
+    def test_fixture_mode_cannot_submit_even_with_live_endpoint(self):
+        from worker.main import run_once
+        import os
+        with patch.dict(os.environ, {
+            "TEJARAT_COLLECT_MODE": "fixture",
+            "PNV_BANK_FEED_URL": URL,
+            "PNV_BANK_FEED_SECRET": SECRET,
+        }):
+            with patch("worker.main.collect_transactions") as collect:
+                with patch("worker.main.publish") as send:
+                    self.assertEqual(run_once(), 2)
+                    collect.assert_not_called()
+                    send.assert_not_called()
+
     def test_redirect_not_followed(self):
         response=Mock(status_code=302)
         with patch("worker.pnv_client.requests.post", return_value=response):
