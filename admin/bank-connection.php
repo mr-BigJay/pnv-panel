@@ -69,7 +69,7 @@ $live = $enabled && empty($cfg['dry_run']);
 $credentialsStatus = pnvBankTejaratCredentialsStatus();
 ?>
 <div class="box" style="direction:rtl;max-width:920px;line-height:1.9">
-<h2 style="margin-bottom:8px">بانک‌ها</h2>
+<h2 style="margin-bottom:8px">اتصال بانک</h2>
 <p style="color:#94a3b8">مدیریت اتصال حساب‌ها و تطبیق خودکار واریزی‌ها با مبالغ پنل</p>
 <div role="tablist" aria-label="انتخاب بانک" style="display:flex;gap:10px;margin:20px 0;border-bottom:1px solid #475569;padding-bottom:12px">
   <div role="tab" aria-selected="true" style="background:#2563eb;color:#fff;padding:9px 23px;border-radius:12px;font-weight:bold">بانک تجارت</div>
