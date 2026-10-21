@@ -58,6 +58,41 @@ $ledger=json_decode(file_get_contents($base.'/ledger.json'),true);
 bankCheck('confirmed ledger',count($ledger)===1 && reset($ledger)['state']==='confirmed');
 $cfg['enabled']=false;pnvBankSaveConfig($cfg);
 bankCheck('disable stops intake',(pnvBankHandleSignedDeposit($raw,$now,$sig,$now)['code']??'')==='disabled');
+// Bank account login secrets are separately encrypted and never enter payment config.
+putenv('PNV_BANK_CREDENTIAL_KEY_PATH=' . $base . '/bank-credentials.key');
+putenv('PNV_BANK_CREDENTIAL_STORE_PATH=' . $base . '/tejarat-credentials.enc.json');
+bankCheck('credentials cannot be saved without server encryption key',
+    !pnvBankSaveTejaratCredentials('tejarat_demo', 'very-private-password'));
+file_put_contents($base . '/bank-credentials.key', bin2hex(random_bytes(32)) . "\n");
+chmod($base . '/bank-credentials.key', 0600);
+bankCheck('save encrypted bank login', pnvBankSaveTejaratCredentials('tejarat_demo', 'very-private-password'));
+$encryptedFile = file_get_contents($base . '/tejarat-credentials.enc.json');
+bankCheck('credential file omits plaintext bank password and username',
+    strpos($encryptedFile, 'very-private-password') === false &&
+    strpos($encryptedFile, 'tejarat_demo') === false);
+bankCheck('bank credential metadata has no password',
+    pnvBankTejaratCredentialsStatus() === 'configured');
+$decrypted = pnvBankReadTejaratCredentials();
+bankCheck('authorized server-side decrypt round trip',
+    is_array($decrypted) && ($decrypted['username'] ?? '') === 'tejarat_demo' &&
+    ($decrypted['password'] ?? '') === 'very-private-password');
+unset($decrypted);
+bankCheck('incorrect key fails closed', (function() use ($base) {
+    $k = file_get_contents($base . '/bank-credentials.key');
+    file_put_contents($base . '/bank-credentials.key', bin2hex(random_bytes(32)) . "\n");
+    $denied = pnvBankReadTejaratCredentials() === null;
+    file_put_contents($base . '/bank-credentials.key', $k);
+    return $denied;
+})());
+bankCheck('missing/corrupted ciphertext fails closed', (function() use ($base, $encryptedFile) {
+    file_put_contents($base . '/tejarat-credentials.enc.json', '{"version":1,"bank":"tejarat","nonce":"invalid","ciphertext":"bad"}');
+    $denied = pnvBankReadTejaratCredentials() === null;
+    file_put_contents($base . '/tejarat-credentials.enc.json', $encryptedFile);
+    return $denied;
+})());
+bankCheck('delete saved credentials', pnvBankDeleteTejaratCredentials() &&
+    pnvBankTejaratCredentialsStatus() === 'not_configured');
+
 unset($GLOBALS['pnvBankTestMarkPaid']);
 foreach (glob($base.'/*') as $p) {if(is_dir($p)) rmdir($p); else unlink($p);}
 rmdir($base);
