@@ -27,6 +27,11 @@ def main() -> int:
     default_log = "https://hb.tejaratbank.ir/account/log"
     bank_url = env("TEJARAT_BANK_URL", default_log)
     stmt_url = env("TEJARAT_STATEMENT_URL", bank_url or default_log)
+    from urllib.parse import urlparse
+    bank_dest = urlparse(stmt_url)
+    if bank_dest.scheme != "https" or bank_dest.hostname != "hb.tejaratbank.ir":
+        print("Only https://hb.tejaratbank.ir is allowed", file=sys.stderr)
+        return 2
     headless = env("TEJARAT_HEADLESS", "false").lower() in ("1", "true", "yes")
     done_sel = env("TEJARAT_LOGIN_DONE_SELECTOR")
     probe_sel = env("TEJARAT_LOGIN_PROBE_SELECTOR")
@@ -82,6 +87,7 @@ def main() -> int:
             input("When logged in and on the statement page, press Enter here… ")
 
         context.storage_state(path=str(state_file))
+        state_file.chmod(0o600)
         context.close()
         browser.close()
 
