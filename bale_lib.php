@@ -246,8 +246,9 @@ if(!function_exists('baleConfigPath')){
 
         // خط مانده را حذف کن تا موجودی به‌اشتباه مچ نشود
         $withoutBalance = preg_replace('/^\s*مانده\s*:.*$/umi', '', $text);
+
         if(!is_string($withoutBalance) || trim($withoutBalance) === ''){
-            $withoutBalance = $text;
+            return [];
         }
 
         $preferred = [];

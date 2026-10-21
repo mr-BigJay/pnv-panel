@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "dry_run": true,
+  "webhook_token": "CHANGE_ME_LONG_RANDOM_SECRET",
+  "allowed_senders": [],
+  "accept_unknown_sender": true,
+  "max_inbox_entries": 500,
+  "header_name": "X-Nomad-Token"
+}

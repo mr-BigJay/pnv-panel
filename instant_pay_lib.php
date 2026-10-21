@@ -1874,4 +1874,139 @@ if(!function_exists('instantPayPath')){
 
         return null;
     }
+
+    function instantPayCardLast4($card){
+        $digits = preg_replace('/\D+/', '', (string)$card);
+
+        if($digits === '' || strlen($digits) < 4){
+            return '';
+        }
+
+        return substr($digits, -4);
+    }
+
+    function instantPayAmountMatchesItem($item, $amountRial){
+        $amountRial = intval($amountRial);
+
+        if($amountRial <= 0 || !is_array($item)){
+            return false;
+        }
+
+        $itemAmount = instantPayNormalizeItemAmountRial($item);
+
+        if($itemAmount === $amountRial){
+            return true;
+        }
+
+        return $itemAmount > 0 && intdiv($itemAmount, 10) === $amountRial;
+    }
+
+    /**
+     * تطبیق پیامک پست‌بانک: چهار رقم آخر کارت + مبلغ + بازه زمانی سفارش.
+     * فقط پیشنهاد تطبیق — فعال‌سازی اشتراک از مسیر جدا (ادمین / بله).
+     */
+    function instantPayFindNomadOrderMatches(array $parse){
+        $cardLast4 = trim((string)($parse['card_last4'] ?? ''));
+        $depositTs = intval($parse['deposit_ts'] ?? 0);
+        $candidates = $parse['amount_candidates'] ?? ($parse['amounts'] ?? []);
+        $now = time();
+        $items = instantPayExpireDue();
+        $grace = instantPayMatchGraceSeconds();
+        $maxAge = instantPayMaxOrderAgeSeconds();
+
+        if(!is_array($candidates) || count($candidates) === 0){
+            return [
+                'status' => 'unmatched',
+                'matches' => [],
+                'error' => 'مبلغ برای تطبیق موجود نیست',
+            ];
+        }
+
+        if($cardLast4 === ''){
+            return [
+                'status' => 'parse_error',
+                'matches' => [],
+                'error' => 'چهار رقم آخر کارت در پیامک پیدا نشد',
+            ];
+        }
+
+        if($depositTs > 0 && ($now - $depositTs) > ($maxAge + 3600)){
+            return [
+                'status' => 'stale',
+                'matches' => [],
+                'error' => 'زمان پیامک خیلی قدیمی است',
+            ];
+        }
+
+        $allMatches = [];
+
+        foreach($candidates as $amount){
+            $amount = intval($amount);
+
+            if($amount <= 0){
+                continue;
+            }
+
+            foreach($items as $item){
+                if(!instantPayItemMatchable($item, $now)){
+                    continue;
+                }
+
+                if(!instantPayAmountMatchesItem($item, $amount)){
+                    continue;
+                }
+
+                $itemLast4 = instantPayCardLast4($item['card'] ?? '');
+
+                if($itemLast4 === '' || $itemLast4 !== $cardLast4){
+                    continue;
+                }
+
+                if($depositTs > 0){
+                    $created = intval($item['created_at'] ?? 0);
+                    $expires = intval($item['expires_at'] ?? 0);
+                    $graceEnd = $expires + $grace;
+
+                    if($created > 0 && $depositTs < ($created - 900)){
+                        continue;
+                    }
+
+                    if($expires > 0 && $depositTs > ($graceEnd + 900)){
+                        continue;
+                    }
+                }
+
+                $allMatches[$item['id'] ?? ('row_' . count($allMatches))] = $item;
+            }
+        }
+
+        $matches = array_values($allMatches);
+
+        if(count($matches) === 0){
+            return [
+                'status' => 'unmatched',
+                'matches' => [],
+                'matched_amount' => intval($candidates[0] ?? 0),
+                'error' => 'سفارش waiting با کارت/مبلغ/زمان هم‌خوان پیدا نشد',
+            ];
+        }
+
+        if(count($matches) > 1){
+            return [
+                'status' => 'ambiguous',
+                'matches' => $matches,
+                'matched_amount' => instantPayNormalizeItemAmountRial($matches[0]),
+                'error' => 'بیش از یک سفارش با این مشخصات پیدا شد',
+            ];
+        }
+
+        $match = $matches[0];
+
+        return [
+            'status' => 'matched',
+            'match' => $match,
+            'matches' => $matches,
+            'matched_amount' => instantPayNormalizeItemAmountRial($match),
+        ];
+    }
 }
