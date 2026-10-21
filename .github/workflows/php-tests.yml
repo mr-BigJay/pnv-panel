@@ -24,3 +24,9 @@ jobs:
           done
           python3 tests/renew_step3_deploy_safety_test.py
           python3 tests/renew_policy_deploy_safety_test.py
+      - name: Test Tejarat read-only worker
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check requests==2.32.3
+          cd services/tejarat-browser-worker
+          PYTHONPATH=. python3 -m unittest discover -s tests -p 'test_*.py' -v
