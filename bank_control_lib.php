@@ -47,7 +47,7 @@ if (!function_exists('pnvTejaratControlSocketPath')) {
         }
         $allowedStates = [
             'idle','starting','checking_session','opening_bank',
-            'session_verified','login_required','awaiting_first_activation',
+            'session_verified','session_stale','login_required','awaiting_first_activation',
             'awaiting_bank_login','waiting_bank_auth','manual_login_timeout',
             'untrusted_redirect','browser_error','unavailable'
         ];
@@ -67,7 +67,8 @@ if (!function_exists('pnvTejaratControlSocketPath')) {
             'starting'=>'در حال آماده‌سازی مرورگر بانک…',
             'opening_bank'=>'مرورگر بانک روی سرور باز شده است.',
             'checking_session'=>'در حال بررسی نشست ذخیره‌شده…',
-            'session_verified'=>'نشست بانک در مرورگر سرور تأیید شد؛ دریافت تراکنش‌ها هنوز باید جداگانه آزمایش شود.',
+            'session_verified'=>'نشست در آخرین بررسی معتبر بود؛ دریافت تراکنش‌ها هنوز باید جداگانه آزمایش شود.',
+            'session_stale'=>'نتیجه بررسی نشست قدیمی است؛ بررسی مجدد لازم است.',
             'login_required'=>'ورود مجدد در محیط رسمی بانک لازم است.',
             'awaiting_first_activation'=>'بانک صفحه فعال‌سازی اولیه و پیامک را نمایش می‌دهد؛ تأیید فقط در مرورگر امن سرور.',
             'awaiting_bank_login'=>'صفحه ورود بانک باز است؛ اگر ورود خودکار ممکن نبود، از مرورگر امن سرور ادامه بده.',
