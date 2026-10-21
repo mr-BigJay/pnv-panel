@@ -61,6 +61,98 @@ if (!function_exists('pnvBankConfigPath')) {
         ]);
         return pnvBankSaveJson(pnvBankConfigPath(), $safe);
     }
+    /**
+     * Banking login credentials are NOT part of public payment configuration.
+     * They are encrypted at rest under /var/lib/pnv-panel with a 32-byte key.
+     * No browser worker uses these credentials yet: interactive bank MFA remains manual.
+     */
+    function pnvBankCredentialStorePath() {
+        $override = getenv('PNV_BANK_CREDENTIAL_STORE_PATH');
+        return is_string($override) && trim($override) !== '' ?
+            $override : '/var/lib/pnv-panel/tejarat-credentials.enc.json';
+    }
+    function pnvBankCredentialKeyPath() {
+        $override = getenv('PNV_BANK_CREDENTIAL_KEY_PATH');
+        return is_string($override) && trim($override) !== '' ?
+            $override : '/var/lib/pnv-panel/bank-credentials.key';
+    }
+    function pnvBankCredentialPrivatePath($path) {
+        if (!is_string($path) || $path === '' || is_link($path) || is_link(dirname($path))) return false;
+        $parent = realpath(dirname($path));
+        if ($parent === false) return false;
+        $publicRoot = realpath(__DIR__);
+        if ($publicRoot !== false && ($parent === $publicRoot ||
+            str_starts_with($parent, $publicRoot . DIRECTORY_SEPARATOR))) return false;
+        $docRoot = realpath((string)($_SERVER['DOCUMENT_ROOT'] ?? ''));
+        if ($docRoot !== false && $docRoot !== '/' &&
+            ($parent === $docRoot || str_starts_with($parent, $docRoot . DIRECTORY_SEPARATOR))) return false;
+        return true;
+    }
+    function pnvBankCredentialKey() {
+        if (!function_exists('sodium_crypto_secretbox') ||
+            !function_exists('sodium_crypto_secretbox_open')) return null;
+        $path = pnvBankCredentialKeyPath();
+        if (!pnvBankCredentialPrivatePath($path) || !is_file($path)) return null;
+        $hex = trim((string)@file_get_contents($path));
+        if (!preg_match('/^[a-f0-9]{64}$/D', $hex)) return null;
+        $key = hex2bin($hex);
+        return is_string($key) && strlen($key) === SODIUM_CRYPTO_SECRETBOX_KEYBYTES ? $key : null;
+    }
+    function pnvBankTejaratCredentialsStatus() {
+        $path = pnvBankCredentialStorePath();
+        if (!pnvBankCredentialPrivatePath($path) || !is_file($path)) return 'not_configured';
+        return pnvBankReadTejaratCredentials() !== null ? 'configured' : 'invalid';
+    }
+    /**
+     * Server-side only. NEVER pass this result into templates, logs or JSON responses.
+     */
+    function pnvBankReadTejaratCredentials() {
+        $path = pnvBankCredentialStorePath();
+        $key = pnvBankCredentialKey();
+        if ($key === null || !pnvBankCredentialPrivatePath($path) || !is_file($path)) return null;
+        $data = json_decode((string)@file_get_contents($path), true);
+        if (!is_array($data) || ($data['version'] ?? 0) !== 1 ||
+            ($data['bank'] ?? '') !== 'tejarat') return null;
+        $nonce = base64_decode((string)($data['nonce'] ?? ''), true);
+        $cipher = base64_decode((string)($data['ciphertext'] ?? ''), true);
+        if (!is_string($nonce) || strlen($nonce) !== SODIUM_CRYPTO_SECRETBOX_NONCEBYTES ||
+            !is_string($cipher) || strlen($cipher) <= SODIUM_CRYPTO_SECRETBOX_MACBYTES) return null;
+        $plaintext = sodium_crypto_secretbox_open($cipher, $nonce, $key);
+        if (!is_string($plaintext)) return null;
+        $credentials = json_decode($plaintext, true);
+        sodium_memzero($plaintext);
+        return is_array($credentials) &&
+            is_string($credentials['username'] ?? null) &&
+            is_string($credentials['password'] ?? null) &&
+            $credentials['username'] !== '' && $credentials['password'] !== ''
+            ? $credentials : null;
+    }
+    function pnvBankSaveTejaratCredentials($username, $password) {
+        $username = trim((string)$username);
+        $password = (string)$password;
+        if ($username === '' || strlen($username) > 150 || strlen($password) < 1 ||
+            strlen($password) > 1024) return false;
+        $path = pnvBankCredentialStorePath();
+        $key = pnvBankCredentialKey();
+        if ($key === null || !pnvBankCredentialPrivatePath($path) || !is_dir(dirname($path))) return false;
+        $plaintext = json_encode(['username'=>$username,'password'=>$password],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($plaintext)) return false;
+        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $cipher = sodium_crypto_secretbox($plaintext, $nonce, $key);
+        sodium_memzero($plaintext);
+        $envelope = [
+            'version'=>1,'bank'=>'tejarat',
+            'nonce'=>base64_encode($nonce),'ciphertext'=>base64_encode($cipher),
+        ];
+        return pnvBankSaveJson($path, $envelope);
+    }
+    function pnvBankDeleteTejaratCredentials() {
+        $path = pnvBankCredentialStorePath();
+        if (!pnvBankCredentialPrivatePath($path)) return false;
+        if (!file_exists($path)) return true;
+        return is_file($path) && unlink($path);
+    }
     function pnvBankVerifySignature($raw, $ts, $signature, array $config, $now = null) {
         $now = $now ?? time();
         $secret = (string)($config['shared_secret'] ?? '');
