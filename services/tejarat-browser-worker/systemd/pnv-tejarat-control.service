@@ -1,0 +1,28 @@
+[Unit]
+Description=PNV Tejarat read-only login control (Unix socket)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tejarat-browser
+Group=www-data
+WorkingDirectory=/opt/tejarat-browser-test/services/tejarat-browser-worker
+ExecStart=/opt/tejarat-browser-test/venv/bin/python -m worker.control_server
+Environment=PNV_TEJARAT_ALLOWED_UID=33
+Environment=PNV_TEJARAT_CONTROL_SOCKET=/run/pnv-tejarat-control/control.sock
+Environment=PNV_TEJARAT_TEST_ROOT=/opt/tejarat-browser-test
+Environment=PNV_WORKER_STORAGE=/opt/tejarat-browser-test/session
+Environment=TEJARAT_LOGIN_HEADLESS=false
+Environment=DISPLAY=:91
+Environment=PYTHONDONTWRITEBYTECODE=1
+RuntimeDirectory=pnv-tejarat-control
+RuntimeDirectoryMode=0770
+UMask=0007
+ProtectSystem=full
+NoNewPrivileges=true
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
