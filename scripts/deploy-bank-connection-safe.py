@@ -108,10 +108,8 @@ def main():
         user = pwd.getpwnam(args.php_user)
         os.chown(private,user.pw_uid,user.pw_gid)
         private.chmod(0o700)
-        if index.read_bytes() != original_index or any(
-            (root/f).read_bytes() if (root/f).exists() else None
-            != original_files[f] for f in ()):  # index race guard
-            raise RuntimeError("STOP files changed since dry-run")
+        if index.read_bytes() != original_index:
+            raise RuntimeError("STOP index changed since dry-run")
         for f in FILES:
             existing = (root/f).read_bytes() if (root/f).exists() else None
             if existing != original_files[f]:
