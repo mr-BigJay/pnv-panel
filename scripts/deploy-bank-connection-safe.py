@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Selective production install for Tejarat bank connection, dry-run by default.
+
+Does NOT change instant_pay, XUI, payments, existing Bale/PostBank or cron.
+No bank requests are performed. Customized admin index is patched in place.
+"""
+import argparse
+import os
+from pathlib import Path
+import pwd
+import shutil
+import subprocess
+import sys
+import tempfile
+
+FILES = ("bank_connection_lib.php", "bank-transaction-webhook.php",
+         "admin/bank-connection.php")
+BANK_MENU = """<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=bank-connection'), ENT_QUOTES, 'UTF-8'); ?>">
+اتصال بانک
+</a>
+
+"""
+BANK_PAGE = """<?php if($page=='bank-connection'){ ?>
+<?php pnvAdminInclude('bank-connection.php'); ?>
+<?php } ?>
+
+"""
+
+def patch_index(content: str) -> str:
+    menu = '<a href="<?php echo htmlspecialchars(pnvAdminUrl(\'bale.php\'), ENT_QUOTES, \'UTF-8\'); ?>">'
+    page = "<?php if($page=='cards'){ ?>"
+    if BANK_MENU not in content:
+        if content.count(menu) != 1:
+            raise RuntimeError("STOP custom navigation anchor differs; no changes")
+        content = content.replace(menu, BANK_MENU + menu, 1)
+    if BANK_PAGE not in content:
+        if content.count(page) != 1:
+            raise RuntimeError("STOP custom cards page anchor differs; no changes")
+        content = content.replace(page, BANK_PAGE + page, 1)
+    return content
+
+def php_lint(path: Path) -> None:
+    r = subprocess.run(["php", "-l", str(path)], capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError("STOP PHP lint failed: " + str(path) + " : " + r.stderr)
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--source", required=True)
+    p.add_argument("--root", default="/var/www/html")
+    p.add_argument("--apply", action="store_true")
+    p.add_argument("--backup-dir", default="/root")
+    p.add_argument("--php-user", default="www-data")
+    p.add_argument("--no-reload", action="store_true")
+    args = p.parse_args()
+    source = Path(args.source).resolve(strict=True)
+    root = Path(args.root).resolve(strict=True)
+    index = root / "admin/index.php"
+    if not index.is_file() or index.is_symlink():
+        raise RuntimeError("STOP missing custom production admin index")
+    target_files = {f: root/f for f in FILES}
+    for f in FILES:
+        if not (source/f).is_file():
+            raise RuntimeError("STOP missing source: " + f)
+        if (root/f).is_symlink():
+            raise RuntimeError("STOP symlink target: " + f)
+    original_index = index.read_bytes()
+    original_files = {f: (root/f).read_bytes() if (root/f).exists() else None for f in FILES}
+    new_index = patch_index(original_index.decode("utf-8")).encode("utf-8")
+    new_files = {f: (source/f).read_bytes() for f in FILES}
+    with tempfile.TemporaryDirectory(prefix="pnv-bank-stage-") as td:
+        stage = Path(td)
+        for f in FILES:
+            dest = stage/f
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(new_files[f])
+            php_lint(dest)
+        idx = stage/"admin/index.php"
+        idx.parent.mkdir(parents=True, exist_ok=True)
+        idx.write_bytes(new_index)
+        php_lint(idx)
+        print("PHP LINT PASS (4 files)")
+        changed = [f for f in FILES if original_files[f] != new_files[f]]
+        if original_index != new_index:
+            changed.append("admin/index.php")
+        print("Changes:", ", ".join(changed) if changed else "(none)")
+        if not changed:
+            print("ALREADY INSTALLED")
+            return
+        if not args.apply:
+            print("SAFE DRY RUN PASS; production unchanged")
+            return
+        if os.geteuid() != 0:
+            raise RuntimeError("STOP root needed only for apply")
+        backup_dir = Path(tempfile.mkdtemp(prefix="pnv-bank-before-",dir=args.backup_dir))
+        backup_dir.chmod(0o700)
+        for f in changed:
+            file = root/f
+            if file.exists():
+                dest = backup_dir/f
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file,dest)
+        private = Path("/var/lib/pnv-panel")
+        if not private.exists():
+            private.mkdir(mode=0o700,parents=True)
+        if private.is_symlink():
+            raise RuntimeError("STOP private bank directory is symlink")
+        user = pwd.getpwnam(args.php_user)
+        os.chown(private,user.pw_uid,user.pw_gid)
+        private.chmod(0o700)
+        if index.read_bytes() != original_index or any(
+            (root/f).read_bytes() if (root/f).exists() else None
+            != original_files[f] for f in ()):  # index race guard
+            raise RuntimeError("STOP files changed since dry-run")
+        for f in FILES:
+            existing = (root/f).read_bytes() if (root/f).exists() else None
+            if existing != original_files[f]:
+                raise RuntimeError("STOP concurrent modification: " + f)
+        installed = []
+        try:
+            for f in changed:
+                dest = root/f
+                staged_bytes = new_index if f == "admin/index.php" else new_files[f]
+                dest.parent.mkdir(parents=True,exist_ok=True)
+                ref = dest if dest.exists() else index
+                st = ref.stat()
+                fd,tmp = tempfile.mkstemp(prefix=".pnv-bank-", dir=str(dest.parent))
+                try:
+                    with os.fdopen(fd,"wb") as stream:
+                        stream.write(staged_bytes)
+                    os.chown(tmp, st.st_uid, st.st_gid)
+                    os.chmod(tmp, st.st_mode & 0o777)
+                    os.replace(tmp,dest)
+                finally:
+                    if os.path.exists(tmp):
+                        os.unlink(tmp)
+                installed.append(f)
+            for f in changed:
+                php_lint(root/f)
+            if not args.no_reload:
+                subprocess.run(["systemctl","reload","php8.3-fpm"],check=True)
+        except Exception:
+            for f in reversed(installed):
+                backup = backup_dir/f
+                if backup.exists():
+                    shutil.copy2(backup, root/f)
+                elif (root/f).exists():
+                    (root/f).unlink()
+            if not args.no_reload:
+                subprocess.run(["systemctl","reload","php8.3-fpm"],check=False)
+            print("ROLLBACK COMPLETED",file=sys.stderr)
+            raise
+        print("BANK CONNECTION FILES INSTALLED; STILL DRY-RUN/DISABLED BY DEFAULT")
+        print("BACKUP:",backup_dir)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        print(str(exc),file=sys.stderr)
+        sys.exit(1)
