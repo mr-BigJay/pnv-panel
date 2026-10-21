@@ -66,6 +66,10 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     default_log = "https://hb.tejaratbank.ir/account/log"
     bank_url = _env("TEJARAT_BANK_URL", default_log)
     stmt_url = _env("TEJARAT_STATEMENT_URL", bank_url or default_log)
+    from urllib.parse import urlparse
+    bank_dest = urlparse(stmt_url)
+    if bank_dest.scheme != "https" or bank_dest.hostname != "hb.tejaratbank.ir":
+        raise ValueError("statement URL must belong to hb.tejaratbank.ir")
     headless = _env("TEJARAT_HEADLESS", "true").lower() in ("1", "true", "yes")
     login_required_flag = _env("TEJARAT_FORCE_LOGIN_REQUIRED", "").lower() in ("1", "true", "yes")
 
@@ -190,6 +194,7 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
                     txs.append(parsed)
 
             context.storage_state(path=str(state_file))
+            state_file.chmod(0o600)
             context.close()
             browser.close()
     except Exception as exc:  # noqa: BLE001 — surface class only
