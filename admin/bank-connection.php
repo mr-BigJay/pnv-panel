@@ -15,6 +15,7 @@ $notice = '';
 $error = '';
 $showSecret = '';
 $viewTab = 'tejarat';
+$nextWizardStep = null;
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) {
         $error = 'نشست امنیتی معتبر نیست. صفحه را تازه کنید.';
@@ -24,7 +25,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $username = (string)($_POST['bank_username'] ?? '');
             $password = (string)($_POST['bank_password'] ?? '');
             if (pnvBankSaveTejaratCredentials($username, $password)) {
-                $notice = 'اطلاعات ورود تجارت به‌صورت رمزگذاری‌شده در فضای خصوصی سرور ذخیره شد.';
+                $notice = 'اطلاعات ورود با موفقیت و به‌صورت رمزگذاری‌شده ذخیره شد. مرحله بعد: ورود اولیه.';
+                $nextWizardStep = 2;
             } else {
                 $error = 'ذخیره امن انجام نشد. کلید رمزگذاری سرور یا اطلاعات ورودی را بررسی کنید.';
             }
@@ -34,6 +36,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $error = 'برای حذف اطلاعات ورود، تأیید حذف را انتخاب کنید.';
             } elseif (pnvBankDeleteTejaratCredentials()) {
                 $notice = 'اطلاعات ورود ذخیره‌شده حذف شد.';
+                $nextWizardStep = 1;
             } else {
                 $error = 'حذف اطلاعات ورود ناموفق بود.';
             }
@@ -55,8 +58,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $error = 'ذخیره تنظیمات تراکنش ناموفق بود. مسیر خصوصی /var/lib/pnv-panel و شماره کارت ۱۶ رقمی را بررسی کنید.';
             } else {
                 $cfg = pnvBankLoadConfig();
-                $notice = 'تنظیمات دریافت تراکنش ذخیره شد؛ این کار به معنی اتصال موفق به بانک نیست.';
+                $notice = 'تنظیمات ذخیره شد. اتصال واقعی بانک هنوز باید جداگانه آزمایش شود.';
+                $nextWizardStep = 3;
             }
+        } elseif ($action === 'check_readiness') {
+            // Read-only preflight: this never tests a bank session or changes payment status.
+            $nextWizardStep = 3;
+            $notice = 'بررسی محلی تنظیمات انجام شد. نتیجه و موارد باقی‌مانده در پایین صفحه دیده می‌شوند؛ این بررسی به معنی اتصال به بانک نیست.';
         } else {
             $error = 'درخواست تنظیمات ناشناخته است.';
         }
@@ -67,55 +75,162 @@ $card = (string)($cfg['destination_card'] ?? '');
 $enabled = !empty($cfg['enabled']);
 $live = $enabled && empty($cfg['dry_run']);
 $credentialsStatus = pnvBankTejaratCredentialsStatus();
+$stepParam = (string)($_GET['step'] ?? '');
+$requestedStep = in_array($stepParam, ['1', '2', '3'], true) ? intval($stepParam) : null;
+$wizardStep = $nextWizardStep ?? $requestedStep ?? ($credentialsStatus === 'configured' ? 2 : 1);
+$hasCard = strlen(pnvBankDigits($card)) === 16;
+$hasFeedSecret = strlen((string)($cfg['shared_secret'] ?? '')) >= 32;
+$readyConfig = $hasCard && $hasFeedSecret && $enabled;
 ?>
-<div class="box" style="direction:rtl;max-width:920px;line-height:1.9">
-<h2 style="margin-bottom:8px">اتصال بانک</h2>
-<p style="color:#94a3b8">مدیریت اتصال حساب‌ها و تطبیق خودکار واریزی‌ها با مبالغ پنل</p>
-<div role="tablist" aria-label="انتخاب بانک" style="display:flex;gap:10px;margin:20px 0;border-bottom:1px solid #475569;padding-bottom:12px">
-  <div role="tab" aria-selected="true" style="background:#2563eb;color:#fff;padding:9px 23px;border-radius:12px;font-weight:bold">بانک تجارت</div>
-</div>
-<?php if ($notice): ?><p role="status" style="color:#86efac"><?= $h($notice) ?></p><?php endif; ?>
-<?php if ($error): ?><p role="alert" style="color:#fca5a5"><?= $h($error) ?></p><?php endif; ?>
-<h3>اتصال حساب تجارت</h3>
-<p><strong>وضعیت:</strong> <?= $credentialsStatus === 'configured' ? 'اطلاعات ورود رمزگذاری و ذخیره شده؛ اتصال بانکی هنوز تأیید نشده' : ($credentialsStatus === 'invalid' ? 'اطلاعات ورود ذخیره‌شده قابل بازیابی نیست (کلید/فایل را بررسی کنید)' : 'اطلاعات ورود تنظیم نشده') ?></p>
-<p style="color:#cbd5e1">نام کاربری و رمز عبور اینترنت‌بانک اختیاری هستند. فقط در صورت نیاز به دسترسی حساب وارد شوند؛ برای ورود اولیه یا تمدید نشست ممکن است احراز هویت دومرحله‌ای بانک لازم باشد. این فرم خودش ورود به بانک یا تأیید پرداخت انجام نمی‌دهد.</p>
-<form method="post" action="<?= $h(pnvAdminUrl('index.php?page=banks')) ?>" autocomplete="off">
-  <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">
-  <input type="hidden" name="action" value="save_credentials">
-  <label for="tejarat-username" style="display:block;margin-top:12px">نام کاربری اینترنت‌بانک تجارت</label>
-  <input id="tejarat-username" name="bank_username" type="text" dir="ltr" autocomplete="off" maxlength="150" required placeholder="<?= $credentialsStatus === 'configured' ? 'برای تغییر، نام کاربری جدید را وارد کنید' : 'نام کاربری اینترنت‌بانک' ?>">
-  <label for="tejarat-password" style="display:block;margin-top:12px">رمز عبور اینترنت‌بانک تجارت</label>
-  <input id="tejarat-password" name="bank_password" type="password" dir="ltr" autocomplete="new-password" maxlength="1024" required placeholder="<?= $credentialsStatus === 'configured' ? 'برای تغییر، رمز عبور جدید را وارد کنید' : 'رمز ورود' ?>">
-  <p style="color:#94a3b8;font-size:13px">رمز عبور بعد از ذخیره در فرم نمایش داده نمی‌شود. رمز پویا، کد پیامکی و OTP را اینجا وارد نکنید.</p>
-  <button type="submit" style="margin-top:12px">ذخیره امن اطلاعات ورود</button>
-</form>
-<?php if ($credentialsStatus !== 'not_configured'): ?>
-<form method="post" action="<?= $h(pnvAdminUrl('index.php?page=banks')) ?>" style="margin:14px 0 26px">
-  <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">
-  <input type="hidden" name="action" value="delete_credentials">
-  <label><input type="checkbox" name="confirm_delete" value="1" required> تأیید حذف اطلاعات ورود ذخیره‌شده</label>
-  <button type="submit" style="background:#991b1b">حذف اطلاعات ورود تجارت</button>
-</form>
-<?php endif; ?>
-<hr style="border:0;border-top:1px solid #475569;margin:24px 0">
-<h3>تنظیمات دریافت و تطبیق واریزی‌ها</h3>
-<p><strong>وضعیت پردازش:</strong> <?= !$enabled ? 'غیرفعال' : ($live ? 'پذیرش تراکنش و امکان تأیید خودکار فعال شده' : 'حالت آزمایشی، بدون تأیید پرداخت') ?></p>
-<form method="post" action="<?= $h(pnvAdminUrl('index.php?page=banks')) ?>" autocomplete="off">
-  <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">
-  <label for="tejarat-card" style="display:block;margin-top:12px">شماره کارت تجارت مقصد (۱۶ رقم)</label>
-  <input id="tejarat-card" name="destination_card" dir="ltr" inputmode="numeric" value="<?= $h($card) ?>" maxlength="24" placeholder="شماره کارت واریز">
-  <label for="tejarat-feed-key" style="display:block;margin-top:12px">کلید ارتباط امن با منبع گردش حساب</label>
-  <input id="tejarat-feed-key" type="password" dir="ltr" name="shared_secret" autocomplete="new-password" placeholder="<?= strlen((string)($cfg['shared_secret'] ?? '')) >= 32 ? 'کلید موجود است؛ برای نگه داشتن خالی بگذارید' : 'ابتدا یک کلید ایجاد کنید' ?>">
-  <label style="display:block;margin:10px 0"><input type="checkbox" name="enabled" value="1" <?= $enabled ? 'checked' : '' ?>> دریافت تراکنش امضاشده فعال باشد</label>
-  <label style="display:block;margin:10px 0"><input type="checkbox" name="enable_live" value="1" <?= $live ? 'checked' : '' ?>> پس از آزمایش کامل منبع معتبر، تأیید خودکار فعال شود</label>
-  <div style="display:flex;gap:10px;flex-wrap:wrap">
-    <button type="submit" name="action" value="save_feed">ذخیره تنظیمات تراکنش</button>
-    <button type="submit" name="action" value="generate_secret" style="background:#475569">تولید کلید اتصال</button>
+
+<style>
+.pnvBankWizard{max-width:960px;margin:auto;direction:rtl;line-height:1.9;color:#e2e8f0}
+.pnvBankWizard *{box-sizing:border-box}
+.pnvBankWizard .bankSubtitle{color:#94a3b8;margin:0 0 20px}
+.pnvBankWizard .bankStepper{display:flex;align-items:center;gap:8px;margin:18px 0 26px;padding:14px 9px;background:#0f172a;border:1px solid #334155;border-radius:16px}
+.pnvBankWizard .bankStep{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;color:#94a3b8;padding:8px 5px;border-radius:11px;font-size:13px;white-space:nowrap}
+.pnvBankWizard .bankStep.isActive{color:#fff;background:#1d4ed8}
+.pnvBankWizard .bankStep.isVisited:not(.isActive){color:#a5b4fc}
+.pnvBankWizard .bankStepNo{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;width:30px;height:30px;background:#334155;color:#e2e8f0;font-weight:bold;flex:none}
+.pnvBankWizard .bankStep.isActive .bankStepNo{background:#eff6ff;color:#1d4ed8}
+.pnvBankWizard .bankDivider{height:2px;width:10px;background:#475569;flex:none}
+.pnvBankWizard .bankPanel{background:#0f172a;border:1px solid #334155;border-radius:16px;padding:20px}
+.pnvBankWizard .bankPanel h3{margin:0 0 6px}
+.pnvBankWizard .bankHint{color:#94a3b8;font-size:13px;line-height:1.9;margin:8px 0 14px}
+.pnvBankWizard .bankNote{background:#1e293b;border:1px solid #475569;border-radius:12px;padding:13px;margin:14px 0;font-size:14px}
+.pnvBankWizard .bankError{color:#fecaca;background:#7f1d1d;padding:12px;border-radius:11px}
+.pnvBankWizard .bankOK{color:#bbf7d0;background:#14532d;padding:12px;border-radius:11px}
+.pnvBankWizard label.bankLabel{display:block;margin:12px 0 5px}
+.pnvBankWizard .bankField{width:100%;background:#1e293b;color:#fff;padding:12px;border:1px solid #475569;border-radius:10px;font:inherit;font-size:14px}
+.pnvBankWizard .bankActions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.pnvBankWizard .bankAction{display:inline-flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;background:#2563eb;color:#fff;border:0;border-radius:11px;padding:11px 16px;font:inherit;font-size:14px;cursor:pointer}
+.pnvBankWizard .bankAction.secondary{background:#334155}
+.pnvBankWizard .bankAction.danger{background:#991b1b}
+.pnvBankWizard .bankAction[disabled]{opacity:.55;cursor:not-allowed}
+.pnvBankWizard .bankCheckRow{display:flex;align-items:center;gap:8px;margin:11px 0}
+.pnvBankWizard .bankCheckRow input{width:auto;flex:none}
+.pnvBankWizard .bankProgress{display:grid;gap:6px;padding:0;margin:12px 0;list-style:none}
+.pnvBankWizard .bankProgress li{border-bottom:1px solid #334155;padding:7px 0;font-size:14px}
+.pnvBankWizard .bankBadge{color:#fbbf24}
+.pnvBankWizard .bankStatus{font-size:14px;padding:12px;background:#1e293b;border-radius:12px;margin-bottom:15px}
+@media(max-width:660px){
+ .pnvBankWizard .bankStepper{gap:3px;padding:8px 4px}
+ .pnvBankWizard .bankStep{font-size:11px;flex-direction:column;gap:3px;white-space:normal;line-height:1.3;text-align:center;padding:8px 3px}
+ .pnvBankWizard .bankStepNo{width:26px;height:26px}
+ .pnvBankWizard .bankDivider{width:6px}
+ .pnvBankWizard .bankPanel{padding:14px}
+}
+</style>
+<div class="box pnvBankWizard">
+  <h2 style="margin:0 0 4px">اتصال بانک</h2>
+  <p class="bankSubtitle">راه‌اندازی مرحله‌به‌مرحله تأیید واریزها، مشابه خرید و تمدید اشتراک</p>
+  <div role="tablist" aria-label="انتخاب بانک" style="margin:12px 0">
+    <span role="tab" aria-selected="true" style="display:inline-block;padding:8px 20px;background:#2563eb;color:white;border-radius:11px">بانک تجارت</span>
   </div>
-</form>
-<?php if ($showSecret): ?>
-<p style="color:#fcd34d">کلید جدید فقط همین بار نمایش داده می‌شود؛ آن را محرمانه در Worker مجاز ذخیره کنید.</p>
-<textarea readonly dir="ltr" rows="2" style="width:100%"><?= $h($showSecret) ?></textarea>
-<?php endif; ?>
-<p style="font-size:14px;color:#94a3b8">آدرس دریافت تراکنش از منبع معتبر: <code dir="ltr">/bank-transaction-webhook.php</code>. تا زمانی که اطلاعات واقعی و امضاشده بانک به این مسیر نرسد، پرداخت‌ها به‌صورت خودکار تأیید نمی‌شوند.</p>
+
+  <nav class="bankStepper" aria-label="مراحل راه‌اندازی بانک تجارت">
+    <?php foreach ([1 => 'اطلاعات حساب', 2 => 'ورود و پیامک', 3 => 'تست و فعال‌سازی'] as $num => $label): ?>
+      <?php if ($num > 1): ?><span class="bankDivider" aria-hidden="true"></span><?php endif; ?>
+      <a href="<?= $h(pnvAdminUrl('index.php?page=banks&step=' . $num)) ?>" class="bankStep <?= $wizardStep === $num ? 'isActive' : ($num < $wizardStep ? 'isVisited' : '') ?>" <?= $wizardStep === $num ? 'aria-current="step"' : '' ?>>
+        <span class="bankStepNo"><?= $num ?></span><span><?= $h($label) ?></span>
+      </a>
+    <?php endforeach; ?>
+  </nav>
+
+  <?php if ($notice): ?><p role="status" class="bankOK"><?= $h($notice) ?></p><?php endif; ?>
+  <?php if ($error): ?><p role="alert" class="bankError"><?= $h($error) ?></p><?php endif; ?>
+
+  <?php if ($wizardStep === 1): ?>
+    <section class="bankPanel" aria-labelledby="bank-title-one">
+      <h3 id="bank-title-one">مرحله ۱ از ۳ — اطلاعات حساب تجارت</h3>
+      <p class="bankHint">نام کاربری و رمز عبور به‌شکل رمزگذاری‌شده و خارج از پوشه عمومی وب ذخیره می‌شوند. اگر قبلاً وارد کرده‌ای، دوباره لازم نیست.</p>
+      <div class="bankStatus"><strong>وضعیت اطلاعات ورود:</strong>
+        <?= $credentialsStatus === 'configured' ? 'ذخیره‌شده و قابل‌بازیابی' : ($credentialsStatus === 'invalid' ? 'خطا در بازیابی رمز؛ کلید سرور را بررسی کن' : 'هنوز ذخیره نشده') ?>
+      </div>
+      <form method="post" action="<?= $h(pnvAdminUrl('index.php?page=banks&step=1')) ?>" autocomplete="off">
+        <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">
+        <input type="hidden" name="action" value="save_credentials">
+        <label class="bankLabel" for="tejarat-username">نام کاربری اینترنت‌بانک</label>
+        <input class="bankField" id="tejarat-username" name="bank_username" type="text" dir="ltr" maxlength="150" autocomplete="off" required placeholder="نام کاربری اینترنت‌بانک تجارت">
+        <label class="bankLabel" for="tejarat-password">رمز عبور</label>
+        <input class="bankField" id="tejarat-password" name="bank_password" type="password" dir="ltr" maxlength="1024" autocomplete="new-password" required placeholder="رمز عبور اینترنت‌بانک">
+        <p class="bankHint">رمز پس از ذخیره نمایش داده نمی‌شود. کد پیامکی، رمز پویا و OTP را اینجا وارد نکن.</p>
+        <div class="bankActions">
+          <button class="bankAction" type="submit">ذخیره و ادامه</button>
+          <?php if ($credentialsStatus === 'configured'): ?>
+          <a class="bankAction secondary" href="<?= $h(pnvAdminUrl('index.php?page=banks&step=2')) ?>">قبلاً ذخیره کردم؛ ادامه</a>
+          <?php endif; ?>
+        </div>
+      </form>
+      <?php if ($credentialsStatus !== 'not_configured'): ?>
+        <form method="post" action="<?= $h(pnvAdminUrl('index.php?page=banks&step=1')) ?>" style="margin-top:22px">
+          <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">
+          <input type="hidden" name="action" value="delete_credentials">
+          <label class="bankCheckRow"><input type="checkbox" name="confirm_delete" value="1" required> تأیید حذف اطلاعات ورود ذخیره‌شده</label>
+          <button class="bankAction danger" type="submit">حذف اطلاعات ورود</button>
+        </form>
+      <?php endif; ?>
+    </section>
+  <?php elseif ($wizardStep === 2): ?>
+    <section class="bankPanel" aria-labelledby="bank-title-two">
+      <h3 id="bank-title-two">مرحله ۲ از ۳ — ورود اولیه و تأیید پیامکی</h3>
+      <div class="bankStatus"><strong>وضعیت:</strong> <?= $credentialsStatus === 'configured' ? 'اطلاعات حساب ذخیره شده؛ نشست وب‌بانک هنوز تأیید نشده است.' : 'برای شروع، ابتدا اطلاعات حساب را در مرحله اول ثبت کن.' ?></div>
+      <p>طبق روشی که گفتی، دفعه اول بانک کد تأیید رو پیامک می‌کنه و بعد از تأیید ممکنه ورودهای بعدی فقط با رمز انجام بشن؛ البته هر زمان بانک دوباره احراز هویت بخواد، باید اون رو انجام بدی.</p>
+      <ol style="padding-right:22px">
+        <li>ورود اولیه رو در مرورگر رسمی بانک تجارت و با نشست اختصاصی Worker انجام بده.</li>
+        <li>کد پیامکی رو <strong>فقط در صفحه رسمی بانک</strong> وارد کن؛ هیچ کدی رو داخل پنل ما قرار نده.</li>
+        <li>وقتی گردش حساب قابل مشاهده شد، می‌تونی به تنظیمات مرحله سوم بری.</li>
+      </ol>
+      <div class="bankNote"><strong>مهم:</strong> بازکردن وب‌بانک روی رایانه شخصی، نشست مرورگر Worker روی سرور رو به‌طور خودکار وصل نمی‌کنه. فعلاً ورود تعاملی Worker باید در مرورگر قابل‌مشاهده روی سرور انجام بشه؛ این صفحه هنوز به سیستم ورود زنده بانک متصل نیست.</div>
+      <div class="bankActions">
+        <a class="bankAction secondary" href="<?= $h(pnvAdminUrl('index.php?page=banks&step=1')) ?>">مرحله قبل</a>
+        <a class="bankAction" href="https://hb.tejaratbank.ir/" rel="noopener noreferrer" target="_blank">بازکردن وب‌بانک تجارت <span aria-hidden="true" style="margin-right:6px">↗</span></a>
+        <a class="bankAction" href="<?= $h(pnvAdminUrl('index.php?page=banks&step=3')) ?>">ادامه به تنظیمات و تست</a>
+      </div>
+    </section>
+  <?php else: ?>
+    <section class="bankPanel" aria-labelledby="bank-title-three">
+      <h3 id="bank-title-three">مرحله ۳ از ۳ — آزمایش و تأیید واریزی‌ها</h3>
+      <div class="bankStatus"><strong>وضعیت بانک:</strong> اتصال واقعی و نشست معتبر بانک از این صفحه هنوز قابل تأیید نیست.</div>
+      <p class="bankHint">بعد از راه‌اندازی Worker فقط‌خواندن، تراکنش‌های واقعی باید با امضای معتبر از بانک تجارت به پنل برسن و مبلغ دقیق، کارت مقصد و شناسه یکتای تراکنش با سفارش تطبیق داده بشن.</p>
+      <form method="post" action="<?= $h(pnvAdminUrl('index.php?page=banks&step=3')) ?>" autocomplete="off">
+        <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">
+        <label class="bankLabel" for="tejarat-card">شماره کارت تجارت مقصد (۱۶ رقم)</label>
+        <input class="bankField" id="tejarat-card" name="destination_card" dir="ltr" inputmode="numeric" maxlength="24" value="<?= $h($card) ?>" placeholder="شماره کارت واریز">
+        <label class="bankLabel" for="tejarat-feed-key">کلید اتصال امن به دریافت‌کننده تراکنش‌ها</label>
+        <input class="bankField" type="password" dir="ltr" id="tejarat-feed-key" name="shared_secret" autocomplete="new-password" placeholder="<?= $hasFeedSecret ? 'کلید موجود است؛ برای نگه داشتن خالی بگذار' : 'کلید اتصال را تولید کن' ?>">
+        <label class="bankCheckRow"><input type="checkbox" name="enabled" value="1" <?= $enabled ? 'checked' : '' ?>> دریافت تراکنش امضاشده فعال باشد</label>
+        <label class="bankCheckRow"><input type="checkbox" name="enable_live" value="1" <?= $live ? 'checked' : '' ?>> فقط پس از بررسی واقعی منبع بانک، تأیید خودکار را فعال کنم</label>
+        <div class="bankNote">برای جلوگیری از تأیید اشتباه، این گزینه رو تا قبل از اتصال Worker، انجام Dry Run با تراکنش واقعی و تأیید نتیجه خاموش نگه دار.</div>
+        <div class="bankActions">
+          <button class="bankAction" type="submit" name="action" value="save_feed">ذخیره تنظیمات</button>
+          <button class="bankAction secondary" type="submit" name="action" value="generate_secret">تولید کلید امن</button>
+        </div>
+      </form>
+      <?php if ($showSecret): ?>
+        <p class="bankHint">کلید تازه تولیدشده فقط همین بار نمایش داده می‌شود؛ آن را فقط در محیط امن Worker ذخیره کن.</p>
+        <textarea class="bankField" dir="ltr" readonly rows="2"><?= $h($showSecret) ?></textarea>
+      <?php endif; ?>
+      <h4 style="margin-bottom:6px">وضعیت آمادگی تنظیمات</h4>
+      <ul class="bankProgress">
+        <li><?= $credentialsStatus === 'configured' ? '✓' : '○' ?> اطلاعات ورود رمزگذاری‌شده: <?= $credentialsStatus === 'configured' ? 'موجود' : 'ثبت نشده / نامعتبر (برای API رسمی اختیاری)' ?></li>
+        <li><?= $hasCard ? '✓' : '○' ?> شماره کارت تجارت: <?= $hasCard ? 'ثبت شده' : 'ثبت نشده' ?></li>
+        <li><?= $hasFeedSecret ? '✓' : '○' ?> کلید ارتباط امضاشده: <?= $hasFeedSecret ? 'ساخته شده' : 'ساخته نشده' ?></li>
+        <li><?= $enabled ? '✓' : '○' ?> دریافت تراکنش: <?= $enabled ? 'پیکربندی‌شده' : 'غیرفعال' ?></li>
+        <li><span class="bankBadge">!</span> نشست Worker و دریافت گردش حساب واقعی: هنوز تأیید نشده</li>
+      </ul>
+      <div class="bankNote">
+        <strong>جمع‌بندی:</strong> <?= $readyConfig ? 'تنظیمات محلی آماده‌اند، اما بانک هنوز وصل‌شده تلقی نمی‌شود.' : 'برای آزمایش عملی، ابتدا شماره کارت، کلید اتصال و حالت دریافت تراکنش را تنظیم کن.' ?>
+        <span style="display:block;margin-top:6px">آدرس دریافت تراکنش از منبع معتبر: <code dir="ltr">/bank-transaction-webhook.php</code></span>
+      </div>
+      <form method="post" action="<?= $h(pnvAdminUrl('index.php?page=banks&step=3')) ?>">
+        <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">
+        <input type="hidden" name="action" value="check_readiness">
+        <div class="bankActions">
+          <a class="bankAction secondary" href="<?= $h(pnvAdminUrl('index.php?page=banks&step=2')) ?>">مرحله قبل</a>
+          <button class="bankAction" type="submit">بررسی آمادگی تنظیمات (بدون اتصال به بانک)</button>
+        </div>
+      </form>
+    </section>
+  <?php endif; ?>
 </div>
