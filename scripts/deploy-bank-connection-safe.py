@@ -79,6 +79,8 @@ def ensure_private_storage(php_user):
         key = keyfile.read_text(encoding="ascii").strip()
         if len(key) != 64 or any(c not in "0123456789abcdef" for c in key):
             raise RuntimeError("STOP invalid existing credential encryption key")
+        os.chown(keyfile, user.pw_uid, user.pw_gid)
+        keyfile.chmod(0o600)
         return
     if store.exists():
         raise RuntimeError("STOP encrypted credentials exist but key is missing")
