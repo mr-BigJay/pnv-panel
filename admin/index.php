@@ -1032,7 +1032,7 @@ class="supportMenu">
 </a>
 
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=banks'), ENT_QUOTES, 'UTF-8'); ?>">
-بانک‌ها
+اتصال بانک
 </a>
 
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('bale.php'), ENT_QUOTES, 'UTF-8'); ?>">
