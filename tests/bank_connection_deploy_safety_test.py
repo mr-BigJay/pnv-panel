@@ -46,11 +46,24 @@ old_page = """<?php if($page=='bank-connection'){ ?>
 legacy = "<?php // CUSTOM LIVE ?>\\n" + old_menu + old_page
 patched = patch(legacy)
 assert "index.php?page=banks" in patched
-assert "بانک‌ها" in patched
+assert "اتصال بانک" in patched
 assert "|| $page=='bank-connection'" in patched
-assert patched.count("بانک‌ها") == 1
+assert patched.count("اتصال بانک") == 1
 assert patch(patched) == patched
 assert "CUSTOM LIVE" in patched
 print("PASS legacy Bank Connection menu upgrades without losing custom code")
+
+# PR43 already deployed: rename "بانک‌ها" without adding a duplicate.
+banks_menu = """<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=banks'), ENT_QUOTES, 'UTF-8'); ?>">
+بانک‌ها
+</a>
+
+"""
+renamed = patch("<?php // CUSTOM PROD ?>\\n" + banks_menu + old_page)
+assert "اتصال بانک" in renamed and "بانک‌ها" not in renamed
+assert renamed.count("اتصال بانک") == 1
+assert patch(renamed) == renamed
+assert "CUSTOM PROD" in renamed
+print("PASS existing Banks menu safely renamed in place")
 
 print("ALL BANK DEPLOY SAFETY TESTS PASSED")
