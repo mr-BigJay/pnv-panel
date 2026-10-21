@@ -136,6 +136,18 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
             page = context.new_page()
             page.set_default_timeout(int(_env("TEJARAT_PAGE_TIMEOUT_MS", "30000")))
             page.goto(stmt_url, wait_until="domcontentloaded")
+            page.wait_for_timeout(1200)
+            # Never report success just because the URL loaded or rows.count()==0.
+            from worker.control_server import classify
+            view_status = classify(page.url, page.locator("body").inner_text(timeout=5000)[:18000])
+            if view_status != "session_verified":
+                health["session_status"] = "login_required" if view_status in (
+                    "awaiting_first_activation", "awaiting_bank_login", "waiting_bank_auth"
+                ) else "error"
+                health["last_error"] = view_status
+                context.close()
+                browser.close()
+                return [], health
 
             nav_raw = _env("TEJARAT_NAV_STEPS_JSON")
             if nav_raw:
@@ -165,6 +177,16 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
                     browser.close()
                     return [], health
 
+            # Verify authentication remains intact after account/report navigation.
+            view_status = classify(page.url, page.locator("body").inner_text(timeout=5000)[:18000])
+            if view_status != "session_verified":
+                health["session_status"] = "login_required"
+                health["last_error"] = "statement_not_verified_after_navigation"
+                context.close()
+                browser.close()
+                return [], health
+
+            # The report can legitimately contain zero rows.
             rows = page.locator(row_sel)
             count = rows.count()
             for i in range(min(count, 200)):
@@ -193,8 +215,8 @@ def collect_live_transactions() -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 if parsed:
                     txs.append(parsed)
 
-            context.storage_state(path=str(state_file))
-            state_file.chmod(0o600)
+            # Authenticated statement fetched. Session is already managed by the
+            # controller; do not overwrite it from the polling collector.
             context.close()
             browser.close()
     except Exception as exc:  # noqa: BLE001 — surface class only
