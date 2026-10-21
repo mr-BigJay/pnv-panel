@@ -1,0 +1,48 @@
+{
+    "enabled": true,
+    "success_rule": "first_approved_purchase",
+    "tiers": [
+        {
+            "id": "tier_3",
+            "referrals": 3,
+            "percent": 20,
+            "qty": 1,
+            "max_discount_thousands": 0,
+            "enabled": true
+        },
+        {
+            "id": "tier_5",
+            "referrals": 5,
+            "percent": 40,
+            "qty": 1,
+            "max_discount_thousands": 0,
+            "enabled": true
+        },
+        {
+            "id": "tier_10",
+            "referrals": 10,
+            "percent": 100,
+            "qty": 1,
+            "max_discount_thousands": 0,
+            "enabled": true
+        },
+        {
+            "id": "tier_20",
+            "referrals": 20,
+            "percent": 100,
+            "qty": 3,
+            "max_discount_thousands": 0,
+            "enabled": true
+        }
+    ],
+    "new_user_reward": {
+        "enabled": false,
+        "first_purchase_percent": 10,
+        "max_discount_thousands": 0
+    },
+    "referrer_purchase_reward": {
+        "enabled": false,
+        "percent": 5,
+        "monthly_cap_thousands": 500
+    }
+}
