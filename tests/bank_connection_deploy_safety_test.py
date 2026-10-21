@@ -30,4 +30,27 @@ with tempfile.TemporaryDirectory(prefix="pnv-bank-deploy-test-") as td:
     assert "STOP custom navigation anchor differs" in bad.stderr
     assert not (root/"bank_connection_lib.php").exists()
     print("PASS unknown production structure rejected without mutations")
+# Existing deployments with the old Bank Connection link must migrate in place.
+import runpy
+patch = runpy.run_path(str(script))["patch_index"]
+old_menu = """<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=bank-connection'), ENT_QUOTES, 'UTF-8'); ?>">
+اتصال بانک
+</a>
+
+"""
+old_page = """<?php if($page=='bank-connection'){ ?>
+<?php pnvAdminInclude('bank-connection.php'); ?>
+<?php } ?>
+
+"""
+legacy = "<?php // CUSTOM LIVE ?>\\n" + old_menu + old_page
+patched = patch(legacy)
+assert "index.php?page=banks" in patched
+assert "بانک‌ها" in patched
+assert "|| $page=='bank-connection'" in patched
+assert patched.count("بانک‌ها") == 1
+assert patch(patched) == patched
+assert "CUSTOM LIVE" in patched
+print("PASS legacy Bank Connection menu upgrades without losing custom code")
+
 print("ALL BANK DEPLOY SAFETY TESTS PASSED")
