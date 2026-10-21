@@ -57,7 +57,11 @@ def _status(state: str) -> None:
 
 def status() -> dict:
     with _lock:
-        return dict(_state)
+        snapshot = dict(_state)
+    # "Verified" is the result of the last probe, not a perpetual assertion.
+    if snapshot["state"] == "session_verified" and time.time() - snapshot["updated_at"] > 300:
+        snapshot["state"] = "session_stale"
+    return snapshot
 
 
 def _probe(page) -> str:
