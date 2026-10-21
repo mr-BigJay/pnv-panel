@@ -5,6 +5,7 @@ if (!function_exists('pnvAdminIsLoggedIn') || !pnvAdminIsLoggedIn()) {
     exit('Forbidden');
 }
 require_once dirname(__DIR__) . '/bank_connection_lib.php';
+require_once dirname(__DIR__) . '/bank_control_lib.php';
 if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 if (empty($_SESSION['pnv_bank_csrf'])) {
     $_SESSION['pnv_bank_csrf'] = bin2hex(random_bytes(32));
@@ -61,6 +62,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $notice = 'تنظیمات ذخیره شد. اتصال واقعی بانک هنوز باید جداگانه آزمایش شود.';
                 $nextWizardStep = 3;
             }
+        } elseif ($action === 'start_login' || $action === 'check_session') {
+            $nextWizardStep = 2;
+            if ($action === 'start_login' && pnvBankTejaratCredentialsStatus() !== 'configured') {
+                $error = 'ابتدا نام کاربری و رمز حساب را در مرحله اول ذخیره کن.';
+            } else {
+                $workerResult = pnvTejaratControlRequest($action === 'start_login' ? 'start' : 'check');
+                if (!empty($workerResult['ok'])) {
+                    $notice = 'دستور بررسی یا شروع اتصال به سرویس بانک ارسال شد. وضعیت را چند ثانیه بعد تازه کن.';
+                } elseif (($workerResult['code'] ?? '') === 'already_running') {
+                    $notice = 'مرورگر بانک در حال اجراست؛ منتظر نتیجه باش.';
+                } else {
+                    $error = pnvTejaratControlMessage($workerResult['state'] ?? 'unavailable');
+                }
+            }
         } elseif ($action === 'check_readiness') {
             // Read-only preflight: this never tests a bank session or changes payment status.
             $nextWizardStep = 3;
@@ -81,6 +96,7 @@ $wizardStep = $nextWizardStep ?? $requestedStep ?? ($credentialsStatus === 'conf
 $hasCard = strlen(pnvBankDigits($card)) === 16;
 $hasFeedSecret = strlen((string)($cfg['shared_secret'] ?? '')) >= 32;
 $readyConfig = $hasCard && $hasFeedSecret && $enabled;
+$workerLiveStatus = ($wizardStep === 2) ? pnvTejaratControlRequest('status') : ['ok'=>false, 'state'=>'unavailable'];
 ?>
 
 <style>
@@ -174,19 +190,26 @@ $readyConfig = $hasCard && $hasFeedSecret && $enabled;
   <?php elseif ($wizardStep === 2): ?>
     <section class="bankPanel" aria-labelledby="bank-title-two">
       <h3 id="bank-title-two">مرحله ۲ از ۳ — ورود اولیه و تأیید پیامکی</h3>
-      <div class="bankStatus"><strong>وضعیت:</strong> <?= $credentialsStatus === 'configured' ? 'اطلاعات حساب ذخیره شده؛ نشست وب‌بانک هنوز تأیید نشده است.' : 'برای شروع، ابتدا اطلاعات حساب را در مرحله اول ثبت کن.' ?></div>
-      <p>طبق روشی که گفتی، دفعه اول بانک کد تأیید رو پیامک می‌کنه و بعد از تأیید ممکنه ورودهای بعدی فقط با رمز انجام بشن؛ البته هر زمان بانک دوباره احراز هویت بخواد، باید اون رو انجام بدی.</p>
-      <ol style="padding-right:22px">
-        <li>ورود اولیه رو در مرورگر رسمی بانک تجارت و با نشست اختصاصی Worker انجام بده.</li>
-        <li>کد پیامکی رو <strong>فقط در صفحه رسمی بانک</strong> وارد کن؛ هیچ کدی رو داخل پنل ما قرار نده.</li>
-        <li>وقتی گردش حساب قابل مشاهده شد، می‌تونی به تنظیمات مرحله سوم بری.</li>
-      </ol>
-      <div class="bankNote"><strong>مهم:</strong> بازکردن وب‌بانک روی رایانه شخصی، نشست مرورگر Worker روی سرور رو به‌طور خودکار وصل نمی‌کنه. فعلاً ورود تعاملی Worker باید در مرورگر قابل‌مشاهده روی سرور انجام بشه؛ این صفحه هنوز به سیستم ورود زنده بانک متصل نیست.</div>
+      <div class="bankStatus" role="status"><strong>وضعیت مرورگر سرور:</strong>
+        <?= $h(pnvTejaratControlMessage($workerLiveStatus['state'] ?? 'unavailable')) ?>
+      </div>
+      <p class="bankHint">با «شروع اتصال»، Worker تلاش می‌کند نشست قبلی را بررسی کند و در صورت نیاز، صفحه رسمی ورود تجارت را با اطلاعات ذخیره‌شده باز کند. اگر بانک پیامک یا فعال‌سازی درخواست کرد، آن مرحله را فقط در مرورگر قابل‌مشاهده روی سرور تکمیل کن.</p>
+      <div class="bankNote">توجه: صفحه <code dir="ltr">/register</code> ممکن است علاوه بر نام کاربری، شماره همراه ثبت‌شده را بخواهد. این مرحله بدون تعامل در مرورگر رسمی بانک قابل‌تکمیل نیست. همچنین مرورگر سرور باید نمایشگر امن Xvfb/VNC (ترجیحاً فقط از طریق تونل SSH) داشته باشد؛ باز کردن سایت روی رایانه تو نشست سرور را فعال نمی‌کند.</div>
+      <form method="post" action="<?= $h(pnvAdminUrl('index.php?page=banks&step=2')) ?>">
+        <input type="hidden" name="csrf" value="<?= $h($csrf) ?>">
+        <div class="bankActions">
+          <button class="bankAction" type="submit" name="action" value="start_login" <?= $credentialsStatus !== 'configured' ? 'disabled' : '' ?>>شروع اتصال بانک تجارت</button>
+          <button class="bankAction secondary" type="submit" name="action" value="check_session">بررسی نشست ذخیره‌شده</button>
+          <a class="bankAction secondary" href="<?= $h(pnvAdminUrl('index.php?page=banks&step=2')) ?>">تازه‌کردن وضعیت</a>
+        </div>
+      </form>
+      <p class="bankHint">پنل هیچ رمز یک‌بارمصرف یا کد پیامکی از تو دریافت نمی‌کند. OTP را <strong>فقط در صفحه رسمی بانک</strong> داخل نشست امن مرورگر سرور وارد کن.</p>
       <div class="bankActions">
         <a class="bankAction secondary" href="<?= $h(pnvAdminUrl('index.php?page=banks&step=1')) ?>">مرحله قبل</a>
-        <a class="bankAction" href="https://hb.tejaratbank.ir/" rel="noopener noreferrer" target="_blank">بازکردن وب‌بانک تجارت <span aria-hidden="true" style="margin-right:6px">↗</span></a>
-        <a class="bankAction" href="<?= $h(pnvAdminUrl('index.php?page=banks&step=3')) ?>">ادامه به تنظیمات و تست</a>
+        <a class="bankAction secondary" href="https://hb.tejaratbank.ir/login" rel="noopener noreferrer" target="_blank">وب‌بانک رسمی <span aria-hidden="true">↗</span></a>
+        <a class="bankAction" href="<?= $h(pnvAdminUrl('index.php?page=banks&step=3')) ?>">مرحله سوم: تنظیمات و تست</a>
       </div>
+      <div class="bankNote"><strong>محدودیت فعلی:</strong> حتی وضعیت «نشست تأیید شد» به‌معنی دریافت تراکنش یا اجازه تأیید خودکار نیست. Worker دریافت تراکنش باید جداگانه با داده واقعی و حالت آزمایشی تست شود.</div>
     </section>
   <?php else: ?>
     <section class="bankPanel" aria-labelledby="bank-title-three">
