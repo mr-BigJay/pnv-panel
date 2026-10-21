@@ -111,7 +111,13 @@ if(!function_exists('subUsageCachePath')){
         foreach($units as $i => $unit){
             if($value < 1024 || $i === count($units) - 1){
                 $decimals = $value >= 100 ? 0 : ($value >= 10 ? 1 : 2);
-                return rtrim(rtrim(number_format($value, $decimals, '.', ''), '0'), '.') . ' ' . $unit;
+                $formatted = number_format($value, $decimals, '.', '');
+
+                if($decimals > 0){
+                    $formatted = rtrim(rtrim($formatted, '0'), '.');
+                }
+
+                return $formatted . ' ' . $unit;
             }
 
             $value /= 1024;
