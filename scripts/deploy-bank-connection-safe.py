@@ -37,7 +37,7 @@ OLD_BANK_PAGE = """<?php if($page=='bank-connection'){ ?>
 """
 
 def patch_index(content: str) -> str:
-    menu = '<a href="<?php echo htmlspecialchars(pnvAdminUrl(\\'bale.php\\'), ENT_QUOTES, \\'UTF-8\\'); ?>">'
+    menu = '<a href="<?php echo htmlspecialchars(pnvAdminUrl(\'bale.php\'), ENT_QUOTES, \'UTF-8\'); ?>">'
     page = "<?php if($page=='cards'){ ?>"
     if OLD_BANK_MENU in content:
         if content.count(OLD_BANK_MENU) != 1:
@@ -86,7 +86,7 @@ def ensure_private_storage(php_user):
     try:
         os.fchown(fd,user.pw_uid,user.pw_gid)
         with os.fdopen(fd, "w", encoding="ascii") as target:
-            target.write(os.urandom(32).hex() + "\\n")
+            target.write(os.urandom(32).hex() + "\n")
             target.flush()
             os.fsync(target.fileno())
     except BaseException:
