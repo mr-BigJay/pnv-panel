@@ -28,17 +28,20 @@ _busy = False
 
 
 def trusted(url: str) -> bool:
-    p = urlparse(url)
-    return p.scheme == "https" and p.hostname == OFFICIAL and p.port in (None, 443)
+    try:
+        p = urlparse(url)
+        return p.scheme == "https" and p.hostname == OFFICIAL and p.port in (None, 443)
+    except ValueError:
+        return False
 
 
 def classify(url: str, text: str) -> str:
     if not trusted(url):
         return "untrusted_redirect"
     path = urlparse(url).path.lower().rstrip("/")
-    if path.startswith("/account/log") and "گردش حساب" in text and (
+    if path == "/account/log" and "گردش حساب" in text and (
         "گزارش" in text or "تعداد گردش" in text
-    ):
+    ) and ("نمایش" in text or "انتخاب حساب" in text):
         return "session_verified"
     if path.startswith("/register"):
         return "awaiting_first_activation"
@@ -61,9 +64,21 @@ def _probe(page) -> str:
     url = page.url
     if not trusted(url):
         return "untrusted_redirect"
-    # Do not persist DOM or financial details.
+    # Do not persist DOM or financial details. The bank UI may be asynchronous.
     content = page.locator("body").inner_text(timeout=3000)[:18000]
     return classify(url, content)
+
+
+def _persist_session(context, state_file) -> None:
+    """Atomic 0600 session replacement, only after verified authenticated UI."""
+    tmp = state_file.with_name(".playwright_storage.pending")
+    try:
+        context.storage_state(path=str(tmp))
+        tmp.chmod(0o600)
+        tmp.replace(state_file)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
 
 
 def _fill_existing_login(page, username: str, password: str) -> None:
@@ -124,8 +139,7 @@ def _session_job(username: str, password: str, check_only: bool) -> None:
                     status_code = _probe(page)
                 if status_code == "session_verified":
                     # Persist only after authenticated statement interface check.
-                    context.storage_state(path=str(state_file))
-                    state_file.chmod(0o600)
+                    _persist_session(context, state_file)
                     _status("session_verified")
                 elif check_only:
                     _status("login_required" if status_code != "untrusted_redirect" else status_code)
@@ -141,8 +155,7 @@ def _session_job(username: str, password: str, check_only: bool) -> None:
                             _status(new_code)
                             break
                         if new_code == "session_verified":
-                            context.storage_state(path=str(state_file))
-                            state_file.chmod(0o600)
+                            _persist_session(context, state_file)
                             _status("session_verified")
                             break
                         if new_code != status_code:
@@ -180,9 +193,16 @@ def dispatch(msg: dict) -> dict:
         if _busy:
             return {"ok": False, "code": "already_running", **_state}
         _busy = True
-    t = threading.Thread(target=_session_job, args=(username, password, action == "check"), daemon=True)
-    t.start()
-    return {"ok": True, "state": "starting", "updated_at": int(time.time())}
+    _status("starting")
+    try:
+        t = threading.Thread(target=_session_job, args=(username, password, action == "check"), daemon=True)
+        t.start()
+    except RuntimeError:
+        with _lock:
+            _busy = False
+        _status("browser_error")
+        return {"ok": False, "code": "start_failed", **status()}
+    return {"ok": True, **status()}
 
 
 class Handler(socketserver.StreamRequestHandler):
@@ -191,11 +211,12 @@ class Handler(socketserver.StreamRequestHandler):
             raw = self.rfile.readline(4097)
             if not raw or len(raw) > 4096:
                 return
-            if hasattr(socket, "SO_PEERCRED"):
-                uid = struct.unpack("3i", self.request.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[1]
-                allowed = int(os.environ["PNV_TEJARAT_ALLOWED_UID"])
-                if uid != allowed:
-                    return
+            if not hasattr(socket, "SO_PEERCRED"):
+                return  # Linux peer authentication is mandatory.
+            uid = struct.unpack("3i", self.request.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[1]
+            allowed = int(os.environ["PNV_TEJARAT_ALLOWED_UID"])
+            if uid != allowed:
+                return
             request = json.loads(raw)
             if not isinstance(request, dict):
                 return
