@@ -1031,6 +1031,10 @@ class="supportMenu">
 
 </a>
 
+<a href="<?php echo htmlspecialchars(pnvAdminUrl('index.php?page=bank-connection'), ENT_QUOTES, 'UTF-8'); ?>">
+اتصال بانک
+</a>
+
 <a href="<?php echo htmlspecialchars(pnvAdminUrl('bale.php'), ENT_QUOTES, 'UTF-8'); ?>">
 
 بله — پرداخت آنی
@@ -1086,6 +1090,10 @@ pnvAdminInclude('support.php');
 
 <?php pnvAdminInclude('renews.php'); ?>
 
+<?php } ?>
+
+<?php if($page=='bank-connection'){ ?>
+<?php pnvAdminInclude('bank-connection.php'); ?>
 <?php } ?>
 
 <?php if($page=='cards'){ ?>
