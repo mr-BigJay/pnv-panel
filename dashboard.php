@@ -592,7 +592,7 @@ max-width:360px;
 <a class="dashItem" href="coupon.php">
 <span class="dashItemMain">
 <span class="dashItemIcon">%</span>
-<span class="dashItemText">کوپن تخفیف</span>
+<span class="dashItemText">دعوت دوستان و جایزه</span>
 </span>
 <span class="dashItemChevron" aria-hidden="true">‹</span>
 </a>
