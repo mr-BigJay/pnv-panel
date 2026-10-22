@@ -1475,7 +1475,10 @@ if(!function_exists('instantPayPath')){
             return $evidence;
         }
 
-        if(!instantPayShouldApplyStatus($currentStatus, 'paid')){
+        // Only this reconciliation path has verified final provision evidence above.
+        // Keep the generic failed-state guard for all unverified transitions.
+        if($currentStatus !== 'payment_received_provision_failed'
+            && !instantPayShouldApplyStatus($currentStatus, 'paid')){
             return [
                 'ok' => true,
                 'already' => true,
