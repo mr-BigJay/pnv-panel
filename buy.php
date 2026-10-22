@@ -555,7 +555,7 @@ function validateCoupon(){
     if(!hasCouponCheck.checked){ resetCouponResult(); return; }
     if(plan === ''){ couponResult.className = 'couponResult is-error'; couponResult.textContent = 'ابتدا پلن را انتخاب کنید'; return; }
     if(code === ''){ resetCouponResult(); return; }
-    fetch('coupon-api.php?plan=' + encodeURIComponent(plan) + '&code=' + encodeURIComponent(code), { credentials: 'same-origin' })
+    fetch('coupon-api.php?plan=' + encodeURIComponent(plan) + '&code=' + encodeURIComponent(code), { credentials: 'same-origin', cache: 'no-store' })
     .then(function(r){ return r.json(); })
     .then(function(data){
         if(!data.ok){ couponResult.className = 'couponResult is-error'; couponResult.textContent = data.error || 'کد تخفیف معتبر نیست'; return; }
@@ -664,7 +664,8 @@ function renderPay(item){
     }
 
     if(item.status === 'failed'){
-        stopPayWatchers();
+        // Keep polling: an administrator may successfully approve this order later.
+        if(payTickTimer){ clearInterval(payTickTimer); payTickTimer = null; }
         instantStatus.hidden = false;
         instantStatus.textContent = item.message || 'خطا در آماده‌سازی اشتراک';
         instantApproved.hidden = true;
@@ -680,9 +681,12 @@ function renderPay(item){
 }
 
 function pollPayStatus(id){
-    fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials: 'same-origin' })
+    fetch('instant-pay-api.php?action=status&id=' + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store' })
     .then(function(r){ return r.json(); })
-    .then(function(data){ if(data && data.ok && data.item) renderPay(data.item); })
+    .then(function(data){
+        if(!currentPay || currentPay.id !== id || currentPay.status === 'paid') return;
+        if(data && data.ok && data.item && data.item.id === id) renderPay(data.item);
+    })
     .catch(function(){});
 }
 
@@ -891,3 +895,4 @@ document.getElementById('copyLinkBtn').addEventListener('click', function(){ cop
 </script>
 </body>
 </html>
+
