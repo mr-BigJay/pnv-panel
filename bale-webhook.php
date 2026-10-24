@@ -94,24 +94,9 @@ $result = instantPayHandleDepositText($text, pnvNowParts());
 if(!empty($result['ok'])){
     $item = $result['item'] ?? [];
     $paidId = $item['id'] ?? '';
-    $raw = $paidId !== '' ? instantPayGet($paidId) : null;
-    $userLabel = is_array($raw) ? ($raw['user'] ?? '-') : '-';
 
-    $msg = "✅ پرداخت تأیید شد\n"
-        . 'کاربر: ' . $userLabel . "\n"
-        . 'مبلغ: ' . ($item['amount_text'] ?? '-') . "\n"
-        . 'پلن: ' . ($item['plan'] ?? '-') . "\n"
-        . 'کد: ' . ($item['code'] ?? '-');
-
-    if(!empty($item['link'])){
-        $msg .= "\nلینک:\n" . $item['link'];
-    }
-
-    if(!empty($result['matched_via'])){
-        $msg .= "\nمسیر: " . $result['matched_via'];
-    }
-
-    baleSendMessage($chatId, $msg, [], $config);
+    // The persisted payment finalization sends the detailed admin notification.
+    // Do not send a second success message from the webhook.
     echo json_encode(['ok' => true, 'paid' => true, 'id' => $paidId]);
     exit;
 }
