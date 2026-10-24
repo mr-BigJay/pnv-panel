@@ -2937,6 +2937,16 @@ if(!function_exists('xuiConfigPath')){
             ];
         }
 
+        // Notify only after provision and the confirmed payment row are persisted.
+        require_once __DIR__ . '/bale_lib.php';
+        try{
+            baleNotifyPaymentConfirmedRow($payments[$index], $payments[$index][9] ?? '', [
+                'provision' => $result,
+            ]);
+        }catch(Throwable $e){
+            error_log('bale payment confirm notify failed: ' . $e->getMessage());
+        }
+
         return array_merge($result, ['ok' => true, 'already' => $already]);
     }
 

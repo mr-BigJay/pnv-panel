@@ -157,5 +157,41 @@ assertTrue(instantPayAdminRowVisible($expiredRow), 'expired json still visible w
 $meta = instantPayAdminRowStatusMeta($visibleRow);
 assertTrue(($meta['title'] ?? '') === 'در حال بررسی', 'waiting json status label');
 
+$renewRow = [
+    'niknam',
+    'https://vip3.example/sub/abc',
+    '20 گیگ - 250 هزار تومان',
+    'AUTO-9680',
+    '',
+    '',
+    'تایید شد',
+    '',
+    time(),
+    'تمدید',
+    '',
+    '',
+    2499680,
+];
+$renewMsg = baleFormatPaymentConfirmed($renewRow, 'تمدید', [
+    'provision' => ['email' => 'reza001', 'server_id' => 'vip3'],
+]);
+assertTrue(strpos($renewMsg, '✅ واریز تأیید شد') !== false, 'renew notify header');
+assertTrue(strpos($renewMsg, 'تمدید | niknam') !== false, 'renew notify kind line');
+assertTrue(strpos($renewMsg, 'پیگیری: AUTO-9680') !== false, 'renew notify tracking');
+assertTrue(strpos($renewMsg, 'reza001') !== false && strpos($renewMsg, 'vip3') !== false, 'renew notify account/server');
+assertTrue(strpos($renewMsg, 'تمدید شد') !== false, 'renew notify footer');
+
+$buyMsg = baleFormatPaymentConfirmed(array_replace($renewRow, [9 => 'خرید']), 'خرید', [
+    'provision' => ['email' => 'reza001', 'server_id' => 'vip'],
+]);
+assertTrue(strpos($buyMsg, 'خرید | niknam') !== false, 'buy notify kind line');
+assertTrue(strpos($buyMsg, 'اشتراک جدید reza001 در پنل vip ایجاد شد') !== false, 'buy notify footer');
+
+$reservedMsg = baleFormatPaymentConfirmed($renewRow, 'تمدید', [
+    'provision' => ['server_id' => 'vip3', 'renew_outcome' => 'reserved'],
+]);
+assertTrue(strpos($reservedMsg, 'رزرو شد') !== false && strpos($reservedMsg, 'تمدید شد') === false, 'reserved renewal is not announced as already applied');
+assertTrue(baleNotifyPaymentConfirmedRow($renewRow, 'تمدید', ['provision' => ['ok' => false]]) === [], 'failed provision cannot send confirmation');
+
 echo $fail === 0 ? "\nAll passed\n" : "\n$fail failed\n";
 exit($fail === 0 ? 0 : 1);
