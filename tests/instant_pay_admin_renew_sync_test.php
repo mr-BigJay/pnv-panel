@@ -238,6 +238,28 @@ ipSyncAssert(instantPayRecoverConfirmedRenewStatus($waitingItem) === null,
 ipSyncAssert((instantPayGet($orderId)['status'] ?? '') === 'waiting',
     'status poll leaves unverified payment unchanged');
 
+// Purchase and previously failed orders must recover only after verified approval.
+foreach (['خرید', 'تمدید'] as $orderType) {
+    foreach (['waiting', 'expired', 'failed', 'payment_received_provision_failed'] as $oldStatus) {
+        $caseItem = array_merge($waitingItem, ['type' => $orderType, 'status' => $oldStatus]);
+        $caseRow = $csvRow;
+        $caseRow[9] = $orderType;
+        ipWriteCsv($csvPath, $caseRow);
+        file_put_contents($jsonPath, json_encode([$caseItem], JSON_UNESCAPED_UNICODE));
+        ipWriteProvision($locksDir, $caseRow, [
+            'state' => 'done',
+            'transaction_id' => xuiPaymentRowTransactionId($caseRow),
+            'result' => ['ok' => true, 'link' => $renewLink],
+        ]);
+        $result = instantPayRecoverConfirmedRenewStatus($caseItem);
+        ipSyncAssert(($result['status'] ?? '') === 'paid', "$orderType recovers from $oldStatus after approval");
+        @unlink(xuiRenewProvisionStorePath(xuiPaymentRowProvisionKey($caseRow)));
+        file_put_contents($jsonPath, json_encode([$caseItem], JSON_UNESCAPED_UNICODE));
+        ipSyncAssert(instantPayRecoverConfirmedRenewStatus($caseItem) === null,
+            "$orderType stays unconfirmed without evidence ($oldStatus)");
+    }
+}
+
 // Browser contract: existing paid handler transitions directly to step 3;
 // public status API now calls the recovery path before responding.
 $apiSource = file_get_contents(__DIR__ . '/../instant-pay-api.php');
@@ -258,3 +280,4 @@ putenv('PNV_LOCKS_DIR');
 
 echo $fail ? "\n{$fail} instant pay admin renew sync test(s) failed\n" : "All instant pay admin renew sync tests passed\n";
 exit($fail ? 1 : 0);
+

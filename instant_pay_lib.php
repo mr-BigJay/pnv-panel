@@ -1192,13 +1192,14 @@ if(!function_exists('instantPayPath')){
     }
 
     /**
-     * Exact binding between one Instant Pay renewal order and one CSV row.
+     * Exact binding between one Instant Pay purchase/renewal order and one CSV row.
+     * Historical function name retained for existing admin callers.
      * The same user may receive the same 4-digit payment code on different days:
      * tracking alone must never confirm a different/newer order.
      */
     function instantPayRenewOrderBindsCsv(array $item, array $row){
-        if(trim((string)($item['type'] ?? '')) !== 'تمدید'
-            || trim((string)($row[9] ?? '')) !== 'تمدید'
+        if(!in_array(trim((string)($item['type'] ?? '')), ['خرید', 'تمدید'], true)
+            || trim((string)($row[9] ?? '')) !== trim((string)($item['type'] ?? ''))
             || !instantPayInstantOrderMatchesCsvRow($item, $row)){
             return false;
         }
@@ -1227,15 +1228,15 @@ if(!function_exists('instantPayPath')){
     }
 
     /**
-     * Restore a previously confirmed renewal for the authenticated status poll.
+     * Restore a previously confirmed purchase or renewal for the authenticated status poll.
      * Reads existing CSV + provision evidence; never calls a mutating XUI API.
      * Returns a public paid item only when the order match is unique and verified.
      */
     function instantPayRecoverConfirmedRenewStatus(array $item){
         $status = trim((string)($item['status'] ?? ''));
 
-        if($status === 'paid' || $status === 'payment_received_provision_failed'
-            || trim((string)($item['type'] ?? '')) !== 'تمدید'
+        if($status === 'paid'
+            || !in_array(trim((string)($item['type'] ?? '')), ['خرید', 'تمدید'], true)
             || !function_exists('xuiLoadPayments')){
             return null;
         }
@@ -1273,11 +1274,11 @@ if(!function_exists('instantPayPath')){
     }
 
     function instantPayRenewProvisionEvidence(array $row, array $item){
-        if(trim((string)($row[9] ?? '')) !== 'تمدید'){
+        if(!instantPayRenewOrderBindsCsv($item, $row)){
             return [
                 'ok' => false,
                 'code' => 'provision_not_verified',
-                'error' => 'این مسیر فقط برای سفارش تمدید است',
+                'error' => 'سفارش خرید یا تمدید با پرداخت تطابق ندارد',
             ];
         }
 
@@ -1445,15 +1446,6 @@ if(!function_exists('instantPayPath')){
             ];
         }
 
-        if($currentStatus === 'payment_received_provision_failed'){
-            return [
-                'ok' => false,
-                'code' => 'provision_failed',
-                'error' => trim((string)($items[$idx]['provision_error'] ?? 'تمدید اشتراک ناموفق بود')),
-                'item' => instantPayPublicView($items[$idx]),
-            ];
-        }
-
         $evidence = instantPayRenewProvisionEvidence($row, $items[$idx]);
 
         if(empty($evidence['ok'])){
@@ -1483,7 +1475,10 @@ if(!function_exists('instantPayPath')){
             return $evidence;
         }
 
-        if(!instantPayShouldApplyStatus($currentStatus, 'paid')){
+        // Only this reconciliation path has verified final provision evidence above.
+        // Keep the generic failed-state guard for all unverified transitions.
+        if($currentStatus !== 'payment_received_provision_failed'
+            && !instantPayShouldApplyStatus($currentStatus, 'paid')){
             return [
                 'ok' => true,
                 'already' => true,
@@ -2554,3 +2549,4 @@ if(!function_exists('instantPayPath')){
         return null;
     }
 }
+

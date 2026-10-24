@@ -42,7 +42,7 @@ if($action === 'status'){
 
     // Manual admin approval updates the CSV/provision store before the user's
     // existing Instant Pay JSON can be marked paid. Recover the SAME order from
-    // verified provision evidence (no XUI writes or new payment confirmation).
+    // verified provision evidence for purchases and renewals (no XUI writes).
     if(function_exists('instantPayRecoverConfirmedRenewStatus')){
         $recovered = instantPayRecoverConfirmedRenewStatus($item);
 
@@ -157,3 +157,4 @@ if($action === 'create'){
 
 http_response_code(400);
 echo json_encode(['ok' => false, 'error' => 'action نامعتبر']);
+
