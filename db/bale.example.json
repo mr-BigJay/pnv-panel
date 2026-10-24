@@ -6,5 +6,11 @@
   "pay_window_seconds": 1800,
   "match_grace_seconds": 0,
   "webhook_secret": "",
+  "webhook_secret_pending": "",
+  "webhook_secret_enforced": false,
+  "webhook_secret_required": false,
+  "webhook_registered_at": 0,
+  "webhook_last_validated_at": 0,
+  "postbank_forward_bot_id": "",
   "forward_hint": "پیام واریز @postbank_bot را به این بازو فوروارد کنید"
 }
