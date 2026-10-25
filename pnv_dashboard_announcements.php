@@ -1,13 +1,18 @@
 <?php
 if(session_status() !== PHP_SESSION_ACTIVE || empty($_SESSION['user'])){ return; }
 require_once __DIR__ . '/campaign_lib.php';
-$pnvDashboardNotices = array_values(array_filter(
-    campaignUserAnnouncements((string)$_SESSION['user']),
-    static function($row){ return empty($row['is_read']); }
-));
+require_once __DIR__ . '/announcement_display_lib.php';
+$pnvDashboardNotices = campaignUserAnnouncements((string)$_SESSION['user']);
 if(!$pnvDashboardNotices){ return; }
+$pnvAutoNoticeId = pnvAnnouncementReserveDisplay((string)$_SESSION['user'], $pnvDashboardNotices);
 ?>
 <style>
+html{height:auto;min-height:100%;overflow-y:auto}
+body.userPanel--dashboard{height:auto;min-height:100dvh;overflow-y:auto}
+.pnvNoticeList{display:flex;flex-direction:column;gap:8px;margin:4px 0;direction:rtl}
+.pnvNoticeOpen{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;box-sizing:border-box;text-align:right;border:1px solid #475569;border-radius:12px;padding:12px;background:#172554;color:#e2e8f0;font:inherit;font-size:13px;line-height:1.7;cursor:pointer;overflow-wrap:anywhere}
+.pnvNoticeOpen:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}
+
 .pnvNoticeDialog{box-sizing:border-box;width:calc(100% - 32px);max-width:460px;max-height:85vh;max-height:85dvh;margin:auto;padding:0;border:1px solid #475569;border-radius:20px;background:#0f172a;color:#e2e8f0;box-shadow:0 24px 80px #0008;font-family:inherit;direction:rtl;text-align:right;overflow:hidden}
 .pnvNoticeDialog::backdrop{background:rgba(2,6,23,.78);backdrop-filter:blur(4px)}
 .pnvNoticeDialog[open]{display:flex;flex-direction:column}
@@ -21,10 +26,15 @@ if(!$pnvDashboardNotices){ return; }
 .pnvNoticeDialog--warning{border-color:#eab308}
 .pnvNoticeDialog--special{border-color:#a78bfa}
 </style>
+<section class="pnvNoticeList" aria-label="اطلاعیه‌ها">
+<?php foreach($pnvDashboardNotices as $pnvNoticeIndex => $pnvNoticeRow){ ?>
+<button type="button" class="pnvNoticeOpen" data-notice-index="<?php echo $pnvNoticeIndex; ?>" aria-haspopup="dialog" aria-controls="pnvNoticeDialog<?php echo $pnvNoticeIndex; ?>"><span><?php echo htmlspecialchars((string)($pnvNoticeRow['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></span><span aria-hidden="true">‹</span></button>
+<?php } ?>
+</section>
 <?php foreach($pnvDashboardNotices as $pnvNoticeIndex => $pnvNoticeRow){
     $pnvNoticeType = in_array($pnvNoticeRow['type'] ?? '', ['info','success','warning','special'], true) ? $pnvNoticeRow['type'] : 'info';
 ?>
-<dialog class="pnvNoticeDialog pnvNoticeDialog--<?php echo $pnvNoticeType; ?>" aria-labelledby="pnvNoticeTitle<?php echo $pnvNoticeIndex; ?>" data-notice-id="<?php echo htmlspecialchars((string)($pnvNoticeRow['id'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+<dialog id="pnvNoticeDialog<?php echo $pnvNoticeIndex; ?>" data-auto="<?php echo ($pnvAutoNoticeId !== null && (string)$pnvNoticeRow['id'] === $pnvAutoNoticeId) ? '1' : '0'; ?>" class="pnvNoticeDialog pnvNoticeDialog--<?php echo $pnvNoticeType; ?>" aria-labelledby="pnvNoticeTitle<?php echo $pnvNoticeIndex; ?>" data-notice-id="<?php echo htmlspecialchars((string)($pnvNoticeRow['id'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
 <h2 id="pnvNoticeTitle<?php echo $pnvNoticeIndex; ?>"><?php echo htmlspecialchars((string)($pnvNoticeRow['title'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></h2>
 <div class="pnvNoticeText"><?php echo htmlspecialchars((string)($pnvNoticeRow['message'] ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></div>
 <footer><button type="button" autofocus>ادامه</button></footer>
@@ -34,44 +44,24 @@ if(!$pnvDashboardNotices){ return; }
 (function(){
     'use strict';
     const dialogs = Array.from(document.querySelectorAll('.pnvNoticeDialog'));
-    let index = 0;
-    const previousFocus = document.activeElement;
-    function showNext(){
-        if(index < dialogs.length){
-            document.body.appendChild(dialogs[index]);
-            dialogs[index].showModal();
-        } else if(previousFocus && previousFocus.isConnected){ previousFocus.focus(); }
+    let previousFocus = null;
+    function openNotice(dialog){
+        if(!dialog || dialog.open) return;
+        previousFocus = document.activeElement;
+        document.body.appendChild(dialog);
+        dialog.showModal();
     }
     dialogs.forEach(function(dialog){
-        const button = dialog.querySelector('button');
-        dialog.addEventListener('cancel', function(event){
-            event.preventDefault();
-            if(button.disabled) return;
-            // Escape closes without recording acknowledgement.
-            dialog.close(); index++; showNext();
-        });
-        button.addEventListener('click', async function(){
-            if(button.disabled) return;
-            button.disabled = true;
-            const controller = new AbortController();
-            const timer = setTimeout(function(){ controller.abort(); }, 5000);
-            try {
-                const response = await fetch('announcement-api.php', {
-                    method:'POST', credentials:'same-origin', cache:'no-store',
-                    body:new URLSearchParams({action:'dismiss', id:dialog.dataset.noticeId}),
-                    signal:controller.signal
-                });
-                const result = await response.json();
-                if(!response.ok || !result.ok) throw new Error('acknowledgement failed');
-            } catch(error) {
-                // Keep the dashboard accessible; an unsaved notice may reappear next visit.
-            } finally {
-                clearTimeout(timer);
-                dialog.close(); index++; showNext();
-            }
+        dialog.querySelector('button').addEventListener('click', function(){ dialog.close(); });
+        dialog.addEventListener('close', function(){
+            if(previousFocus && previousFocus.isConnected) previousFocus.focus();
         });
     });
-    showNext();
+    document.querySelectorAll('.pnvNoticeOpen').forEach(function(button){
+        button.addEventListener('click', function(){ openNotice(dialogs[Number(button.dataset.noticeIndex)]); });
+    });
+    const automatic = dialogs.find(function(dialog){ return dialog.dataset.auto === '1'; });
+    if(automatic) openNotice(automatic);
 })();
 </script>
-<?php unset($pnvDashboardNotices, $pnvNoticeIndex, $pnvNoticeRow, $pnvNoticeType); ?>
+<?php unset($pnvDashboardNotices, $pnvNoticeIndex, $pnvNoticeRow, $pnvNoticeType, $pnvAutoNoticeId); ?>

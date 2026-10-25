@@ -29,6 +29,7 @@ if(isset($_POST['save_announcement'])){
     $message = trim((string)($_POST['message'] ?? ''));
     $type = trim((string)($_POST['type'] ?? 'info'));
     $priority = max(0, intval($_POST['priority'] ?? 100));
+    $displayLimit = max(0, min(1000, intval($_POST['display_limit'] ?? 1)));
     $status = !empty($_POST['status_active']) ? 'active' : 'inactive';
     $startsAt = campaignParseDateTime($_POST['starts_at'] ?? '');
     $expiresAt = campaignParseDateTime($_POST['expires_at'] ?? '');
@@ -48,6 +49,7 @@ if(isset($_POST['save_announcement'])){
             'message' => $message,
             'type' => $type,
             'priority' => $priority,
+            'display_limit' => $displayLimit,
             'starts_at' => $startsAt,
             'expires_at' => $expiresAt,
             'status' => $status,
@@ -272,6 +274,11 @@ $isActive = ($editRow['status'] ?? 'active') === 'active';
 
 <div class="campaignSection">
 <p class="campaignSectionTitle">تنظیمات</p>
+<div class="campaignField">
+<label class="campaignLabel" for="annDisplayLimit">تعداد نمایش خودکار برای هر کاربر</label>
+<input class="campaignInput" id="annDisplayLimit" name="display_limit" type="number" min="0" max="1000" step="1" value="<?php echo max(0, min(1000, (int)($editRow['display_limit'] ?? 1))); ?>" required>
+<p class="campaignHint">مثلاً ۳ یعنی حداکثر سه بار در بازدیدهای جداگانه. صفر یعنی فقط بازکردن دستی. در هر بار بازشدن داشبورد فقط یک اطلاعیه خودکار نمایش داده می‌شود. افزایش عدد، دفعات باقی‌مانده را بیشتر می‌کند و ویرایش متن شمارنده را صفر نمی‌کند.</p>
+</div>
 <div class="campaignToggleRow">
 <div class="campaignToggleText">پیام در حال حاضر فعال است</div>
 <label class="campaignToggle">
