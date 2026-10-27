@@ -562,6 +562,8 @@ max-width:360px;
 </div>
 </div>
 
+<?php require __DIR__ . '/pnv_dashboard_announcements.php'; ?>
+
 <div class="dashPrimaryGrid">
 <a class="dashPrimary" href="buy.php">
 <span class="dashPrimaryIcon">+</span>
