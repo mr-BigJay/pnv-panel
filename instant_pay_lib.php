@@ -2554,3 +2554,7 @@ if(!function_exists('instantPayPath')){
         return null;
     }
 }
+
+if(is_file(__DIR__ . '/instant_pay_admin_tabs_lib.php')){
+    require_once __DIR__ . '/instant_pay_admin_tabs_lib.php';
+}
