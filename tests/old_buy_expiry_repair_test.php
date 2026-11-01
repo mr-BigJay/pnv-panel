@@ -16,7 +16,7 @@ $tmp = sys_get_temp_dir() . '/pnv_old_expiry_repair_' . getmypid();
 @mkdir($tmp, 0700, true);
 @mkdir($tmp . '/invoices', 0700, true);
 @mkdir($tmp . '/db', 0700, true);
-foreach(['xui_lib.php', 'subscription_lib.php', 'instant_pay_lib.php'] as $file){
+foreach(['xui_lib.php', 'subscription_lib.php'] as $file){
     copy(__DIR__ . '/../' . $file, $tmp . '/' . $file);
 }
 putenv('PNV_XUI_CONFIG_PATH=' . $tmp . '/db/xui_servers.json');
@@ -27,7 +27,11 @@ file_put_contents($tmp . '/db/plans.json', '[]');
 
 require_once $tmp . '/xui_lib.php';
 require_once $tmp . '/subscription_lib.php';
-require_once $tmp . '/instant_pay_lib.php';
+// Isolated InstantPay fixture, without loading Bale or live payment integrations.
+$GLOBALS['testInstantPayRecords'] = [];
+function instantPayLoad(){
+    return $GLOBALS['testInstantPayRecords'];
+}
 
 $server = ['id'=>'vip3','host'=>'vip3.example.test','inbound_id'=>1,'base_url'=>'https://fake.test/custom/','api_token'=>'test'];
 file_put_contents($tmp . '/db/xui_servers.json', json_encode([
@@ -38,10 +42,10 @@ $link = 'https://vip3.example.test:2096/sub/abc1234567890ab';
 $csv = fopen($tmp . '/invoices/payments.csv', 'w');
 fputcsv($csv, ['alice','config1','10 گیگ - 30 روز','AUTO-1000','','','تایید شد',$link,$now - 86400*7,'خرید','','',1500000]);
 fclose($csv);
-file_put_contents($tmp . '/db/instant_payments.json', json_encode([[
+$GLOBALS['testInstantPayRecords'] = [[
     'user'=>'alice','code'=>1000,'status'=>'paid','paid_at'=>$now - 86400*6,
     'type'=>'خرید','link'=>$link,
-]]));
+]];
 $client = [
     'id'=>'e4e9df20-8a83-4e4a-990f-b696faf567c9',
     'subId'=>'abc1234567890ab',
