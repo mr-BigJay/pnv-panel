@@ -74,6 +74,7 @@ function pnvExpiryAuditInbounds($server){
     $bySub = [];
     $inboundCount = 0;
     $hasSettings = false;
+    $missingInboundSettings = false;
     foreach($inbounds as $inbound){
         if(!is_array($inbound)){
             continue;
@@ -95,6 +96,7 @@ function pnvExpiryAuditInbounds($server){
             $settings = json_decode($settings, true);
         }
         if(!is_array($settings) || !isset($settings['clients']) || !is_array($settings['clients'])){
+            $missingInboundSettings = true;
             continue;
         }
         $hasSettings = true;
@@ -113,8 +115,8 @@ function pnvExpiryAuditInbounds($server){
         }
     }
 
-    if($inboundCount === 0 || !$hasSettings){
-        return ['ok' => false, 'clients' => [], 'reason' => 'inbound_settings_unavailable'];
+    if($inboundCount === 0 || !$hasSettings || $missingInboundSettings){
+        return ['ok' => false, 'clients' => [], 'reason' => 'inbound_settings_unavailable_or_partial'];
     }
     return ['ok' => true, 'clients' => $bySub, 'reason' => ''];
 }
@@ -124,7 +126,7 @@ function pnvExpiryAuditInbounds($server){
  * Match by username + subId across host aliases. False positives are
  * intentional: an uncertain renewal must NOT be automatically repaired.
  */
-function pnvExpiryAuditRenewalSignals($instantOrders, $reservations){
+function pnvExpiryAuditRenewalSignals($instantOrders, $reservations, $paymentRows = []){
     $signals = [
         'instant_renewals' => [],
         'reservation_renewals' => [],
@@ -151,6 +153,25 @@ function pnvExpiryAuditRenewalSignals($instantOrders, $reservations){
             }
         }
         if(!$matched){
+            $signals['unknown_users'][$user] = true;
+        }
+    }
+
+    // CSV renewal links may use different host aliases than the original buy.
+    foreach($paymentRows as $row){
+        if(!is_array($row) || trim((string)($row[9] ?? '')) !== 'تمدید'){
+            continue;
+        }
+        $user = strtolower(trim((string)($row[0] ?? '')));
+        if($user === ''){
+            $signals['ambiguous'] = true;
+            continue;
+        }
+        $p = pnvExpiryAuditCsvLink($row, 'تمدید');
+        if(is_array($p)){
+            $signals['instant_renewals'][$user . '|' . $p['sub_id']] = true;
+        }
+        else{
             $signals['unknown_users'][$user] = true;
         }
     }
@@ -267,7 +288,8 @@ function pnvExpiryAuditMain(array $argv){
     }
     $signals = pnvExpiryAuditRenewalSignals(
         is_array($paidRecords) ? $paidRecords : [],
-        $reservations
+        $reservations,
+        $payments
     );
     $nowMs = (int)floor(microtime(true) * 1000);
     $groups = [];
