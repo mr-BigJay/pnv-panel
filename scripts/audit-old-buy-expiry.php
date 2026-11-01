@@ -46,7 +46,7 @@ function pnvExpiryAuditPaidIndex($instant){
         }
         $tracking = strpos($tracking, 'AUTO-') === 0 ? $tracking : 'AUTO-' . $tracking;
         $key = $user . '|' . $tracking;
-        if(isset($out[$key])){
+        if(array_key_exists($key, $out)){
             // Duplicate keys: intentionally make the timestamp untrustworthy.
             $out[$key] = null;
         }
@@ -259,8 +259,8 @@ function pnvExpiryAuditMain(array $argv){
         $currentMs = array_key_exists('expiryTime', $client)
             ? xuiClientExpiryMs($client) : 0;
         $gb = xuiParsePlanGb((string)($row[2] ?? ''));
-        $totalBytes = array_key_exists('totalGB', $client)
-            ? intval($client['totalGB']) : 0;
+        $totalBytes = is_array($client) && function_exists('xuiClientTotalBytes')
+            ? xuiClientTotalBytes($client) : 0;
         $expectedBytes = xuiGbToBytes($gb);
         $quotaMatches = $gb > 0 && $totalBytes > 0
             && abs($totalBytes - $expectedBytes) < 1048576;
