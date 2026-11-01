@@ -108,6 +108,37 @@ function pnvProbe342Count($server, $email, $subId){
     return [$countEmail, $countSub];
 }
 
+function pnvProbe342CountInbounds($server, $email, $subId){
+    $response = xuiApiRequest($server, 'GET', '/panel/api/inbounds/list');
+    if(empty($response['success']) || !is_array($response['obj'] ?? null)){
+        pnvProbe342Abort('inbounds/list failed');
+    }
+    $items = $response['obj']['list'] ?? $response['obj'];
+    if(!is_array($items) || count($items) === 0){
+        pnvProbe342Abort('inbound list empty/invalid');
+    }
+    $emailCount = 0;
+    $subCount = 0;
+    foreach($items as $inbound){
+        if(!is_array($inbound)){
+            pnvProbe342Abort('inbound malformed');
+        }
+        $settings = $inbound['settings'] ?? null;
+        if(is_string($settings)){
+            $settings = json_decode($settings, true);
+        }
+        if(!is_array($settings) || !is_array($settings['clients'] ?? null)){
+            pnvProbe342Abort('partial inbound settings - cannot prove uniqueness');
+        }
+        foreach($settings['clients'] as $client){
+            if(!is_array($client)) continue;
+            if(strcasecmp((string)($client['email'] ?? ''), $email) === 0) $emailCount++;
+            if((string)($client['subId'] ?? '') === $subId) $subCount++;
+        }
+    }
+    return [$emailCount, $subCount];
+}
+
 function pnvProbe342Run($args){
     $root = realpath(pnvProbe342Arg($args, 'root', '/var/www/html'));
     $serverId = pnvProbe342Arg($args, 'server', 'vip3');
@@ -148,7 +179,8 @@ function pnvProbe342Run($args){
     }
 
     [$countEmail, $countSub] = pnvProbe342Count($server, $email, (string)$c['subId']);
-    if($countEmail !== 1 || $countSub !== 1){
+    [$ibEmail, $ibSub] = pnvProbe342CountInbounds($server, $email, (string)$c['subId']);
+    if($countEmail !== 1 || $countSub !== 1 || $ibEmail !== 1 || $ibSub !== 1){
         pnvProbe342Abort('duplicate test client exists before update');
     }
 
@@ -160,6 +192,7 @@ function pnvProbe342Run($args){
         'version' => $version,
         'traffic_bytes_before' => 0,
         'client_counts_before' => ['email' => $countEmail, 'subId' => $countSub],
+        'inbound_counts_before' => ['email' => $ibEmail, 'subId' => $ibSub],
         'expiry_ms_before' => 0,
         'expiry_ms_target' => $target,
     ];
@@ -205,7 +238,9 @@ function pnvProbe342Run($args){
         $afterObj = pnvProbe342Fetch($server, $email);
         $after = $afterObj['client'];
         [$afterEmail, $afterSub] = pnvProbe342Count($server, $email, (string)$c['subId']);
+        [$afterIbEmail, $afterIbSub] = pnvProbe342CountInbounds($server, $email, (string)$c['subId']);
         $out['client_counts_after'] = ['email' => $afterEmail, 'subId' => $afterSub];
+        $out['inbound_counts_after'] = ['email' => $afterIbEmail, 'subId' => $afterIbSub];
         $out['uuid_preserved'] = (string)($after['uuid'] ?? '') === (string)$c['uuid'];
         $out['sub_id_preserved'] = (string)($after['subId'] ?? '') === (string)$c['subId'];
         $out['quota_preserved'] = intval($after['totalGB'] ?? -1) === intval($c['totalGB']);
@@ -215,6 +250,7 @@ function pnvProbe342Run($args){
         $out['reset_preserved'] = intval($after['reset'] ?? 0) === intval($c['reset'] ?? 0);
         $out['expiry_applied'] = intval($after['expiryTime'] ?? 0) === $target;
         $allGood = $afterEmail === 1 && $afterSub === 1
+            && $afterIbEmail === 1 && $afterIbSub === 1
             && $out['uuid_preserved'] && $out['sub_id_preserved']
             && $out['quota_preserved'] && $out['traffic_preserved']
             && $out['password_preserved'] && $out['auth_preserved']
