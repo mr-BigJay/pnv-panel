@@ -167,6 +167,25 @@ function pnvRepairRun(array $args){
     if($apply && function_exists('posix_geteuid') && posix_geteuid() !== 0){
         pnvRepairAbort('--apply requires root');
     }
+
+    // Prevent two expiry-repair invocations from touching the same client.
+    // The lock remains held by this process until the function returns.
+    $repairLock = null;
+    if($apply){
+        $lockDir = '/root/pnv-expiry-repair-locks';
+        if(is_link($lockDir)){
+            pnvRepairAbort('unsafe repair lock directory');
+        }
+        if(!is_dir($lockDir) && !mkdir($lockDir, 0700, true)){
+            pnvRepairAbort('cannot create repair lock directory');
+        }
+        chmod($lockDir, 0700);
+        $repairLock = fopen($lockDir . '/' . $key . '.lock', 'c');
+        if(!is_resource($repairLock) || !flock($repairLock, LOCK_EX | LOCK_NB)){
+            pnvRepairAbort('another repair operation is in progress');
+        }
+    }
+
     $savedReport = json_decode((string)file_get_contents($reportPath), true);
     $saved = pnvRepairMatchingItem($savedReport, $key);
 
