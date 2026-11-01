@@ -34,7 +34,7 @@ NEW = (
 
 
 def function_block(text, name):
-    start = re.search(r"(?m)^    function " + re.escape(name) + r"\\(", text)
+    start = re.search(r"(?m)^    function " + re.escape(name) + r"\(", text)
     if not start:
         raise RuntimeError("STOP missing function: " + name)
     next_fn = re.search(r"(?m)^    function ", text[start.end():])
