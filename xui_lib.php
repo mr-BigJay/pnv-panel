@@ -148,6 +148,10 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiPickBuyServer($config = null){
+        if(!empty($GLOBALS['xuiTestPickBuyServer']) && is_callable($GLOBALS['xuiTestPickBuyServer'])){
+            return $GLOBALS['xuiTestPickBuyServer']($config);
+        }
+
         if($config === null){
             $config = xuiLoadConfig();
         }
@@ -174,11 +178,13 @@ if(!function_exists('xuiConfigPath')){
     }
 
     function xuiParsePlanGb($planText){
-        if(preg_match('/(\d+)\s*گیگ/u', (string)$planText, $m)){
+        $planText = xuiNormalizePlanDigits($planText);
+
+        if(preg_match('/([0-9]+)\s*گیگ/u', $planText, $m)){
             return intval($m[1]);
         }
 
-        if(preg_match('/(\d+)\s*GB/i', (string)$planText, $m)){
+        if(preg_match('/([0-9]+)\s*GB/i', $planText, $m)){
             return intval($m[1]);
         }
 
@@ -203,8 +209,17 @@ if(!function_exists('xuiConfigPath')){
      * تعداد روز پلن از متن فاکتور / کاتالوگ.
      * 0 = نامحدود زمانی
      */
+    function xuiNormalizePlanDigits($value){
+        return strtr((string)$value, [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+    }
+
     function xuiPlanDurationMeta($planText){
-        $planText = trim((string)$planText);
+        $planText = trim(xuiNormalizePlanDigits($planText));
         $meta = [
             'resolved' => false,
             'time_unlimited' => false,
@@ -227,14 +242,14 @@ if(!function_exists('xuiConfigPath')){
             return $meta;
         }
 
-        if(preg_match('/(\d+)\s*ماه/u', $planText, $m)){
+        if(preg_match('/([0-9]+)\s*ماه/u', $planText, $m)){
             $meta['resolved'] = true;
             $meta['days'] = max(0, intval($m[1]) * 30);
 
             return $meta;
         }
 
-        if(preg_match('/(\d+)\s*روز/u', $planText, $m)){
+        if(preg_match('/([0-9]+)\s*روز/u', $planText, $m)){
             $meta['resolved'] = true;
             $meta['days'] = max(0, intval($m[1]));
 
@@ -253,13 +268,13 @@ if(!function_exists('xuiConfigPath')){
                 continue;
             }
 
-            $name = trim((string)($plan['name'] ?? ''));
+            $name = trim(xuiNormalizePlanDigits((string)($plan['name'] ?? '')));
 
             if($name === '' || $strIpos($planText, $name) === false){
                 continue;
             }
 
-            $days = trim((string)($plan['days'] ?? ''));
+            $days = trim(xuiNormalizePlanDigits((string)($plan['days'] ?? '')));
 
             if($days === 'نامحدود' || strcasecmp($days, 'unlimited') === 0){
                 $meta['resolved'] = true;
@@ -269,9 +284,9 @@ if(!function_exists('xuiConfigPath')){
                 return $meta;
             }
 
-            if($days !== '' && preg_match('/^\d+$/', $days)){
+            if($days !== '' && preg_match('/^[0-9]+$/', $days) && intval($days) > 0){
                 $meta['resolved'] = true;
-                $meta['days'] = max(0, intval($days));
+                $meta['days'] = intval($days);
 
                 return $meta;
             }
@@ -1736,7 +1751,7 @@ if(!function_exists('xuiConfigPath')){
         return null;
     }
 
-    function xuiCreateClient($server, $email, $gb, $subId = ''){
+    function xuiCreateClient($server, $email, $gb, $subId = '', $days = 0, $anchorMs = null){
         $email = xuiSanitizeClientEmail($email);
 
         if($email === ''){
@@ -1749,13 +1764,23 @@ if(!function_exists('xuiConfigPath')){
 
         $inboundId = intval($server['inbound_id'] ?? 1);
         $bytes = xuiGbToBytes($gb);
+        $days = max(0, intval($days));
+        $expiryMs = 0;
+
+        if($days > 0){
+            $anchorMs = ($anchorMs !== null && intval($anchorMs) > 0)
+                ? intval($anchorMs)
+                : (int)floor(microtime(true) * 1000);
+            $expiryMs = $anchorMs + ($days * 86400000);
+        }
+
         $uuid = xuiGenerateUuid();
 
         $client = [
             'id' => $uuid,
             'email' => $email,
             'enable' => true,
-            'expiryTime' => 0,
+            'expiryTime' => $expiryMs,
             'totalGB' => $bytes,
             'limitIp' => 0,
             'subId' => $subId,
@@ -1780,7 +1805,9 @@ if(!function_exists('xuiConfigPath')){
                 'sub_id' => $subId,
                 'link' => xuiBuildSubLink($server['host'] ?? '', $subId),
                 'server' => $server,
-                'raw' => $result
+                'raw' => $result,
+                'days' => $days,
+                'expiry_ms' => $expiryMs,
             ];
         }
 
@@ -1801,7 +1828,9 @@ if(!function_exists('xuiConfigPath')){
                 'sub_id' => $subId,
                 'link' => xuiBuildSubLink($server['host'] ?? '', $subId),
                 'server' => $server,
-                'raw' => $legacy
+                'raw' => $legacy,
+                'days' => $days,
+                'expiry_ms' => $expiryMs,
             ];
         }
 
@@ -3298,6 +3327,34 @@ if(!function_exists('xuiConfigPath')){
         return $recreateResult;
     }
 
+    function xuiResolveNewClientPlanDuration($planText){
+        $meta = xuiPlanDurationMeta($planText);
+
+        if(empty($meta['resolved'])){
+            return [
+                'ok' => false,
+                'error' => 'مدت پلن خرید قابل تشخیص نیست؛ ساخت اشتراک بدون تاریخ انقضای مشخص مجاز نیست',
+                'code' => 'invalid_plan_duration',
+            ];
+        }
+
+        $days = max(0, intval($meta['days'] ?? 0));
+
+        if($days === 0 && empty($meta['time_unlimited'])){
+            return [
+                'ok' => false,
+                'error' => 'مدت پلن خرید نامعتبر است؛ فقط پلن نامحدود زمانی می‌تواند بدون تاریخ انقضا ساخته شود',
+                'code' => 'invalid_plan_duration',
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'days' => $days,
+            'time_unlimited' => !empty($meta['time_unlimited']),
+        ];
+    }
+
     function xuiProvisionBuy($paymentRow){
         $config = xuiLoadConfig();
 
@@ -3308,6 +3365,12 @@ if(!function_exists('xuiConfigPath')){
         $username = trim((string)($paymentRow[0] ?? ''));
         $configName = trim((string)($paymentRow[1] ?? ''));
         $planText = trim((string)($paymentRow[2] ?? ''));
+        $duration = xuiResolveNewClientPlanDuration($planText);
+
+        if(empty($duration['ok'])){
+            return $duration;
+        }
+
         $gb = xuiParsePlanGb($planText);
 
         if($gb <= 0){
@@ -3333,7 +3396,7 @@ if(!function_exists('xuiConfigPath')){
             $email .= '_' . substr(xuiGenerateSubId(6), 0, 4);
         }
 
-        $created = xuiCreateClient($server, $email, $gb);
+        $created = xuiCreateClient($server, $email, $gb, '', intval($duration['days']));
 
         if(empty($created['ok'])){
             return $created;
@@ -3345,7 +3408,9 @@ if(!function_exists('xuiConfigPath')){
             'email' => $created['email'],
             'sub_id' => $created['sub_id'],
             'server_id' => $server['id'] ?? '',
-            'gb' => $gb
+            'gb' => $gb,
+            'days' => intval($duration['days']),
+            'expiry_ms' => intval($created['expiry_ms'] ?? 0),
         ];
     }
 
