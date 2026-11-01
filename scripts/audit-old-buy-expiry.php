@@ -74,6 +74,7 @@ function pnvExpiryAuditInbounds($server){
     $bySub = [];
     $inboundCount = 0;
     $hasSettings = false;
+    $missingInboundSettings = false;
     foreach($inbounds as $inbound){
         if(!is_array($inbound)){
             continue;
@@ -95,6 +96,7 @@ function pnvExpiryAuditInbounds($server){
             $settings = json_decode($settings, true);
         }
         if(!is_array($settings) || !isset($settings['clients']) || !is_array($settings['clients'])){
+            $missingInboundSettings = true;
             continue;
         }
         $hasSettings = true;
@@ -113,16 +115,110 @@ function pnvExpiryAuditInbounds($server){
         }
     }
 
-    if($inboundCount === 0 || !$hasSettings){
-        return ['ok' => false, 'clients' => [], 'reason' => 'inbound_settings_unavailable'];
+    if($inboundCount === 0 || !$hasSettings || $missingInboundSettings){
+        return ['ok' => false, 'clients' => [], 'reason' => 'inbound_settings_unavailable_or_partial'];
     }
     return ['ok' => true, 'clients' => $bySub, 'reason' => ''];
+}
+
+/**
+ * Conservative cross-source renewal matcher.
+ * Match by username + subId across host aliases. False positives are
+ * intentional: an uncertain renewal must NOT be automatically repaired.
+ */
+function pnvExpiryAuditRenewalSignals($instantOrders, $reservations, $paymentRows = []){
+    $signals = [
+        'instant_renewals' => [],
+        'reservation_renewals' => [],
+        'reservation_sub_ids' => [],
+        'unknown_users' => [],
+        'ambiguous' => false,
+    ];
+
+    foreach($instantOrders as $item){
+        if(!is_array($item) || trim((string)($item['type'] ?? '')) !== 'تمدید'){
+            continue;
+        }
+        $user = strtolower(trim((string)($item['user'] ?? '')));
+        if($user === ''){
+            $signals['ambiguous'] = true;
+            continue;
+        }
+        $matched = false;
+        foreach(['sub', 'link'] as $field){
+            $p = xuiParseSubLink((string)($item[$field] ?? ''));
+            if(is_array($p)){
+                $signals['instant_renewals'][$user . '|' . $p['sub_id']] = true;
+                $matched = true;
+            }
+        }
+        if(!$matched){
+            $signals['unknown_users'][$user] = true;
+        }
+    }
+
+    // CSV renewal links may use different host aliases than the original buy.
+    foreach($paymentRows as $row){
+        if(!is_array($row) || trim((string)($row[9] ?? '')) !== 'تمدید'){
+            continue;
+        }
+        $user = strtolower(trim((string)($row[0] ?? '')));
+        if($user === ''){
+            $signals['ambiguous'] = true;
+            continue;
+        }
+        $p = pnvExpiryAuditCsvLink($row, 'تمدید');
+        if(is_array($p)){
+            $signals['instant_renewals'][$user . '|' . $p['sub_id']] = true;
+        }
+        else{
+            $signals['unknown_users'][$user] = true;
+        }
+    }
+
+    foreach($reservations as $item){
+        if(!is_array($item)){
+            $signals['ambiguous'] = true;
+            continue;
+        }
+        $user = strtolower(trim((string)($item['username'] ?? '')));
+        $subId = trim((string)($item['sub_id'] ?? ''));
+        if($subId === ''){
+            $p = xuiParseSubLink((string)($item['sub_link'] ?? ''));
+            $subId = is_array($p) ? $p['sub_id'] : '';
+        }
+        if($subId !== ''){
+            $signals['reservation_sub_ids'][$subId] = true;
+            if($user !== ''){
+                $signals['reservation_renewals'][$user . '|' . $subId] = true;
+            }
+        }
+        elseif($user !== ''){
+            $signals['unknown_users'][$user] = true;
+        }
+        else{
+            $signals['ambiguous'] = true;
+        }
+    }
+    return $signals;
 }
 
 function pnvExpiryAuditClassification(array $ctx){
     // This function makes no API calls or state changes.
     if(!empty($ctx['history_conflict'])){
         return 'history_conflict';
+    }
+    if(!empty($ctx['renewal_sources_unavailable'])){
+        return 'renewal_sources_unavailable';
+    }
+    if(!empty($ctx['renewal_history_unknown'])){
+        return 'renewal_history_unknown';
+    }
+    if(!empty($ctx['renewal_payment_detected'])){
+        return 'renewal_payment_detected';
+    }
+    if(!empty($ctx['renew_reservation_detected'])){
+        return 'renew_reservation_detected';
     }
     if(empty($ctx['paid_source_ok'])){
         return 'paid_timestamp_unverified';
@@ -174,8 +270,27 @@ function pnvExpiryAuditMain(array $argv){
 
     $config = xuiLoadConfig();
     $payments = xuiLoadPayments();
-    $paidRecords = function_exists('instantPayLoad') ? instantPayLoad() : [];
-    $paidIndex = pnvExpiryAuditPaidIndex($paidRecords);
+    $paidRecords = function_exists('instantPayLoad') ? instantPayLoad() : null;
+    $paidIndex = is_array($paidRecords) ? pnvExpiryAuditPaidIndex($paidRecords) : [];
+    // Read renewal reservation queue without touching queue state or locks.
+    if(is_file($root . '/renew_reserve_lib.php')){
+        require_once $root . '/renew_reserve_lib.php';
+    }
+    $renewalSourcesAvailable = is_array($paidRecords) && function_exists('renewReserveLoadResult');
+    $reservations = [];
+    if($renewalSourcesAvailable){
+        $loaded = renewReserveLoadResult();
+        $renewalSourcesAvailable = is_array($loaded) && !empty($loaded['ok'])
+            && is_array($loaded['items'] ?? null);
+        if($renewalSourcesAvailable){
+            $reservations = $loaded['items'];
+        }
+    }
+    $signals = pnvExpiryAuditRenewalSignals(
+        is_array($paidRecords) ? $paidRecords : [],
+        $reservations,
+        $payments
+    );
     $nowMs = (int)floor(microtime(true) * 1000);
     $groups = [];
 
@@ -265,8 +380,16 @@ function pnvExpiryAuditMain(array $argv){
         $quotaMatches = $gb > 0 && $totalBytes > 0
             && abs($totalBytes - $expectedBytes) < 1048576;
 
+        $linkId = (string)$parsed['sub_id'];
+        $userSubKey = $user . '|' . $linkId;
         $ctx = [
             'history_conflict' => count($events) !== 1 || count($buys) !== 1,
+            'renewal_sources_unavailable' => !$renewalSourcesAvailable,
+            'renewal_history_unknown' => !empty($signals['ambiguous'])
+                || !empty($signals['unknown_users'][$user]),
+            'renewal_payment_detected' => !empty($signals['instant_renewals'][$userSubKey]),
+            'renew_reservation_detected' => !empty($signals['reservation_sub_ids'][$linkId])
+                || !empty($signals['reservation_renewals'][$userSubKey]),
             'paid_source_ok' => $paidSourceOk,
             'server_ok' => $serverOk,
             'matching_clients' => count($clients),
@@ -298,11 +421,13 @@ function pnvExpiryAuditMain(array $argv){
 
     $report = [
         'mode' => 'READ_ONLY_NO_MUTATIONS',
+        'audit_version' => 2,
+        'renewal_sources_available' => $renewalSourcesAvailable,
         'generated_utc' => gmdate('c'),
         'root' => $root,
         'summary' => $stats,
         'items' => $results,
-        'note' => 'Only one-payment, 30/90-day, paid_at-proven candidates may be proposed. This is NOT authority to change user expiry; manual 3x-ui changes cannot be ruled out by CSV alone.',
+        'note' => 'Cross-checks original purchase, InstantPay renewal orders and reservation queue. Candidates still require manual review. 3x-ui administrator edits, unlogged renewals and exact activation time cannot be established from these sources.',
     ];
     echo json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), "\n";
 }

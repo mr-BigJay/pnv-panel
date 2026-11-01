@@ -2,8 +2,8 @@
 /**
  * One-by-one repair of historic, wrongly unlimited-time new purchases.
  *
- * Requires a saved read-only audit report, a candidate key, and a matching
- * current audit. Dry-run by default. No purchase/renewal/CSV changes.
+ * Requires a saved renewal-aware v2 audit report, a candidate key, and a
+ * matching current audit. Dry-run by default. No purchase/renewal/CSV changes.
  * Even in --apply mode, only the selected XUI client's expiryTime may change.
  *
  * Usage:
@@ -33,6 +33,11 @@ function pnvRepairAbort($reason){
 function pnvRepairMatchingItem($report, $key){
     if(!is_array($report) || ($report['mode'] ?? '') !== 'READ_ONLY_NO_MUTATIONS'){
         pnvRepairAbort('invalid audit report');
+    }
+    // A pre-renewal-aware audit is no longer sufficient for any repair.
+    if(intval($report['audit_version'] ?? 0) < 2
+        || empty($report['renewal_sources_available'])){
+        pnvRepairAbort('legacy audit report: rerun renewal-aware audit before any repair');
     }
     $items = array_values(array_filter($report['items'] ?? [], static function($item) use ($key){
         return is_array($item) && ($item['key'] ?? '') === $key;

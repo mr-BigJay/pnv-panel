@@ -16,7 +16,7 @@ $tmp = sys_get_temp_dir() . '/pnv_old_expiry_repair_' . getmypid();
 @mkdir($tmp, 0700, true);
 @mkdir($tmp . '/invoices', 0700, true);
 @mkdir($tmp . '/db', 0700, true);
-foreach(['xui_lib.php', 'subscription_lib.php'] as $file){
+foreach(['xui_lib.php', 'subscription_lib.php', 'renew_reserve_lib.php'] as $file){
     copy(__DIR__ . '/../' . $file, $tmp . '/' . $file);
 }
 putenv('PNV_XUI_CONFIG_PATH=' . $tmp . '/db/xui_servers.json');

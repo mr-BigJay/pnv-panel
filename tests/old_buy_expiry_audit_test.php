@@ -4,6 +4,7 @@
  * No network calls, payment writes or 3x-ui mutations.
  */
 require_once __DIR__ . '/../scripts/audit-old-buy-expiry.php';
+require_once __DIR__ . '/../xui_lib.php';
 
 $failed = 0;
 function auditAssert($value, $label){
@@ -48,6 +49,10 @@ auditAssert(pnvExpiryAuditClassification($baseline) === 'candidate_review_before
 
 foreach([
     ['history_conflict', true, 'history_conflict'],
+    ['renewal_sources_unavailable', true, 'renewal_sources_unavailable'],
+    ['renewal_history_unknown', true, 'renewal_history_unknown'],
+    ['renewal_payment_detected', true, 'renewal_payment_detected'],
+    ['renew_reservation_detected', true, 'renew_reservation_detected'],
     ['paid_source_ok', false, 'paid_timestamp_unverified'],
     ['server_ok', false, 'server_read_unavailable'],
     ['matching_clients', 0, 'client_not_found'],
@@ -62,6 +67,30 @@ foreach([
     $ctx[$case[0]] = $case[1];
     auditAssert(pnvExpiryAuditClassification($ctx) === $case[2], $case[2] . ' skip');
 }
+
+$link = 'https://vip3.example.test:2096/sub/abcd1234';
+$renewOrder = [[
+    'user'=>'ALICE', 'type'=>'تمدید', 'status'=>'paid', 'sub'=>$link,
+]];
+$reservation = [[
+    'username'=>'alice', 'status'=>'reserved',
+    'server_host'=>'vip4.example.test', 'sub_id'=>'abcd1234',
+]];
+$csvRenewal = [[
+    'alice', 'https://vip-other.example.test:2096/sub/abcd1234', 'plan', '', '', '', 'تایید شد', '', '', 'تمدید',
+]];
+$signals = pnvExpiryAuditRenewalSignals($renewOrder, $reservation, $csvRenewal);
+auditAssert(!empty($signals['instant_renewals']['alice|abcd1234']), 'renewals found even when host aliases differ');
+auditAssert(!empty($signals['reservation_sub_ids']['abcd1234']), 'queued renewal detected via subId');
+auditAssert(empty($signals['unknown_users']['alice']), 'no false missing linkage when renewal references are valid');
+$missingLink = pnvExpiryAuditRenewalSignals([[
+    'user'=>'alice', 'type'=>'تمدید', 'status'=>'paid', 'link'=>'',
+]], [], []);
+auditAssert(!empty($missingLink['unknown_users']['alice']), 'unlinked renewal of user blocks automatic repair');
+$malformedQueue = pnvExpiryAuditRenewalSignals([], ['not-a-record']);
+auditAssert(!empty($malformedQueue['ambiguous']), 'malformed reservation marks evidence ambiguous');
+$clean = pnvExpiryAuditRenewalSignals([], [], []);
+auditAssert(empty($clean['instant_renewals']) && empty($clean['reservation_sub_ids']), 'clean history leaves candidates unchanged');
 
 $source = file_get_contents(__DIR__ . '/../scripts/audit-old-buy-expiry.php');
 auditAssert(strpos($source, "'GET', '/panel/api/inbounds/list'") !== false, 'audit uses read-only inbound list');
