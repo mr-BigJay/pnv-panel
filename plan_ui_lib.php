@@ -219,6 +219,20 @@ if(!function_exists('pnvFormatPlanPrice')){
         $link = trim((string)$link);
         $username = trim((string)$username);
 
+        // The purchased plan's original duration is authoritative. A subscription
+        // header may report expire=0 after expiry or reset, but that must never
+        // reclassify a time-limited purchase as an unlimited-time subscription.
+        $planText = trim((string)$planText);
+        if($planText !== '' && function_exists('xuiPlanDurationMeta')){
+            $meta = xuiPlanDurationMeta($planText);
+            if(!empty($meta['time_unlimited'])){
+                return 'unlimited';
+            }
+            if(!empty($meta['resolved']) && intval($meta['days'] ?? 0) > 0){
+                return 'limited';
+            }
+        }
+
         if(
             $link !== ''
             && !preg_match('#^https?://#i', $link)
@@ -226,7 +240,6 @@ if(!function_exists('pnvFormatPlanPrice')){
             && function_exists('pnvFindSubLinkFromCsv')
         ){
             $resolved = pnvFindSubLinkFromCsv($username, $link);
-
             if($resolved !== ''){
                 $link = $resolved;
             }
@@ -234,14 +247,13 @@ if(!function_exists('pnvFormatPlanPrice')){
 
         if($link !== '' && preg_match('#^https?://#i', $link) && function_exists('xuiFetchSubUserinfoExpire')){
             $expire = xuiFetchSubUserinfoExpire($link);
-
             if($expire !== null){
                 return $expire > 0 ? 'limited' : 'unlimited';
             }
         }
 
+        // Retain legacy parsing only when duration metadata was not recognized.
         $planDays = function_exists('xuiParsePlanDays') ? xuiParsePlanDays($planText) : 0;
-
         if($planDays > 0){
             return 'limited';
         }
