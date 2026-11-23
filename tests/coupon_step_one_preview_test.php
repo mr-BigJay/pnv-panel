@@ -38,6 +38,14 @@ couponPreviewAssert(
     'legacy coupon value still resolves'
 );
 couponPreviewAssert(couponFindPlanByValue('UNLISTED - 1 میلیون تومان', $plans) === null, 'nonexistent plan remains rejected');
+couponPreviewAssert(
+    strpos(couponBuildPlanLabel($plans[0], 20), 'ماهه') !== false,
+    'discounted 30-day invoice retains purchased plan duration'
+);
+couponPreviewAssert(
+    strpos(couponBuildPlanLabel($plans[1], 15), 'ماهه') !== false,
+    'discounted 90-day invoice retains purchased plan duration'
+);
 
 $called = [];
 $calculate = function($user, $code, $value, $catalog) use (&$called, $ui){
