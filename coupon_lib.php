@@ -464,6 +464,16 @@ if(!function_exists('couponLoadCoupons')){
 
         $planValue = trim($planValue);
 
+        // Keep coupon validation aligned with the three-step form's real plan
+        // value (which includes the duration, e.g. " - 30 روزه").
+        if(!function_exists('pnvFindPlanByValue')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+        $matched = pnvFindPlanByValue($planValue, $plans);
+        if(is_array($matched)){
+            return $matched;
+        }
+
         foreach($plans as $plan){
 
             $value = trim(($plan['name'] ?? '') . ' - ' . couponFormatPriceThousands($plan['price'] ?? 0));
@@ -476,6 +486,64 @@ if(!function_exists('couponLoadCoupons')){
 
         return null;
 
+    }
+
+    /**
+     * Read-only preview for step one: show eligible prices before choosing a plan.
+     * Each plan is checked by the same checkout validator used when creating
+     * an order, but this function never reserves/consumes a coupon.
+     */
+    function couponPreviewForPlans($username, $code, $plans, $calculator = null){
+        if(!function_exists('pnvPlansForStepUi')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+
+        $code = trim((string)$code);
+        if($code === ''){
+            return ['ok' => false, 'error' => 'کد تخفیف را وارد کنید'];
+        }
+        if(!is_array($plans)){
+            return ['ok' => false, 'error' => 'لیست پلن‌ها در دسترس نیست'];
+        }
+
+        if($calculator === null){
+            $calculator = 'checkoutCalculateDiscountCode';
+        }
+        if(!is_callable($calculator)){
+            return ['ok' => false, 'error' => 'امکان اعتبارسنجی کد وجود ندارد'];
+        }
+
+        $discounts = [];
+        $firstError = 'کد تخفیف معتبر نیست';
+        foreach(pnvPlansForStepUi($plans) as $plan){
+            $value = (string)($plan['value'] ?? '');
+            if($value === ''){
+                continue;
+            }
+            $result = $calculator($username, $code, $value, $plans);
+            if(empty($result['ok'])){
+                if($firstError === 'کد تخفیف معتبر نیست' && !empty($result['error'])){
+                    $firstError = (string)$result['error'];
+                }
+                continue;
+            }
+
+            $original = intval($result['original'] ?? $result['original_amount'] ?? $plan['price'] ?? 0);
+            $final = intval($result['final'] ?? $result['final_amount'] ?? $original);
+            $discounts[$value] = [
+                'original' => $original,
+                'final' => max(0, $final),
+                'original_text' => couponFormatPriceThousands($original),
+                'final_text' => couponFormatPriceThousands(max(0, $final)),
+                'percent' => intval($result['percent'] ?? 0),
+            ];
+        }
+
+        if(count($discounts) === 0){
+            return ['ok' => false, 'error' => $firstError];
+        }
+
+        return ['ok' => true, 'discounts' => $discounts, 'eligible_count' => count($discounts)];
     }
 
     function couponApplyDiscountThousands($priceThousands, $percent){
@@ -494,14 +562,18 @@ if(!function_exists('couponLoadCoupons')){
         $original = couponFormatPriceThousands($plan['price'] ?? 0);
         $discounted = couponApplyDiscountThousands($plan['price'] ?? 0, $percent);
         $finalText = couponFormatPriceThousands($discounted);
+        // Preserve duration in discounted invoice labels so 30/90-day
+        // subscriptions are still recognizable by the existing XUI logic.
+        if(!function_exists('pnvPlanOptionValue')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+        $baseLabel = pnvPlanOptionValue($plan);
 
         if($percent <= 0){
-            return ($plan['name'] ?? '') . ' - ' . $original;
+            return $baseLabel;
         }
 
-        return ($plan['name'] ?? '')
-            . ' - '
-            . $original
+        return $baseLabel
             . ' | تخفیف '
             . $percent
             . '% → '

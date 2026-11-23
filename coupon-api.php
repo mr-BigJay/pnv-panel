@@ -26,6 +26,15 @@ if(!is_array($plans)){
     $plans = [];
 }
 
+// First-step preview: validate the code against every eligible plan before
+// the customer chooses one. Preserve the existing single-plan API below.
+if(trim((string)($_GET['mode'] ?? $_POST['mode'] ?? '')) === 'preview'){
+    header('Cache-Control: no-store, max-age=0');
+    $result = couponPreviewForPlans($username, $code, $plans);
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if($plan === ''){
     echo json_encode(['ok' => false, 'error' => 'ابتدا پلن را انتخاب کنید'], JSON_UNESCAPED_UNICODE);
     exit;
