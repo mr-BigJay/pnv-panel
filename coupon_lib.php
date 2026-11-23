@@ -562,14 +562,18 @@ if(!function_exists('couponLoadCoupons')){
         $original = couponFormatPriceThousands($plan['price'] ?? 0);
         $discounted = couponApplyDiscountThousands($plan['price'] ?? 0, $percent);
         $finalText = couponFormatPriceThousands($discounted);
+        // Preserve duration in discounted invoice labels so 30/90-day
+        // subscriptions are still recognizable by the existing XUI logic.
+        if(!function_exists('pnvPlanOptionValue')){
+            require_once __DIR__ . '/plan_ui_lib.php';
+        }
+        $baseLabel = pnvPlanOptionValue($plan);
 
         if($percent <= 0){
-            return ($plan['name'] ?? '') . ' - ' . $original;
+            return $baseLabel;
         }
 
-        return ($plan['name'] ?? '')
-            . ' - '
-            . $original
+        return $baseLabel
             . ' | تخفیف '
             . $percent
             . '% → '
